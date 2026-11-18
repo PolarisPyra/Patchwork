@@ -519,7 +519,6 @@ fn start_chat(core: &Arc<Core>, caller: &Thread, args: &Value) -> Result<String,
         access_mode: caller.access_mode,
         effort: given("effort"),
         compact_window: None,
-        plan_mode: false,
     })?;
     // A chat a bot's run starts is part of that run, under the same limits.
     let bot_id = caller.bot_id.clone().or_else(|| {

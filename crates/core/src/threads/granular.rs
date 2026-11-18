@@ -1,6 +1,5 @@
 //! Granular chats: the model and effort of a chat's own agent, of the fallback that takes over
-//! when that agent's provider is out of usage, of the sub agents each of them starts, and of the
-//! agent that reviews what a reply changed.
+//! when that agent's provider is out of usage, and of the agent that reviews what a reply changed.
 //!
 //! A chat's picks are its own; a project's are given to every chat in it, and to each new one.
 //! They only act while granular chats are on in Settings.
@@ -32,11 +31,6 @@ pub struct AgentPick {
 pub struct Reserves {
     /// Takes the chat over when its agent's provider is out of usage.
     pub fallback: Option<AgentPick>,
-    /// What the chat's agent runs its sub agents at. Naming the chat's agent sets the model and
-    /// effort of the sub agents its CLI starts; naming another has Patchwork run them there.
-    pub sub: Option<AgentPick>,
-    /// What the fallback runs its sub agents at, as `sub` is for the chat's agent.
-    pub sub_fallback: Option<AgentPick>,
     /// Reviews the files each reply changed, as a second opinion from another model.
     pub review: Option<AgentPick>,
 }
@@ -50,33 +44,11 @@ pub struct Granular {
     pub reserves: Reserves,
 }
 
-/// Whether the sub agents `agent` starts on itself can be given a model and effort: by its CLI,
-/// or, for Patchwork's own agent, by Patchwork, which runs them.
-#[must_use]
-pub fn runs_sub_agents_at(agent: AgentKind) -> bool {
-    matches!(agent, AgentKind::Claude | AgentKind::Codex | AgentKind::Api)
-}
-
-/// Whether `agent` can hand its sub agents' work to another agent, which Patchwork runs for it:
-/// the agents given Patchwork's own tools.
-#[must_use]
-pub fn delegates_sub_agents(agent: AgentKind) -> bool {
-    matches!(
-        agent,
-        AgentKind::Claude | AgentKind::Codex | AgentKind::OpenCode | AgentKind::Api
-    )
-}
-
 impl Granular {
-    /// Drops the picks that could never act: a fallback that is the chat's own agent and model,
-    /// and sub agents the agent that would start them can neither run nor hand over.
+    /// Drops the picks that could never act: a fallback or reviewer that is the chat's own agent
+    /// and model.
     fn tidy(&mut self) {
-        let Reserves {
-            fallback,
-            sub,
-            sub_fallback,
-            review,
-        } = &mut self.reserves;
+        let Reserves { fallback, review } = &mut self.reserves;
         let main = &self.main;
         let same = |pick: &AgentPick| pick.agent == main.agent && pick.model == main.model;
         if fallback.as_ref().is_some_and(same) {
@@ -85,23 +57,6 @@ impl Granular {
         // A review by the model that wrote the changes is no second opinion.
         if review.as_ref().is_some_and(same) {
             *review = None;
-        }
-        let fits = |pick: &AgentPick, agent: AgentKind| {
-            if pick.agent == agent {
-                runs_sub_agents_at(agent)
-            } else {
-                delegates_sub_agents(agent)
-            }
-        };
-        if sub.as_ref().is_some_and(|s| !fits(s, main.agent)) {
-            *sub = None;
-        }
-        let behind = fallback.as_ref().map(|f| f.agent);
-        if sub_fallback
-            .as_ref()
-            .is_some_and(|s| !behind.is_some_and(|agent| fits(s, agent)))
-        {
-            *sub_fallback = None;
         }
     }
 }
@@ -132,49 +87,17 @@ fn save(store: &Store, thread_id: &str, reserves: &Reserves) -> Result<(), Error
     store.set_state(&thread_key(thread_id), &json)
 }
 
-/// The model and effort the thread's sub agents run at, when its `agent` can be told.
-pub(crate) fn sub_pick(
-    store: &Store,
-    settings: &Settings,
-    thread_id: &str,
-    agent: AgentKind,
-) -> Option<AgentPick> {
-    if !settings.granular_chats || !runs_sub_agents_at(agent) {
-        return None;
-    }
-    saved(store, thread_id).sub.filter(|s| s.agent == agent)
-}
-
-/// Where the thread's `run_sub_agent` calls run: on the other agent its chat names, else, for
-/// Patchwork's own agent, which has no sub agents of its own, on itself at the chat's sub agent
-/// pick or its own model.
-pub(crate) fn sub_agent_of(
-    store: &Store,
-    settings: &Settings,
-    thread: &Thread,
-) -> Option<AgentPick> {
-    if let Some(pick) = delegate_of(store, settings, thread) {
-        return Some(pick);
-    }
+/// Where the thread's `run_sub_agent` calls run: Patchwork's own agent, which has no sub agents
+/// of its own, runs them on itself at its own model.
+pub(crate) fn sub_agent_of(thread: &Thread) -> Option<AgentPick> {
     if thread.agent != AgentKind::Api || thread.parent.is_some() {
         return None;
     }
-    let own = AgentPick {
+    Some(AgentPick {
         agent: AgentKind::Api,
         model: thread.model.clone(),
         effort: thread.effort.clone(),
-    };
-    Some(sub_pick(store, settings, &thread.id, AgentKind::Api).unwrap_or(own))
-}
-
-/// The other agent the thread's sub agents run on, when its own can hand work to one.
-fn delegate_of(store: &Store, settings: &Settings, thread: &Thread) -> Option<AgentPick> {
-    if !settings.granular_chats || thread.parent.is_some() || !delegates_sub_agents(thread.agent) {
-        return None;
-    }
-    saved(store, &thread.id)
-        .sub
-        .filter(|s| s.agent != thread.agent)
+    })
 }
 
 /// The agent that reviews the files the thread's replies change, if it has one other than the
@@ -227,13 +150,10 @@ pub(crate) fn fall_back(store: &Store, settings: &Settings, thread: &Thread) -> 
         );
         return None;
     }
-    // A fallback is used once, and its sub agents are now the chat's. The chat has moved either
-    // way: reserves left as they were name a fallback it is now on, which is no fallback, and
-    // sub agents of the agent it left, which are not used.
+    // A fallback is used once. The chat has moved either way: reserves left as they were name a
+    // fallback it is now on, which is no fallback.
     let left = Reserves {
         fallback: None,
-        sub: reserves.sub_fallback,
-        sub_fallback: None,
         review: reserves.review,
     };
     if let Err(e) = save(store, &thread.id, &left) {
@@ -282,7 +202,7 @@ impl Core {
             return Ok(());
         }
         // The reserves first. Should the chat's own agent then fail to save, they stand behind
-        // the agent it kept: sub agents of another agent are not used, and it has a fallback.
+        // the agent it kept.
         if !same_reserves {
             save(&self.store, id, &reserves)?;
         }

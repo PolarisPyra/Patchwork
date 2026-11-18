@@ -218,54 +218,50 @@ impl Core {
         if !provider::is_goal_command(&text) && self.waits_to_resume(&thread_id) {
             return self.hold_for_resume(&thread_id, &text, attachments, via);
         }
+        // Patchwork runs the goal itself, the same for every agent: a pause or a clear is
+        // answered here, and a new goal or a resume is sent as the goal's brief.
+        let goal_local = provider::goal_command(&text).and_then(|command| match command {
+            provider::GoalCommand::Show => Some(Err(Error::from(
+                "Name the goal after /goal, or pause, resume or clear it",
+            ))),
+            provider::GoalCommand::Clear => Some(self.stop_goal(&thread_id)),
+            provider::GoalCommand::Pause => {
+                self.pause_goal(&thread_id);
+                Some(Ok(()))
+            }
+            provider::GoalCommand::Set(_) | provider::GoalCommand::Resume => None,
+        });
+        if let Some(done) = goal_local {
+            done?;
+            let msg = user_message(&text, Vec::new());
+            let m = msg.clone();
+            self.store
+                .update_thread(&thread_id, |t| t.messages.push(Arc::new(m)))?;
+            self.emit(AgentEventEnvelope {
+                thread_id,
+                event: AgentEvent::MessageStarted {
+                    message: msg.clone(),
+                },
+            });
+            return Ok(msg);
+        }
+        // A goal set or resumed while a turn runs is pursued from now: its brief steers the turn,
+        // or waits in the queue, and the turn's end carries it on.
         if let Some(command) = provider::goal_command(&text) {
-            if self.runner.is_running(&thread_id) {
-                return Err(
-                    "A /goal command runs as a turn of its own; send it once this turn ends".into(),
-                );
-            }
-            let agent = self.store.thread(&thread_id).map(|t| t.agent);
-            if agent == Some(AgentKind::OpenCode) {
-                return Err(
-                    "OpenCode has no /goal command. Describe the task in a message instead.".into(),
-                );
-            }
-            if agent == Some(AgentKind::Api) {
-                return Err(
-                    "API providers have no /goal command. Describe the task in a message instead."
-                        .into(),
-                );
-            }
-            if agent == Some(AgentKind::Antigravity) {
-                if provider::antigravity::antigravity_bin().is_none() {
-                    return Err("/goal needs the Antigravity CLI. Install it in Settings.".into());
-                }
-                // Antigravity's /goal only sets a goal, so any other word would become one.
-                if !matches!(command, provider::GoalCommand::Set(_)) {
-                    return Err("Antigravity's /goal only sets a goal: /goal <objective>. Clear a goal from the goal banner.".into());
-                }
-            }
-            // Claude would take either word as a new goal it can never meet, and loop on it.
-            let word = match command {
-                provider::GoalCommand::Pause => Some("pause"),
-                provider::GoalCommand::Resume => Some("resume"),
-                _ => None,
+            let current = self.store.thread(&thread_id).and_then(|t| t.goal);
+            let goal = if let provider::GoalCommand::Set(objective) = command {
+                orchestration::goal::new_goal(current.as_ref(), objective)
+            } else {
+                let goal = current.ok_or("There is no goal to resume")?;
+                goal.with_status(GoalStatus::Active, crate::system::now_ms())
             };
-            if agent == Some(AgentKind::Claude)
-                && let Some(word) = word
-            {
-                return Err(format!(
-                    "Claude has no /goal {word}. Send a message to carry on with the goal, or /goal clear to drop it."
-                ).into());
-            }
-            if matches!(
-                command,
-                provider::GoalCommand::Set(_) | provider::GoalCommand::Resume
-            ) {
-                // Only an explicit new goal or resume request can reopen a dismissed goal.
-                // A provider restating cached goal state must not erase the dismissal.
-                orchestration::goal::clear_dismissal(&self.store, &thread_id)?;
-            }
+            // Only an explicit new goal or resume reopens a dismissed goal.
+            orchestration::goal::clear_dismissal(&self.store, &thread_id)?;
+            orchestration::publish(
+                self,
+                &thread_id,
+                AgentEvent::GoalUpdated { goal: Some(goal) },
+            );
         }
         // Antigravity has no setting for when it compacts, so a chat over its compact window
         // compacts first, and the message waits for it in the queue.
@@ -329,8 +325,7 @@ impl Core {
             self.name_thread(&thread_id, subject, placeholder, agent, model);
         }
         // A goal that has ended is over: the next message starts unrelated work, so its banner
-        // goes. The agent has already dropped the goal, or `settle` told it to with a /goal
-        // command, which is why those leave the banner alone.
+        // goes. A new /goal replaces it instead.
         if !provider::is_goal_command(&text)
             && let Some(goal) = self.store.thread(&thread_id).and_then(|t| t.goal)
             && matches!(goal.status, GoalStatus::Complete | GoalStatus::Blocked)
@@ -353,9 +348,10 @@ impl Core {
             let agent = self.store.with_threads(|threads| {
                 threads.iter().find(|t| t.id == thread_id).map(|t| t.agent)
             });
+            let text = orchestration::goal::agent_text(&self.store, &thread_id, text.clone());
             let text = match (agent, skills::invoked(&text, &skills)) {
                 (Some(agent), Some((skill, rest))) => skills::invocation(agent, &skill, rest),
-                _ => text.clone(),
+                _ => text,
             };
             let (text, role) = self.summon_agents(&thread_id, text, false);
             switched = Some(role);
@@ -453,7 +449,7 @@ impl Core {
                     }
                 };
                 // The app adds a message it sent once this returns, but not one the core sends
-                // itself (a goal clear), so the chat learns of it before the reply starts.
+                // itself (carrying a goal on), so the chat learns of it before the reply starts.
                 self.emit(AgentEventEnvelope {
                     thread_id: thread_id.clone(),
                     event: AgentEvent::MessageStarted {
@@ -507,8 +503,7 @@ impl Core {
     }
 
     /// Stops the running turn by interrupting the agent, so its session records the stop and an
-    /// agent that can stays up for the next message. Codex is first told to pause the goal it is
-    /// pursuing, so it does not carry on with it later.
+    /// agent that can stays up for the next message.
     pub fn cancel_turn(&self, thread_id: &str) {
         THREAD_LOG.text(
             LogLevel::Info,
@@ -522,41 +517,12 @@ impl Core {
     /// Stops the running turn as `cancel_turn` does; without `interrupt`, the agent process ends
     /// with it.
     pub(crate) fn stop_turn(&self, thread_id: &str, interrupt: bool) {
-        let thread = self.store.thread(thread_id);
-        let session_id = thread.as_ref().and_then(|t| t.session_id.clone());
-        let pause = thread.and_then(|t| {
-            let active = t.goal.is_some_and(|g| g.status == GoalStatus::Active);
-            provider::goal_pause(t.agent, t.session_id.as_deref()?).filter(|_| active)
-        });
+        let session_id = self.store.thread(thread_id).and_then(|t| t.session_id);
         if interrupt {
-            self.runner
-                .interrupt(thread_id, session_id.as_deref(), pause);
+            self.runner.interrupt(thread_id, session_id.as_deref());
         } else {
-            self.runner.cancel(thread_id, pause);
+            self.runner.cancel(thread_id);
         }
-    }
-
-    /// Stops the subagent that the call `tool_id` started.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when the subagent's command already finished, when the chat has no running
-    /// turn, when the subagent cannot be stopped, or when the turn no longer accepts input.
-    pub fn stop_subagent(&self, thread_id: &str, tool_id: &str) -> Result<(), Error> {
-        // A sub agent on another agent is a turn of its own, in its own thread.
-        let own_turn = self.store.thread(thread_id).and_then(|t| {
-            t.messages
-                .iter()
-                .flat_map(|m| &m.tools)
-                .find(|c| c.id == tool_id)
-                .and_then(|c| c.child_thread_id.clone())
-                .filter(|child| self.runner.is_starting(child) || self.runner.is_running(child))
-        });
-        if let Some(child) = own_turn {
-            self.stop_turn(&child, false);
-            return Ok(());
-        }
-        self.runner.stop_subagent(thread_id, tool_id)
     }
 
     /// Drops the note on chat `thread_id`'s background task `tool_id` that Patchwork closing ended

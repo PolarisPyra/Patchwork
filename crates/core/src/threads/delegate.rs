@@ -12,7 +12,6 @@
 use serde_json::{Value, json};
 
 use super::granular::{AgentPick, sub_agent_of};
-use crate::provider::AgentKind;
 use crate::{Error, Core};
 
 /// The tool a chat's agent starts a sub agent on another agent with.
@@ -42,37 +41,22 @@ pub fn shown(summary: &str) -> &str {
     }
 }
 
-/// What the agent of `caller` is told the tool does, for sub agents that run at `pick`.
-fn description(caller: AgentKind, pick: &AgentPick) -> String {
+/// What Patchwork's own agent is told the tool does, for sub agents that run at `pick`.
+fn description(pick: &AgentPick) -> String {
     let model = pick
         .model
         .as_deref()
         .map(|model| format!(" ({model})"))
         .unwrap_or_default();
     // Patchwork's own agent runs its calls one at a time and has no sub agents of its own.
-    if caller == AgentKind::Api {
-        let on = if pick.agent == caller {
-            format!("a fresh run of this agent{model}, with the same tools")
-        } else {
-            format!("{:?}{model}, with tools of its own", pick.agent)
-        };
-        return format!(
-            "Hand a self-contained piece of work to a sub agent and wait for its answer: {on}, \
-             working in the same folder. It sees nothing of this conversation, so the prompt must \
-             hold everything it needs, and only its last reply comes back. Use it for work whose \
-             steps would crowd this conversation, such as searching a large codebase or \
-             researching a question. Your calls run one at a time, so to carry on with your own \
-             work while it runs, set run_in_background: the call then returns its id at once, and \
-             {RESULT} gives its answer when you need it."
-        );
-    }
     format!(
-        "Run a sub agent on {:?}{model} and wait for its answer. The user set this chat's sub \
-         agents to run there: whenever you would hand work to a sub agent, call this instead of \
-         your own sub agent or task tool. The sub agent works in the same folder with tools of its \
-         own and sees nothing of this conversation, so the prompt must hold everything it needs. \
-         Several calls in one message run side by side.",
-        pick.agent
+        "Hand a self-contained piece of work to a sub agent and wait for its answer: a fresh run \
+         of this agent{model}, with the same tools, working in the same folder. It sees nothing of \
+         this conversation, so the prompt must hold everything it needs, and only its last reply \
+         comes back. Use it for work whose steps would crowd this conversation, such as searching \
+         a large codebase or researching a question. Your calls run one at a time, so to carry on \
+         with your own work while it runs, set run_in_background: the call then returns its id at \
+         once, and {RESULT} gives its answer when you need it."
     )
 }
 
@@ -107,29 +91,23 @@ impl Ask {
 }
 
 impl Core {
-    /// The tools as Patchwork's own server lists them for the thread's agent: [`TOOL`], and for
-    /// Patchwork's own agent [`RESULT`] with it. Empty when the thread's CLI runs its sub agents
-    /// itself.
+    /// The tools as Patchwork's own server lists them for the thread's agent: [`TOOL`] and
+    /// [`RESULT`] for Patchwork's own agent, and none for a CLI, which runs its sub agents itself.
     pub(crate) fn delegate_tools(&self, thread_id: &str) -> Vec<Value> {
         let Some(thread) = self.store.thread(thread_id) else {
             return Vec::new();
         };
-        let Some(pick) = sub_agent_of(&self.store, &self.store.settings(), &thread) else {
+        let Some(pick) = sub_agent_of(&thread) else {
             return Vec::new();
         };
         let mut run = json!({
             "name": TOOL,
-            "description": description(thread.agent, &pick),
+            "description": description(&pick),
             "inputSchema": {"type": "object", "properties": {
                 "description": {"type": "string", "description": "What the sub agent does, in a few words."},
                 "prompt": {"type": "string", "description": "The whole task, with everything the sub agent needs to know."}
             }, "required": ["description", "prompt"]},
         });
-        // A CLI runs the calls of one message side by side, so only Patchwork's own agent, whose
-        // calls run one at a time, needs a sub agent in the background.
-        if thread.agent != AgentKind::Api {
-            return vec![run];
-        }
         run["inputSchema"]["properties"]["run_in_background"] = json!({
             "type": "boolean",
             "description": "Return at once with the sub agent's id, and carry on while it works.",

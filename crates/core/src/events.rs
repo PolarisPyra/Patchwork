@@ -100,11 +100,6 @@ pub enum AgentEvent {
     GoalUpdated {
         goal: Option<Goal>,
     },
-    /// The reply ended and the agent is checking whether it met the goal (Claude). The
-    /// message's next output ends the check.
-    GoalChecking {
-        message_id: String,
-    },
     /// The agent is summarizing the conversation to free up context. Saved as a compaction part
     /// where it happened; the message's next output ends it.
     Compacting {
@@ -233,7 +228,7 @@ pub enum AgentEvent {
     },
     /// The chat apps the thread is continued on changed.
     ChatAppsChanged,
-    /// The thread's agent, model, access or plan mode was changed from a chat app, or it was set
+    /// The thread's agent, model or access was changed from a chat app, or it was set
     /// there to resume once its usage limit resets.
     OptionsChanged,
     /// The settings were changed from outside the window, as a chat app does: the window reads

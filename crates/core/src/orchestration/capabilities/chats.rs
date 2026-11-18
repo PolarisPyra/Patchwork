@@ -132,7 +132,7 @@ fn changed(ctx: &Ctx<'_>, thread_id: &str) {
     });
 }
 
-/// Changes what a chat runs with: its agent, model, access and plan mode.
+/// Changes what a chat runs with: its agent, model and access.
 pub(super) fn set_options(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
     let thread = chat(ctx, args)?;
     let access = text(args, "access");
@@ -152,11 +152,6 @@ pub(super) fn set_options(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> 
             ctx.core.set_chat_option(&now, word, value)?;
             any = true;
         }
-    }
-    if let Some(on) = args["plan"].as_bool() {
-        ctx.core
-            .set_chat_option(&thread, "plan", if on { "on" } else { "off" })?;
-        any = true;
     }
     let now = ctx.core.store.thread(&thread.id).unwrap_or(thread);
     Ok(if any {

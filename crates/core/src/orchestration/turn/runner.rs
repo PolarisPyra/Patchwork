@@ -297,23 +297,15 @@ impl Runner {
         Delivery::Queued
     }
 
-    /// Stops the turn and drops the messages waiting for it. `last_line` is written
-    /// to the agent first, with a moment to act on it. The agent's scope is stopped along
+    /// Stops the turn and drops the messages waiting for it. The agent's scope is stopped along
     /// with its process group, so a command it started in a session of its own, which
     /// could keep its output open, ends with it.
-    pub fn cancel(&self, thread_id: &str, last_line: Option<String>) {
+    pub fn cancel(&self, thread_id: &str) {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(turn) = turns.get(thread_id) {
             stop_turn(turn);
             let (pid, exited, scope) = (turn.pid, Arc::clone(&turn.exited), turn.scope.clone());
-            let grace = if last_line.is_some_and(|line| write_line(&turn.stdin, &line)) {
-                // Time for the agent to act on its last line before it is stopped.
-                Duration::from_millis(300)
-            } else {
-                Duration::ZERO
-            };
             std::thread::spawn(move || {
-                std::thread::sleep(grace);
                 terminate(pid, exited);
                 if let Some(unit) = scope {
                     scope::stop(&unit);
@@ -330,7 +322,7 @@ impl Runner {
     /// reply within `INTERRUPT_GRACE` or before Stop is pressed again, is stopped as `cancel`
     /// stops it. `session_id` is the
     /// thread's agent session, which Codex needs.
-    pub fn interrupt(&self, thread_id: &str, session_id: Option<&str>, last_line: Option<String>) {
+    pub fn interrupt(&self, thread_id: &str, session_id: Option<&str>) {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(turn) = turns.get(thread_id) else {
             self.stop_when_started(thread_id);
@@ -348,12 +340,9 @@ impl Runner {
         // Stop pressed again while the agent has yet to end its reply ends it now.
         let Some(line) = line.filter(|_| !turn.interrupts.waiting()) else {
             drop(turns);
-            return self.cancel(thread_id, last_line);
+            return self.cancel(thread_id);
         };
         stop_turn(turn);
-        if let Some(last_line) = &last_line {
-            write_line(&turn.stdin, last_line);
-        }
         let asked = turn.interrupts.ask();
         let wait = if write_line(&turn.stdin, &line) {
             INTERRUPT_GRACE

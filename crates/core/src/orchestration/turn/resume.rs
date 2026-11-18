@@ -13,7 +13,6 @@ use std::sync::Arc;
 use crate::events::AgentEvent;
 use crate::orchestration::turn::start::TurnRequest;
 use crate::orchestration::{self, goal};
-use crate::provider::AgentKind;
 use crate::settings::ResumeAtLaunch;
 use crate::threads::{Goal, GoalStatus, MessageStatus, Role, Thread};
 use crate::{Error, Core};
@@ -121,17 +120,15 @@ impl Core {
         let goal = thread
             .goal
             .filter(|g| goal::take_cut_off(&self.store, thread_id, g));
-        // Codex pursues a goal only while it is active in its own thread, which `/goal resume`
-        // sets as it starts the turn. Its thread holds the cut-off turn, so it needs no note.
-        let text = match (&goal, thread.agent, &thread.session_id) {
-            (Some(_), AgentKind::Codex, Some(_)) => "/goal resume".into(),
-            _ => note(cut_off),
-        };
+        // The goal is active before the turn starts, so the turn's end carries it on.
+        if let Some(goal) = &goal {
+            set_goal_status(self, thread_id, goal, GoalStatus::Active);
+        }
         let started = self.runner.start_turn(
             self,
             TurnRequest {
                 thread_id: thread_id.into(),
-                text,
+                text: note(cut_off),
                 attachments: Vec::new(),
                 images: Vec::new(),
                 resumes: true,
@@ -140,23 +137,22 @@ impl Core {
         if let Err(e) = started {
             // The turn did not start, so the goal is still the one a later resume takes up.
             if let Some(goal) = &goal {
+                set_goal_status(self, thread_id, goal, GoalStatus::Paused);
                 goal::note_cut_off(&self.store, thread_id, goal, true);
             }
             return Err(e);
         }
-        // Claude takes its goal up again by itself when its session resumes, and Codex reports
-        // its own as it goes active. Antigravity keeps the goal with the conversation and
-        // reports nothing, so the goal is shown pursued again here.
-        if let Some(goal) = goal.filter(|_| thread.agent == AgentKind::Antigravity) {
-            let status = GoalStatus::Active;
-            orchestration::publish(
-                self,
-                thread_id,
-                AgentEvent::GoalUpdated {
-                    goal: Some(Goal { status, ..goal }),
-                },
-            );
-        }
         Ok(())
     }
+}
+
+/// Publishes `goal` with `status`.
+fn set_goal_status(core: &Arc<Core>, thread_id: &str, goal: &Goal, status: GoalStatus) {
+    orchestration::publish(
+        core,
+        thread_id,
+        AgentEvent::GoalUpdated {
+            goal: Some(goal.clone().with_status(status, crate::system::now_ms())),
+        },
+    );
 }

@@ -26,7 +26,6 @@ pub struct NewThread {
     /// None follows Settings → Tokens.
     #[serde(default)]
     pub compact_window: Option<u64>,
-    pub plan_mode: bool,
 }
 
 impl NewThread {
@@ -77,7 +76,6 @@ impl Core {
             access_mode,
             effort,
             compact_window,
-            plan_mode,
         } = new;
         if let Some(id) = &project_id {
             self.project_root(id)?;
@@ -106,7 +104,6 @@ impl Core {
             folder_id: None,
             archived_at: None,
             parent: None,
-            plan_mode,
             slash_commands: vec![],
             imported_from: None,
             context_pending: false,
@@ -121,12 +118,11 @@ impl Core {
         note(
             &thread.id,
             format!(
-                "created: {:?}, model {}, {:?} access, effort {}, plan mode {}, {}",
+                "created: {:?}, model {}, {:?} access, effort {}, {}",
                 thread.agent,
                 thread.model.as_deref().unwrap_or("default"),
                 thread.access_mode,
                 thread.effort.as_deref().unwrap_or("default"),
-                thread.plan_mode,
                 if thread.project_id.is_some() {
                     "in a project"
                 } else {
@@ -239,7 +235,7 @@ impl Core {
     /// Ends what a thread that is about to be deleted has outside the database: its agent and
     /// jobs, the snapshots its turns left in the project's repository, and its API session.
     pub(crate) fn forget_thread(&self, id: &str) {
-        self.runner.cancel(id, None);
+        self.runner.cancel(id);
         self.runner.forget_jobs(id);
         self.remove_checkpoints(id);
         self.remove_thread_worktree(id);

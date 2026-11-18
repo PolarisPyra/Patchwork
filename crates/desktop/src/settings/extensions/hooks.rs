@@ -54,15 +54,7 @@ fn when_text(event: HookEvent, shell: bool) -> String {
     };
     match event {
         HookEvent::UserPromptSubmit => "When a prompt is sent".into(),
-        HookEvent::SessionStart => "When a session starts".into(),
         HookEvent::PreToolUse => format!("Before {calls}"),
-        HookEvent::PermissionRequest if shell => "When a shell command asks permission".into(),
-        HookEvent::PermissionRequest => "When a tool asks permission".into(),
-        HookEvent::PostToolUse => format!("After {calls}"),
-        HookEvent::PreCompact => "Before compacting".into(),
-        HookEvent::PostCompact => "After compacting".into(),
-        HookEvent::SubagentStart => "When a subagent starts".into(),
-        HookEvent::SubagentStop => "When a subagent stops".into(),
         HookEvent::Stop => "After each turn".into(),
         HookEvent::Interrupt => "When a turn is interrupted".into(),
         HookEvent::SessionEnd => "When a session ends".into(),

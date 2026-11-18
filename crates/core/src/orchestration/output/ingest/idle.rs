@@ -25,10 +25,9 @@ pub(super) fn can_idle(turn: &Turn, goal: Option<&Goal>, stream_error: Option<&S
 }
 
 /// Whether the agent's process can stay up once its reply has ended. Only Claude keeps its process
-/// between messages, and a goal still to be pursued keeps the turn going instead.
+/// between messages. An active goal ends the turn instead, so the goal is settled and carried on.
 pub(super) fn stays_up(turn: &Turn, goal: Option<&Goal>) -> bool {
-    turn.agent == AgentKind::Claude
-        && !goal.is_some_and(|g| matches!(g.status, GoalStatus::Active | GoalStatus::Paused))
+    turn.agent == AgentKind::Claude && !goal.is_some_and(|g| g.status == GoalStatus::Active)
 }
 
 /// Completes the replies not yet completed, with the files they changed, and marks the turn

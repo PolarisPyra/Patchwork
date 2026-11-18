@@ -13,7 +13,6 @@ use crate::provider::TurnSpec;
 /// The prompt is sent on stdin (`user_message`), so approvals can be answered there too.
 pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
     let mode = match spec.mode {
-        _ if spec.plan => "plan",
         AccessMode::Supervised => "manual",
         AccessMode::AutoAcceptEdits => "acceptEdits",
         AccessMode::Auto => "auto",
@@ -97,17 +96,6 @@ pub fn background_task(tool_id: &str, request_id: &str) -> String {
         "type": "control_request",
         "request_id": request_id,
         "request": {"subtype": "background_tasks", "tool_use_id": tool_id},
-    })
-    .to_string()
-}
-
-/// Asks Claude to stop one of its subagents.
-#[must_use]
-pub fn stop_task(task_id: &str) -> String {
-    serde_json::json!({
-        "type": "control_request",
-        "request_id": crate::system::new_id(),
-        "request": {"subtype": "stop_task", "task_id": task_id},
     })
     .to_string()
 }

@@ -135,9 +135,10 @@ impl Core {
         if queued.is_empty() {
             return Err("There are no queued messages to resume".into());
         }
+        // A queued `/goal` reaches the agent as the goal's brief.
         let text = queued
             .iter()
-            .map(|m| m.text.as_str())
+            .map(|m| orchestration::goal::agent_text(&self.store, thread_id, m.text.clone()))
             .collect::<Vec<_>>()
             .join("\n\n");
         let text = self.chat_app_context(thread_id, text);

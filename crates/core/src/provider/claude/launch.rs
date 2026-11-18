@@ -73,7 +73,7 @@ pub fn resume_point_args(point: &ResumePoint) -> Vec<String> {
 /// Writes the hooks Claude runs to `file` in its plugin folder, or removes the file when there are
 /// none. Turns share the folder, so the file is only written when it changes.
 fn write_hooks(file: &Path, hooks: &[AgentHook]) {
-    let config = crate::provider::hooks::hooks_json(hooks, AgentKind::Claude);
+    let config = crate::provider::hooks::hooks_json(hooks);
     if config["hooks"]
         .as_object()
         .is_none_or(serde_json::Map::is_empty)
@@ -154,19 +154,6 @@ pub fn launch_env(compact_window: u64) -> Vec<(&'static str, String)> {
         ));
     }
     env
-}
-
-/// Environment that sets the model and effort Claude runs its subagents at, in place of the
-/// chat's own.
-#[must_use]
-pub fn sub_agent_env(pick: &crate::threads::AgentPick) -> Vec<(&'static str, String)> {
-    [
-        ("CLAUDE_CODE_SUBAGENT_MODEL", &pick.model),
-        ("CLAUDE_CODE_SUBAGENT_EFFORT", &pick.effort),
-    ]
-    .into_iter()
-    .filter_map(|(name, value)| Some((name, value.clone()?)))
-    .collect()
 }
 
 /// Variables the shell-environment file leaves out: Patchwork passes the PATH itself, and the rest
@@ -253,6 +240,85 @@ fn permission_settings(command: &str) -> serde_json::Value {
         "matcher": PERMISSION_TOOLS,
         "hooks": [{ "type": "command", "command": command, "timeout": 86400 }],
     }] } })
+}
+
+/// Longest the one-off `/goal clear` may take: it is answered without the model.
+const GOAL_CLEAR_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Clears the goal Claude keeps in session `session_id` from before Patchwork ran goals itself.
+///
+/// Claude restores an unmet goal of its own when a session resumes, and would pursue it beside
+/// Patchwork's. The session's transcript says whether it holds one: its last `goal_status` is
+/// neither met nor failed. Then `/goal clear` runs in the session, in `root` where it was started,
+/// which records the goal as cleared, so this runs once per session. Failures are logged, and the
+/// turn starts anyway.
+pub fn clear_own_goal(session_id: &str, root: &str, compact_window: u64) {
+    if !holds_goal(session_id) {
+        return;
+    }
+    let Some(binary) = super::cli::binary() else {
+        return;
+    };
+    let child = crate::system::host_command(binary)
+        .args(["-p", "--resume", session_id, "/goal clear"])
+        .envs(launch_env(compact_window))
+        .current_dir(root)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+    let mut child = match child {
+        Ok(child) => child,
+        Err(e) => {
+            log::warn!(error:% = e; "could not clear Claude's own goal: {{error}}");
+            return;
+        }
+    };
+    let started = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return,
+            Ok(None) if started.elapsed() < GOAL_CLEAR_LIMIT => {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                log::warn!("clearing Claude's own goal took too long");
+                return;
+            }
+            Err(e) => {
+                log::warn!(error:% = e; "could not clear Claude's own goal: {{error}}");
+                return;
+            }
+        }
+    }
+}
+
+/// Whether the session's transcript ends with a goal of Claude's own still being pursued.
+fn holds_goal(session_id: &str) -> bool {
+    let file = format!("{session_id}.jsonl");
+    let Some(projects) = super::home().map(|h| h.join("projects")) else {
+        return false;
+    };
+    let Some(text) = std::fs::read_dir(projects)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .find_map(|dir| std::fs::read_to_string(dir.path().join(&file)).ok())
+    else {
+        return false;
+    };
+    text.lines()
+        .rev()
+        .filter(|line| line.contains("\"goal_status\""))
+        .find_map(|line| {
+            let v: serde_json::Value = serde_json::from_str(line).ok()?;
+            let status = &v["attachment"];
+            (status["type"] == "goal_status")
+                .then(|| status["met"] == false && status["failed"].as_bool() != Some(true))
+        })
+        .unwrap_or(false)
 }
 
 #[cfg(test)]

@@ -34,7 +34,7 @@ pub struct Request {
     pub model: Option<String>,
     /// The model's variant, OpenCode's reasoning effort.
     pub effort: Option<String>,
-    /// `build`, or `plan` in plan mode.
+    /// The OpenCode agent the turn runs as: `build`.
     pub agent: String,
     /// The session's permission rules; empty keeps OpenCode's own.
     pub permissions: Value,

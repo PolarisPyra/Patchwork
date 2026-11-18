@@ -1,5 +1,5 @@
 //! Drawing the card: rows for the chat's agent, the agent that reviews its replies, and its
-//! fallback, each agent's over the sub agents it starts, and the buttons under them.
+//! fallback, and the buttons under them.
 
 // Rust guideline compliant 2026-10-09
 
@@ -9,13 +9,12 @@ use gpui::{
 };
 
 use super::menus::below;
-use super::state::{GranularDialog, GranularScope, Part, Slot, agent_of, pick_of, starter_of};
+use super::state::{GranularDialog, GranularScope, Part, Slot, agent_of, pick_of};
 use crate::chat::composer::effort_label;
 use crate::ui::dialog;
 use crate::ui::theme::{fs_md, fs_sm, radius, Theme, theme};
 use crate::ui::{BtnKind, agent_label, agent_logo, btn, button, icon, icon_button};
 use crate::workspace::Workspace;
-use patchwork_core::threads::delegates_sub_agents;
 
 /// The height of every select on the card.
 const SELECT_HEIGHT: f32 = 32.;
@@ -73,7 +72,7 @@ impl Workspace {
     fn granular_panel(
         &self,
         dialog: &GranularDialog,
-        (main, sub): (Slot, Option<Slot>),
+        main: Slot,
         t: &Theme,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -173,46 +172,6 @@ impl Workspace {
             cx,
         )
         .on_click(cx.listener(move |this, _, _, cx| this.reset_granular(main, cx)));
-        // The agent the sub agents run on, where the one that starts them can hand work to another.
-        let sub_agent = sub
-            .and_then(|sub| starter_of(value, sub).map(|starter| (sub, starter)))
-            .filter(|(_, starter)| delegates_sub_agents(*starter))
-            .map(|(sub, starter)| {
-                let pick = pick_of(value, sub);
-                let on = pick.map_or(starter, |p| p.agent);
-                let model = pick.and_then(|p| p.model.as_deref());
-                let field = Field {
-                    shown: agent_label(on).into(),
-                    unset: on == starter,
-                    mark: Some(agent_logo(on, model, 16.)),
-                };
-                let label = format!("{} agent", sub.name());
-                row("Agent", dropdown(sub, Part::Agent, label, field))
-            });
-        let sub_rows: Vec<AnyElement> = sub_agent
-            .into_iter()
-            .chain(sub.map(rows).unwrap_or_default())
-            .collect();
-        let sub_agents = sub.filter(|_| !sub_rows.is_empty()).map(|sub| {
-            div()
-                .id(SharedString::from(format!("granular-{}", sub.name())))
-                .role(Role::Group)
-                .aria_label(sub.name())
-                .flex()
-                .flex_col()
-                .gap(px(6.))
-                .pt(px(10.))
-                .border_t_1()
-                .border_color(t.border)
-                .child(
-                    div()
-                        .text_size(px(fs_sm()))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(t.text_muted)
-                        .child("Sub agents"),
-                )
-                .children(sub_rows)
-        });
         div()
             .id(SharedString::from(format!("granular-{}", main.name())))
             .role(Role::Group)
@@ -246,7 +205,6 @@ impl Workspace {
                     .child(row("Agent", picker))
                     .children(rows(main)),
             )
-            .children(sub_agents)
             .into_any_element()
     }
 
@@ -259,8 +217,8 @@ impl Workspace {
         let t = *theme(cx);
         let viewport = window.viewport_size();
         // Settings → Chat can turn review off for every chat, and then there is nothing to pick.
-        let reviewer = (!self.settings.review_off)
-            .then(|| self.granular_panel(dialog, (Slot::Review, None), &t, cx));
+        let reviewer =
+            (!self.settings.review_off).then(|| self.granular_panel(dialog, Slot::Review, &t, cx));
         // Stacked, the card can outgrow the window, so its panels scroll under the title.
         let panels = div()
             .id("granular-panels")
@@ -269,9 +227,9 @@ impl Workspace {
             .gap(px(12.))
             .max_h(viewport.height - px(180.))
             .overflow_y_scroll()
-            .child(self.granular_panel(dialog, (Slot::Main, Some(Slot::Sub)), &t, cx))
+            .child(self.granular_panel(dialog, Slot::Main, &t, cx))
             .children(reviewer)
-            .child(self.granular_panel(dialog, (Slot::Fallback, Some(Slot::SubFallback)), &t, cx));
+            .child(self.granular_panel(dialog, Slot::Fallback, &t, cx));
         let project = matches!(dialog.scope, GranularScope::Project(_));
         let save = if dialog.first.is_some() {
             "Send"

@@ -24,7 +24,6 @@ pub(super) struct Draft {
     pub(super) access: AccessMode,
     pub(super) compact: Option<u64>,
     pub(super) role: Option<String>,
-    pub(super) plan_mode: bool,
 }
 
 /// The values the chips show: the open chat's, or the draft's before it starts.
@@ -107,7 +106,7 @@ impl Composer {
             if !alternate && this.sigil_enter(window, cx) {
                 return;
             }
-            this.send(alternate, true, window, cx);
+            this.send(alternate, window, cx);
         })
         .detach();
         cx.subscribe(&editor, |this, _, _: &Changed, cx| {
@@ -171,7 +170,6 @@ impl Composer {
                 access: AccessMode::FullAccess,
                 compact: None,
                 role: None,
-                plan_mode: false,
             },
             menu: None,
             dismissed: None,
@@ -247,7 +245,6 @@ impl Composer {
             access_mode: self.draft.access,
             effort,
             compact_window: self.draft.compact,
-            plan_mode: false,
         }
     }
 
@@ -258,7 +255,6 @@ impl Composer {
         self.draft.effort.clone_from(&bot.effort);
         self.draft.access = bot.access_mode;
         self.draft.role = None;
-        self.draft.plan_mode = false;
         cx.notify();
     }
 

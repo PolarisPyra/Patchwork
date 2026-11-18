@@ -1,8 +1,7 @@
-//! Subagents a turn starts: their own threads, moving them to the background, and stopping one.
+//! Subagents a turn starts: their own threads, and moving them to the background.
 
 // Rust guideline compliant 2026-10-09
 
-use crate::Error;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -28,9 +27,6 @@ use crate::orchestration::Runner;
 use crate::orchestration::output::stream::publish;
 use crate::orchestration::turn::start::assistant_message;
 use crate::orchestration::turn::start::Turn;
-
-/// Subagents the agent started: tool call id → the agent's own task id.
-pub(in crate::orchestration) type Tasks = Arc<Mutex<HashMap<String, String>>>;
 
 /// Control requests waiting for the agent's answer, by request id.
 pub(in crate::orchestration) type Controls = Arc<Mutex<HashMap<String, mpsc::Sender<()>>>>;
@@ -82,37 +78,6 @@ impl Runner {
         for answer in answers {
             let left = deadline.saturating_duration_since(Instant::now());
             let _ = answer.recv_timeout(left);
-        }
-    }
-
-    /// Stops one subagent of the running turn, leaving the rest of the turn going, or a command
-    /// Patchwork's own agent moved to the background.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when the command already finished, when the chat has no running turn, when
-    /// the subagent cannot be stopped, or when the turn no longer accepts input.
-    pub fn stop_subagent(&self, thread_id: &str, tool_id: &str) -> Result<(), Error> {
-        if let Some(stopped) = self.jobs.stop_listed(thread_id, tool_id) {
-            return stopped
-                .then_some(())
-                .ok_or_else(|| "This command has already finished".into());
-        }
-        let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
-        let turn = turns
-            .get(thread_id)
-            .ok_or("This turn is no longer running")?;
-        let line = turn
-            .tasks
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .get(tool_id)
-            .and_then(|task| provider::stop_subagent(turn.agent, task))
-            .ok_or("This subagent can't be stopped")?;
-        if write_line(&turn.stdin, &line) {
-            Ok(())
-        } else {
-            Err("This turn no longer accepts input".into())
         }
     }
 }
@@ -167,7 +132,6 @@ pub(in crate::orchestration) fn open_child(turn: &Turn, tool: &ToolCall) -> Opti
             thread_id: turn.thread_id.clone(),
             tool_id: tool.id.clone(),
         }),
-        plan_mode: false,
         slash_commands: vec![],
         imported_from: None,
         context_pending: false,

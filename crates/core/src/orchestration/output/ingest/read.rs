@@ -7,16 +7,13 @@ use std::io::BufReader;
 use std::process::Child;
 use std::process::ChildStdout;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::PoisonError;
 use std::thread::JoinHandle;
 
 use serde_json::Value;
 
-use crate::provider::GoalUpdate;
 use crate::provider::Parsed;
-use crate::provider::TaskEvent;
 use crate::provider;
 use crate::system::{processes, scope};
 use crate::events::AgentEvent;
@@ -47,7 +44,6 @@ fn publish_child(turn: &Turn, child: &mut SubagentThread, events: Vec<AgentEvent
     }
 }
 
-use crate::threads::GoalStatus;
 use crate::threads::MessageStatus;
 use crate::threads::TokenUsage;
 use crate::logging::{AGENT_LOG, Data, Source};
@@ -57,7 +53,6 @@ use crate::system::now_ms;
 
 use crate::orchestration::changes::attribution;
 use crate::orchestration::tasks::background::Background;
-use crate::orchestration::goal::end_input;
 use crate::orchestration::goal;
 use crate::orchestration::turn::process::exit_error;
 use crate::orchestration::turn::process::last_lines;
@@ -122,15 +117,9 @@ pub(in crate::orchestration) fn ingest(
     let mut repeats = Repeats::default();
     // The agent could not find the session the turn resumed, so the turn runs again without it.
     let mut session_lost = false;
-    let mut goal = turn.core.store.thread(&turn.thread_id).and_then(|t| t.goal);
-    // The agent reported its turn finished; Codex may start another for an active goal.
+    let goal = turn.core.store.thread(&turn.thread_id).and_then(|t| t.goal);
+    // The agent reported its turn finished.
     let mut ended = false;
-    // Codex reported this run's goal active, so it starts further turns toward it.
-    let mut goal_run = false;
-    // Claude ended a reply while pursuing the goal, so its evaluator checked that reply.
-    let mut goal_checked = false;
-    // Bumped whenever a turn starts, so a grace window that is still waiting does not close stdin.
-    let goal_round = Arc::new(AtomicU64::new(0));
     // Text streamed to the frontend but not yet stored; saving every delta
     // stalls the reader, so it is stored before the next event and at the end.
     let mut unsaved = Unsaved::default();
@@ -305,9 +294,6 @@ pub(in crate::orchestration) fn ingest(
                     // The finished turn can no longer be steered; until Codex starts the
                     // next one, messages wait for the run to end.
                     *turn.native.lock().unwrap_or_else(PoisonError::into_inner) = None;
-                    if stream_error.is_some() {
-                        goal_run = false;
-                    }
                     // Codex's calls still open are what its turn left running, so they are listed
                     // under the background now.
                     if turn.agent == AgentKind::Codex {
@@ -321,7 +307,7 @@ pub(in crate::orchestration) fn ingest(
                     if can_idle(&turn, goal.as_ref(), stream_error.as_ref()) {
                         go_idle(&turn, &segments, &mut completed, &mut unsaved, false, None);
                     } else if !background.keeps_stdin_open() {
-                        end_input(&turn, goal_run, &goal_round);
+                        turn.close_unless_steered();
                     } else if can_idle(&turn, goal.as_ref(), None) {
                         // A reply that failed while a command it started runs on ends now, with its
                         // error. Claude stays up with the command, as after a reply that did not fail,
@@ -360,7 +346,7 @@ pub(in crate::orchestration) fn ingest(
                         (has_text, last_was_text) = (false, false);
                         steer_reply_empty = true;
                     }
-                    if ended && !goal_run {
+                    if ended {
                         turn.close_unless_steered();
                     }
                 }
@@ -385,56 +371,8 @@ pub(in crate::orchestration) fn ingest(
                             .unwrap_or_else(PoisonError::into_inner)
                             .push(refused);
                     }
-                    if ended && !goal_run {
+                    if ended {
                         turn.close_unless_steered();
-                    }
-                }
-                Parsed::Goal(GoalUpdate::Checking) => {
-                    if !turn.cancelled.load(Ordering::SeqCst)
-                        && goal.as_ref().is_some_and(|g| goal::pursued(turn.agent, g))
-                    {
-                        goal_checked = true;
-                        turn.save_text(&mut unsaved);
-                        turn.publish(AgentEvent::GoalChecking {
-                            message_id: turn.message_id.clone(),
-                        });
-                    }
-                }
-                Parsed::Goal(update) => {
-                    // Once stopped, the agent's last word on the goal no longer applies.
-                    if turn.cancelled.load(Ordering::SeqCst) {
-                        continue;
-                    }
-                    if goal::update_is_dismissed(&turn.core.store, &turn.thread_id, &update)
-                        || goal::update_releases_held(
-                            &turn.core.store,
-                            &turn.thread_id,
-                            goal.as_ref(),
-                            &update,
-                        )
-                    {
-                        continue;
-                    }
-                    // Clearing from the banner drops the stored goal before the agent replies,
-                    // so the clear is published even when this turn started without a goal.
-                    let cleared = matches!(update, GoalUpdate::Cleared);
-                    let next = goal::next_goal(goal.as_ref(), update);
-                    if next != goal || cleared {
-                        goal = next;
-                        turn.save_text(&mut unsaved);
-                        turn.publish(AgentEvent::GoalUpdated { goal: goal.clone() });
-                    }
-                    // Codex goes on toward an active goal in turns it starts itself.
-                    goal_run = turn.agent == AgentKind::Codex
-                        && goal
-                            .as_ref()
-                            .is_some_and(|g| g.status == GoalStatus::Active);
-                    if ended && can_idle(&turn, goal.as_ref(), stream_error.as_ref()) {
-                        if completed < segments.len() {
-                            go_idle(&turn, &segments, &mut completed, &mut unsaved, false, None);
-                        }
-                    } else if ended && !background.keeps_stdin_open() {
-                        end_input(&turn, goal_run, &goal_round);
                     }
                 }
                 Parsed::SessionId(id) => {
@@ -457,12 +395,6 @@ pub(in crate::orchestration) fn ingest(
                     turn.publish(AgentEvent::SlashCommandsUpdated { commands });
                 }
                 Parsed::Task(event) => {
-                    if let TaskEvent::Started { task, task_id, .. } = &event {
-                        turn.tasks
-                            .lock()
-                            .unwrap_or_else(PoisonError::into_inner)
-                            .insert(task.tool_id.clone(), task_id.clone());
-                    }
                     for event in background.apply(event, &turn.message_id) {
                         publish_event(&turn, &mut children, &mut unsaved, event);
                     }
@@ -472,7 +404,7 @@ pub(in crate::orchestration) fn ingest(
                             go_idle(&turn, &segments, &mut completed, &mut unsaved, false, None);
                         }
                     } else if ended && !background.keeps_stdin_open() {
-                        end_input(&turn, goal_run, &goal_round);
+                        turn.close_unless_steered();
                     }
                 }
                 Parsed::Usage(windows) => turn.core.usage.record(turn.agent, windows),
@@ -517,7 +449,6 @@ pub(in crate::orchestration) fn ingest(
                 }
                 Parsed::TurnStarted(id) => {
                     ended = false;
-                    goal_round.fetch_add(1, Ordering::SeqCst);
                     *turn.native.lock().unwrap_or_else(PoisonError::into_inner) = Some(id);
                 }
                 Parsed::Compacting => {
@@ -708,12 +639,10 @@ pub(in crate::orchestration) fn ingest(
         }
     }
 
-    // An agent that was idle held no goal, and a turn that replaced it may have set one since.
-    let clear_in_agent = if turn.idle.load(Ordering::SeqCst) {
-        None
-    } else {
-        goal::settle(&turn, status, cancelled, goal_checked)
-    };
+    // An agent that went idle had no active goal, and a turn that replaced it may have set one
+    // since.
+    let goal_continues =
+        !turn.idle.load(Ordering::SeqCst) && goal::settle(&turn, status, cancelled, &segments);
 
     let session_lost = session_lost && !cancelled;
     finish(
@@ -723,7 +652,7 @@ pub(in crate::orchestration) fn ingest(
             status,
             error,
             cancelled,
-            clear_in_agent,
+            goal_continues,
             session_lost,
         },
     );

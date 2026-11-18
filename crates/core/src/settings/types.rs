@@ -454,10 +454,8 @@ pub enum ResumeAtLaunch {
 pub struct TokenSettings {
     /// Shows the token counts under each finished reply.
     pub show_usage: bool,
-    /// A context above this is flagged, and a cold task this large is asked about first.
+    /// A context above this is flagged.
     pub warn_above: u64,
-    /// Asks before a large task whose prompt cache has expired is resumed.
-    pub ask_before_resume: bool,
     /// The context size at which Claude compacts mid-task. 0 leaves Claude's own, near the
     /// model's full window.
     pub claude_compact_window: u64,
@@ -495,7 +493,6 @@ impl Default for TokenSettings {
         Self {
             show_usage: true,
             warn_above: 150_000,
-            ask_before_resume: true,
             claude_compact_window: 200_000,
             compact_window_reset: true,
             api_compact_window: 128_000,

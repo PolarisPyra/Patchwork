@@ -65,12 +65,9 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
     let mut tools = if spec.dispatcher {
         Vec::new()
     } else {
-        mcp::turn_tools(spec.plan)
+        mcp::turn_tools()
     };
-    // A sub agent can change files, which planning must not.
-    if !spec.plan || spec.dispatcher {
-        tools.extend(mcp::own_turn_tools(spec.thread_id));
-    }
+    tools.extend(mcp::own_turn_tools(spec.thread_id));
     let command =
         (spec.attachments.is_empty() && spec.text.trim() == "/compact").then_some("compact");
     let fields = json!({
@@ -82,7 +79,6 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         "imagesOk": images_ok,
         "vision": vision,
         "mode": spec.mode,
-        "plan": spec.plan,
         "effort": spec.effort,
         "compactWindow": spec.compact_window,
         "unlimitedSteps": spec.unlimited_steps,
@@ -95,7 +91,7 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         "hooks": spec
             .hooks
             .iter()
-            .filter(|hook| crate::provider::hooks::runs(crate::provider::AgentKind::Api, hook.event))
+            .filter(|hook| crate::provider::hooks::runs(hook.event))
             .collect::<Vec<_>>(),
     });
     if let (Some(request), Some(fields)) = (request.as_object_mut(), fields.as_object()) {
@@ -209,10 +205,6 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
                 steps,
             })]
         }
-        Some("api.plan") => vec![Parsed::Event(AgentEvent::PlanProposed {
-            message_id: message_id.into(),
-            text: text("text").into(),
-        })],
         Some("api.approval") => vec![Parsed::Approval {
             title: text("title").into(),
             detail: crate::provider::one_line(text("detail")),

@@ -23,7 +23,7 @@ use approvals::answer::{decide, unasked};
 #[doc(inline)]
 pub use approvals::answer::ApprovalDecision;
 #[doc(inline)]
-pub use goal::{Upkeep, is_upkeep, upkeep};
+pub use goal::{Upkeep, is_goal_continuation, is_upkeep, upkeep};
 #[doc(inline)]
 pub use messages::dispatch::{Dispatched, Route, Target};
 #[doc(inline)]

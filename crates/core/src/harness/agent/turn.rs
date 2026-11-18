@@ -69,7 +69,6 @@ pub(super) struct Request {
     #[serde(default)]
     pub(super) vision: Option<Vision>,
     pub(super) mode: AccessMode,
-    pub(super) plan: bool,
     pub(super) effort: Option<String>,
     /// Summarizes the conversation before a request once the last one's context reached this; 0
     /// leaves it until the provider refuses the conversation as too long.
@@ -271,7 +270,7 @@ impl Agent {
         let mut tools = if request.dispatcher {
             json!([])
         } else {
-            crate::harness::tools::definitions(request.plan)
+            crate::harness::tools::definitions()
         };
         if let Some(list) = tools.as_array_mut() {
             list.extend(request.mcp_tools.iter().map(|t| {

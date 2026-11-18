@@ -136,7 +136,6 @@ fn reviewer_thread(parent: &Thread, pick: &AgentPick) -> Thread {
             thread_id: parent.id.clone(),
             tool_id: String::new(),
         }),
-        plan_mode: false,
         slash_commands: vec![],
         imported_from: None,
         context_pending: false,

@@ -14,9 +14,7 @@ use crate::provider::CliInfo;
 use crate::provider::cli_info::{self, InfoCommand};
 use crate::provider::ModelOption;
 use super::find_binary;
-use super::GoalUpdate;
 use crate::system::fs::home_dir;
-use super::goal_argument;
 use super::located_or;
 use super::one_line;
 use super::probe;
@@ -145,7 +143,7 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
         args.push(format!("--effort={e}"));
     }
     // The `=` form keeps a prompt that starts with "-" from being read as a flag. Slash
-    // commands such as `/goal` are expanded in print mode.
+    // commands are expanded in print mode.
     args.push(format!("--print={}", prompt(spec)));
     args
 }
@@ -159,14 +157,6 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
         Some("init") => {
             if let Some(id) = v["conversation_id"].as_str().filter(|id| !id.is_empty()) {
                 out.push(Parsed::SessionId(id.into()));
-            }
-            // Antigravity reports nothing about a goal, so one set with `/goal` is taken as set
-            // once the run starts.
-            if let Some(objective) = goal_objective(spec) {
-                out.push(Parsed::Goal(GoalUpdate::Set {
-                    objective: objective.into(),
-                    checks: None,
-                }));
             }
         }
         // A subagent's steps are not part of the reply.
@@ -236,9 +226,4 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
         _ => {}
     }
     out
-}
-
-/// The objective of a `/goal <objective>` message.
-fn goal_objective<'a>(spec: &TurnSpec<'a>) -> Option<&'a str> {
-    goal_argument(spec.text).filter(|o| !o.is_empty())
 }

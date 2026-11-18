@@ -127,7 +127,7 @@ impl Core {
     pub fn set_thread_archived(&self, id: &str, archived: bool) -> Result<(), Error> {
         self.thread(id)?;
         if archived {
-            self.runner.cancel(id, None);
+            self.runner.cancel(id);
             crate::logging::THREAD_LOG.forget(id);
         }
         self.store

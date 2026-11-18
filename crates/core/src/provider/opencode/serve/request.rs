@@ -29,7 +29,7 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         "sessionId": spec.session_id,
         "model": spec.model,
         "effort": spec.effort,
-        "agent": if spec.plan { "plan" } else { "build" },
+        "agent": "build",
         "permissions": serve_permissions(spec),
         "text": prompt(spec),
         "files": image_paths(spec.attachments),
@@ -114,10 +114,6 @@ pub(super) fn serve_permissions(spec: &TurnSpec) -> Value {
     // A tool caught in a loop has no rule and no request for Patchwork to answer, so it stays
     // OpenCode's own call, as before.
     rules.push(rule("doom_loop", "allow"));
-    // Plan mode only reads and plans.
-    if spec.plan {
-        rules.push(rule("edit", "deny"));
-    }
     Value::Array(rules)
 }
 

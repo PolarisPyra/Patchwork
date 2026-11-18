@@ -25,8 +25,6 @@ pub struct TurnSpec<'a> {
     pub vision_model: Option<&'a crate::settings::VisionModel>,
     pub text: &'a str,
     pub mode: AccessMode,
-    /// Plan mode: the agent plans and proposes a plan, without changing files.
-    pub plan: bool,
     /// Reasoning effort, e.g. "high"; None leaves the CLI's default.
     pub effort: Option<&'a str>,
     /// The context size at which the agent compacts mid-task; 0 leaves it to the agent.
@@ -164,12 +162,6 @@ pub fn steer_input(
     }
 }
 
-/// The stdin line that pauses the agent's goal, for agents that pursue it on their own.
-#[must_use]
-pub fn goal_pause(agent: AgentKind, session_id: &str) -> Option<String> {
-    (agent == AgentKind::Codex).then(|| codex::goal_pause(session_id))
-}
-
 /// The stdin line that stops the agent's reply without ending its process, for agents that can.
 /// Codex needs the id of the turn it is running.
 #[must_use]
@@ -186,12 +178,6 @@ pub fn interrupt(
         AgentKind::OpenCode => opencode::uses_serve().then(opencode::interrupt_line),
         AgentKind::Antigravity => None,
     }
-}
-
-/// The stdin line that stops one subagent, for agents that can.
-#[must_use]
-pub fn stop_subagent(agent: AgentKind, task_id: &str) -> Option<String> {
-    (agent == AgentKind::Claude).then(|| claude::stop_task(task_id))
 }
 
 /// `/goal`, alone or with arguments, which runs as a turn of its own.
@@ -329,11 +315,6 @@ pub fn withheld_env(agent: AgentKind, vision: Option<AgentKind>) -> Vec<String> 
 #[must_use]
 pub fn turn_input(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
     match agent {
-        // Claude only runs `/goal` from a text-only message, so a goal names its attachments by
-        // path and Claude opens them with its own tools.
-        AgentKind::Claude if is_goal_command(spec.text) => {
-            vec![claude::user_message(&prompt(spec), &[])]
-        }
         AgentKind::Claude => vec![claude::user_message(&prompt(spec), spec.images)],
         AgentKind::Codex => codex::turn_input(spec),
         // The OpenCode bridge reads its turn from stdin, and answers and steers after it.
@@ -381,8 +362,8 @@ fn unasked(agent: AgentKind, spec: &TurnSpec, parsed: Parsed) -> Parsed {
             reply,
             target,
         },
-        // Claude's full access still sends questions here, and calls no rule answers, such as
-        // leaving plan mode, which are allowed at once.
+        // Claude's full access still sends questions here, and calls no rule answers, which are
+        // allowed at once.
         None if questions.is_empty()
             && agent == AgentKind::Claude
             && spec.mode == AccessMode::FullAccess =>

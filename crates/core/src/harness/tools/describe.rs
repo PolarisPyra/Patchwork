@@ -9,9 +9,9 @@ use crate::permissions::Target;
 use crate::permissions::PermissionKind;
 use crate::threads::AccessMode;
 
-/// The tools offered to the model. Plan mode offers only those that change nothing.
+/// The tools offered to the model.
 #[must_use]
-pub fn definitions(plan: bool) -> Value {
+pub fn definitions() -> Value {
     let tool = |name: &str, description: &str, parameters: Value| json!({"type": "function", "function": {"name": name, "description": description, "parameters": parameters}});
     let path = json!({"type": "string", "description": "A path relative to the project root, or absolute"});
     let mut tools = vec![
@@ -87,14 +87,6 @@ pub fn definitions(plan: bool) -> Value {
             }}}, "required": ["steps"]}),
         ),
     ];
-    if plan {
-        tools.push(tool(
-            "propose_plan",
-            "Present the finished implementation plan to the user, as Markdown. Call this once, when the plan is ready.",
-            json!({"type": "object", "properties": {"plan": {"type": "string"}}, "required": ["plan"]}),
-        ));
-        return Value::Array(tools);
-    }
     tools.extend([
         tool(
             "write_file",
@@ -146,7 +138,7 @@ pub fn definitions(plan: bool) -> Value {
         ),
     ]);
     // Computer use is only offered once Settings → Permissions has turned it on.
-    if !plan && crate::computer::enabled() {
+    if crate::computer::enabled() {
         tools.extend([
             tool(
                 "computer_screenshot",
@@ -216,7 +208,6 @@ pub fn display_name(name: &str) -> &str {
         "fetch_url" => "WebFetch",
         "ask_user" => "AskUserQuestion",
         "update_plan" => "TodoWrite",
-        "propose_plan" => "ExitPlanMode",
         "computer_screenshot" => "Screenshot",
         "computer_move" => "MoveMouse",
         "computer_click" => "Click",
@@ -242,7 +233,7 @@ pub fn summary(name: &str, args: &Value, root: &Path) -> String {
             .as_str()
             .unwrap_or_default()
             .to_string(),
-        "update_plan" | "propose_plan" | "computer_screenshot" | "job_list" => String::new(),
+        "update_plan" | "computer_screenshot" | "job_list" => String::new(),
         "computer_move" | "computer_click" => format!("{}, {}", field("x"), field("y")),
         "computer_type" => field("text"),
         "computer_key" => {

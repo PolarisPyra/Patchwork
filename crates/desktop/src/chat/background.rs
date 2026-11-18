@@ -1,7 +1,6 @@
 //! Tasks the agent started that are still running after its reply ended.
-//! They keep the turn going, so the user can follow them and stop one from here. A task the agent
-//! has no way to stop has no stop button. Tasks that Patchwork closing ended stay listed until the
-//! user runs them again or dismisses them.
+//! They keep the turn going, so the user can follow them from here. Tasks that Patchwork closing
+//! ended stay listed until the user runs them again or dismisses them.
 
 // Rust guideline compliant 2026-10-09
 
@@ -9,7 +8,7 @@ use gpui::{Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px, r
 use patchwork_core::threads::{BackgroundTask, TaskStatus};
 
 use crate::ui::theme::{fs_sm, radius, Theme};
-use crate::ui::{button, icon, icon_button, now_ms, spinner, tooltip};
+use crate::ui::{button, icon_button, now_ms, spinner, tooltip};
 use crate::workspace::Workspace;
 
 /// What each kind of task the agents report is called here. Any other kind is shown as it comes.
@@ -36,16 +35,6 @@ fn elapsed(ms: u64) -> String {
 }
 
 impl Workspace {
-    fn stop_background(&mut self, tool_id: &str, cx: &mut Context<Self>) {
-        let Some(thread) = self.thread.as_ref().map(|t| t.id.clone()) else {
-            return;
-        };
-        if let Err(e) = self.core.stop_subagent(&thread, tool_id) {
-            self.error = Some(e.to_string());
-        }
-        cx.notify();
-    }
-
     /// Drops task `tool_id` from the tasks that Patchwork closing ended.
     fn dismiss_cut_off(&mut self, tool_id: String, cx: &mut Context<Self>) {
         let Some(thread) = self.thread.as_ref().map(|t| t.id.clone()) else {
@@ -168,8 +157,7 @@ pub fn background_tasks(
         .map(|(i, task)| cut_off_row(i, task, t, cx))
         .collect();
     let now = now_ms();
-    let hover = t.bg_hover;
-    let rows = live.into_iter().enumerate().map(|(i, task)| {
+    let rows = live.into_iter().map(|task| {
         let lead = if task.status == TaskStatus::Running {
             div()
                 .flex_none()
@@ -182,22 +170,6 @@ pub fn background_tasks(
                 .child("Waiting")
                 .into_any_element()
         };
-        let stop = task.task_id.is_some().then(|| {
-            let tool_id = task.tool_id.clone();
-            button(
-                SharedString::from(format!("stop-background-{i}")),
-                format!("Stop background command {}", task.description),
-            )
-            .tooltip(tooltip("Stop background command"))
-            .flex_none()
-            .size(px(24.))
-            .justify_center()
-            .rounded(px(radius()))
-            .text_color(t.danger)
-            .hover(move |s| s.bg(hover))
-            .child(icon("square-fill", 10.))
-            .on_click(cx.listener(move |w, _, _, cx| w.stop_background(&tool_id, cx)))
-        });
         div()
             .flex()
             .min_w_0()
@@ -234,7 +206,6 @@ pub fn background_tasks(
                     .text_color(t.text_muted)
                     .child(elapsed(now.saturating_sub(task.started_at))),
             )
-            .children(stop)
     });
     Some(
         div()

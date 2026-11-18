@@ -65,7 +65,6 @@ impl Core {
             access_mode: task.access_mode,
             effort: None,
             compact_window: None,
-            plan_mode: false,
         })?;
         let thread = self.store.thread(&thread.id).unwrap_or(thread);
         self.emit(AgentEventEnvelope {

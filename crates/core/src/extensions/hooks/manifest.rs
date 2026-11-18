@@ -131,10 +131,11 @@ fn run_by(event: HookEvent, handler: &HookHandler) -> Vec<AgentKind> {
     if !runs {
         return Vec::new();
     }
-    AgentKind::ALL
-        .into_iter()
-        .filter(|&agent| event.runs_in_patchwork() || crate::provider::hooks::runs(agent, event))
-        .collect()
+    if event.runs_in_patchwork() || crate::provider::hooks::runs(event) {
+        AgentKind::ALL.to_vec()
+    } else {
+        Vec::new()
+    }
 }
 
 /// One handler, by its `type`. A command without its command line is skipped.

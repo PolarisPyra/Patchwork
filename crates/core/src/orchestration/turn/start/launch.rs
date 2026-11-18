@@ -26,8 +26,6 @@ use crate::system::scope;
 use crate::Core;
 use crate::events::AgentEvent;
 use crate::provider::AgentKind;
-use crate::threads::Goal;
-use crate::threads::GoalStatus;
 use crate::system::now_ms;
 use crate::threads::Role;
 use crate::logging::{AGENT_LOG, Data, Source};
@@ -44,7 +42,6 @@ use crate::orchestration::messages::queue::Queue;
 use crate::orchestration::messages::queue::Steers;
 use crate::orchestration::Runner;
 use crate::orchestration::tasks::subagents::Controls;
-use crate::orchestration::tasks::subagents::Tasks;
 
 /// Refuses a turn in a thread whose agent is replying, rather than starting a second agent beside
 /// it that nothing could stop.
@@ -86,7 +83,6 @@ impl Runner {
             mode,
             effort,
             compact_window,
-            plan,
             context,
             point,
             project_id,
@@ -148,7 +144,6 @@ impl Runner {
                 thread
                     .compact_window
                     .unwrap_or_else(|| settings.tokens.compact_window(thread.agent)),
-                thread.plan_mode,
                 context,
                 point,
                 thread.project_id.clone(),
@@ -164,6 +159,19 @@ impl Runner {
             )
         };
         let sends_context = context.is_some();
+        // Claude restores a goal of its own on resume, which Patchwork's would run beside. Each
+        // session is checked once.
+        let checked = format!("claude-goal-checked:{thread_id}");
+        if agent == AgentKind::Claude
+            && let Some(session) = &session_id
+            && !crate::system::ssh::is_remote(&root)
+            && core.store.state(&checked).as_deref() != Some(session.as_str())
+        {
+            crate::provider::claude::launch::clear_own_goal(session, &root, compact_window);
+            if let Err(e) = core.store.set_state(&checked, session) {
+                log::warn!(error:% = e; "failed to note a checked Claude session: {{error}}");
+            }
+        }
         let settings = core.store.settings();
         // A chat app's dispatcher has Patchwork's chat tools and nothing of the computer, which
         // only the agents that can be launched without their own tools can promise.
@@ -177,6 +185,8 @@ impl Runner {
         } else {
             crate::extensions::skills::enabled(&settings)
         };
+        // A /goal that sets or resumes the goal reaches the agent as the goal's brief.
+        let text = crate::orchestration::goal::agent_text(&core.store, &thread_id, text);
         // A message that names a skill as "$name" anywhere reaches the agent in the form it runs.
         let text = match crate::extensions::skills::invoked(&text, &skills) {
             Some((skill, rest)) => crate::extensions::skills::invocation(agent, &skill, rest),
@@ -293,7 +303,6 @@ impl Runner {
             vision_model: vision_model.as_ref(),
             text: &text,
             mode,
-            plan,
             effort: effort.as_deref(),
             compact_window,
             unlimited_steps,
@@ -344,11 +353,6 @@ impl Runner {
         if let Some(point) = &point {
             args.extend(crate::provider::claude::launch::resume_point_args(point));
         }
-        // The chat's own pick for the subagents its CLI starts, where the CLI takes one.
-        let sub = crate::threads::sub_pick(&core.store, &settings, &thread_id, agent);
-        if let (AgentKind::Codex, Some(sub)) = (agent, &sub) {
-            args.extend(crate::provider::codex::sub_agent_args(sub));
-        }
         if let Some(why) = provider::hooks::unguarded(agent, &args) {
             return Err(why.into());
         }
@@ -382,9 +386,6 @@ impl Runner {
             cmd.envs(crate::provider::claude::launch::launch_env(compact_window));
             if let Some(file) = crate::provider::claude::launch::shell_env_file() {
                 cmd.env("CLAUDE_ENV_FILE", file);
-            }
-            if let Some(sub) = &sub {
-                cmd.envs(crate::provider::claude::launch::sub_agent_env(sub));
             }
         }
         cmd.args(&args)
@@ -483,7 +484,6 @@ impl Runner {
         let native_turn = NativeTurn::default();
         let steers = Steers::default();
         let queue = Queue::default();
-        let tasks = Tasks::default();
         let controls = Controls::default();
         let idle = Arc::new(AtomicBool::new(false));
         let turn = Turn {
@@ -501,7 +501,6 @@ impl Runner {
             native: Arc::clone(&native_turn),
             steers: Arc::clone(&steers),
             queue: Arc::clone(&queue),
-            tasks: Arc::clone(&tasks),
             controls: Arc::clone(&controls),
             idle: Arc::clone(&idle),
             last_output: Arc::new(AtomicU64::new(now_ms())),
@@ -513,7 +512,6 @@ impl Runner {
             resumes,
             sent_context: sends_context,
             mode,
-            plan,
             effort,
             compact_window,
             unlimited_steps,
@@ -544,7 +542,6 @@ impl Runner {
                     native: native_turn,
                     steers,
                     queue,
-                    tasks,
                     controls,
                     idle,
                     stale: AtomicBool::new(false),
@@ -565,23 +562,9 @@ impl Runner {
             .unwrap_or_else(PoisonError::into_inner)
             .remove(&turn.thread_id)
         {
-            self.cancel(&turn.thread_id, None);
+            self.cancel(&turn.thread_id);
         }
         turn.publish(AgentEvent::MessageStarted { message });
-        // Claude restores an unmet goal whenever its session resumes, so this turn pursues it.
-        if agent == AgentKind::Claude && turn.session_id.is_some() {
-            let paused = core
-                .store
-                .thread(&turn.thread_id)
-                .and_then(|t| t.goal)
-                .filter(|g| g.status == GoalStatus::Paused);
-            if let Some(goal) = paused {
-                let status = GoalStatus::Active;
-                turn.publish(AgentEvent::GoalUpdated {
-                    goal: Some(Goal { status, ..goal }),
-                });
-            }
-        }
         let watched = Watched {
             core: Arc::clone(core),
             thread_id: turn.thread_id.clone(),
