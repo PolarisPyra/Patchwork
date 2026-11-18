@@ -3,6 +3,26 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.114] - 2026-11-18
+
+**v26.11.114** · 3 changes from 1 contributor
+
+- **Forks share their task's worktree.** A forked task now works in its source task's worktree by default, and worktrees clean themselves up when no longer needed.
+
+### Plus 1 more bug fix.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* fix(permissions): commands that use shell variables no longer ask when they are allowed by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/238
+* feat(worktrees): forks share their task's worktree, and worktrees clean themselves up by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/239
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.113...26.11.114
+
+</details>
+
 ## [26.11.113] - 2026-11-18
 
 **v26.11.113** · 6 changes from 1 contributor
