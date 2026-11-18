@@ -40,6 +40,17 @@ impl Workspace {
                     delete,
                 ];
             }
+            Target::Bot(id)
+                if self
+                    .bots
+                    .iter()
+                    .any(|b| &b.id == id && b.archived_at.is_some()) =>
+            {
+                return vec![
+                    item("Restore", "arrow-counter-clockwise", Act::Restore),
+                    delete,
+                ];
+            }
             _ => {}
         }
         let mut items = vec![item("Rename", "pencil-simple", Act::Rename)];
@@ -277,6 +288,7 @@ impl Workspace {
                 return self.open_background_dialog(id, window, cx);
             }
             (Target::Bot(id), Act::Details) => return self.open_bot_details(id, cx),
+            (Target::Bot(id), Act::Restore) => return self.set_bot_archived(id, false, cx),
             (Target::Bot(id), Act::Background) => {
                 return self.open_bot_background_dialog(id, window, cx);
             }
