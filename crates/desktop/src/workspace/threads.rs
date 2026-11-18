@@ -218,6 +218,9 @@ impl Workspace {
                 .detach();
                 if changed_project {
                     self.load_git(cx);
+                } else {
+                    // Another task of the project may work in a worktree of its own.
+                    self.read_git(false, cx);
                 }
                 true
             }

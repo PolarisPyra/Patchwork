@@ -16,7 +16,15 @@ impl Workspace {
         } else {
             CanvasTab::Code
         };
-        self.open_canvas(path, None, tab, window, cx);
+        let Some(project) = self.project() else {
+            return;
+        };
+        // The file is in the folder Source Control shows, which may be the task's worktree.
+        let root = self
+            .git_root
+            .clone()
+            .unwrap_or_else(|| project.path.clone());
+        self.open_canvas_at(path, root, None, tab, window, cx);
     }
 
     /// Opens `path` in the file panel, on `tab`, with the reply it came from.

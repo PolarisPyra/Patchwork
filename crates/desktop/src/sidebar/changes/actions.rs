@@ -82,10 +82,10 @@ impl ChangesView {
                     this.busy = Some("Pushing…".into());
                     cx.notify();
                 });
-                let (core, id) = (Arc::clone(&core), id.clone());
+                let (core, id, thread) = (Arc::clone(&core), id.clone(), thread.clone());
                 match cx
                     .background_spawn(async move {
-                        let root = core.project_root(&id)?;
+                        let root = core.source_root(&id, thread.as_deref())?;
                         patchwork_core::workspace::push(&root)
                     })
                     .await
@@ -120,8 +120,9 @@ impl ChangesView {
         .detach();
     }
 
-    /// The open chat or task, whose model writes a message when no title model is set.
-    fn thread_id(&self, cx: &Context<Self>) -> Option<String> {
+    /// The open chat or task: its model writes a message when no title model is set, and its
+    /// worktree, when it has one, is the folder Source Control works in.
+    pub(super) fn thread_id(&self, cx: &Context<Self>) -> Option<String> {
         self.workspace
             .upgrade()?
             .read(cx)
@@ -172,9 +173,10 @@ impl ChangesView {
         let (Some(core), Some(id)) = (self.core(cx), self.project_id.clone()) else {
             return;
         };
+        let thread = self.thread_id(cx);
         self.error = None;
         let task = cx.background_spawn(async move {
-            let root = core.project_root(&id)?;
+            let root = core.source_root(&id, thread.as_deref())?;
             for file in &files {
                 step(&root, file)?;
             }
@@ -238,7 +240,8 @@ impl ChangesView {
         self.resolving = true;
         cx.notify();
         let project = id.clone();
-        let task = cx.background_spawn(async move { core.conflict_prompt(&id) });
+        let thread = self.thread_id(cx);
+        let task = cx.background_spawn(async move { core.conflict_prompt(&id, thread.as_deref()) });
         cx.spawn(async move |this, cx| {
             let prompt = task.await;
             this.update(cx, |this, cx| {
@@ -271,7 +274,9 @@ impl ChangesView {
         self.pr_busy = true;
         cx.notify();
         let project = id.clone();
-        let task = cx.background_spawn(async move { core.pull_request_feedback(&id) });
+        let thread = self.thread_id(cx);
+        let task =
+            cx.background_spawn(async move { core.pull_request_feedback(&id, thread.as_deref()) });
         cx.spawn(async move |this, cx| {
             let feedback = task.await;
             this.update(cx, |this, cx| {

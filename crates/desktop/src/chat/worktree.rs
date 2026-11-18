@@ -149,6 +149,8 @@ impl Workspace {
                 // Replies' files were read from the project's folder before the worktree was known.
                 if strip.state.as_ref().map(|s| s.worktree.root.clone()) != had {
                     this.reply_files.clear();
+                    // A task's first turn makes its worktree, which Source Control then shows.
+                    this.read_git(false, cx);
                 }
                 cx.notify();
             })

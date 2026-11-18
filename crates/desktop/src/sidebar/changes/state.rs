@@ -254,8 +254,9 @@ impl ChangesView {
         let (Some(core), Some(id)) = (self.core(cx), self.project_id.clone()) else {
             return;
         };
+        let thread = self.thread_id(cx);
         let task = cx.background_spawn(async move {
-            let root = core.project_root(&id)?;
+            let root = core.source_root(&id, thread.as_deref())?;
             Ok::<_, patchwork_core::Error>((id, patchwork_core::workspace::git_sync_state(&root)))
         });
         cx.spawn(async move |this, cx| {
@@ -291,8 +292,9 @@ impl ChangesView {
             return;
         };
         let limit = PAGE * self.pages;
+        let thread = self.thread_id(cx);
         let task = cx.background_spawn(async move {
-            let log = core.git_log(&id, 0, limit);
+            let log = core.git_log(&id, thread.as_deref(), 0, limit);
             (id, log)
         });
         cx.spawn(async move |this, cx| {
