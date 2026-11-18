@@ -4,6 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 mod actions;
+mod bots;
 mod add_project;
 mod background_dialog;
 mod bars;

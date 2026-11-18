@@ -144,6 +144,7 @@ fn reviewer_thread(parent: &Thread, pick: &AgentPick) -> Thread {
         role_pending: false,
         favorite: false,
         pinned: false,
+        bot_id: None,
     }
 }
 

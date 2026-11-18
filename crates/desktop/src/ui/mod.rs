@@ -4,6 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 pub mod assets;
+pub mod avatar;
 pub mod backdrop;
 pub mod background_picker;
 pub mod dialog;

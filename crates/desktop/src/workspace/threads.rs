@@ -35,9 +35,12 @@ impl Workspace {
     }
 
     /// What the window shows now, as a place to come back to.
-    fn place(&self) -> Option<Place> {
+    pub(super) fn place(&self) -> Option<Place> {
         match self.page {
             super::Page::Orchestrator => Some(Place::Orchestrator),
+            super::Page::Chats if self.bot_shown.is_some() => {
+                self.bot_shown.clone().map(Place::Bot)
+            }
             super::Page::Chats => self.thread.as_ref().map(|t| {
                 if self.peeking {
                     Place::Peek(t.id.clone())
@@ -126,6 +129,7 @@ impl Workspace {
                 true
             }
             Place::Chat(id) => self.show_thread(id, cx),
+            Place::Bot(id) => self.show_bot(id, cx),
             Place::Peek(id) => {
                 let shown = self.show_thread(id, cx);
                 self.peeking |= shown;
@@ -141,6 +145,7 @@ impl Workspace {
                 // A chat opened from the orchestrator page is shown in place of the page.
                 self.page = super::Page::Chats;
                 self.peeking = false;
+                self.bot_shown = None;
                 let changed_project =
                     self.thread.as_ref().map(|t| &t.project_id) != Some(&thread.project_id);
                 // Leaving a chat with its options still open counts as putting them away.

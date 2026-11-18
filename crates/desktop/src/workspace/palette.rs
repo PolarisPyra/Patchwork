@@ -132,11 +132,20 @@ pub fn items(w: &Workspace) -> Vec<Item> {
             .iter()
             .filter(|t| t.archived_at.is_none() && t.parent.is_none())
             .map(|t| {
-                let group = t
+                // A bot's runs are found under the bot's name.
+                let bot = t
+                    .bot_id
+                    .as_ref()
+                    .and_then(|id| w.bots.iter().find(|b| &b.id == id));
+                let project = t
                     .project_id
                     .as_ref()
-                    .and_then(|id| projects.iter().find(|p| &p.id == id))
-                    .map_or("Chats", |p| p.name.as_str());
+                    .and_then(|id| projects.iter().find(|p| &p.id == id));
+                let group = match (bot, project) {
+                    (Some(bot), _) => bot.name.as_str(),
+                    (None, Some(p)) => p.name.as_str(),
+                    (None, None) => "Chats",
+                };
                 item(
                     group,
                     display_title(&t.title),

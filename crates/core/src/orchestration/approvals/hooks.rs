@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use crate::orchestration::turn::start::PendingApproval;
 use crate::orchestration::{Runner, publish, unasked};
 use crate::{Core, Error};
-use crate::permissions::{self, Target, Unasked};
+use crate::permissions::{self, PermissionKind, Target, Unasked};
 use crate::events::AgentEvent;
 use crate::system::new_id;
 use crate::threads::{AccessMode, Approval, ApprovalStatus, Role};
@@ -43,6 +43,10 @@ impl Runner {
             .store
             .thread(&thread_id)
             .is_some_and(|t| t.access_mode == AccessMode::FullAccess);
+        // A tool the bot blocks is refused before any rule is read.
+        if core.bot_refuses(&thread_id, Path::new(&root), &target) {
+            return Self::refuse_blocked(core, &thread_id, &text("title"), &text("detail"), kind);
+        }
         let denied = match unasked(core, &thread_id, &root, &target, !full) {
             Unasked::Run => return json!({"deny": null}),
             Unasked::Refuse(decision) => Some(decision),
@@ -90,6 +94,48 @@ impl Runner {
             Ok(()) => json!({"deny": null}),
             Err(reason) => refused(reason),
         }
+    }
+
+    /// Records a call the bot behind thread `thread_id` blocks as refused, in its latest reply,
+    /// and returns the hook's answer that refuses it.
+    fn refuse_blocked(
+        core: &Core,
+        thread_id: &str,
+        title: &str,
+        detail: &str,
+        kind: PermissionKind,
+    ) -> Value {
+        let reason = crate::bots::BLOCKED_REASON;
+        if let Some(message_id) = core.store.thread(thread_id).and_then(|t| {
+            t.messages
+                .iter()
+                .rev()
+                .find(|m| m.role == Role::Assistant)
+                .map(|m| m.id.clone())
+        }) {
+            let approval = Approval {
+                id: new_id(),
+                title: title.to_string(),
+                detail: format!("{reason}: {}", crate::provider::one_line(detail)),
+                status: ApprovalStatus::Denied,
+                questions: Vec::new(),
+                answers: HashMap::new(),
+                kind: Some(kind),
+                suggestions: Vec::new(),
+                rule: None,
+                auto: true,
+                secret: None,
+            };
+            publish(
+                core,
+                thread_id,
+                AgentEvent::ApprovalRequested {
+                    message_id,
+                    approval,
+                },
+            );
+        }
+        json!({"deny": format!("{reason}. Do not try it again.")})
     }
 
     /// Asks the person, in the latest reply of the chat `thread_id`, to allow what `title` and

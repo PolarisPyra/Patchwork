@@ -4,6 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 mod archived;
+mod bots;
 pub mod changes;
 pub mod devices;
 mod export;

@@ -97,6 +97,9 @@ pub struct Thread {
     /// pinned.
     #[serde(default)]
     pub pinned: bool,
+    /// The bot this thread is a run of; None for a chat or task started by hand.
+    #[serde(default)]
+    pub bot_id: Option<String>,
 }
 
 /// Where a subagent's thread came from.
@@ -179,6 +182,7 @@ impl Thread {
             role_pending: self.role_pending,
             favorite: self.favorite,
             pinned: self.pinned,
+            bot_id: self.bot_id.clone(),
         }
     }
 

@@ -45,6 +45,13 @@ impl Workspace {
         let mut items = vec![item("Rename", "pencil-simple", Act::Rename)];
         match target {
             Target::Archived(_) | Target::Many(_) => {}
+            Target::Bot(_) => {
+                items.push(item("Background…", "image", Act::Background));
+                items.push(Item {
+                    danger: true,
+                    ..item("Delete", "trash", Act::Remove)
+                });
+            }
             Target::Thread(id) => {
                 if let Some(thread) = self.thread_by_id(id) {
                     items.push(if thread.favorite {
@@ -268,6 +275,9 @@ impl Workspace {
             (Target::Thread(id), Act::Background) => {
                 return self.open_background_dialog(id, window, cx);
             }
+            (Target::Bot(id), Act::Background) => {
+                return self.open_bot_background_dialog(id, window, cx);
+            }
             (Target::Thread(id), Act::Granular) => {
                 let scope = GranularScope::Chat(id.clone());
                 return self.open_granular_dialog(scope, None, window, cx);
@@ -317,6 +327,7 @@ impl Workspace {
             (Target::Project(_) | Target::Folder(_), Act::Remove) => {
                 return self.remove_targets(&[target], window, cx);
             }
+            (Target::Bot(id), Act::Remove) => return self.delete_bot(id, window, cx),
             (Target::Many(targets), Act::Remove) => {
                 return self.remove_targets(targets, window, cx);
             }

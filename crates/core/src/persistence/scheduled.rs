@@ -31,6 +31,7 @@ struct Row {
     last_run_at: Option<i64>,
     next_run_at: Option<i64>,
     created_at: i64,
+    bot_id: Option<String>,
 }
 
 pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
@@ -38,7 +39,7 @@ pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
         .conn
         .prepare(
             "SELECT id, name, prompt, schedule, project_id, agent, model, access_mode, enabled,
-                    last_run_at, next_run_at, created_at
+                    last_run_at, next_run_at, created_at, bot_id
              FROM scheduled_tasks ORDER BY created_at",
         )
         .map_err(err)?;
@@ -57,6 +58,7 @@ pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
                 last_run_at: row.get(9)?,
                 next_run_at: row.get(10)?,
                 created_at: row.get(11)?,
+                bot_id: row.get(12)?,
             })
         })
         .map_err(err)?;
@@ -81,6 +83,7 @@ pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
                 next_run_at: row.next_run_at,
                 created_at: row.created_at,
                 recent_runs,
+                bot_id: row.bot_id,
             })
         })
         .collect()
@@ -157,13 +160,14 @@ fn save(inner: &Inner, task: &Task) -> Result<(), Error> {
         .execute(
             "INSERT INTO scheduled_tasks
                  (id, name, prompt, schedule, project_id, agent, model, access_mode, enabled,
-                  last_run_at, next_run_at, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                  last_run_at, next_run_at, created_at, bot_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
              ON CONFLICT (id) DO UPDATE SET name = excluded.name, prompt = excluded.prompt,
                  schedule = excluded.schedule, project_id = excluded.project_id,
                  agent = excluded.agent, model = excluded.model,
                  access_mode = excluded.access_mode, enabled = excluded.enabled,
-                 last_run_at = excluded.last_run_at, next_run_at = excluded.next_run_at",
+                 last_run_at = excluded.last_run_at, next_run_at = excluded.next_run_at,
+                 bot_id = excluded.bot_id",
             params![
                 task.id,
                 task.name,
@@ -177,6 +181,7 @@ fn save(inner: &Inner, task: &Task) -> Result<(), Error> {
                 task.last_run_at,
                 task.next_run_at,
                 task.created_at,
+                task.bot_id,
             ],
         )
         .map_err(err)?;

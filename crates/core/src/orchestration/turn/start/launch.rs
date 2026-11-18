@@ -191,6 +191,7 @@ impl Runner {
             text
         };
         let text = core.chat_app_voice(&thread_id, text, session_id.is_none());
+        let text = core.bot_brief(&thread_id, text, session_id.is_none());
         let text = core.chat_app_context(&thread_id, text);
         let text = match context {
             Some(context) => format!("{context}{text}"),
@@ -227,7 +228,7 @@ impl Runner {
         }
         .map(|cli| cli.join("skills").to_string_lossy().into_owned());
         // A dispatcher runs none of the user's hooks or custom agents, which could run commands.
-        let (guarded, hooks) = if dispatcher {
+        let (mut guarded, hooks) = if dispatcher {
             (Vec::new(), Vec::new())
         } else {
             (
@@ -243,6 +244,42 @@ impl Runner {
             }
             AgentKind::Antigravity | AgentKind::Api => Vec::new(),
         };
+        // The tools a bot blocks. Every agent but `opencode run` asks Patchwork at each call;
+        // that one is told at launch, and can't be told about servers.
+        let blocked = core
+            .run_bot_id(&thread_id)
+            .and_then(|id| core.bot(&id))
+            .map(|bot| bot.blocked)
+            .unwrap_or_default();
+        if !blocked.is_empty() {
+            let opencode_run =
+                agent == AgentKind::OpenCode && !crate::provider::opencode::uses_serve();
+            if opencode_run && !blocked.servers.is_empty() {
+                return Err(
+                    "This bot blocks MCP servers, which this version of OpenCode can't \
+                            enforce. Update OpenCode, or unblock the servers"
+                        .into(),
+                );
+            }
+            if opencode_run {
+                for &kind in &blocked.kinds {
+                    guarded.retain(|g| g.kind != kind);
+                    guarded.push(crate::permissions::Guarded {
+                        kind,
+                        deny: Vec::new(),
+                        ask: Vec::new(),
+                        denied: true,
+                    });
+                }
+            }
+            if agent == AgentKind::Claude && crate::provider::mcp::relay_endpoint().is_none() {
+                return Err(
+                    "Patchwork's permission relay is not running, so this bot's blocked \
+                            tools would not be refused. Restart Patchwork and try again"
+                        .into(),
+                );
+            }
+        }
         let vision_model = settings.vision.clone();
         let unlimited_steps = settings.unlimited_steps;
         let token_limit = settings.turn_token_limit;
@@ -299,6 +336,7 @@ impl Runner {
             ));
             args.extend(crate::provider::claude::launch::permission_args());
             args.extend(crate::provider::claude::launch::agents_args(&agents, &root));
+            args.extend(core.bot_claude_args(&thread_id));
         }
         // After an undo or a fork the session goes on from the reply they left last. The
         // point is forgotten once the session reports in, as it then goes on from there.

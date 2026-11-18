@@ -86,6 +86,9 @@ pub struct RemovedBackground {
     /// and dark ones'.
     #[serde(default)]
     pub page: [bool; 3],
+    /// The bots that showed it as their own background.
+    #[serde(default)]
+    pub bots: Vec<String>,
 }
 
 /// The longest side a picture is kept at. A background is mostly covered by the window color, so
@@ -348,7 +351,7 @@ impl Core {
     /// # Errors
     ///
     /// Returns an error when `file` names a path rather than a plain file name, when the picture
-    /// cannot be moved aside, or when a chat or the settings cannot be saved.
+    /// cannot be moved aside, or when a chat, a bot or the settings cannot be saved.
     pub fn remove_background_image(&self, file: &str) -> Result<RemovedBackground, Error> {
         // A name with a folder in it could reach a file outside the backgrounds folder.
         if Path::new(file).file_name().and_then(|n| n.to_str()) != Some(file) {
@@ -372,6 +375,14 @@ impl Core {
         for id in &threads {
             self.store.update_thread(id, |t| t.background = None)?;
         }
+        let mut bots = Vec::new();
+        for mut bot in self.store.bots() {
+            if bot.background.as_ref() == Some(&picture) {
+                bot.background = None;
+                self.store.save_bot(&bot)?;
+                bots.push(bot.id);
+            }
+        }
         let shared = self.store.settings().chat_background == picture;
         let mut page = [false; 3];
         self.update_settings(|s| {
@@ -385,6 +396,7 @@ impl Core {
             threads,
             shared,
             page,
+            bots,
         })
     }
 
@@ -394,7 +406,7 @@ impl Core {
     /// # Errors
     ///
     /// Returns an error when the file name contains a path, when the picture cannot be moved back
-    /// into the backgrounds folder, or when a chat or the settings cannot be saved.
+    /// into the backgrounds folder, or when a chat, a bot or the settings cannot be saved.
     pub fn restore_background_image(&self, removed: &RemovedBackground) -> Result<(), Error> {
         let file = removed.file.as_str();
         if Path::new(file).file_name().and_then(|n| n.to_str()) != Some(file) {
@@ -414,6 +426,12 @@ impl Core {
                     t.background = Some(picture.clone());
                 }
             })?;
+        }
+        for mut bot in self.store.bots() {
+            if bot.background.is_none() && removed.bots.contains(&bot.id) {
+                bot.background = Some(picture.clone());
+                self.store.save_bot(&bot)?;
+            }
         }
         self.update_settings(|s| {
             if removed.shared && s.chat_background == ChatBackground::None {

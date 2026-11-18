@@ -321,6 +321,7 @@ fn only_a_finished_reply_that_changed_files_is_checked() {
         role_pending: false,
         favorite: false,
         pinned: false,
+        bot_id: None,
     };
     let id = thread.messages[0].id.clone();
     store.insert_threads(vec![thread.clone()]).unwrap();

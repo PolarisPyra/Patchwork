@@ -69,6 +69,7 @@ impl Workspace {
                 }
                 // A picture added or removed in Settings changes the ones a chat can show.
                 this.backgrounds.reload();
+                this.bot_pictures_changed(cx);
                 this.sync_panel(cx);
                 this.apply_theme(window, cx);
             }

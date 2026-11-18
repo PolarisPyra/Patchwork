@@ -167,6 +167,31 @@ const MIGRATIONS: &[Migration] = &[
         name: "pairings",
         sql: include_str!("0031_pairings.sql"),
     },
+    Migration {
+        id: 32,
+        name: "bots",
+        sql: include_str!("0032_bots.sql"),
+    },
+    Migration {
+        id: 33,
+        name: "bot_archive",
+        sql: include_str!("0033_bot_archive.sql"),
+    },
+    Migration {
+        id: 34,
+        name: "bot_background",
+        sql: include_str!("0034_bot_background.sql"),
+    },
+    Migration {
+        id: 35,
+        name: "scheduled_bot",
+        sql: include_str!("0035_scheduled_bot.sql"),
+    },
+    Migration {
+        id: 36,
+        name: "bot_blocked",
+        sql: include_str!("0036_bot_blocked.sql"),
+    },
 ];
 
 fn fail(m: &Migration, e: impl std::fmt::Display) -> Error {

@@ -35,7 +35,13 @@ pub(super) fn screen(turn: &Turn, item: Parsed) -> Option<Parsed> {
         return Some(item);
     };
     let asks = turn.mode != crate::threads::AccessMode::FullAccess;
-    if unasked(&turn.core, &turn.thread_id, &turn.root, &target, asks) == permissions::Unasked::Run
+    // A tool the bot blocks goes on to be refused as an approval, where the chat shows why.
+    let blocked = turn
+        .core
+        .bot_refuses(&turn.thread_id, Path::new(&turn.root), &target);
+    if !blocked
+        && unasked(&turn.core, &turn.thread_id, &turn.root, &target, asks)
+            == permissions::Unasked::Run
     {
         write_line(
             &turn.stdin,
@@ -139,8 +145,18 @@ pub(super) fn request_approval(
         auto: false,
         secret: None,
     };
-    // A hook refuses it, whatever the rules and the user would say.
-    if let Some(reason) = target.as_ref().and_then(|t| refused_by_hook(turn, t)) {
+    // The bot blocks it, or a hook refuses it, whatever the rules and the user would say.
+    let refused = target.as_ref().and_then(|t| {
+        if turn
+            .core
+            .bot_refuses(&turn.thread_id, Path::new(&turn.root), t)
+        {
+            Some(crate::bots::BLOCKED_REASON.to_string())
+        } else {
+            refused_by_hook(turn, t)
+        }
+    });
+    if let Some(reason) = refused {
         let mut reply = reply;
         reply["message"] = Value::from(reason.as_str());
         write_line(

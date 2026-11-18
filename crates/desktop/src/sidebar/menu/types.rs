@@ -12,6 +12,7 @@ pub enum Target {
     Thread(String),
     Project(String),
     Folder(String),
+    Bot(String),
     /// An archived view header: the archived chats or tasks under it.
     Archived(Vec<String>),
     /// Rows picked together with Ctrl or Shift.

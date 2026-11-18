@@ -5,6 +5,7 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use gpui::{Entity, FocusHandle, Pixels, Point, WeakEntity, Window, prelude::*};
+use patchwork_core::bots::Bot;
 use patchwork_core::provider::{AgentKind, ModelOption};
 use patchwork_core::settings::Settings;
 use patchwork_core::threads::{AccessMode, Attachment, NewThread};
@@ -248,6 +249,17 @@ impl Composer {
             compact_window: self.draft.compact,
             plan_mode: false,
         }
+    }
+
+    /// Has the next new chat start with `bot`'s agent, model, effort and access, for its page.
+    pub fn pick_as(&mut self, bot: &Bot, cx: &mut Context<Self>) {
+        self.draft.agent = Some(bot.agent);
+        self.draft.model.clone_from(&bot.model);
+        self.draft.effort.clone_from(&bot.effort);
+        self.draft.access = bot.access_mode;
+        self.draft.role = None;
+        self.draft.plan_mode = false;
+        cx.notify();
     }
 
     /// Reads the custom agents the chat's project can summon, for the open menu.
