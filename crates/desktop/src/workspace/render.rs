@@ -39,6 +39,7 @@ impl Render for Workspace {
             self.title = title;
         }
         self.sync_mobile(cx);
+        self.remember_place(cx);
         let t = *theme(cx);
         let orchestrating = self.page == Page::Orchestrator;
         let sidebar = self.sidebar_view().map(|_| {

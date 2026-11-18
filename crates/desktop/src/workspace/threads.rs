@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use gpui::{Focusable, FollowMode, Window, prelude::*};
 use patchwork_core::events::{AgentEvent, AgentEventEnvelope, Place as Shown};
-use patchwork_core::threads::{Attachment, NewThread, Part};
+use patchwork_core::threads::{Attachment, LastPlace, NewThread, Part};
 use super::state::{Place, ReplyNotice, Workspace, end_thinking, message_mut};
 
 impl Workspace {
@@ -49,6 +49,49 @@ impl Workspace {
                 }
             }),
         }
+    }
+
+    /// What fills the window as the next launch opens it: a chat looked in on opens as a chat.
+    fn last_place(&self) -> Option<LastPlace> {
+        Some(match self.place()? {
+            Place::Orchestrator => LastPlace::Orchestrator,
+            Place::Chat(id) | Place::Peek(id) => LastPlace::Chat(id),
+            Place::Bot(id) => LastPlace::Bot(id),
+        })
+    }
+
+    /// Saves what fills the window, off the UI thread, when it changed since it was last saved.
+    pub(super) fn remember_place(&mut self, cx: &mut Context<Self>) {
+        let Some(place) = self.last_place() else {
+            return;
+        };
+        if self.saved_place.as_ref() == Some(&place) {
+            return;
+        }
+        self.saved_place = Some(place.clone());
+        let core = Arc::clone(&self.core);
+        cx.background_spawn(async move {
+            if let Err(e) = core.set_last_place(&place) {
+                log::warn!(error:% = e; "could not record what the window shows: {{error}}");
+            }
+        })
+        .detach();
+    }
+
+    /// Opens what filled the window when the app last closed, else the orchestrator page, with
+    /// the last chat ready behind it.
+    pub(super) fn restore_place(&mut self, cx: &mut Context<Self>) {
+        let shown = match self.core.last_place() {
+            Some(LastPlace::Chat(id)) if self.threads.iter().any(|t| t.id == id) => {
+                self.show(&Place::Chat(id), cx)
+            }
+            Some(LastPlace::Bot(id)) => self.show(&Place::Bot(id), cx),
+            Some(LastPlace::Chat(_) | LastPlace::Orchestrator) | None => false,
+        };
+        if !shown {
+            self.page = super::Page::Orchestrator;
+        }
+        self.saved_place = self.last_place();
     }
 
     pub fn open_thread(&mut self, id: &str, cx: &mut Context<Self>) {

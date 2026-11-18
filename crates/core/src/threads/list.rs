@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use crate::Error;
 use crate::system::now_ms;
-use crate::threads::{MessageStatus, ApprovalStatus, Thread};
+use crate::threads::{MessageStatus, ApprovalStatus, LastPlace, Thread};
 use crate::threads::title::clean_name;
 use crate::Core;
 
@@ -13,6 +13,9 @@ use super::lifecycle::note;
 
 /// `app_state` key for the thread the user had open last.
 const LAST_THREAD_KEY: &str = "last_thread_id";
+
+/// `app_state` key for what filled the window when the app last closed.
+const LAST_PLACE_KEY: &str = "last_place";
 
 /// `thread` with only its last message and those still streaming, running background tasks,
 /// queued, or waiting on an approval, so listing every thread does not send each one's whole history.
@@ -82,6 +85,24 @@ impl Core {
     /// Returns an error when the value cannot be saved to the database.
     pub fn set_last_thread_id(&self, id: &str) -> Result<(), Error> {
         self.store.set_state(LAST_THREAD_KEY, id)
+    }
+
+    /// What filled the window when the app last closed, if it was recorded and can be read.
+    pub fn last_place(&self) -> Option<LastPlace> {
+        let saved = self.store.state(LAST_PLACE_KEY)?;
+        serde_json::from_str(&saved)
+            .inspect_err(|e| log::warn!(error:% = e; "could not read the last place: {{error}}"))
+            .ok()
+    }
+
+    /// Remembers `place` as what fills the window, to open it at the next launch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the value cannot be saved to the database.
+    pub fn set_last_place(&self, place: &LastPlace) -> Result<(), Error> {
+        let saved = serde_json::to_string(place).map_err(|e| e.to_string())?;
+        self.store.set_state(LAST_PLACE_KEY, &saved)
     }
 
     /// Renames the chat `id`.
