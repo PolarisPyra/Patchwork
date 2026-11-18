@@ -276,7 +276,7 @@ impl Workspace {
             (Target::Thread(id), Act::Background) => {
                 return self.open_background_dialog(id, window, cx);
             }
-            (Target::Bot(id), Act::Details) => return self.open_bot_page(id, cx),
+            (Target::Bot(id), Act::Details) => return self.open_bot_details(id, cx),
             (Target::Bot(id), Act::Background) => {
                 return self.open_bot_background_dialog(id, window, cx);
             }

@@ -54,6 +54,11 @@ impl Render for Workspace {
         };
         // The chat's file panel and terminal belong to the chat a bot's page takes the place of.
         let beside_chat = bot_page.is_none();
+        let bot_details = if beside_chat && !orchestrating {
+            self.bot_details_view(window, cx)
+        } else {
+            None
+        };
         let canvas = self.canvas_area(window, cx).filter(|_| beside_chat);
         let panel = self.panel_area(window, cx).filter(|_| beside_chat);
         let background_dialog = self.background_dialog(window, cx);
@@ -248,6 +253,7 @@ impl Render for Workspace {
                                     .child(self.chat_region.clone().cached(
                                         StyleRefinement::default().flex_1().min_w_0().min_h_0(),
                                     ))
+                                    .children(bot_details)
                                     .children(canvas),
                             )
                             .children(panel)

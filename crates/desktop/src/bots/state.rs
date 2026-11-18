@@ -28,6 +28,15 @@ impl Tab {
     ];
 }
 
+/// How much of the page is drawn.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Layout {
+    /// The whole page, in place of a chat.
+    Page,
+    /// Only the details, beside the bot's chat, which shows or hides them.
+    BesideChat,
+}
+
 pub struct BotPage {
     pub(super) workspace: WeakEntity<Workspace>,
     pub(super) core: Arc<Core>,
@@ -43,6 +52,8 @@ pub struct BotPage {
     pub starting: bool,
     /// The details are shown beside the conversation.
     pub(super) details_open: bool,
+    /// Whether the page is drawn whole, or only its details beside the bot's chat.
+    pub layout: Layout,
     /// The page open in place of the tab, if any.
     pub(super) drill: Option<Drill>,
     /// What the bot is told, read when the Inspector opens; None until read.
@@ -65,6 +76,7 @@ impl BotPage {
         workspace: WeakEntity<Workspace>,
         core: Arc<Core>,
         bot: Bot,
+        layout: Layout,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -98,6 +110,7 @@ impl BotPage {
             usage: None,
             starting: false,
             details_open: true,
+            layout,
             drill: None,
             brief: None,
             start_closed: false,
@@ -107,7 +120,9 @@ impl BotPage {
         page.load_knowledge(cx);
         page.load_usage(cx);
         // Made while the window's workspace is being drawn, which the composer belongs to.
-        cx.defer_in(window, |this, window, cx| this.focus_composer(window, cx));
+        if layout == Layout::Page {
+            cx.defer_in(window, |this, window, cx| this.focus_composer(window, cx));
+        }
         page
     }
 
@@ -394,6 +409,10 @@ impl BotPage {
 
     /// Shows or hides the details beside the conversation.
     pub(super) fn toggle_details(&mut self, cx: &mut Context<Self>) {
+        if self.layout == Layout::BesideChat {
+            let _ = self.workspace.update(cx, Workspace::toggle_bot_details);
+            return;
+        }
         self.details_open = !self.details_open;
         cx.notify();
     }

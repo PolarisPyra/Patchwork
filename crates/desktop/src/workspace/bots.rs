@@ -6,7 +6,7 @@ use std::sync::Arc;
 use gpui::{AnyElement, PromptLevel, Window, prelude::*};
 use patchwork_core::bots::Bot;
 use patchwork_core::threads::{Attachment, NewThread};
-use crate::bots::BotPage;
+use crate::bots::{BotPage, Layout};
 use super::state::{Place, Workspace};
 
 impl Workspace {
@@ -116,15 +116,68 @@ impl Workspace {
         let current = self
             .bot_page
             .as_ref()
-            .is_some_and(|p| p.read(cx).bot.id == id);
+            .is_some_and(|p| p.read(cx).bot.id == id && p.read(cx).layout == Layout::Page);
         if !current {
             let bot = self.bots.iter().find(|b| b.id == id).cloned()?;
             let (workspace, core) = (cx.entity().downgrade(), Arc::clone(&self.core));
-            self.bot_page = Some(cx.new(|cx| BotPage::new(workspace, core, bot, window, cx)));
+            self.bot_page =
+                Some(cx.new(|cx| BotPage::new(workspace, core, bot, Layout::Page, window, cx)));
         }
         self.bot_page
             .clone()
             .map(gpui::IntoElement::into_any_element)
+    }
+
+    /// The bot whose chat is open, when one of its chats is open in place of its page.
+    pub fn chat_bot(&self) -> Option<&Bot> {
+        if self.bot_shown.is_some() {
+            return None;
+        }
+        let id = self.thread.as_ref()?.bot_id.as_ref()?;
+        self.bots
+            .iter()
+            .find(|b| &b.id == id && b.archived_at.is_none())
+    }
+
+    /// Shows or hides the bot's details beside its chat.
+    pub fn toggle_bot_details(&mut self, cx: &mut Context<Self>) {
+        self.bot_details = !self.bot_details;
+        cx.notify();
+    }
+
+    /// The details of the bot whose chat is open, beside it, while they are shown.
+    pub(super) fn bot_details_view(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        if !self.bot_details {
+            return None;
+        }
+        let bot = self.chat_bot()?.clone();
+        let current = self.bot_page.as_ref().is_some_and(|p| {
+            p.read(cx).bot.id == bot.id && p.read(cx).layout == Layout::BesideChat
+        });
+        if !current {
+            let (workspace, core) = (cx.entity().downgrade(), Arc::clone(&self.core));
+            self.bot_page = Some(
+                cx.new(|cx| BotPage::new(workspace, core, bot, Layout::BesideChat, window, cx)),
+            );
+        }
+        self.bot_page
+            .clone()
+            .map(gpui::IntoElement::into_any_element)
+    }
+
+    /// Opens bot `id`'s chat with its details beside it, or its page before it has a chat.
+    pub fn open_bot_details(&mut self, id: &str, cx: &mut Context<Self>) {
+        match self.bot_chat(id) {
+            Some(chat) => {
+                self.bot_details = true;
+                self.open_thread(&chat, cx);
+            }
+            None => self.open_bot_page(id, cx),
+        }
     }
 
     /// Renames bot `id` off the UI thread, and shows the new name in the list and on its page.
