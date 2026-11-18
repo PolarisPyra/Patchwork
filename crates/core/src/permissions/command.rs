@@ -203,13 +203,6 @@ fn git_without_options(words: &[String]) -> Option<Vec<String>> {
     })
 }
 
-/// Whether a program is written so that it could be any program: with a pattern the shell fills
-/// in, or a variable. A rule that refuses or asks covers it, as it cannot be told it is not
-/// the rule's command.
-pub(super) fn any_program(program: &str) -> bool {
-    program.contains(['*', '?', '[', '$', '`'])
-}
-
 /// A shell line as its simple commands' words, split at `&&`, `||`, `;`, `|`, `&`, new lines and
 /// the ends of a subshell or substitution, with comments, reserved words and leading `NAME=value`
 /// assignments dropped, `sh -c '…'` unwrapped, and the command a wrapper such as `env` or `xargs`
@@ -340,12 +333,13 @@ pub(super) fn split_writes(line: &str) -> (Vec<Vec<String>>, bool, Vec<String>) 
                     file.push(c);
                     chars.next();
                 }
-                // A name the shell would expand or quote is not the file it names.
-                if file.is_empty()
-                    || file.contains(['\'', '"', '$', '`', '~', '*', '?', '[', '{', '(', '\\'])
-                {
+                // A name the shell would expand or quote is not the file it names, so it is not
+                // asked about as an edit; the command's own rules answer for the line.
+                if file.is_empty() {
                     safe = false;
-                } else if file != "/dev/null" {
+                } else if file != "/dev/null"
+                    && !file.contains(['\'', '"', '$', '`', '~', '*', '?', '[', '{', '(', '\\'])
+                {
                     writes.push(file);
                 }
             }
