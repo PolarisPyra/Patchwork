@@ -94,6 +94,11 @@ impl Workspace {
         for th in &self.threads {
             (&th.id, th.messages.len(), is_busy(th)).hash(&mut hasher);
         }
+        // A running turn changes files without adding messages, so its marks are read again every
+        // few seconds while it updates.
+        if self.threads.iter().any(|th| is_busy(th)) {
+            (now_ms() / 3000).hash(&mut hasher);
+        }
         let key = hasher.finish();
         if self.worktree_marks_key == Some(key) {
             return;
@@ -166,6 +171,10 @@ pub(super) fn thread_row(
     let group = SharedString::from(format!("row:{}", th.id));
     let id = th.id.clone();
     let archive_id = th.id.clone();
+    let (hovered, hover_id) = (
+        w.hovered_row.as_deref() == Some(th.id.as_str()),
+        th.id.clone(),
+    );
     let (fill, hover) = if picked {
         (t.bg_accent_soft, t.tree_selected)
     } else {
@@ -266,13 +275,9 @@ pub(super) fn thread_row(
                 .flex()
                 .items_center()
                 .justify_end()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .group_hover(group.clone(), gpui::Styled::invisible)
-                        .child(state),
-                )
+                .when(!hovered, |s| {
+                    s.child(div().flex().items_center().child(state))
+                })
                 .child(
                     button(
                         SharedString::from(format!("archive:{}", th.id)),
@@ -320,6 +325,13 @@ pub(super) fn thread_row(
                 this.open_context_menu(target, e, window, cx);
             }),
         )
+        .on_hover(cx.listener(move |this, over: &bool, _, cx| {
+            let now = over.then(|| hover_id.clone());
+            if *over || this.hovered_row.as_ref() == Some(&hover_id) {
+                this.hovered_row = now;
+                cx.notify();
+            }
+        }))
         .on_click(cx.listener(move |this, e: &ClickEvent, _, cx| {
             if !this.pick_row(&pick, e.modifiers(), cx) {
                 this.open_thread(&id, cx);

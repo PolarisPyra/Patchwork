@@ -960,7 +960,47 @@ impl Core {
                 marks.insert(id.to_owned(), mark);
             }
         }
+        self.mark_unstarted(&mut marks);
         marks
+    }
+
+    /// Marks clean each task whose first turn hasn't run yet and will make its worktree, so it
+    /// shows the mark before it has one.
+    fn mark_unstarted(&self, marks: &mut HashMap<String, WorktreeMark>) {
+        let projects = self.store.settings().projects;
+        let mut repos: HashMap<String, bool> = HashMap::new();
+        for thread in self.list_threads() {
+            let Some(project_id) = thread.project_id.as_deref() else {
+                continue;
+            };
+            if marks.contains_key(&thread.id)
+                || thread.archived_at.is_some()
+                || thread.parent.is_some()
+                || thread.session_id.is_some()
+                || thread.messages.iter().any(|m| m.role == Role::Assistant)
+                || self.worktree_record(&thread.id).is_some()
+                || self.store.state(&failed_key(&thread.id)).is_some()
+                || self.edits_in_place(project_id)
+                || self.is_dispatcher(&thread.id)
+            {
+                continue;
+            }
+            let Some(path) = projects
+                .iter()
+                .find(|p| p.id == project_id)
+                .map(|p| &p.path)
+            else {
+                continue;
+            };
+            let repo = *repos.entry(path.clone()).or_insert_with(|| {
+                !ssh::is_remote(path)
+                    && !self.is_worktree_project(path)
+                    && git(path, &["rev-parse", "--verify", "-q", "HEAD"]).is_ok()
+            });
+            if repo {
+                marks.insert(thread.id.clone(), WorktreeMark::Clean);
+            }
+        }
     }
 
     /// The top folder of the repository task `thread_id`'s project is in.
