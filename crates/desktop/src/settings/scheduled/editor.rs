@@ -20,7 +20,24 @@ pub(super) fn editor(
 ) -> Option<Div> {
     let t = *theme(cx);
     let draft = d.scheduled.editing.clone()?;
-    let projects = d.settings.projects.clone();
+    // A routine runs as its bot, which works only in the projects linked to it.
+    let bot = draft
+        .bot_id
+        .as_ref()
+        .and_then(|id| d.scheduled.bots.iter().find(|b| &b.id == id))
+        .cloned();
+    let projects: Vec<_> = d
+        .settings
+        .projects
+        .iter()
+        .filter(|p| bot.as_ref().is_none_or(|b| b.projects.contains(&p.id)))
+        .cloned()
+        .collect();
+    let own = if bot.is_some() {
+        "The bot's own folder"
+    } else {
+        "A chat in a scratch folder"
+    };
 
     let name = d.field(
         "sched-name",
@@ -226,10 +243,7 @@ pub(super) fn editor(
         .project_id
         .as_ref()
         .and_then(|id| projects.iter().find(|p| p.id == *id))
-        .map_or_else(
-            || "A chat in a scratch folder".to_string(),
-            |p| p.name.clone(),
-        );
+        .map_or_else(|| own.to_string(), |p| p.name.clone());
     let where_select = select_box(
         "sched-where",
         "Project",
@@ -243,23 +257,20 @@ pub(super) fn editor(
         move |d, e: &ClickEvent, window, cx| {
             let query = d.scheduled.query.trim().to_lowercase();
             let scratch: Pick = Box::new(|task| task.project_id = None);
-            let items = std::iter::once((
-                "A chat in a scratch folder".to_string(),
-                current.is_none(),
-                scratch,
-            ))
-            .chain(
-                projects
-                    .iter()
-                    .filter(|p| p.name.to_lowercase().contains(&query))
-                    .map(|p| {
-                        let id = p.id.clone();
-                        let checked = current.as_deref() == Some(id.as_str());
-                        let pick: Pick = Box::new(move |task| task.project_id = Some(id.clone()));
-                        (p.name.clone(), checked, pick)
-                    }),
-            )
-            .collect();
+            let items = std::iter::once((own.to_string(), current.is_none(), scratch))
+                .chain(
+                    projects
+                        .iter()
+                        .filter(|p| p.name.to_lowercase().contains(&query))
+                        .map(|p| {
+                            let id = p.id.clone();
+                            let checked = current.as_deref() == Some(id.as_str());
+                            let pick: Pick =
+                                Box::new(move |task| task.project_id = Some(id.clone()));
+                            (p.name.clone(), checked, pick)
+                        }),
+                )
+                .collect();
             d.task_menu("sched-where", "Project", items, e, window, cx);
         }
     }));
@@ -355,8 +366,21 @@ pub(super) fn editor(
                         .min_w(px(200.))
                         .flex_1(),
                     )
-                    .child(labelled("Agent", agent_select, &t))
-                    .child(labelled("Access", mode_select, &t)),
+                    .map(|row| match &bot {
+                        Some(bot) => row.child(labelled(
+                            "Bot",
+                            div()
+                                .h(px(28.))
+                                .flex()
+                                .items_center()
+                                .text_size(px(fs_sm()))
+                                .child(bot.name.clone()),
+                            &t,
+                        )),
+                        None => row
+                            .child(labelled("Agent", agent_select, &t))
+                            .child(labelled("Access", mode_select, &t)),
+                    }),
             )
             .children(path.map(|path| {
                 div()

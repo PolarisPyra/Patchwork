@@ -24,6 +24,7 @@ use crate::chat::approvals::AllowChoice;
 use crate::chat::composer::Composer;
 use crate::chat::files::ReplyFiles;
 use crate::chat::goal::GoalClear;
+use crate::chat::worktree::WorktreeStrip;
 use crate::chat::lineage::Lineage;
 use crate::chat::plan::ShownPlan;
 use crate::chat::prompts::Answering;
@@ -54,6 +55,8 @@ pub(super) enum Place {
     Chat(String),
     /// A chat opened from an orchestrator card: read-only, with the sidebar closed.
     Peek(String),
+    /// A bot's page, by the bot's id.
+    Bot(String),
 }
 
 /// What fills the window beside the activity bar.
@@ -90,6 +93,11 @@ pub struct Workspace {
     /// Every thread, each with only the messages the task list reads.
     pub threads: Vec<Arc<Thread>>,
     pub folders: Vec<Folder>,
+    /// Every bot, oldest first.
+    pub bots: Vec<patchwork_core::bots::Bot>,
+    /// The bot whose page shows in place of the chat, and its page once drawn.
+    pub bot_shown: Option<String>,
+    pub bot_page: Option<Entity<crate::bots::BotPage>>,
     /// The chat apps each thread came from or has on it now, by thread id.
     pub chat_apps: HashMap<String, ChatApps>,
     /// Projects and folders (`folder:<id>`) whose rows are closed.
@@ -127,6 +135,8 @@ pub struct Workspace {
     pub plan_fold_queued: Option<String>,
     pub goal_clear: Option<GoalClear>,
     pub goal_closed: Option<u64>,
+    /// The open task's worktree and the strip that offers merging it.
+    pub worktree: Option<WorktreeStrip>,
     /// A redraw is due in a second, for the elapsed times on screen.
     pub(super) ticking: bool,
     pub queue_open: bool,
@@ -255,6 +265,7 @@ impl Workspace {
         let threads = core.list_threads();
         let chat_apps = core.thread_chat_apps();
         let folders = core.list_folders();
+        let bots = core.bots();
         let workspace = cx.entity().downgrade();
         let composer = cx.new(|cx| Composer::new(workspace.clone(), window, cx));
         let changes_view = cx.new(|cx| ChangesView::new(workspace, window, cx));
@@ -301,6 +312,9 @@ impl Workspace {
             settings,
             threads,
             folders,
+            bots,
+            bot_shown: None,
+            bot_page: None,
             collapsed,
             chat_apps,
             archived_collapsed: HashSet::new(),
@@ -325,6 +339,7 @@ impl Workspace {
             plan_fold_queued: None,
             goal_clear: None,
             goal_closed: None,
+            worktree: None,
             ticking: false,
             queue_open: true,
             queue_scroll: ScrollHandle::new(),

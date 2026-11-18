@@ -144,6 +144,7 @@ fn reviewer_thread(parent: &Thread, pick: &AgentPick) -> Thread {
         role_pending: false,
         favorite: false,
         pinned: false,
+        bot_id: None,
     }
 }
 
@@ -153,7 +154,8 @@ fn prompt(core: &Core, parent: &Thread, message_id: &str) -> Option<String> {
     let at = parent.messages.iter().position(|m| m.id == message_id)?;
     let reply = &parent.messages[at];
     let turn = reply.turn.as_ref()?;
-    let root = core.project_root(parent.project_id.as_deref()?).ok()?;
+    parent.project_id.as_ref()?;
+    let root = core.thread_root(&parent.id).ok()?;
     let request = parent.messages[..at]
         .iter()
         .rfind(|m| m.role == Role::User && !m.queued)

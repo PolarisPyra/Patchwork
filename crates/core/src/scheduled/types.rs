@@ -28,6 +28,10 @@ pub struct Task {
     /// The newest few runs, newest first.
     #[serde(default)]
     pub recent_runs: Vec<Run>,
+    /// The bot the task runs as, with its instructions, files and sandbox; None for a plain
+    /// agent.
+    #[serde(default)]
+    pub bot_id: Option<String>,
 }
 
 /// One time a scheduled task's slot came round.

@@ -341,10 +341,10 @@ fn delete_ref(root: &str, name: &str) {
 }
 
 impl Core {
-    /// The project root of a thread, for threads that belong to a project.
+    /// The folder a thread that belongs to a project works in: its worktree or the project's.
     fn checkpoint_root(&self, thread_id: &str) -> Option<String> {
-        let project_id = self.store.thread(thread_id)?.project_id?;
-        self.project_root(&project_id).ok()
+        self.store.thread(thread_id)?.project_id?;
+        self.thread_root(thread_id).ok()
     }
 
     /// Snapshots the project before the reply to `message_id`, for a message that an idle

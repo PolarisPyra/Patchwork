@@ -71,6 +71,7 @@ fn thread(messages: Vec<Message>) -> Thread {
         role_pending: false,
         favorite: false,
         pinned: false,
+        bot_id: None,
     }
 }
 
@@ -190,6 +191,7 @@ fn scheduled_tasks_survive_reopen() {
         next_run_at: None,
         created_at: 7,
         recent_runs: Vec::new(),
+        bot_id: None,
     };
     let saved = crate::scheduled::prepare(task).unwrap();
     store.save_scheduled_task(&saved).unwrap();
@@ -262,6 +264,7 @@ fn a_task_without_a_name_or_a_time_is_refused() {
         next_run_at: None,
         created_at: 0,
         recent_runs: Vec::new(),
+        bot_id: None,
     };
     crate::scheduled::prepare(task("", "09:00")).unwrap_err();
     crate::scheduled::prepare(task("n", "nine")).unwrap_err();

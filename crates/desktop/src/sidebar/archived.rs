@@ -1,5 +1,5 @@
-//! `ArchivedView`: chats and tasks moved out of the task list, under the project and folder each
-//! came from, in their task-list order. Restoring one puts it back where it was.
+//! `ArchivedView`: bots, chats and tasks moved out of the task list, under the project and
+//! folder each came from, in their task-list order. Restoring one puts it back where it was.
 
 // Rust guideline compliant 2026-10-09
 
@@ -8,11 +8,13 @@ use gpui::{
     AnyElement, Div, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, div, prelude::*,
     px,
 };
+use patchwork_core::bots::Bot;
 use patchwork_core::threads::Thread;
 
 use super::menu::Target;
 use super::{empty_row, twistie};
 use super::tree::{indent_guide, tree_row};
+use crate::ui::avatar::{Mood, avatar};
 use crate::ui::theme::{fs_md, fs_sm, radius_sm, theme};
 use crate::ui::{agent_label, agent_logo, button, display_title, icon, scrollbar};
 use crate::workspace::Workspace;
@@ -33,6 +35,9 @@ pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl Int
         .filter(|th| th.project_id.is_none())
         .collect();
 
+    let bots: Vec<&Bot> = w.bots.iter().filter(|b| b.archived_at.is_some()).collect();
+    let empty = archived.is_empty() && bots.is_empty();
+
     let (muted, fg) = (t.text_muted, t.text);
     let heading = div()
         .h(px(32.))
@@ -45,7 +50,7 @@ pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl Int
         .text_size(px(fs_md()))
         .font_weight(FontWeight::SEMIBOLD)
         .child("Archived")
-        .when(!archived.is_empty(), |s| {
+        .when(!empty, |s| {
             s.child(
                 button("archived-collapse-all", "Collapse all")
                     .gap(px(4.))
@@ -58,6 +63,7 @@ pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl Int
                     .on_click(cx.listener(|this, _, _, cx| {
                         let projects = this.settings.projects.iter().map(|p| p.id.clone());
                         this.archived_collapsed.insert("chats".into());
+                        this.archived_collapsed.insert("bots".into());
                         this.archived_collapsed.extend(projects);
                         cx.notify();
                     })),
@@ -65,6 +71,9 @@ pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl Int
         });
 
     let mut groups = div().mx(px(-8.)).flex_none();
+    if !bots.is_empty() {
+        groups = groups.child(bots_group(w, &bots, cx));
+    }
     if !chats.is_empty() {
         let mut rows = Vec::new();
         for th in &chats {
@@ -152,7 +161,7 @@ pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl Int
         .gap(px(1.))
         .size_full()
         .p(px(8.))
-        .when(archived.is_empty(), |s| {
+        .when(empty, |s| {
             s.child(empty_row("Nothing archived", &t).mt(px(-10.)).px(px(4.)))
         })
         .child(groups);
@@ -230,6 +239,79 @@ fn group(
                 .flex_col()
                 .py(px(1.))
                 .child(indent_guide(guide))
+                .children(rows),
+        )
+    })
+}
+
+/// The archived bots' header, which opens and closes them, and each bot with its restore button.
+fn bots_group(w: &Workspace, bots: &[&Bot], cx: &mut Context<Workspace>) -> Div {
+    let t = *theme(cx);
+    let open = !w.archived_collapsed.contains("bots");
+    let header = tree_row("archived:bots".into(), "Bots".into(), 1, open, false, &t)
+        .pl(px(4.))
+        .child(twistie(open))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .font_weight(FontWeight::MEDIUM)
+                .child("Bots"),
+        )
+        .on_click(cx.listener(|this, _, _, cx| {
+            if !this.archived_collapsed.remove("bots") {
+                this.archived_collapsed.insert("bots".into());
+            }
+            cx.notify();
+        }));
+    let (btn_hover, fg) = (t.border_strong, t.text);
+    let rows = bots.iter().map(|bot| {
+        let restore = bot.id.clone();
+        div()
+            .id(SharedString::from(format!("archived-bot:{}", bot.id)))
+            .role(Role::TreeItem)
+            .aria_level(2)
+            .aria_label(bot.name.clone())
+            .h(px(crate::ui::theme::roomy(28.)))
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap(px(6.))
+            .ml(px(30.))
+            .mr(px(4.))
+            .pl(px(8.))
+            .pr(px(8.))
+            .rounded(px(radius_sm()))
+            .text_color(t.text)
+            .child(avatar(&bot.id, &bot.name, Mood::Idle, 16.))
+            .child(div().flex_1().min_w_0().truncate().child(bot.name.clone()))
+            .child(
+                button(
+                    SharedString::from(format!("restore-bot:{}", bot.id)),
+                    format!("Restore {}", bot.name),
+                )
+                .size(px(20.))
+                .flex_none()
+                .justify_center()
+                .rounded(px(radius_sm()))
+                .text_color(t.text_muted)
+                .hover(move |s| s.bg(btn_hover).text_color(fg))
+                .child(icon("arrow-counter-clockwise", 16.))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.set_bot_archived(&restore, false, cx);
+                })),
+            )
+    });
+    let rows: Vec<_> = rows.collect();
+    div().flex_none().child(header).when(open, |s| {
+        s.child(
+            div()
+                .relative()
+                .flex()
+                .flex_col()
+                .py(px(1.))
+                .child(indent_guide(16.))
                 .children(rows),
         )
     })

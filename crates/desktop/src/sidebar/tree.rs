@@ -8,7 +8,8 @@ use gpui::{
     div, prelude::*, px,
 };
 use patchwork_core::gateway::ChatApps;
-use patchwork_core::threads::{ApprovalStatus, Thread};
+use patchwork_core::threads::{ApprovalStatus, MessageStatus, Thread};
+use crate::ui::avatar::{Mood, avatar};
 use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
 use crate::ui::{
     agent_label, agent_logo, button, display_title, format_relative, icon, now_ms, platform_logo,
@@ -114,7 +115,22 @@ pub(super) fn thread_row(
     } else {
         (gpui::transparent_black(), t.tree_hover)
     };
-    let mark: Option<AnyElement> = if th.favorite {
+    let bot = th
+        .bot_id
+        .as_ref()
+        .and_then(|id| w.bots.iter().find(|b| &b.id == id));
+    let mark: Option<AnyElement> = if let Some(bot) = bot {
+        let mood = if needs_approval {
+            Mood::Waiting
+        } else if busy {
+            Mood::Working
+        } else if last.is_some_and(|m| m.status == MessageStatus::Error) {
+            Mood::Error
+        } else {
+            Mood::Idle
+        };
+        Some(avatar(&bot.id, &bot.name, mood, 16.).into_any_element())
+    } else if th.favorite {
         Some(
             icon("star-fill", 13.)
                 .text_color(t.text_muted)

@@ -21,6 +21,35 @@ impl Core {
         self: &Arc<Self>,
         task: &crate::scheduled::Task,
     ) -> Result<Thread, Error> {
+        let thread = match &task.bot_id {
+            Some(bot) => self.start_bot_routine(bot, task)?,
+            None => self.start_plain_task(task)?,
+        };
+        // Named after the task, not after its prompt: the first message is what the schedule says,
+        // and the task's own name is what the list should show. This comes after the message so
+        // the naming a new thread gets from its first line cannot take the name back.
+        self.store
+            .update_thread(&thread.id, |t| t.title.clone_from(&task.name))?;
+        self.emit(AgentEventEnvelope {
+            thread_id: thread.id.clone(),
+            event: AgentEvent::TitleUpdated {
+                title: task.name.clone(),
+            },
+        });
+        let thread = self.store.thread(&thread.id).unwrap_or(thread);
+        Ok(thread)
+    }
+
+    /// Runs bot `bot_id` with the task's prompt. A project the bot is no longer linked to is
+    /// dropped, so the run happens in the bot's own folder.
+    fn start_bot_routine(self: &Arc<Self>, bot_id: &str, task: &Task) -> Result<Thread, Error> {
+        let linked = self.bot(bot_id).map(|b| b.projects).unwrap_or_default();
+        let project_id = task.project_id.clone().filter(|id| linked.contains(id));
+        self.run_bot(bot_id, &task.prompt, project_id)
+    }
+
+    /// Starts the task's prompt on its own agent in a new thread.
+    fn start_plain_task(self: &Arc<Self>, task: &Task) -> Result<Thread, Error> {
         let project_id = task.project_id.clone().filter(|id| {
             self.store
                 .settings()
@@ -56,18 +85,6 @@ impl Core {
             });
             return Err(error);
         }
-        // Named after the task, not after its prompt: the first message is what the schedule says,
-        // and the task's own name is what the list should show. This comes after the message so
-        // the naming a new thread gets from its first line cannot take the name back.
-        self.store
-            .update_thread(&thread.id, |t| t.title.clone_from(&task.name))?;
-        self.emit(AgentEventEnvelope {
-            thread_id: thread.id.clone(),
-            event: AgentEvent::TitleUpdated {
-                title: task.name.clone(),
-            },
-        });
-        let thread = self.store.thread(&thread.id).unwrap_or(thread);
         Ok(thread)
     }
 

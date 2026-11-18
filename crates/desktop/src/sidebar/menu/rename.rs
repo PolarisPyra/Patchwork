@@ -25,6 +25,11 @@ impl Workspace {
                 .iter()
                 .find(|f| &f.id == id)
                 .map(|f| f.name.clone()),
+            Target::Bot(id) => self
+                .bots
+                .iter()
+                .find(|b| &b.id == id)
+                .map(|b| b.name.clone()),
             Target::Archived(_) | Target::Many(_) => None,
         };
         let Some(current) = current else {
@@ -62,13 +67,17 @@ impl Workspace {
             return;
         };
         let name = renaming.field.read(cx).content.trim().to_string();
-        if save && !name.is_empty() && name != renaming.current {
+        let changed = save && !name.is_empty() && name != renaming.current;
+        if let (true, Target::Bot(id)) = (changed, &renaming.target) {
+            // A bot's page shows its name too.
+            self.rename_bot(id.clone(), name, cx);
+        } else if changed {
             let target = renaming.target.clone();
             let rename = move |core: &patchwork_core::Core| match &target {
                 Target::Thread(id) => core.rename_thread(id, &name),
                 Target::Project(id) => core.rename_project(id, &name),
                 Target::Folder(id) => core.rename_folder(id, &name),
-                Target::Archived(_) | Target::Many(_) => Ok(()),
+                Target::Archived(_) | Target::Many(_) | Target::Bot(_) => Ok(()),
             };
             self.change("rename it", rename, cx);
         }

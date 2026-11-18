@@ -13,6 +13,7 @@ mod options;
 mod standing;
 pub(crate) mod title;
 mod types;
+mod worktree;
 
 #[doc(inline)]
 pub use messages::{
@@ -34,3 +35,6 @@ pub use title::{title_from, without_leading_attachments};
 #[doc(inline)]
 pub use types::{AccessMode, Goal, GoalStatus, ResumePoint, Thread, ThreadParent};
 pub(crate) use types::NOT_FOUND;
+#[doc(inline)]
+pub use worktree::{Worktree, WorktreeState};
+pub(crate) use worktree::project_folders;

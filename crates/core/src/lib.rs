@@ -8,6 +8,7 @@ pub use patchwork_system::VERSION;
 
 pub mod android;
 pub mod backgrounds;
+pub mod bots;
 pub mod checks;
 pub mod computer;
 pub mod events;
@@ -65,6 +66,8 @@ pub struct Core {
     installers_dir: PathBuf,
     /// The git worktrees tasks work in apart from their project, one folder each.
     worktrees_dir: PathBuf,
+    /// One folder per bot, which holds the files it knows.
+    bots_dir: PathBuf,
     sink: EventSink,
     /// The watcher on the active project, with that project's id.
     project_watch: std::sync::Mutex<Option<(String, watch::ProjectWatcher)>>,
@@ -150,6 +153,7 @@ impl Core {
             backgrounds_dir: data_dir.join("backgrounds"),
             installers_dir: data_dir.join("installers"),
             worktrees_dir: data_dir.join("worktrees"),
+            bots_dir: data_dir.join("bots"),
             sink,
             project_watch: std::sync::Mutex::default(),
             skills_watch: std::sync::Mutex::default(),

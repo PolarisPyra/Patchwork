@@ -132,7 +132,7 @@ impl Runner {
                     )
                     .into());
                 }
-                project.path.clone()
+                core.turn_root(&thread, id, &project.path)
             } else {
                 let dir = core.chat_dir(&thread_id);
                 std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -191,6 +191,7 @@ impl Runner {
             text
         };
         let text = core.chat_app_voice(&thread_id, text, session_id.is_none());
+        let text = core.bot_brief(&thread_id, text, session_id.is_none());
         let text = core.chat_app_context(&thread_id, text);
         let text = match context {
             Some(context) => format!("{context}{text}"),
@@ -299,6 +300,7 @@ impl Runner {
             ));
             args.extend(crate::provider::claude::launch::permission_args());
             args.extend(crate::provider::claude::launch::agents_args(&agents, &root));
+            args.extend(core.bot_claude_args(&thread_id));
         }
         // After an undo or a fork the session goes on from the reply they left last. The
         // point is forgotten once the session reports in, as it then goes on from there.
@@ -329,7 +331,15 @@ impl Runner {
         let (mut cmd, scope) = if remote {
             (provider::remote_turn_command(agent)?, None)
         } else {
-            scope::scoped(provider::turn_command(agent)?)
+            let command = provider::turn_command(agent)?;
+            // A task in its own worktree can't write its project's folder or another project's.
+            let command = match core.run_sandbox(&thread_id)? {
+                Some((read_only, writable)) => {
+                    crate::system::sandbox::read_only(command, &read_only, &writable)
+                }
+                None => command,
+            };
+            scope::scoped(command)
         };
         if let Some(shell) = provider::agent_shell(agent) {
             // Claude Code on Windows runs its commands in Git Bash, and refuses to start when it

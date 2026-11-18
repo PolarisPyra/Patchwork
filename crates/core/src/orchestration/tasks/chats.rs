@@ -425,8 +425,15 @@ fn readable(core: &Core, caller: &Thread) -> Vec<Thread> {
                 && t.parent.is_none()
                 && t.archived_at.is_none()
                 && (everywhere || t.project_id == caller.project_id)
+                && reachable(caller, t)
         })
         .collect()
+}
+
+/// Whether the caller may see and drive chat `t`: a bot's run reaches only its own bot's
+/// runs, so it can't hand work to a chat that runs outside the bot's sandbox.
+fn reachable(caller: &Thread, t: &Thread) -> bool {
+    caller.bot_id.is_none() || t.bot_id == caller.bot_id
 }
 
 /// A step's status as `read_chat` words it.
@@ -469,7 +476,11 @@ fn target(core: &Core, caller: &Thread, args: &Value) -> Result<Thread, Error> {
     let chat = core
         .store
         .thread(id)
-        .filter(|t| t.parent.is_none() && (everywhere || t.project_id == caller.project_id))
+        .filter(|t| {
+            t.parent.is_none()
+                && (everywhere || t.project_id == caller.project_id)
+                && reachable(caller, t)
+        })
         .ok_or(if everywhere {
             "No chat with that id; list_chats lists them"
         } else {
@@ -510,6 +521,19 @@ fn start_chat(core: &Arc<Core>, caller: &Thread, args: &Value) -> Result<String,
         compact_window: None,
         plan_mode: false,
     })?;
+    // A chat a bot's run starts is part of that run, under the same limits.
+    let bot_id = caller.bot_id.clone().or_else(|| {
+        let parent = caller.parent.as_ref()?;
+        core.store.thread(&parent.thread_id)?.bot_id
+    });
+    if let Some(bot_id) = bot_id
+        && let Err(e) = core
+            .store
+            .update_thread(&thread.id, |t| t.bot_id = Some(bot_id))
+    {
+        core.delete_thread(&thread.id);
+        return Err(e);
+    }
     let thread = core.store.thread(&thread.id).unwrap_or(thread);
     let id = thread.id.clone();
     core.emit(AgentEventEnvelope {

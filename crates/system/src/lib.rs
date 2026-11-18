@@ -20,6 +20,7 @@ pub mod contained;
 pub mod device;
 pub mod processes;
 pub mod ssh;
+pub mod sandbox;
 pub mod scope;
 mod shells;
 pub mod time;

@@ -31,7 +31,29 @@ impl Workspace {
         let Some(project) = self.project() else {
             return;
         };
-        let (id, root) = (project.id.clone(), project.path.clone());
+        // A reply's files are in the folder its task worked in, which may be its worktree.
+        let root = message
+            .as_ref()
+            .and_then(|_| self.thread_folder())
+            .unwrap_or_else(|| project.path.clone());
+        self.open_canvas_at(path, root, message, tab, window, cx);
+    }
+
+    /// Opens `path`, in the folder `root`, in the file panel on `tab`, with the reply it came
+    /// from.
+    pub fn open_canvas_at(
+        &mut self,
+        path: &str,
+        root: String,
+        message: Option<Message>,
+        tab: CanvasTab,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(project) = self.project() else {
+            return;
+        };
+        let id = project.id.clone();
         let workspace = cx.entity().downgrade();
         let path = Some(path.to_string());
         if self.android_open(cx) {

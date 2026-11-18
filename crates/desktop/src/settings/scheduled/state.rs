@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use chrono::{Local, TimeZone};
 use gpui::{AnyElement, ClickEvent, Div, FontWeight, SharedString, Window, div, prelude::*, px};
+use patchwork_core::bots::Bot;
 use patchwork_core::provider::AgentKind;
 use patchwork_core::scheduled::{RunOutcome, Schedule, Run, Task, Weekday};
 use patchwork_core::system::now_ms;
@@ -51,6 +52,8 @@ pub(super) type Pick = Box<dyn Fn(&mut Task)>;
 #[derive(Default)]
 pub struct ScheduledState {
     pub(super) tasks: Option<Vec<Task>>,
+    /// Every bot, for naming the one a routine runs as.
+    pub(super) bots: Vec<Bot>,
     pub(super) asked: bool,
     /// The task being edited, or a new one with an empty id.
     pub(super) editing: Option<Task>,
@@ -168,6 +171,7 @@ pub(super) fn blank(agent: AgentKind) -> Task {
         next_run_at: None,
         created_at: now_ms() as i64,
         recent_runs: Vec::new(),
+        bot_id: None,
     }
 }
 
@@ -192,8 +196,11 @@ impl SettingsDialog {
     pub(super) fn list_scheduled(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
         self.run(
-            move || core.scheduled_tasks(),
-            |d, tasks, _| d.scheduled.tasks = Some(tasks),
+            move || (core.scheduled_tasks(), core.bots()),
+            |d, (tasks, bots), _| {
+                d.scheduled.tasks = Some(tasks);
+                d.scheduled.bots = bots;
+            },
             cx,
         );
     }
@@ -215,6 +222,19 @@ impl SettingsDialog {
             },
             cx,
         );
+    }
+
+    /// Opens a new routine for `bot`: a task that runs as the bot, in its first linked project.
+    pub fn add_routine(&mut self, bot: &Bot, cx: &mut Context<Self>) {
+        let task = Task {
+            name: bot.name.clone(),
+            project_id: bot.projects.first().cloned(),
+            model: bot.model.clone(),
+            access_mode: bot.access_mode,
+            bot_id: Some(bot.id.clone()),
+            ..blank(bot.agent)
+        };
+        self.edit_task(task, cx);
     }
 
     pub(super) fn edit_task(&mut self, task: Task, cx: &mut Context<Self>) {

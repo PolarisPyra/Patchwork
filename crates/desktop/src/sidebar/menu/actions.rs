@@ -45,6 +45,13 @@ impl Workspace {
         let mut items = vec![item("Rename", "pencil-simple", Act::Rename)];
         match target {
             Target::Archived(_) | Target::Many(_) => {}
+            Target::Bot(_) => {
+                items.push(item("Background…", "image", Act::Background));
+                items.push(Item {
+                    danger: true,
+                    ..item("Delete", "trash", Act::Remove)
+                });
+            }
             Target::Thread(id) => {
                 if let Some(thread) = self.thread_by_id(id) {
                     items.push(if thread.favorite {
@@ -83,6 +90,22 @@ impl Workspace {
                     "git-branch",
                     Act::WorktreeTask,
                 ));
+                if !remote {
+                    let in_place = self.settings.edit_in_place.iter().any(|p| p == id);
+                    items.push(if in_place {
+                        item(
+                            "Give tasks their own worktree",
+                            "git-branch",
+                            Act::EditInPlace(false),
+                        )
+                    } else {
+                        item(
+                            "Edit tasks in the project folder",
+                            "folder",
+                            Act::EditInPlace(true),
+                        )
+                    });
+                }
                 if self.settings.granular_chats {
                     items.push(item("Granular settings…", "gauge", Act::Granular));
                 }
@@ -252,6 +275,9 @@ impl Workspace {
             (Target::Thread(id), Act::Background) => {
                 return self.open_background_dialog(id, window, cx);
             }
+            (Target::Bot(id), Act::Background) => {
+                return self.open_bot_background_dialog(id, window, cx);
+            }
             (Target::Thread(id), Act::Granular) => {
                 let scope = GranularScope::Chat(id.clone());
                 return self.open_granular_dialog(scope, None, window, cx);
@@ -284,6 +310,11 @@ impl Workspace {
             (Target::Project(id), Act::WorktreeTask) => {
                 return self.new_task_in_worktree(id.clone(), window, cx);
             }
+            (Target::Project(id), Act::EditInPlace(on)) => {
+                let (id, on) = (id.clone(), *on);
+                let change = move |core: &patchwork_core::Core| core.set_edits_in_place(&id, on);
+                return self.change("change where the project's tasks work", change, cx);
+            }
             (Target::Project(id), Act::ChangeFolder) => {
                 return self.change_project_folder(id.clone(), cx);
             }
@@ -296,6 +327,7 @@ impl Workspace {
             (Target::Project(_) | Target::Folder(_), Act::Remove) => {
                 return self.remove_targets(&[target], window, cx);
             }
+            (Target::Bot(id), Act::Remove) => return self.delete_bot(id, window, cx),
             (Target::Many(targets), Act::Remove) => {
                 return self.remove_targets(targets, window, cx);
             }

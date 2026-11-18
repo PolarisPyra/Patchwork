@@ -116,6 +116,7 @@ fn child_thread(parent: Thread, pick: AgentPick, ask: &Ask, call: Option<Called>
         role_pending: false,
         favorite: false,
         pinned: false,
+        bot_id: None,
     }
 }
 
