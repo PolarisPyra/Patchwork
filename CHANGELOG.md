@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.106] - 2026-11-18
+
+**26.11.106** · 2 changes from 1 contributor
+
+- **Worktree status.** View changed files and merge or discard them from the new worktree status above the chat box.
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- A task's worktree status now sits on the line above the chat box, to the left of the context and token counts. It stays empty until the task has something to merge, and clicking it lists the changed files with Discard and Merge below them. Attaching an image, file or folder no longer pushes the token counts away from the chat box. by [PolarisPyra in #217](https://github.com/PolarisPyra/Patchwork/pull/217)
+
+### Fixed
+
+- Pressing Stop while the agent was running a command took up to five seconds to end the reply, with no sign that the click had worked. A reply now ends within two seconds, and pressing Stop again ends it right away. by [PolarisPyra in #218](https://github.com/PolarisPyra/Patchwork/pull/218)
+
+</details>
+
 ## [26.11.105] - 2026-11-18
 
 **26.11.105** · 5 changes from 1 contributor
