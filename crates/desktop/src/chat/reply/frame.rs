@@ -100,6 +100,24 @@ pub(super) fn foot(
             .filter(|p| p.role == MessageRole::User)
             .map(|p| p.id.clone());
         let (thread_id, message_id) = (thread.id.clone(), m.id.clone());
+        // In a worktree, a second button forks the other way than the project's setting.
+        let other_fork = w.thread_folder().map(|_| {
+            let new = !thread
+                .project_id
+                .as_deref()
+                .is_some_and(|p| w.settings.worktrees.forks_into_new(p));
+            let label = if new {
+                "Fork into a new worktree"
+            } else {
+                "Fork into the same worktree"
+            };
+            let (thread_id, message_id) = (thread_id.clone(), message_id.clone());
+            action_button(format!("fork-other-{}", m.id), label, "git-branch", t).on_click(
+                cx.listener(move |w, _, _, cx| {
+                    w.fork(&thread_id, &message_id, Some(new), cx);
+                }),
+            )
+        });
         let copy_id = m.id.clone();
         out.push(
             div()
@@ -126,9 +144,10 @@ pub(super) fn foot(
                 }))
                 .child(
                     action_button(format!("fork-{}", m.id), "Fork", "git-fork", t).on_click(
-                        cx.listener(move |w, _, _, cx| w.fork(&thread_id, &message_id, cx)),
+                        cx.listener(move |w, _, _, cx| w.fork(&thread_id, &message_id, None, cx)),
                     ),
                 )
+                .children(other_fork)
                 .child(
                     div()
                         .ml(px(6.))

@@ -29,6 +29,7 @@ use super::terminal;
 use super::themes;
 use super::tokens;
 use super::updates;
+use super::worktrees;
 
 impl SettingsDialog {
     pub(super) fn pane(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
@@ -59,6 +60,7 @@ impl SettingsDialog {
             "projects" => projects::render(self, cx),
             "ssh" => ssh::render(self, window, cx),
             "scheduled" => scheduled::render(self, window, cx),
+            "worktrees" => worktrees::render(self, cx),
             "terminal" => terminal::render(self, window, cx),
             "notifications" => notifications::render(self, cx),
             "updates" => updates::render(self, cx),

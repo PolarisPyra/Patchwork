@@ -14,6 +14,7 @@ mod standing;
 pub(crate) mod title;
 mod types;
 mod worktree;
+mod worktree_cleanup;
 
 #[doc(inline)]
 pub use messages::{

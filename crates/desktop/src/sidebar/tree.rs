@@ -120,11 +120,12 @@ impl Workspace {
     }
 }
 
-/// The sidebar's mark on a task whose worktree needs the user, and what it says.
+/// The sidebar's mark on a task's worktree, and what it says.
 fn worktree_mark(mark: WorktreeMark, t: &Theme) -> (AnyElement, &'static str) {
-    let (label, color) = match mark {
-        WorktreeMark::Unmerged => ("Unmerged changes", t.accent_text),
-        WorktreeMark::OffBranch => ("Worktree on another branch", t.warning),
+    let (label, color, name) = match mark {
+        WorktreeMark::Unmerged => ("Unmerged changes", t.accent_text, "git-branch"),
+        WorktreeMark::OffBranch => ("Worktree on another branch", t.warning, "git-branch"),
+        WorktreeMark::Clean => ("No changes", t.text_muted, "git-commit"),
     };
     let element = div()
         .id("worktree-mark")
@@ -134,7 +135,7 @@ fn worktree_mark(mark: WorktreeMark, t: &Theme) -> (AnyElement, &'static str) {
         .flex()
         .items_center()
         .text_color(color)
-        .child(icon("git-branch", 13.))
+        .child(icon(name, 13.))
         .into_any_element();
     (element, label)
 }
