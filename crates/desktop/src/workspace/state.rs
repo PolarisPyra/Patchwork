@@ -155,6 +155,8 @@ pub struct Workspace {
     pub worktree_marks: HashMap<String, WorktreeMark>,
     /// The tasks as they were when the marks were last read, so a change reads them again.
     pub worktree_marks_key: Option<u64>,
+    /// The task row under the mouse, which shows its archive button in place of its time.
+    pub hovered_row: Option<String>,
     /// A redraw is due in a second, for the elapsed times on screen.
     pub(super) ticking: bool,
     pub queue_open: bool,
@@ -366,6 +368,7 @@ impl Workspace {
             parked_worktrees: HashMap::new(),
             worktree_marks: HashMap::new(),
             worktree_marks_key: None,
+            hovered_row: None,
             ticking: false,
             queue_open: true,
             queue_scroll: ScrollHandle::new(),
