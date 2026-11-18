@@ -14,7 +14,6 @@ use std::sync::{Arc, PoisonError};
 
 use serde::{Deserialize, Serialize};
 
-use crate::settings::WorktreeCleanup;
 use crate::system::{new_id, ssh};
 use crate::threads::{NOT_FOUND, Role, Thread};
 use crate::workspace::{self, FileChange, landed};
@@ -434,7 +433,7 @@ impl Core {
             return Ok(());
         };
         let new = new.unwrap_or_else(|| {
-            project_id.is_some_and(|p| self.store.settings().worktrees.forks_into_new(p))
+            project_id.is_some() && self.store.settings().worktrees.fork_into_new
         });
         let own = new
             && !source.parked
@@ -1470,8 +1469,7 @@ impl Core {
     /// whose folders are gone from each project's repository, and Patchwork their records, with
     /// their branches once the project has all of them. A deleted task's worktree that couldn't
     /// be removed then is removed now, and so is a clean worktree no task's record names. Work
-    /// a project doesn't have yet stays, on its branch. The cleanup rules in the settings then
-    /// run, and all of it again every hour.
+    /// a project doesn't have yet stays, on its branch. All of it runs again every hour.
     pub fn start_worktree_cleanup(self: &Arc<Self>) {
         if !self.store.owns_data() {
             return;
@@ -1480,7 +1478,6 @@ impl Core {
         std::thread::spawn(move || {
             loop {
                 core.clean_worktrees();
-                core.apply_cleanup_rules();
                 std::thread::sleep(CLEANUP_EVERY);
             }
         });
@@ -1556,8 +1553,7 @@ impl Core {
             self.forget_worktree(thread_id);
             return;
         }
-        let project = self.store.thread(thread_id).and_then(|t| t.project_id);
-        if !self.cleanup_rules(project.as_deref()).with_deleted_tasks {
+        if !self.removes_with_tasks() {
             return;
         }
         if record.parked {
@@ -1610,24 +1606,9 @@ impl Core {
             .any(|id| id != thread_id && self.store.thread(id).is_some())
     }
 
-    /// The worktree cleanup rules of project `project_id`: its own, or the default ones.
-    pub(super) fn cleanup_rules(&self, project_id: Option<&str>) -> WorktreeCleanup {
-        let settings = self.store.settings().worktrees;
-        project_id.map_or_else(
-            || settings.cleanup.clone(),
-            |id| settings.cleanup_for(id).clone(),
-        )
-    }
-
-    /// The worktree cleanup rules of the project in the repository whose main folder is `top`,
-    /// for a worktree whose task is gone.
-    fn cleanup_rules_in(&self, top: &str) -> WorktreeCleanup {
-        let top = canonical(top).ok();
-        let project = self.store.settings().projects.into_iter().find(|p| {
-            top.as_ref()
-                .is_some_and(|top| std::fs::canonicalize(&p.path).is_ok_and(|p| p.starts_with(top)))
-        });
-        self.cleanup_rules(project.as_ref().map(|p| p.id.as_str()))
+    /// Whether deleting a task removes its worktree.
+    fn removes_with_tasks(&self) -> bool {
+        self.store.settings().worktrees.cleanup.with_deleted_tasks
     }
 
     /// Removes `worktree` of the repository whose main folder is `top`: what it hadn't committed
@@ -1699,10 +1680,7 @@ impl Core {
             self.forget_worktree(thread_id);
             return;
         }
-        if !self.owns(worktree)
-            || main_top(&worktree.top)
-                .is_some_and(|top| !self.cleanup_rules_in(&top).with_deleted_tasks)
-        {
+        if !self.owns(worktree) || !self.removes_with_tasks() {
             return;
         }
         let removed = (|| -> Result<(), Error> {

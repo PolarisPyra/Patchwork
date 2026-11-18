@@ -27,6 +27,7 @@ use super::ssh;
 use super::themes;
 use super::tokens;
 use super::updates;
+use super::worktrees;
 
 /// What the dialog tells the workspace.
 pub enum SettingsEvent {
@@ -234,6 +235,7 @@ pub struct SettingsDialog {
     /// Why the last save failed.
     pub(super) error: Option<String>,
     pub(super) general: general::GeneralState,
+    pub(super) worktrees: worktrees::WorktreesState,
     pub(super) shortcuts: shortcuts::ShortcutsState,
     pub(super) providers: providers::ProvidersState,
     pub(super) extensions: extensions::ExtensionsState,
@@ -291,6 +293,7 @@ impl SettingsDialog {
             menu: None,
             error: None,
             general: general::GeneralState::default(),
+            worktrees: worktrees::WorktreesState::default(),
             shortcuts: shortcuts::ShortcutsState::default(),
             providers: providers::ProvidersState::default(),
             extensions: extensions::ExtensionsState::default(),

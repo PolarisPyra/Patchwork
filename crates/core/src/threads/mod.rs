@@ -38,3 +38,4 @@ pub use types::{AccessMode, Goal, GoalStatus, LastPlace, ResumePoint, Thread, Th
 pub(crate) use types::NOT_FOUND;
 #[doc(inline)]
 pub use worktree::{Worktree, WorktreeMark, WorktreeState};
+pub use worktree_cleanup::WorktreeSweep;
