@@ -3,6 +3,30 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.113] - 2026-11-18
+
+**v26.11.113** · 6 changes from 1 contributor
+
+- **Terminal opens in your task's worktree.** Ctrl+` now opens a shell already in the open task's worktree instead of the project folder or the last shell used.
+- **Git push, reset and clean run without prompts.** With Commands set to Allow, git push, git reset and git clean no longer ask for approval.
+
+### Plus 2 more bug fixes.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* fix(chat): dragging in a dialog no longer highlights the chat behind it by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/233
+* feat(bots): bigger bot avatars in the bot list and chat by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/234
+* fix(sidebar): task row times and spinners line up with or without the branch mark by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/235
+* feat(terminal): the terminal key opens in the open task's worktree by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/236
+* fix(permissions): git push, reset and clean no longer ask when commands are allowed by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/237
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.112...26.11.113
+
+</details>
+
 ## [26.11.112] - 2026-11-18
 
 **v26.11.112** · 3 changes from 1 contributor
