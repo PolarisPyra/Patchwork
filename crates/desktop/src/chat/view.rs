@@ -13,7 +13,6 @@ use super::background;
 use super::header::header;
 use super::folder;
 use super::goal;
-use super::worktree;
 use super::plan;
 use super::prompts;
 use super::queue;
@@ -82,7 +81,8 @@ pub fn render(
     let prompt = w.prompt().map(|p| prompts::choice_panel(w, p, &t, cx));
     let queued = queue::queued_strip(w, &t, cx);
     let goal = goal::goal_banner(w, &t, cx);
-    let worktree = worktree::worktree_strip(w, &t, cx);
+    // The composer shows the worktree's status on the line above it.
+    w.load_worktree(cx);
     let missing = folder::missing_folder(w, &t, cx);
     let resume = resume::resume_prompt(w, &t, cx);
     let backdrop = backdrop::chat_backdrop(w, &t, cx);
@@ -122,7 +122,6 @@ pub fn render(
                     .children(prompt)
                     .children(queued)
                     .children(goal)
-                    .children(worktree)
                     .child(w.composer.clone()),
             )
         });
@@ -309,13 +308,12 @@ pub(super) fn empty_chat(w: &Workspace, t: &Theme) -> Div {
 /// The chat's token use: totals over its replies, context from the last.
 pub(crate) fn usage_line(thread: &Thread, warn_above: u64, t: &Theme) -> Div {
     let line = div()
-        .mb(px(6.))
+        .flex_1()
+        .min_w_0()
         .flex()
         .flex_wrap()
         .justify_end()
         .gap_x(px(12.))
-        // In line with where the pill under it stops being round.
-        .pr(px(crate::ui::pill::PILL_RADIUS))
         .text_size(px(fs_xs()))
         .line_height(px(16.));
     let Some(last) = thread.messages.iter().rev().find_map(|m| m.usage.as_ref()) else {

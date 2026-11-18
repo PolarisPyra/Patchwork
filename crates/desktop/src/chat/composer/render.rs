@@ -10,7 +10,7 @@ use gpui::{
 use crate::ui::text_area::Paste;
 use crate::chat::user::attachment_chip;
 use crate::ui::pill::{PILL_PAD, SEND, pill, send_button};
-use crate::ui::theme::{fs_md, theme};
+use crate::ui::theme::{fs_md, fs_xs, theme};
 use crate::ui::{agent_logo, button, format_tokens, icon, tooltip};
 use crate::workspace::{Workspace, is_busy, is_working};
 use super::menus::{Menu, access_of, compact_label, effort_label, efforts};
@@ -44,6 +44,8 @@ impl Render for Composer {
         }
         self.check_model(agent, model.as_deref(), working, cx);
         let notice = self.model_notice(agent, model.as_deref(), vision_set, &t, cx);
+        let (worktree, worktree_files) =
+            workspace.update(cx, |w, cx| crate::chat::worktree::worktree_strip(w, &t, cx));
         let w = workspace.read(cx);
         let usage = w
             .thread
@@ -490,6 +492,21 @@ impl Render for Composer {
             .child(agent_chip)
             .child(div().flex_1())
             .child(format_chip);
+        // The worktree's status and the token use share the line just above the pill, which
+        // attachments don't push up: they go above it.
+        let status_line = (worktree.is_some() || usage.is_some()).then(|| {
+            div()
+                .mb(px(6.))
+                .flex()
+                .items_end()
+                .gap_x(px(12.))
+                // In line with where the pill under it stops being round.
+                .px(px(crate::ui::pill::PILL_RADIUS))
+                .text_size(px(fs_xs()))
+                .line_height(px(16.))
+                .children(worktree)
+                .child(usage.unwrap_or_else(|| div().flex_1()))
+        });
         div()
             .id("composer")
             .role(Role::Group)
@@ -497,8 +514,9 @@ impl Render for Composer {
             .flex()
             .flex_col()
             .children(notice)
-            .children(usage)
             .children(attached)
+            .children(worktree_files)
+            .children(status_line)
             .child(pill)
             .child(controls)
             .into_any_element()
