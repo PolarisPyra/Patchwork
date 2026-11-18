@@ -162,7 +162,7 @@ jobs:
               | if any($picked[].commits[]; . < 1 or . > ($all | length)) then error("a commit number is out of range") else . end
               | [$picked[].commits[]] as $covered
               | ($picked | map("- **\(.label | sub("\\.$"; "")).** \(.detail)") | join("\n")) as $bullets
-              # The fixes and performance improvements no highlight covers, by their subject's type.
+              # The fixes and performance improvements no highlight covers, by the type their subject starts with.
               | [$all | to_entries[] | select((.key + 1) | IN($covered[]) | not)
                   | .value.subject | capture("^(?<type>fix|perf)(\\([^)]*\\))?!?:"; "i") | .type | ascii_downcase]
                 as $remaining
