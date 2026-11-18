@@ -3,6 +3,15 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.110] - 2026-11-18
+
+## What's Changed
+* feat(release): update notes lead with highlights and fold GitHub's full list by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/227
+* ci(release): the notes step no longer stops on a quote in a comment by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/228
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.109...26.11.110
+
 ## [26.11.109] - 2026-11-18
 
 **26.11.109** · 2 changes from 1 contributor
