@@ -255,7 +255,7 @@ impl BotPage {
             .flex()
             .items_end()
             .gap(px(8.))
-            .child(avatar(&self.bot.id, &self.bot.name, Mood::Idle, 28.))
+            .child(avatar(&self.bot.id, &self.bot.name, Mood::Idle, 40.))
             .child(
                 div()
                     .px(px(12.))

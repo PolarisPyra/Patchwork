@@ -131,7 +131,7 @@ pub(super) fn bots_section(
                 .text_color(t.text)
                 .bg(fill)
                 .hover(move |s| s.bg(hover))
-                .child(avatar(&bot.id, &bot.name, mood, 32.))
+                .child(avatar(&bot.id, &bot.name, mood, 40.))
                 .child(
                     div()
                         .flex_1()
