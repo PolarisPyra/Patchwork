@@ -13,7 +13,7 @@ pub(crate) use commits::{stage_all, staged_summary, truncated};
 #[doc(inline)]
 pub use commits::{commit, git_log};
 pub(crate) use remote::{
-    CheckState, base_ref, branch_summary, check_state, create_pull_request, gh,
+    CheckState, base_ref, branch_summary, check_state, create_pull_request, fetch_remote, gh,
     pull_request_checks, pull_request_view,
 };
 #[doc(inline)]
