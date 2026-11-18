@@ -1,4 +1,4 @@
-//! The strip above the composer of a task that works in its own worktree: what it changed that
+//! The status above the composer of a task that works in its own worktree: what it changed that
 //! the project doesn't have yet, and Merge and Discard. Its files open on their diffs.
 
 // Rust guideline compliant 2026-10-09
@@ -51,7 +51,7 @@ impl Workspace {
 
     /// Reads the open task's worktree off the main thread when the task changed since it was
     /// last read.
-    fn load_worktree(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn load_worktree(&mut self, cx: &mut Context<Self>) {
         let Some(key) = key_of(self) else {
             self.worktree = None;
             return;
@@ -211,7 +211,7 @@ impl Workspace {
     }
 }
 
-/// "3 files changed · 1 commit", or that there is nothing to merge.
+/// "3 files changed · 1 commit".
 fn summary(state: &WorktreeState) -> String {
     let mut parts = Vec::new();
     match state.changes.len() {
@@ -224,84 +224,108 @@ fn summary(state: &WorktreeState) -> String {
         1 => parts.push("1 commit".to_owned()),
         n => parts.push(format!("{n} commits")),
     }
-    if parts.is_empty() {
-        "Nothing to merge".into()
-    } else {
-        parts.join(" · ")
-    }
+    parts.join(" · ")
 }
 
-/// The open task's worktree strip, when it works in one.
+/// The open task's worktree, when it works in one and there is something to say about it: its
+/// status for the line above the composer, beside the token use, and its changed files when that
+/// status is opened, which go above that line.
 pub fn worktree_strip(
-    w: &mut Workspace,
+    w: &Workspace,
     t: &Theme,
     cx: &mut Context<Workspace>,
-) -> Option<Stateful<gpui::Div>> {
-    w.load_worktree(cx);
+) -> (Option<Stateful<gpui::Div>>, Option<Stateful<gpui::Div>>) {
     let working = w.thread.as_ref().is_some_and(is_working);
-    let strip = w.worktree.as_ref()?;
-    let state = strip.state.clone()?;
+    let Some((strip, state)) = w
+        .worktree
+        .as_ref()
+        .and_then(|strip| Some((strip, strip.state.clone()?)))
+    else {
+        return (None, None);
+    };
     let pending = !state.changes.is_empty() || state.commits > 0;
-    let label: SharedString = strip
-        .busy
-        .map_or_else(|| summary(&state), str::to_owned)
-        .into();
-    let branch: SharedString = state.worktree.branch.clone().into();
     let (open, conflicted) = (strip.open, strip.conflicted);
-    let (error, note) = (strip.error.clone(), strip.note.clone());
+    let message = strip
+        .error
+        .clone()
+        .map(|e| (e, true))
+        .or_else(|| strip.note.clone().map(|n| (n, false)));
+    // Nothing to merge, nothing running and nothing to report: the line stays blank.
+    if !pending && strip.busy.is_none() && message.is_none() && !conflicted {
+        return (None, None);
+    }
     let idle = strip.busy.is_none() && !working;
     let (muted, fg) = (t.text_muted, t.text);
-    let can_open = !state.changes.is_empty();
-    let toggle = button("worktree-toggle", label.clone())
-        .when(can_open, |b| b.aria_expanded(open))
-        .flex_1()
-        .min_w_0()
-        .gap(px(8.))
-        .text_color(muted)
-        .hover(move |s| s.text_color(fg))
-        .tooltip(tooltip(format!("Working in its own worktree on {branch}")))
-        .child(
-            icon("git-branch", 13.)
-                .flex_none()
-                .text_color(t.accent_text),
-        )
-        .child(
-            div()
-                .id("worktree-state")
-                .role(Role::Status)
-                .aria_label(label.clone())
-                .flex_none()
-                .whitespace_nowrap()
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(t.text)
-                .child(label),
-        )
-        .child(
-            div()
-                .min_w_0()
-                .truncate()
-                .text_size(px(fs_xs()))
-                .text_color(t.text_subtle)
-                .child(branch),
-        )
-        .when(can_open, |b| {
-            b.child(
-                icon(if open { "caret-down" } else { "caret-right" }, 12.)
-                    .ml_auto()
-                    .flex_none(),
+    // Opening it shows the changed files and the Discard and Merge buttons.
+    let can_open = pending;
+    let branch: SharedString = state.worktree.branch.clone().into();
+    let label: Option<SharedString> = strip
+        .busy
+        .map(str::to_owned)
+        .or_else(|| pending.then(|| summary(&state)))
+        .map(Into::into);
+    let toggle = label.map(|label| {
+        button("worktree-toggle", label.clone())
+            .when(can_open, |b| b.aria_expanded(open))
+            .flex_none()
+            .gap(px(6.))
+            .text_color(muted)
+            .hover(move |s| s.text_color(fg))
+            .tooltip(tooltip(format!("Working in its own worktree on {branch}")))
+            .child(
+                icon("git-branch", 13.)
+                    .flex_none()
+                    .text_color(t.accent_text),
             )
-        })
-        .on_click(cx.listener(|w, _, _, cx| {
-            if let Some(strip) = w.worktree.as_mut() {
-                strip.open = !strip.open;
-            }
-            cx.notify();
-        }));
-    let actions = div()
+            .child(
+                div()
+                    .id("worktree-state")
+                    .role(Role::Status)
+                    .aria_label(label.clone())
+                    .flex_none()
+                    .whitespace_nowrap()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(t.text)
+                    .child(label),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .truncate()
+                    .text_color(t.text_subtle)
+                    .child(branch.clone()),
+            )
+            .when(can_open, |b| {
+                b.child(icon(if open { "caret-down" } else { "caret-right" }, 12.).flex_none())
+            })
+            .on_click(cx.listener(|w, _, _, cx| {
+                if let Some(strip) = w.worktree.as_mut() {
+                    strip.open = !strip.open;
+                }
+                cx.notify();
+            }))
+    });
+    let message = message.map(|(text, failed)| {
+        let shown: SharedString = text.into();
+        div()
+            .id("worktree-message")
+            .role(if failed { Role::Alert } else { Role::Status })
+            .aria_label(shown.clone())
+            .min_w_0()
+            .truncate()
+            .text_color(if failed { t.danger } else { t.text_muted })
+            .tooltip(tooltip(shown.clone()))
+            .child(shown)
+    });
+    let status = div()
+        .id("worktree")
+        .role(Role::Region)
+        .aria_label("Worktree")
         .flex()
         .flex_none()
         .items_center()
         .gap(px(8.))
+        .children(toggle)
         .when(idle && conflicted, |d| {
             d.child(
                 strip_action("worktree-resolve", "Ask to resolve", t)
@@ -309,45 +333,16 @@ pub fn worktree_strip(
                     .on_click(cx.listener(|w, _, _, cx| w.resolve_worktree(cx))),
             )
         })
-        .when(idle && pending, |d| {
-            d.child(
-                strip_action("worktree-discard", "Discard", t)
-                    .tooltip(tooltip("Throw away the task's changes"))
-                    .on_click(cx.listener(|w, _, window, cx| w.discard_worktree(window, cx))),
-            )
-            .child(
-                strip_action("worktree-merge", "Merge", t)
-                    .tooltip(tooltip("Bring the task's changes into the project"))
-                    .on_click(cx.listener(|w, _, _, cx| w.merge_worktree(cx))),
-            )
-        });
-    let message = error
-        .map(|e| (e, true))
-        .or_else(|| note.map(|n| (n, false)))
-        .map(|(text, failed)| {
-            div()
-                .id("worktree-message")
-                .role(if failed { Role::Alert } else { Role::Status })
-                .aria_label(text.clone())
-                .px(px(10.))
-                .py(px(6.))
-                .border_t_1()
-                .border_color(t.border)
-                .text_size(px(fs_xs()))
-                .text_color(if failed { t.danger } else { t.text_muted })
-                .child(text)
-        });
+        .children(message);
     let root = state.worktree.root.clone();
-    let files = (open && can_open).then(|| {
-        let hover = t.bg_hover;
+    let hover = t.bg_hover;
+    let list = (!state.changes.is_empty()).then(|| {
         div()
             .id("worktree-files")
             .role(Role::List)
             .aria_label("Changed files")
             .max_h(px(FILES_MAX_HEIGHT))
             .overflow_y_scroll()
-            .border_t_1()
-            .border_color(t.border)
             .py(px(4.))
             .children(state.changes.iter().enumerate().map(|(i, change)| {
                 let path = change.path.clone();
@@ -375,33 +370,39 @@ pub fn worktree_strip(
                     }))
             }))
     });
-    Some(
+    let actions = idle.then(|| {
         div()
-            .id("worktree")
+            .flex()
+            .justify_end()
+            .gap(px(8.))
+            .px(px(10.))
+            .py(px(6.))
+            .when(list.is_some(), |d| d.border_t_1().border_color(t.border))
+            .child(
+                strip_action("worktree-discard", "Discard", t)
+                    .tooltip(tooltip("Throw away the task's changes"))
+                    .on_click(cx.listener(|w, _, window, cx| w.discard_worktree(window, cx))),
+            )
+            .child(
+                strip_action("worktree-merge", "Merge", t)
+                    .tooltip(tooltip("Bring the task's changes into the project"))
+                    .on_click(cx.listener(|w, _, _, cx| w.merge_worktree(cx))),
+            )
+    });
+    let panel = (open && can_open && (list.is_some() || actions.is_some())).then(|| {
+        div()
+            .id("worktree-panel")
             .role(Role::Region)
-            .aria_label("Worktree")
-            .mx(px(8.))
+            .aria_label("Worktree changes")
             .mb(px(6.))
-            .overflow_hidden()
             .rounded(px(radius_sm()))
             .border_1()
             .border_color(t.border_strong)
             .bg(t.bg_panel)
             .text_size(px(fs_sm()))
             .shadow_sm()
-            .child(
-                div()
-                    .flex()
-                    .h(px(36.))
-                    .min_w_0()
-                    .items_center()
-                    .gap(px(8.))
-                    .bg(t.bg_app)
-                    .px(px(10.))
-                    .child(toggle)
-                    .child(actions),
-            )
-            .children(files)
-            .children(message),
-    )
+            .children(list)
+            .children(actions)
+    });
+    (Some(status), panel)
 }
