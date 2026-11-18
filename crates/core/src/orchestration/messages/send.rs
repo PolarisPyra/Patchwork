@@ -515,7 +515,8 @@ impl Core {
     }
 
     /// Stops the running turn as `cancel_turn` does; without `interrupt`, the agent process ends
-    /// with it.
+    /// with it. The commands Patchwork runs for the thread's agent, which outlive its process as
+    /// background jobs, stop with it.
     pub(crate) fn stop_turn(&self, thread_id: &str, interrupt: bool) {
         let session_id = self.store.thread(thread_id).and_then(|t| t.session_id);
         if interrupt {
@@ -523,6 +524,8 @@ impl Core {
         } else {
             self.runner.cancel(thread_id);
         }
+        // After the turn is marked stopped, so a command it starts meanwhile stops itself.
+        self.runner.stop_jobs(thread_id);
     }
 
     /// Drops the note on chat `thread_id`'s background task `tool_id` that Patchwork closing ended
