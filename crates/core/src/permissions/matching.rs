@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::system::fs::{real, resolve};
 use crate::system::fs::home_dir;
 use super::{Effect, PermissionKind, PermissionRule};
-use super::command::{any_program, does_more, handed_code, may_run, split_writes};
+use super::command::{does_more, handed_code, may_run, split_writes};
 use super::{Target, opencode_name};
 
 /// One part of a request a rule has to cover.
@@ -92,9 +92,6 @@ pub(super) fn covers(rule: &PermissionRule, unit: &Unit, root: &Path) -> bool {
         },
         Unit::Command(words) => {
             let wanted: Vec<&str> = pattern.split_whitespace().collect();
-            if rule.effect != Effect::Allow && words.first().is_some_and(|w| any_program(w)) {
-                return true;
-            }
             !wanted.is_empty()
                 && words.len() >= wanted.len()
                 && wanted
