@@ -29,6 +29,8 @@ pub struct Shell {
     pub name: String,
     /// The SSH host it runs on, or None for this computer.
     pub host: Option<String>,
+    /// The folder it started in.
+    cwd: String,
     /// Set once the shell has ended with an error, while its last output stays readable.
     pub exit_code: Option<u32>,
     /// It runs one command rather than a shell, and has yet to say how the command ended.
@@ -227,6 +229,22 @@ impl Panel {
         }
     }
 
+    /// Switches to a shell that started in `folder`, or starts one there when none did.
+    pub fn switch_to_shell_in(&mut self, folder: &str, cx: &mut Context<Self>) {
+        let found = self
+            .shown()
+            .find(|s| !s.task && std::path::Path::new(&s.cwd).starts_with(folder))
+            .map(|s| s.id);
+        match found {
+            Some(id) => {
+                self.active = Some(id);
+                cx.notify();
+            }
+            None if !self.starting => self.start(true, None, cx),
+            None => {}
+        }
+    }
+
     fn restore(&mut self, cx: &mut Context<Self>) {
         if !self.restored {
             self.restored = true;
@@ -297,6 +315,7 @@ impl Panel {
             attachment,
             name: attached.info.name,
             host: attached.info.host,
+            cwd: attached.info.cwd,
             exit_code,
             task: false,
             parser,

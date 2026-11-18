@@ -8,6 +8,7 @@ use std::sync::Arc;
 use gpui::{App, Entity, MouseButton, Role, Window, div, prelude::*, px};
 use patchwork_core::Core;
 use patchwork_core::settings::Settings;
+use patchwork_core::system::ssh::is_remote;
 
 use super::Workspace;
 use crate::panel::{Panel, PanelEvent, PanelTab};
@@ -51,13 +52,14 @@ pub(super) fn new_panel(
 }
 
 impl Workspace {
-    /// Hands the panel the settings and the open project's folder.
+    /// Hands the panel the settings and the folder new terminals start in: the open task's
+    /// worktree, or else the open project's folder.
     pub(super) fn sync_panel(&mut self, cx: &mut Context<Self>) {
         let host = self.machine_host(cx);
         let cwd = self
             .project()
             .filter(|p| p.host() == host.as_deref())
-            .map(|p| p.path.clone());
+            .map(|p| self.local_thread_folder().unwrap_or_else(|| p.path.clone()));
         self.panel
             .update(cx, |p, cx| p.sync(&self.settings, host, cwd, cx));
     }
@@ -99,14 +101,26 @@ impl Workspace {
     }
 
     /// The terminal key opens the terminal, focuses it if the panel shows something else, and
-    /// closes the panel from inside it.
+    /// closes the panel from inside it. In a task with its own worktree it opens on a shell in
+    /// that worktree, as the worktree menu's "Open terminal here" does.
     pub(super) fn toggle_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let panel = self.panel.read(cx);
         if self.panel_open && panel.tab == PanelTab::Terminal && panel.terminal_focused(window) {
             return self.close_panel(window, cx);
         }
         self.open_panel(PanelTab::Terminal, cx);
-        self.panel.update(cx, |p, cx| p.focus_terminal(window, cx));
+        let folder = self.local_thread_folder();
+        self.panel.update(cx, |p, cx| {
+            if let Some(folder) = folder {
+                p.switch_to_shell_in(&folder, cx);
+            }
+            p.focus_terminal(window, cx);
+        });
+    }
+
+    /// The open task's worktree when it is on this computer.
+    fn local_thread_folder(&self) -> Option<String> {
+        self.thread_folder().filter(|f| !is_remote(f))
     }
 
     pub(super) fn new_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
