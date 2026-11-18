@@ -55,6 +55,8 @@ pub(super) enum Place {
     Chat(String),
     /// A chat opened from an orchestrator card: read-only, with the sidebar closed.
     Peek(String),
+    /// A bot's page, by the bot's id.
+    Bot(String),
 }
 
 /// What fills the window beside the activity bar.
@@ -91,6 +93,11 @@ pub struct Workspace {
     /// Every thread, each with only the messages the task list reads.
     pub threads: Vec<Arc<Thread>>,
     pub folders: Vec<Folder>,
+    /// Every bot, oldest first.
+    pub bots: Vec<patchwork_core::bots::Bot>,
+    /// The bot whose page shows in place of the chat, and its page once drawn.
+    pub bot_shown: Option<String>,
+    pub bot_page: Option<Entity<crate::bots::BotPage>>,
     /// The chat apps each thread came from or has on it now, by thread id.
     pub chat_apps: HashMap<String, ChatApps>,
     /// Projects and folders (`folder:<id>`) whose rows are closed.
@@ -258,6 +265,7 @@ impl Workspace {
         let threads = core.list_threads();
         let chat_apps = core.thread_chat_apps();
         let folders = core.list_folders();
+        let bots = core.bots();
         let workspace = cx.entity().downgrade();
         let composer = cx.new(|cx| Composer::new(workspace.clone(), window, cx));
         let changes_view = cx.new(|cx| ChangesView::new(workspace, window, cx));
@@ -304,6 +312,9 @@ impl Workspace {
             settings,
             threads,
             folders,
+            bots,
+            bot_shown: None,
+            bot_page: None,
             collapsed,
             chat_apps,
             archived_collapsed: HashSet::new(),

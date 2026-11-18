@@ -18,13 +18,21 @@ impl Render for Workspace {
             return self.onboarding_view(window, cx);
         }
         self.follow_project_look(window, cx);
-        // The orchestrator page belongs to no chat, so the open one stays out of its title.
-        let title = match &self.thread {
+        // The orchestrator page belongs to no chat, so the open one stays out of its title, and
+        // a bot's page takes the place of the chat, so its name does too.
+        let bot = self
+            .bot_shown
+            .as_ref()
+            .and_then(|id| self.bots.iter().find(|b| &b.id == id));
+        let title = match (&self.thread, bot) {
             _ if self.page == Page::Orchestrator => {
                 format!("{} - Orchestrator mode", crate::APP_TITLE)
             }
-            Some(thread) => format!("{} - {}", crate::APP_TITLE, display_title(&thread.title)),
-            None => crate::APP_TITLE.into(),
+            (_, Some(bot)) => format!("{} - {}", crate::APP_TITLE, bot.name),
+            (Some(thread), None) => {
+                format!("{} - {}", crate::APP_TITLE, display_title(&thread.title))
+            }
+            (None, None) => crate::APP_TITLE.into(),
         };
         if title != self.title {
             window.set_window_title(&title);
@@ -39,8 +47,15 @@ impl Render for Workspace {
                 .clone()
                 .cached(StyleRefinement::default().flex_none().w(width))
         });
-        let canvas = self.canvas_area(window, cx);
-        let panel = self.panel_area(window, cx);
+        let bot_page = if orchestrating {
+            None
+        } else {
+            self.bot_page_view(window, cx)
+        };
+        // The chat's file panel and terminal belong to the chat a bot's page takes the place of.
+        let beside_chat = bot_page.is_none();
+        let canvas = self.canvas_area(window, cx).filter(|_| beside_chat);
+        let panel = self.panel_area(window, cx).filter(|_| beside_chat);
         let background_dialog = self.background_dialog(window, cx);
         let granular_dialog = self.granular_dialog(window, cx);
         let error = self.error_toast(&t, cx);
@@ -217,7 +232,8 @@ impl Render for Workspace {
                             .clone()
                             .cached(StyleRefinement::default().flex_1().min_w_0().min_h_0())
                     }))
-                    .children((!orchestrating).then(|| {
+                    .children(bot_page)
+                    .children((!orchestrating && self.bot_shown.is_none()).then(|| {
                         div()
                             .flex()
                             .flex_col()

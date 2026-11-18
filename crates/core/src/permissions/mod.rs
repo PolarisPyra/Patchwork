@@ -26,6 +26,6 @@ mod decide;
 
 #[doc(inline)]
 pub use decide::{
-    Decision, Guarded, Target, Unasked, decide, guarded, opencode_name, same_guards, same_request,
-    suggest, unasked,
+    Decision, Guarded, Target, Unasked, decide, guarded, opencode_name, refuses, same_guards,
+    same_request, suggest, unasked,
 };

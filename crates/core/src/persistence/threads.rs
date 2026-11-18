@@ -16,9 +16,9 @@ pub(super) fn save_thread_row(tx: &Transaction, t: &Thread) -> rusqlite::Result<
         "INSERT INTO threads
              (id, project_id, title, agent, model, session_id, created_at, access_mode, goal,
               position, folder_id, effort, archived_at, parent, plan_mode, slash_commands,
-              imported_from, context_pending, role, role_pending)
+              imported_from, context_pending, role, role_pending, bot_id)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20)
+                 ?19, ?20, ?21)
          ON CONFLICT (id) DO UPDATE SET project_id = excluded.project_id,
              title = excluded.title, agent = excluded.agent, model = excluded.model,
              session_id = excluded.session_id, access_mode = excluded.access_mode,
@@ -26,7 +26,7 @@ pub(super) fn save_thread_row(tx: &Transaction, t: &Thread) -> rusqlite::Result<
              parent = excluded.parent, plan_mode = excluded.plan_mode,
              slash_commands = excluded.slash_commands, imported_from = excluded.imported_from,
              context_pending = excluded.context_pending, role = excluded.role,
-             role_pending = excluded.role_pending",
+             role_pending = excluded.role_pending, bot_id = excluded.bot_id",
         params![
             t.id,
             t.project_id,
@@ -47,7 +47,8 @@ pub(super) fn save_thread_row(tx: &Transaction, t: &Thread) -> rusqlite::Result<
             t.imported_from,
             t.context_pending,
             t.role,
-            t.role_pending
+            t.role_pending,
+            t.bot_id
         ],
     )?;
     // Kept in `app_state` rather than columns of their own, so the schema stays the same and a
@@ -191,7 +192,7 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
     let mut stmt = conn.prepare(
         "SELECT id, project_id, title, agent, model, session_id, created_at, access_mode, goal,
                 position, folder_id, effort, archived_at, parent, plan_mode, slash_commands,
-                imported_from, context_pending, role, role_pending
+                imported_from, context_pending, role, role_pending, bot_id
          FROM threads ORDER BY position",
     )?;
     let mut threads: Vec<Thread> = stmt
@@ -226,6 +227,7 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
                 role_pending: r.get(19)?,
                 favorite: false,
                 pinned: false,
+                bot_id: r.get(20)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;

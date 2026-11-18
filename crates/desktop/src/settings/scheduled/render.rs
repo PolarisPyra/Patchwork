@@ -23,6 +23,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
             .iter()
             .find(|p| p.id == *id)
             .map_or_else(|| "Project".to_string(), |p| p.name.clone()),
+        None if task.bot_id.is_some() => "Bot's own folder".to_string(),
         None => "Scratch chat".to_string(),
     };
     let id = task.id.clone();
@@ -115,7 +116,15 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                             },
                             place,
                         ))
-                        .child(agent_label(task.agent)),
+                        .child(
+                            task.bot_id
+                                .as_ref()
+                                .and_then(|id| d.scheduled.bots.iter().find(|b| &b.id == id))
+                                .map_or_else(
+                                    || agent_label(task.agent).to_string(),
+                                    |b| b.name.clone(),
+                                ),
+                        ),
                 )
                 .child(
                     div()

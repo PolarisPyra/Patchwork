@@ -1,4 +1,5 @@
-//! The chat's background, behind everything it draws: its own, else the one in Settings.
+//! The chat's background, behind everything it draws: its own, else its bot's, else the one in
+//! Settings. A bot's page draws the bot's the same way.
 //!
 //! A preset or an animated backdrop is drawn as Settings previews it; a picture covers the chat,
 //! with the window's color laid over it.
@@ -66,19 +67,27 @@ impl Workspace {
     }
 }
 
-/// The chat's own background, else the one in Settings.
+/// The chat's own background, else its bot's, else the one in Settings.
 fn chat_background(w: &Workspace) -> ChatBackground {
-    w.thread
-        .as_ref()
+    let thread = w.thread.as_ref();
+    thread
         .and_then(|t| t.background.clone())
+        .or_else(|| {
+            let bot = thread?.bot_id.as_ref()?;
+            w.bots.iter().find(|b| &b.id == bot)?.background.clone()
+        })
         .unwrap_or_else(|| w.settings.chat_background.clone())
 }
 
 /// The scheme the chat's background is drawn for, when it is drawn for one: the chat is then
 /// drawn over it as the Orchestrator page is over its backdrop, so its text reads over it.
 pub fn chat_scheme(w: &Workspace) -> Option<Scheme> {
-    let background = chat_background(w);
-    let scene = match &background {
+    scheme_for(w, &chat_background(w))
+}
+
+/// The scheme `background` is drawn for, when it is drawn for one.
+pub fn scheme_for(w: &Workspace, background: &ChatBackground) -> Option<Scheme> {
+    let scene = match background {
         ChatBackground::Scene { id } => w.backgrounds.scenes.iter().find(|s| &s.id == id),
         _ => None,
     };
@@ -91,7 +100,17 @@ pub fn chat_backdrop(
     cx: &mut Context<Workspace>,
 ) -> Option<AnyElement> {
     let background = chat_background(w);
-    let under = match &background {
+    backdrop_for(w, &background, t, cx)
+}
+
+/// `background` drawn to cover the element it is put in, which must be relative.
+pub fn backdrop_for(
+    w: &mut Workspace,
+    background: &ChatBackground,
+    t: &Theme,
+    cx: &mut Context<Workspace>,
+) -> Option<AnyElement> {
+    let under = match background {
         ChatBackground::None => return None,
         ChatBackground::Preset { id } => preset_fill(id, t)?,
         ChatBackground::Butterfly => {

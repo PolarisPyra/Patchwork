@@ -100,6 +100,27 @@ pub fn unasked(
     }
 }
 
+/// Whether a deny rule in `rules` covers any part of `target`.
+///
+/// Whether one of `rules` that refuses covers any part of `target` in `root`, outside the
+/// settings' scopes: a bot's blocked tools. A file a command writes by redirection counts as an
+/// edit.
+#[must_use]
+pub fn refuses(rules: &[PermissionRule], root: &Path, target: &Target) -> bool {
+    let (parts, _, writes) = units(target, root);
+    let hits = |kind: PermissionKind, parts: &[Unit]| {
+        rules
+            .iter()
+            .filter(|r| r.kind == kind && r.effect == Effect::Deny)
+            .any(|r| parts.iter().any(|u| covers(r, u, root)))
+    };
+    hits(target.kind, &parts)
+        || (!writes.is_empty() && {
+            let (edits, _, _) = units(&Target::new(PermissionKind::Edit, writes), root);
+            hits(PermissionKind::Edit, &edits)
+        })
+}
+
 /// The deny and ask rules of one kind that `opencode run` is told at launch.
 ///
 /// The deny and ask rules of one kind that hold in a thread, for an agent that has to be told at

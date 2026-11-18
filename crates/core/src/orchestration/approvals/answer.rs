@@ -39,7 +39,7 @@ pub(in crate::orchestration) fn decide(
         project.as_deref(),
         std::path::Path::new(root),
         target,
-        &crate::extensions::skills::folders(&settings),
+        &readable(core, thread_id, &settings),
     )
 }
 
@@ -59,9 +59,21 @@ pub(in crate::orchestration) fn unasked(
         project.as_deref(),
         std::path::Path::new(root),
         target,
-        &crate::extensions::skills::folders(&settings),
+        &readable(core, thread_id, &settings),
         asks,
     )
+}
+
+/// The folders thread `thread_id`'s agent reads without asking: the skills, and for a bot's run
+/// the files the bot knows.
+fn readable(
+    core: &Core,
+    thread_id: &str,
+    settings: &crate::settings::Settings,
+) -> Vec<std::path::PathBuf> {
+    let mut folders = crate::extensions::skills::folders(settings);
+    folders.extend(core.run_knowledge_dir(thread_id));
+    folders
 }
 
 impl Runner {

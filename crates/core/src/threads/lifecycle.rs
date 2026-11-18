@@ -114,6 +114,7 @@ impl Core {
             role_pending: false,
             favorite: false,
             pinned: false,
+            bot_id: None,
         };
         self.give_project_granular(&mut thread);
         self.store.insert_threads(vec![thread.clone()])?;

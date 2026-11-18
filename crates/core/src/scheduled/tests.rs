@@ -94,6 +94,7 @@ fn a_task_runs_when_due_and_skips_a_slot_long_gone() {
         next_run_at,
         created_at: 0,
         recent_runs: Vec::new(),
+        bot_id: None,
     };
     let slot = 1_000;
     assert_eq!(action(&task(true, Some(slot)), slot), Action::Run);

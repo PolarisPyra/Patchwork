@@ -13,18 +13,25 @@ use patchwork_core::threads::Thread;
 use crate::ui::theme::{fs_md, theme};
 use crate::ui::{button, icon, icon_button, scrollbar};
 use crate::workspace::Workspace;
+use super::bots::bots_section;
 use super::render::{empty_row, section_label, twistie};
 use super::tree::{TREE_GUTTER, indent_guide, reveal_button, thread_row, tree_row};
 
 pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl IntoElement {
     let t = *theme(cx);
-    let live: Vec<Arc<Thread>> = w
+    // A bot's runs are listed under the bot, not with the chats and projects.
+    let (bot_runs, live): (Vec<Arc<Thread>>, Vec<Arc<Thread>>) = w
         .threads
         .iter()
         .filter(|th| th.archived_at.is_none() && th.parent.is_none())
         .cloned()
-        .collect();
-    let selected = w.thread.as_ref().map(|th| th.id.clone());
+        .partition(|th| th.bot_id.is_some());
+    // A bot's page takes the chat's place, so no chat shows as picked under it.
+    let selected = w
+        .thread
+        .as_ref()
+        .filter(|_| w.bot_shown.is_none())
+        .map(|th| th.id.clone());
     // The list shows only what is on the machine picked in the toolbar.
     let host = w.machine_host(cx);
     let here: Vec<Project> = w
@@ -45,11 +52,6 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
         .iter()
         .map(Arc::as_ref)
         .filter(|th| th.favorite && on_machine(th))
-        .collect();
-    let chats: Vec<&Thread> = live
-        .iter()
-        .map(Arc::as_ref)
-        .filter(|th| th.project_id.is_none() && !th.favorite)
         .collect();
 
     let mut tree = div()
@@ -74,23 +76,17 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
             tree = tree.child(thread_row(w, th, 0, selected.as_deref(), cx));
         }
     }
+    // Chats outside a project are reached from search and the Archived page.
     if host.is_none() {
-        let new_chat = icon_button("new-chat", "New chat", "plus", 18., cx)
-            .on_click(cx.listener(|this, _, window, cx| this.new_thread_in(None, None, window, cx)))
-            .into_any_element();
-        tree = tree.child(section_label(
-            "Chats",
+        let runs: Vec<&Thread> = bot_runs.iter().map(Arc::as_ref).collect();
+        tree = tree.children(bots_section(
+            w,
+            &runs,
             favorites.is_empty(),
-            Some(new_chat),
-            &t,
+            &mut rows,
+            selected.as_deref(),
+            cx,
         ));
-        if chats.is_empty() {
-            tree = tree.child(empty_row("No chats yet", &t));
-        }
-        for th in &chats {
-            rows.push(Target::Thread(th.id.clone()));
-            tree = tree.child(thread_row(w, th, 0, selected.as_deref(), cx));
-        }
     }
 
     let (muted, fg) = (t.text_muted, t.text);

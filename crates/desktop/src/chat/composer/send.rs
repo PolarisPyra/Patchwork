@@ -97,6 +97,17 @@ impl Composer {
             plan_mode: self.draft.plan_mode,
         };
         let attachments = std::mem::take(&mut self.attachments);
+        // On a bot's page the message starts a run of the bot.
+        if workspace.read(cx).bot_shown.is_some() {
+            let kept = attachments.clone();
+            if !workspace.update(cx, |w, cx| w.send_to_bot(text, attachments, new, cx)) {
+                self.attachments = kept;
+                return;
+            }
+            self.editor.update(cx, |e, cx| e.clear(window, cx));
+            cx.notify();
+            return;
+        }
         workspace.update(cx, |w, cx| {
             // A granular chat is asked what it runs with before its first message goes, unless
             // its project says.
