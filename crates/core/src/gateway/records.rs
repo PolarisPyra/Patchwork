@@ -23,6 +23,9 @@ const BINDINGS: &str = "gateway.bindings";
 /// The app state key of the ids of the dispatcher threads.
 const DISPATCHERS: &str = "gateway.dispatchers";
 
+/// The app state key of the ids of the threads the chat apps started, which run in the background.
+const OPENED: &str = "gateway.opened";
+
 /// The app state key of the threads a conversation is told about without talking to them.
 const WATCHES: &str = "gateway.watches";
 
@@ -202,6 +205,12 @@ impl Core {
             log::warn!(error:% = error; "could not save a conversation's thread: {{error}}");
         }
         self.unwatch(thread_id);
+        let saved = self.change_list(OPENED, |list: &mut Vec<String>| {
+            list.retain(|id| id != thread_id);
+        });
+        if let Err(error) = saved {
+            log::warn!(error:% = error; "could not forget a chat app's thread: {{error}}");
+        }
         if self.is_dispatcher(thread_id) {
             let saved = self.change_list(DISPATCHERS, |list: &mut Vec<String>| {
                 list.retain(|id| id != thread_id);
@@ -218,6 +227,26 @@ impl Core {
         self.read_list::<String>(DISPATCHERS)
             .iter()
             .any(|id| id == thread_id)
+    }
+
+    /// Whether `thread_id` was started from a chat app, so it runs in the background: the window
+    /// neither lists it nor notifies about it. Dispatchers count, since only chat apps start them.
+    pub(crate) fn in_background(&self, thread_id: &str) -> bool {
+        self.background_threads().iter().any(|id| id == thread_id)
+    }
+
+    /// The ids of every thread started from a chat app. See `in_background`.
+    pub(crate) fn background_threads(&self) -> Vec<String> {
+        let mut ids = self.read_list::<String>(OPENED);
+        ids.extend(self.read_list::<String>(DISPATCHERS));
+        ids
+    }
+
+    /// Records that a chat app started `thread_id`.
+    pub(super) fn mark_opened(&self, thread_id: &str) -> Result<(), Error> {
+        self.change_list(OPENED, |list: &mut Vec<String>| {
+            list.push(thread_id.to_string());
+        })
     }
 
     /// Makes `thread_id` a dispatcher.

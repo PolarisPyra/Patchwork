@@ -437,9 +437,12 @@ impl Core {
         })?;
         let thread = self.store.thread(&thread.id).unwrap_or(thread);
         let id = thread.id.clone();
-        if dispatcher.is_some()
-            && let Err(error) = self.mark_dispatcher(&id)
-        {
+        let marked = if dispatcher.is_some() {
+            self.mark_dispatcher(&id)
+        } else {
+            self.mark_opened(&id)
+        };
+        if let Err(error) = marked {
             self.delete_thread(&id);
             return Err(error);
         }
