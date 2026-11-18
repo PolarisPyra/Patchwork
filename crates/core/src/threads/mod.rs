@@ -33,7 +33,7 @@ pub use standing::{Ask, AskKind, Standing, asks};
 pub use attachments::is_long_paste;
 pub use title::{title_from, without_leading_attachments};
 #[doc(inline)]
-pub use types::{AccessMode, Goal, GoalStatus, ResumePoint, Thread, ThreadParent};
+pub use types::{AccessMode, Goal, GoalStatus, LastPlace, ResumePoint, Thread, ThreadParent};
 pub(crate) use types::NOT_FOUND;
 #[doc(inline)]
 pub use worktree::{Worktree, WorktreeState};

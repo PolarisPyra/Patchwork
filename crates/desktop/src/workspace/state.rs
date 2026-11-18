@@ -153,6 +153,8 @@ pub struct Workspace {
     pub chat_drafts: ChatDrafts,
     pub steer_pressed: bool,
     pub lineage: Lineage,
+    /// What filling the window was last saved as, to open again at the next launch.
+    pub(super) saved_place: Option<patchwork_core::threads::LastPlace>,
     /// What was shown before and after what is shown now, newest last, for going back and
     /// forward.
     pub(super) history_back: Vec<Place>,
@@ -357,6 +359,7 @@ impl Workspace {
             chat_drafts: ChatDrafts::default(),
             steer_pressed: false,
             lineage: Lineage::default(),
+            saved_place: None,
             history_back: Vec::new(),
             history_forward: Vec::new(),
             peeking: false,
@@ -435,9 +438,8 @@ impl Workspace {
         if let Some(id) = last {
             this.open_thread(&id, cx);
         }
-        // The app opens on the orchestrator page, with the last chat ready behind it.
-        this.page = Page::Orchestrator;
-        // Getting that chat ready is not a step to go back from.
+        this.restore_place(cx);
+        // Getting the window ready is not a step to go back from.
         this.history_back.clear();
         this.watch_rail_focus(window, cx);
         this.watch_themes(window, cx);

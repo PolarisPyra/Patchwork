@@ -212,3 +212,15 @@ impl Thread {
             .filter(|m| matches!(m.status, MessageStatus::Interrupted | MessageStatus::Error))
     }
 }
+
+/// What filled the window when the app last closed, to open again at the next launch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "id", rename_all = "camelCase")]
+pub enum LastPlace {
+    /// The orchestrator page.
+    Orchestrator,
+    /// A chat, by its id.
+    Chat(String),
+    /// A bot's page, by the bot's id.
+    Bot(String),
+}
