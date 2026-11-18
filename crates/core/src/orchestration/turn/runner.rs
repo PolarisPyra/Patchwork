@@ -327,7 +327,8 @@ impl Runner {
     /// Stops the reply under way and leaves the messages waiting for it queued, as `cancel` does, but
     /// by interrupting the agent, which ends its turn cleanly in its session. Claude then stays
     /// up for the next message. An agent that cannot be interrupted, or that does not end its
-    /// reply within `INTERRUPT_GRACE`, is stopped as `cancel` stops it. `session_id` is the
+    /// reply within `INTERRUPT_GRACE` or before Stop is pressed again, is stopped as `cancel`
+    /// stops it. `session_id` is the
     /// thread's agent session, which Codex needs.
     pub fn interrupt(&self, thread_id: &str, session_id: Option<&str>, last_line: Option<String>) {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
@@ -344,7 +345,8 @@ impl Runner {
         let line = (!turn.idle.load(Ordering::SeqCst))
             .then(|| provider::interrupt(turn.agent, session_id, turn_id.as_deref()))
             .flatten();
-        let Some(line) = line else {
+        // Stop pressed again while the agent has yet to end its reply ends it now.
+        let Some(line) = line.filter(|_| !turn.interrupts.waiting()) else {
             drop(turns);
             return self.cancel(thread_id, last_line);
         };

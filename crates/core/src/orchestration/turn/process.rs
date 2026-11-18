@@ -36,7 +36,7 @@ pub(in crate::orchestration) const QUIT_GRACE: Duration = Duration::from_secs(2)
 
 /// How long a stopped agent gets to end its reply after being interrupted before it is sent
 /// SIGTERM.
-pub(in crate::orchestration) const INTERRUPT_GRACE: Duration = Duration::from_secs(5);
+pub(in crate::orchestration) const INTERRUPT_GRACE: Duration = Duration::from_secs(2);
 
 /// The longest line of agent output that is kept; longer lines are dropped whole.
 pub(in crate::orchestration) const MAX_LINE_BYTES: usize = 8 << 20;
