@@ -20,15 +20,13 @@ merge.
   PRs.
 - **Show it works.** Say how you reproduced the bug and how you checked the fix. For UI changes,
   attach before and after screenshots to the PR, not to the repo.
-- **Write the changelog line.** See [Changelog](#changelog).
+- **Title it as a conventional commit.** See [Titles](#titles).
 
-### Changelog
+### Titles
 
-The PR title becomes the commit subject, so write it short, in sentence case and the imperative, and
-about what users see. The description needs a line that starts with `Changelog:` and a group (Added,
-Changed, Fixed, Removed or Security), written as [the changelog style](docs/changelog-style.md)
-describes; the release notes are built from it. A change users can't notice says `Changelog: none`.
-A check on the PR enforces both.
+The PR title becomes the commit subject, so write it as a conventional commit in plain language,
+about what users see: "fix(chat): new threads no longer spike CPU". The release notes are built
+from the titles and the start of each PR's description.
 
 ## Setup
 

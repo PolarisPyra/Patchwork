@@ -1,10 +1,22 @@
-## What and why
+<!--
+Read CONTRIBUTING.md before opening a PR. Use a conventional commit title in plain language, such
+as "fix(chat): new threads no longer spike CPU".
+-->
 
-<!-- The bug, and the issue it's in if there is one. -->
+## Problem
 
-## How I checked it
+<!-- The problem in a sentence or two, with the expected behavior. The release notes read the
+start of this section, so lead with what users see. -->
 
-<!-- How you reproduced the bug and what you saw after the fix. Screenshots for UI changes. -->
+## Change
 
-<!-- One line starting with Changelog: and a group (Added, Changed, Fixed, Removed or Security), or Changelog: none. See CONTRIBUTING.md. -->
-Changelog: 
+<!-- How this fixes the problem. -->
+
+## Scope
+
+<!-- The issue that shows the bug, or why a small fix of an obvious bug needs none. -->
+
+## Verification
+
+<!-- How you reproduced the bug and what you saw after the fix. Before and after screenshots for
+UI changes. -->
