@@ -14,6 +14,9 @@
 //! Setting it also seals the data key under a recovery key, which the user is shown once and
 //! Patchwork keeps nowhere: it opens the vault when the password is lost.
 //!
+//! A vault that never locks has that wrapping key kept in the system credential store as well,
+//! so it opens as Patchwork starts.
+//!
 //! A vault that cannot be unlocked is never replaced: it stays locked for the run, and nothing
 //! can be saved until the wrapping key is back.
 
@@ -25,9 +28,11 @@ mod password;
 mod recovery;
 mod secrets;
 mod state;
+mod timeout;
 
-pub use password::VaultSettings;
 pub use secrets::Saved;
 pub(crate) use secrets::{get, put, remove, take_old};
 pub(crate) use state::open;
 pub use state::{Method, Status, status};
+pub(crate) use timeout::keep_open;
+pub use timeout::{VaultSettings, VaultTimeout};

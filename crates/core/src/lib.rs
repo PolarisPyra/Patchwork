@@ -130,7 +130,11 @@ impl Core {
         settings::follow(&store.settings());
         logging::start(&logs, &store.settings().logging);
         logging::system::record(&logs);
-        vault::open(&dirs.data, &dirs.config);
+        vault::open(
+            &dirs.data,
+            &dirs.config,
+            store.settings().vault.timeout == vault::VaultTimeout::Never,
+        );
         settings::unseal(&store)?;
         // Starts the MCP servers, which read their saved values: after the vault is open.
         provider::mcp::init(&dirs.config);

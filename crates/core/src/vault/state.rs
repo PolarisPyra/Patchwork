@@ -19,7 +19,7 @@ use crate::Error;
 use crate::persistence::DB_FILE;
 
 /// The credential store's service name for everything Patchwork saves.
-const SERVICE: &str = "dev.patchwork.ade";
+pub(super) const SERVICE: &str = "dev.patchwork.ade";
 
 /// The wrapping key's name in the credential store. A debug build has its own.
 const KEY_ENTRY: &str = if cfg!(debug_assertions) {
@@ -183,7 +183,21 @@ fn unlock(data: &Path, config: &Path) -> Result<State, Error> {
         let method = Method::named(&method).ok_or("The vault was made by a newer Patchwork")?;
         if method == Method::Password {
             drop(tx);
-            return Ok(State::Waiting(Sealed { conn, config }));
+            // A vault that never locks opens with the key kept for it, while that still fits.
+            let kept = super::timeout::kept().and_then(|wrapping| {
+                let key = data_key(&wrapping, &nonce, &wrapped).ok()?;
+                super::timeout::hold(&wrapping);
+                Some(key)
+            });
+            let Some(key) = kept else {
+                return Ok(State::Waiting(Sealed { conn, config }));
+            };
+            return Ok(State::Open(Vault {
+                conn,
+                cipher: held(&key),
+                method,
+                config,
+            }));
         }
         let wrapping = wrapping_key(method, &config)?;
         let key = data_key(&wrapping, &nonce, &wrapped)
@@ -219,8 +233,10 @@ fn unlock(data: &Path, config: &Path) -> Result<State, Error> {
 }
 
 /// Opens this instance's vault for the run. A vault that cannot be unlocked stays locked: its
-/// secrets are left as they are, and nothing can be saved.
-pub(crate) fn open(data: &Path, config: &Path) {
+/// secrets are left as they are, and nothing can be saved. A vault with a password waits for
+/// it, unless it never locks (`keep`) and its kept key still opens it.
+pub(crate) fn open(data: &Path, config: &Path, keep: bool) {
+    super::timeout::start(keep);
     let opened = unlock(data, config).unwrap_or_else(|e| State::Locked(e.to_string()));
     set_status(match &opened {
         State::Open(vault) => {

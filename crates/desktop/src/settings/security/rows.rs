@@ -7,16 +7,22 @@ use gpui::{
     AnyElement, ClipboardItem, Focusable, Role, SharedString, Toggled, Window, div, prelude::*, px,
 };
 use patchwork_core::gateway::ChatAppCall;
-use patchwork_core::vault::Method;
+use patchwork_core::vault::{Method, VaultTimeout};
 
 use super::{ASK, Change, FIELD_WIDTH, password_field};
-use crate::settings::controls::{list_box, section_heading, segmented, switch, token_row};
+use crate::settings::controls::{choice, list_box, section_heading, select_box, token_row};
 use crate::settings::dialog::SettingsDialog;
 use crate::ui::theme::{Theme, font_mono, fs_sm, radius_sm, theme};
 use crate::ui::{BtnKind, btn, format_relative, icon_button, input_box, platform_logo, tooltip};
 
-/// When a vault with a password locks by itself, in minutes: 0 is never.
-const IDLE: [(u32, &str); 4] = [(0, "Never"), (5, "5 min"), (15, "15 min"), (60, "1 hour")];
+/// When a vault with a password locks by itself.
+const TIMEOUTS: [(VaultTimeout, &str); 5] = [
+    (VaultTimeout::Minutes(60), "1 hour"),
+    (VaultTimeout::Minutes(240), "4 hours"),
+    (VaultTimeout::SystemLock, "On system lock"),
+    (VaultTimeout::Restart, "On restart"),
+    (VaultTimeout::Never, "Never"),
+];
 
 /// How many of the chat apps' calls the pane lists.
 const CALLS_SHOWN: usize = 30;
@@ -62,31 +68,51 @@ pub(super) fn protected_row(
         .into_any_element()
 }
 
-/// When the vault locks by itself, for a vault with a password.
-pub(super) fn idle_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
+/// When a vault with a password locks by itself. An idle time saved by an earlier version
+/// stays listed while it is the one picked.
+pub(super) fn timeout_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
+    const TITLE: &str = "Vault timeout";
     let t = *theme(cx);
-    token_row("Lock when idle", None, &t)
-        .child(segmented(
-            "security-idle",
-            "Lock when idle",
-            d.settings.vault.lock_after_mins,
-            &IDLE,
-            &t,
-            |d, mins, cx| d.update(|s| s.vault.lock_after_mins = mins, cx),
-            cx,
-        ))
-        .into_any_element()
-}
-
-/// Whether the vault locks when the screen is locked or the computer goes to sleep.
-pub(super) fn screen_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
-    const TITLE: &str = "Lock with the screen and on sleep";
-    let t = *theme(cx);
-    let on = d.settings.vault.lock_with_screen;
+    let current = d.settings.vault.timeout;
+    let mut options: Vec<(VaultTimeout, SharedString)> = TIMEOUTS
+        .iter()
+        // Only Linux has the listener for the screen and for sleep.
+        .filter(|(at, _)| cfg!(target_os = "linux") || *at != VaultTimeout::SystemLock)
+        .map(|&(at, label)| (at, label.into()))
+        .collect();
+    if let VaultTimeout::Minutes(mins) = current
+        && !options.iter().any(|(at, _)| *at == current)
+    {
+        options.insert(0, (current, format!("{mins} min").into()));
+    }
+    let label = options
+        .iter()
+        .find(|(at, _)| *at == current)
+        .map_or_else(SharedString::default, |(_, label)| label.clone());
+    let open = d.menu_open("security-timeout");
     token_row(TITLE, None, &t)
-        .child(switch("security-screen", TITLE, on, &t).on_click(
-            cx.listener(move |d, _, _, cx| d.update(|s| s.vault.lock_with_screen = !on, cx)),
-        ))
+        .child(
+            select_box("security-timeout", TITLE, label, open, &t)
+                .w(px(FIELD_WIDTH))
+                .on_click(cx.listener(move |d, e: &gpui::ClickEvent, window, cx| {
+                    let weak = cx.entity().downgrade();
+                    let items = options
+                        .iter()
+                        .map(|&(timeout, ref label)| {
+                            choice(
+                                weak.clone(),
+                                label.clone(),
+                                timeout == current,
+                                move |d, cx| {
+                                    d.menu = None;
+                                    d.update(|s| s.vault.timeout = timeout, cx);
+                                },
+                            )
+                        })
+                        .collect();
+                    d.toggle_menu("security-timeout", TITLE, items, e.position(), window, cx);
+                })),
+        )
         .into_any_element()
 }
 
