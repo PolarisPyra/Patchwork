@@ -34,6 +34,15 @@ pub enum Error {
     Message(String),
 }
 
+impl Error {
+    /// Whether it is a command that ran past its time limit and was stopped, which trying again
+    /// may get past.
+    #[must_use]
+    pub fn is_timed_out(&self) -> bool {
+        matches!(self, Self::Io(e) if e.kind() == std::io::ErrorKind::TimedOut)
+    }
+}
+
 impl From<std::io::Error> for Error {
     fn from(error: std::io::Error) -> Self {
         Self::Io(Arc::new(error))

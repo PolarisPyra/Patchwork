@@ -39,6 +39,9 @@ const PIPE_GRACE: Duration = Duration::from_secs(1);
 const WAIT_MS: u64 = 30_000;
 const MAX_WAIT_MS: u64 = 600_000;
 
+/// What cargo prints while another build holds the lock on the build folder it needs.
+const BUILD_LOCK: &str = "Blocking waiting for file lock";
+
 /// Every command Patchwork's own agent has started that is still held.
 #[derive(Default)]
 pub struct Jobs {
@@ -88,6 +91,9 @@ struct State {
     stopped: bool,
     /// Its end has been published.
     ended: bool,
+    /// Cargo said it is waiting for another build's lock on the build folder, which a task
+    /// worktree shares with the others, and has printed nothing since.
+    blocked: bool,
 }
 
 impl State {
@@ -126,7 +132,7 @@ impl Job {
     }
 
     /// Copies a pipe into the job's output on its own thread.
-    fn read(self: &Arc<Self>, mut pipe: impl Read + Send + 'static) {
+    fn read(self: &Arc<Self>, core: Arc<Core>, mut pipe: impl Read + Send + 'static) {
         let job = Arc::clone(self);
         std::thread::spawn(move || {
             let mut chunk = [0u8; 8192];
@@ -134,7 +140,10 @@ impl Job {
                 if n == 0 {
                     break;
                 }
-                job.lock().push(&chunk[..n]);
+                let mut state = job.lock();
+                state.push(&chunk[..n]);
+                job.note_blocked(&core, &mut state, &chunk[..n]);
+                drop(state);
                 job.changed.notify_all();
             }
             job.lock().open -= 1;
@@ -159,7 +168,7 @@ impl Job {
     fn list(&self, core: &Core, message_id: &str) {
         let mut state = self.lock();
         state.listed = Some(message_id.into());
-        let task = self.task(TaskStatus::Running);
+        let task = self.task(TaskStatus::Running, &state);
         publish(
             core,
             &self.thread_id,
@@ -173,6 +182,32 @@ impl Job {
         }
     }
 
+    /// Notes whether `chunk` shows cargo waiting for another build's lock, and tells a listed job's
+    /// background task when that changes, so it shows what the command is waiting on.
+    fn note_blocked(&self, core: &Core, state: &mut State, chunk: &[u8]) {
+        let text = String::from_utf8_lossy(chunk);
+        let blocked = if text.contains(BUILD_LOCK) {
+            true
+        } else if text.trim().is_empty() {
+            state.blocked
+        } else {
+            false
+        };
+        if blocked == state.blocked {
+            return;
+        }
+        state.blocked = blocked;
+        let Some(message_id) = state.listed.clone().filter(|_| !state.ended) else {
+            return;
+        };
+        let task = self.task(TaskStatus::Running, state);
+        publish(
+            core,
+            &self.thread_id,
+            AgentEvent::BackgroundTaskUpdated { message_id, task },
+        );
+    }
+
     /// Publishes the end of a listed job, once.
     fn end(&self, core: &Core, state: &mut State) {
         let Some(message_id) = state.listed.clone().filter(|_| !state.ended) else {
@@ -184,7 +219,7 @@ impl Job {
             Some(Some(0)) => TaskStatus::Done,
             _ => TaskStatus::Failed,
         };
-        let task = self.task(status);
+        let task = self.task(status, state);
         publish(
             core,
             &self.thread_id,
@@ -192,7 +227,7 @@ impl Job {
         );
     }
 
-    fn task(&self, status: TaskStatus) -> BackgroundTask {
+    fn task(&self, status: TaskStatus, state: &State) -> BackgroundTask {
         BackgroundTask {
             tool_id: self.tool_id.clone(),
             task_id: Some(self.id.clone()),
@@ -201,8 +236,10 @@ impl Job {
             description: self.command.clone(),
             status,
             started_at: self.started_at,
-            summary: None,
+            summary: (state.blocked && status.is_live())
+                .then(|| "Waiting for another build to finish".to_owned()),
             output: None,
+            cut_off: false,
         }
     }
 
@@ -348,8 +385,12 @@ pub(in crate::orchestration) fn call(
             .map(String::from)
             .or_else(|| args["job_id"].as_u64().map(|n| n.to_string()))
             .ok_or_else(|| "job_id is required".to_string())?;
-        jobs.get(&from.thread_id, &id)
-            .ok_or_else(|| format!("There is no job {id}"))
+        jobs.get(&from.thread_id, &id).ok_or_else(|| {
+            format!(
+                "There is no job {id}: jobs end when Patchwork closes, so start it again if \
+                     it was cut off"
+            )
+        })
     };
     match tool {
         "bash" => bash(core, from, args, stopped),
@@ -411,12 +452,13 @@ fn bash(
         .clamp(1, MAX_BASH_TIMEOUT);
     // A command sent to the background leaves the shell to the commands that wait for theirs.
     let keep = args["run_in_background"] != true;
-    let cmd = bash_command(
+    let mut cmd = bash_command(
         command,
         Path::new(&from.root),
         &shell_file(&from.thread_id),
         keep,
     )?;
+    cmd.envs(core.worktree_env(&from.root));
     let (mut child, range) = contained::spawn(cmd, Stdio::null())
         .map_err(|e| format!("Failed to run the command: {e}"))?;
     let (Some(out), Some(err)) = (child.stdout.take(), child.stderr.take()) else {
@@ -438,8 +480,8 @@ fn bash(
         changed: Condvar::new(),
     });
     jobs.lock().insert(job.id.clone(), Arc::clone(&job));
-    job.read(out);
-    job.read(err);
+    job.read(Arc::clone(core), out);
+    job.read(Arc::clone(core), err);
     job.watch(Arc::clone(core), child);
     if args["run_in_background"] == true {
         job.list(core, &from.message_id);
@@ -474,8 +516,11 @@ fn bash(
             job.list(core, &from.message_id);
             let text = text.trim_end();
             return Ok(format!(
-                "{text}\n\n[still running after {timeout} s; moved to background job {}]",
-                job.id
+                "{text}\n\n[still running after {timeout} s; moved to background job {id}. It keeps \
+                 running: read its output with job_output, which waits up to {wait} s for it to \
+                 end, and stop it with job_kill. Don't start it again or wait for it in a loop.]",
+                id = job.id,
+                wait = MAX_WAIT_MS / 1000,
             )
             .trim_start()
             .into());

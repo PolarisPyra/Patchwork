@@ -208,6 +208,12 @@ impl Panel {
         self.start(true, None, cx);
     }
 
+    /// Starts another terminal in the folder `cwd`, in the shell picked last.
+    pub fn new_terminal_in(&mut self, cwd: String, cx: &mut Context<Self>) {
+        self.cwd = Some(cwd);
+        self.new_terminal(cx);
+    }
+
     /// Moves focus into the terminal, now or once its shell is up.
     pub fn focus_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.shown().next().is_none() {

@@ -101,5 +101,6 @@ pub fn background_task(tool: &ToolCall) -> Option<BackgroundTask> {
         started_at: tool.started_at.unwrap_or_else(now_ms),
         summary: None,
         output: None,
+        cut_off: false,
     })
 }

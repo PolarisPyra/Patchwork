@@ -1,36 +1,84 @@
 //! The status above the composer of a task that works in its own worktree: what it changed that
-//! the project doesn't have yet, and Merge and Discard. Its files open on their diffs.
+//! the project doesn't have yet, how far behind the project it is, and Merge, Update and Discard.
+//! Its files open on their diffs, and its menu copies or opens its folder.
 
 // Rust guideline compliant 2026-10-09
 
 use std::sync::Arc;
 
+use futures::channel::oneshot;
 use gpui::{
-    FontWeight, PromptButton, PromptLevel, Role, SharedString, Stateful, Window, div, prelude::*,
-    px,
+    ClickEvent, ClipboardItem, Entity, FontWeight, Pixels, Point, PromptButton, PromptLevel, Role,
+    SharedString, Stateful, Window, div, prelude::*, px,
 };
+use patchwork_core::system::ssh::is_remote;
 use patchwork_core::threads::WorktreeState;
+use patchwork_core::{Core, Error};
 
 use crate::canvas::CanvasTab;
 use crate::chat::goal::strip_action;
+use crate::ui::menu::{Dismissed, Menu, MenuItem};
 use crate::ui::theme::{Theme, fs_sm, fs_xs, radius_sm};
-use crate::ui::{button, icon, tooltip};
+use crate::ui::{button, icon, icon_button, tooltip};
 use crate::workspace::{Workspace, is_working};
 
 /// The tallest the list of files grows before it scrolls.
 const FILES_MAX_HEIGHT: f32 = 140.;
+
+/// What the strip does to the task's worktree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Step {
+    Merge,
+    Update,
+    Discard,
+    SwitchBack,
+}
+
+impl Step {
+    fn busy(self) -> &'static str {
+        match self {
+            Self::Merge => "Merging…",
+            Self::Update => "Updating…",
+            Self::Discard => "Discarding…",
+            Self::SwitchBack => "Switching back…",
+        }
+    }
+
+    /// Runs the step on task `id`, and returns what to tell the user when it went through.
+    /// `waiting` is called when another merge holds a merge up.
+    fn run(self, core: &Core, id: &str, waiting: impl FnOnce()) -> Result<Option<String>, Error> {
+        match self {
+            Self::Merge => core
+                .merge_thread(id, waiting)
+                .map(|into| Some(format!("Merged into {into}"))),
+            Self::Update => core
+                .update_worktree(id)
+                .map(|from| Some(format!("Brought in {from}"))),
+            Self::Discard => core.discard_thread_changes(id).map(|()| None),
+            Self::SwitchBack => core.restore_worktree_branch(id).map(|()| None),
+        }
+    }
+}
 
 /// The open task's worktree as last read, and what the strip is doing with it.
 pub struct WorktreeStrip {
     /// The task, and what it looked like when its worktree was read, so a change reads it again.
     key: (String, usize, bool),
     state: Option<WorktreeState>,
+    /// Why the task has no worktree although it was to get one, so it edits the project itself.
+    failed: Option<String>,
     busy: Option<&'static str>,
     error: Option<String>,
     /// The last merge conflicted, so the strip offers to have the task resolve it.
     conflicted: bool,
+    /// The last step ran out of time, so the strip offers to run it again.
+    retry: Option<Step>,
     note: Option<String>,
     open: bool,
+    /// The worktree's menu and where it opened.
+    menu: Option<(Entity<Menu>, Point<Pixels>)>,
+    /// Where the press that closed the menu landed, so it doesn't open the menu again.
+    menu_dismissed: Option<Point<Pixels>>,
 }
 
 /// The key a task's worktree is read again on: its id, how many messages it has, and whether
@@ -66,24 +114,32 @@ impl Workspace {
                 self.worktree = Some(WorktreeStrip {
                     key: key.clone(),
                     state: None,
+                    failed: None,
                     busy: None,
                     error: None,
                     conflicted: false,
+                    retry: None,
                     note: None,
                     open: false,
+                    menu: None,
+                    menu_dismissed: None,
                 });
             }
         }
         let core = Arc::clone(&self.core);
         let id = key.0.clone();
-        let task = cx.background_spawn(async move { core.worktree_state(&id) });
+        let task =
+            cx.background_spawn(
+                async move { (core.worktree_state(&id), core.worktree_failure(&id)) },
+            );
         cx.spawn(async move |this, cx| {
-            let read = task.await;
+            let (read, failed) = task.await;
             this.update(cx, |this, cx| {
                 let Some(strip) = this.worktree.as_mut().filter(|s| s.key == key) else {
                     return;
                 };
                 let had = strip.state.as_ref().map(|s| s.worktree.root.clone());
+                strip.failed = failed;
                 match read {
                     Ok(state) => strip.state = state,
                     Err(e) => {
@@ -109,29 +165,44 @@ impl Workspace {
     }
 
     /// Runs `step` on the open task's worktree off the main thread, then reads it again.
-    fn worktree_step(
-        &mut self,
-        busy: &'static str,
-        step: impl FnOnce(&patchwork_core::Core, &str) -> Result<Option<String>, patchwork_core::Error>
-        + Send
-        + 'static,
-        cx: &mut Context<Self>,
-    ) {
+    fn worktree_step(&mut self, step: Step, cx: &mut Context<Self>) {
         let Some(strip) = self.worktree.as_mut() else {
             return;
         };
         if strip.busy.is_some() {
             return;
         }
-        strip.busy = Some(busy);
+        strip.busy = Some(step.busy());
         strip.error = None;
         strip.note = None;
+        strip.retry = None;
         let id = strip.key.0.clone();
         let core = Arc::clone(&self.core);
+        let (waiting, waited) = oneshot::channel::<()>();
         let task = {
             let id = id.clone();
-            cx.background_spawn(async move { step(&core, &id) })
+            cx.background_spawn(async move {
+                step.run(&core, &id, move || {
+                    let _ = waiting.send(());
+                })
+            })
         };
+        // A merge held up by another says so until it gets its turn.
+        let held_id = id.clone();
+        cx.spawn(async move |this, cx| {
+            if waited.await.is_err() {
+                return;
+            }
+            let _ = this.update(cx, |this, cx| {
+                if let Some(strip) = this.worktree.as_mut().filter(|s| s.key.0 == held_id)
+                    && strip.busy.is_some()
+                {
+                    strip.busy = Some("Waiting for another merge…");
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
         cx.spawn(async move |this, cx| {
             let done = task.await;
             this.update(cx, |this, cx| {
@@ -143,13 +214,16 @@ impl Workspace {
                             strip.conflicted = false;
                         }
                         Err(e) => {
+                            strip.retry = e.is_timed_out().then_some(step);
                             let e = e.to_string();
-                            strip.conflicted = e.starts_with("Merging would conflict");
+                            strip.conflicted = e.starts_with("Merging would conflict")
+                                || e.starts_with("Updating would conflict");
                             strip.error = Some(e);
                         }
                     }
                 }
                 this.reload_worktree(cx);
+                this.reload_worktree_marks(cx);
                 this.load_git(cx);
             })
         })
@@ -157,22 +231,15 @@ impl Workspace {
         cx.notify();
     }
 
-    fn merge_worktree(&mut self, cx: &mut Context<Self>) {
-        self.worktree_step(
-            "Merging…",
-            |core, id| {
-                core.merge_thread(id)
-                    .map(|into| Some(format!("Merged into {into}")))
-            },
-            cx,
-        );
-    }
-
     fn discard_worktree(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(state) = self.worktree.as_ref().and_then(|s| s.state.as_ref()) else {
+            return;
+        };
+        let detail = discard_detail(state);
         let answer = window.prompt(
             PromptLevel::Warning,
             "Discard this task's changes?",
-            Some("Its files go back to how the project has them, and its commits that aren't merged are dropped."),
+            Some(&detail),
             &[PromptButton::ok("Discard"), PromptButton::cancel("Keep")],
             cx,
         );
@@ -180,15 +247,75 @@ impl Workspace {
             if answer.await != Ok(0) {
                 return;
             }
-            let _ = this.update(cx, |this, cx| {
-                this.worktree_step(
-                    "Discarding…",
-                    |core, id| core.discard_thread_changes(id).map(|()| None),
-                    cx,
-                );
-            });
+            let _ = this.update(cx, |this, cx| this.worktree_step(Step::Discard, cx));
         })
         .detach();
+    }
+
+    /// Runs the step that ran out of time again.
+    fn retry_worktree(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        match self.worktree.as_ref().and_then(|s| s.retry) {
+            Some(Step::Discard) => self.discard_worktree(window, cx),
+            Some(step) => self.worktree_step(step, cx),
+            None => {}
+        }
+    }
+
+    /// Opens or closes the worktree's menu: copy its path, open a terminal or the file manager
+    /// there.
+    fn toggle_worktree_menu(
+        &mut self,
+        e: &ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(strip) = self.worktree.as_mut() else {
+            return;
+        };
+        let closing_press = matches!(e, ClickEvent::Mouse(click)
+            if strip.menu_dismissed.take() == Some(click.down.position));
+        if closing_press || strip.menu.take().is_some() {
+            cx.notify();
+            return;
+        }
+        let Some(root) = strip.state.as_ref().map(|s| s.worktree.root.clone()) else {
+            return;
+        };
+        let this = cx.entity().downgrade();
+        let mut items = vec![{
+            let root = root.clone();
+            MenuItem::new("Copy path", move |_, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(root.clone()));
+            })
+            .icon("copy")
+        }];
+        if !is_remote(&root) {
+            let folder = root.clone();
+            items.push(
+                MenuItem::new("Open terminal here", move |window, cx| {
+                    let _ = this.update(cx, |w, cx| w.new_terminal_in(root.clone(), window, cx));
+                })
+                .icon("terminal"),
+            );
+            items.push(
+                MenuItem::new("Open in file manager", move |_, cx| {
+                    cx.open_with_system(std::path::Path::new(&folder));
+                })
+                .icon("folder-open"),
+            );
+        }
+        let menu = Menu::open("Worktree", items, window, cx);
+        cx.subscribe_in(&menu, window, |this, _, e: &Dismissed, window, cx| {
+            if let Some(strip) = this.worktree.as_mut() {
+                strip.menu_dismissed = e.0;
+                strip.menu = None;
+            }
+            window.focus(&this.focus, cx);
+            cx.notify();
+        })
+        .detach();
+        strip.menu = Some((menu, e.position()));
+        cx.notify();
     }
 
     /// Asks the task to bring in the project's branch and resolve what conflicts.
@@ -211,7 +338,26 @@ impl Workspace {
     }
 }
 
-/// "3 files changed · 1 commit".
+/// What discarding drops: "3 changed files go back to how the project has them, and 2 unmerged
+/// commits are dropped."
+fn discard_detail(state: &WorktreeState) -> String {
+    let files = match state.changes.len() {
+        0 => None,
+        1 => Some("1 changed file goes back to how the project has it".to_owned()),
+        n => Some(format!(
+            "{n} changed files go back to how the project has them"
+        )),
+    };
+    let commits = match state.commits {
+        0 => None,
+        1 => Some("1 unmerged commit is dropped".to_owned()),
+        n => Some(format!("{n} unmerged commits are dropped")),
+    };
+    let parts: Vec<String> = files.into_iter().chain(commits).collect();
+    format!("{}.", parts.join(", and "))
+}
+
+/// "3 files changed · 1 commit · 2 behind".
 fn summary(state: &WorktreeState) -> String {
     let mut parts = Vec::new();
     match state.changes.len() {
@@ -224,7 +370,27 @@ fn summary(state: &WorktreeState) -> String {
         1 => parts.push("1 commit".to_owned()),
         n => parts.push(format!("{n} commits")),
     }
+    if state.behind > 0 {
+        parts.push(format!("{} behind", state.behind));
+    }
     parts.join(" · ")
+}
+
+/// The status of a task that was to get a worktree and edits the project's own folder instead.
+fn no_worktree(error: &str, t: &Theme) -> Stateful<gpui::Div> {
+    let text: SharedString = format!("No worktree, so this task edits the project: {error}").into();
+    div()
+        .id("worktree")
+        .role(Role::Alert)
+        .aria_label(text.clone())
+        .flex()
+        .min_w_0()
+        .items_center()
+        .gap(px(6.))
+        .text_color(t.danger)
+        .tooltip(tooltip(text.clone()))
+        .child(icon("git-branch", 13.).flex_none())
+        .child(div().min_w_0().truncate().child(text))
 }
 
 /// The open task's worktree, when it works in one and there is something to say about it: its
@@ -236,25 +402,38 @@ pub fn worktree_strip(
     cx: &mut Context<Workspace>,
 ) -> (Option<Stateful<gpui::Div>>, Option<Stateful<gpui::Div>>) {
     let working = w.thread.as_ref().is_some_and(is_working);
-    let Some((strip, state)) = w
-        .worktree
-        .as_ref()
-        .and_then(|strip| Some((strip, strip.state.clone()?)))
-    else {
+    let Some(strip) = w.worktree.as_ref() else {
+        return (None, None);
+    };
+    if strip.state.is_none()
+        && let Some(failed) = &strip.failed
+    {
+        return (Some(no_worktree(failed, t)), None);
+    }
+    let Some(state) = strip.state.clone() else {
         return (None, None);
     };
     let pending = !state.changes.is_empty() || state.commits > 0;
-    let (open, conflicted) = (strip.open, strip.conflicted);
+    let off_branch = state.off_branch.clone();
+    let idle = strip.busy.is_none() && !working;
+    let (open, conflicted, retry) = (strip.open, strip.conflicted, strip.retry.is_some());
+    let menu = strip.menu.clone();
     let message = strip
         .error
         .clone()
         .map(|e| (e, true))
+        .or_else(|| {
+            off_branch.clone().filter(|_| idle).map(|on| {
+                let branch = &state.worktree.branch;
+                (format!("On {on} instead of {branch}"), true)
+            })
+        })
         .or_else(|| strip.note.clone().map(|n| (n, false)));
-    // Nothing to merge, nothing running and nothing to report: the line stays blank.
-    if !pending && strip.busy.is_none() && message.is_none() && !conflicted {
+    let retry = idle && retry && strip.error.is_some();
+    // Nothing to merge or bring in, nothing running and nothing to report: the line stays blank.
+    if !pending && state.behind == 0 && strip.busy.is_none() && message.is_none() && !conflicted {
         return (None, None);
     }
-    let idle = strip.busy.is_none() && !working;
     let (muted, fg) = (t.text_muted, t.text);
     // Opening it shows the changed files and the Discard and Merge buttons.
     let can_open = pending;
@@ -262,7 +441,7 @@ pub fn worktree_strip(
     let label: Option<SharedString> = strip
         .busy
         .map(str::to_owned)
-        .or_else(|| pending.then(|| summary(&state)))
+        .or_else(|| (pending || state.behind > 0).then(|| summary(&state)))
         .map(Into::into);
     let toggle = label.map(|label| {
         button("worktree-toggle", label.clone())
@@ -305,6 +484,11 @@ pub fn worktree_strip(
                 cx.notify();
             }))
     });
+    let more = icon_button("worktree-menu", "Worktree actions", "dots-three", 14., cx)
+        .flex_none()
+        .aria_expanded(menu.is_some())
+        .tooltip(tooltip("Worktree actions"))
+        .on_click(cx.listener(Workspace::toggle_worktree_menu));
     let message = message.map(|(text, failed)| {
         let shown: SharedString = text.into();
         div()
@@ -322,10 +506,11 @@ pub fn worktree_strip(
         .role(Role::Region)
         .aria_label("Worktree")
         .flex()
-        .flex_none()
+        .min_w_0()
         .items_center()
         .gap(px(8.))
         .children(toggle)
+        .child(more)
         .when(idle && conflicted, |d| {
             d.child(
                 strip_action("worktree-resolve", "Ask to resolve", t)
@@ -333,7 +518,31 @@ pub fn worktree_strip(
                     .on_click(cx.listener(|w, _, _, cx| w.resolve_worktree(cx))),
             )
         })
-        .children(message);
+        .when(idle && off_branch.is_some(), |d| {
+            d.child(
+                strip_action("worktree-switch-back", "Switch back", t)
+                    .tooltip(tooltip(format!(
+                        "Check out {} again",
+                        state.worktree.branch
+                    )))
+                    .on_click(cx.listener(|w, _, _, cx| w.worktree_step(Step::SwitchBack, cx))),
+            )
+        })
+        .when(idle && state.behind > 0 && off_branch.is_none(), |d| {
+            d.child(
+                strip_action("worktree-update", "Update", t)
+                    .tooltip(tooltip("Bring in the project's new commits"))
+                    .on_click(cx.listener(|w, _, _, cx| w.worktree_step(Step::Update, cx))),
+            )
+        })
+        .children(message)
+        .when(retry, |d| {
+            d.child(
+                strip_action("worktree-retry", "Retry", t)
+                    .on_click(cx.listener(|w, _, window, cx| w.retry_worktree(window, cx))),
+            )
+        })
+        .children(menu.map(|(menu, at)| Menu::view(&menu, at)));
     let root = state.worktree.root.clone();
     let hover = t.bg_hover;
     let list = (!state.changes.is_empty()).then(|| {
@@ -370,7 +579,7 @@ pub fn worktree_strip(
                     }))
             }))
     });
-    let actions = idle.then(|| {
+    let actions = (idle && off_branch.is_none()).then(|| {
         div()
             .flex()
             .justify_end()
@@ -386,7 +595,7 @@ pub fn worktree_strip(
             .child(
                 strip_action("worktree-merge", "Merge", t)
                     .tooltip(tooltip("Bring the task's changes into the project"))
-                    .on_click(cx.listener(|w, _, _, cx| w.merge_worktree(cx))),
+                    .on_click(cx.listener(|w, _, _, cx| w.worktree_step(Step::Merge, cx))),
             )
     });
     let panel = (open && can_open && (list.is_some() || actions.is_some())).then(|| {
