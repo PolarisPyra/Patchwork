@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.104] - 2026-11-18
+
+**26.11.104** · 2 changes from 1 contributor
+
+- **Ongoing bot chats.** Each bot keeps one ongoing chat, and each chat app gets its own bot with a status icon.
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- Each bot now keeps one ongoing chat, which opens when you click the bot in the sidebar. Its page is under Details in the bot's right-click menu, and its routines still start runs of their own under it. Each chat app, such as Discord, now gets its own bot the first time it sends a message, all of its conversations go into that bot's chat, and a phone icon on the bot's row is green while you message from the app, yellow while it is connected and red when it is offline. by [PolarisPyra in #211](https://github.com/PolarisPyra/Patchwork/pull/211)
+
+### Removed
+
+- A bot's picture on its page no longer has a shadow under it. by [PolarisPyra in #210](https://github.com/PolarisPyra/Patchwork/pull/210)
+
+</details>
+
 ## [26.11.103] - 2026-11-18
 
 **26.11.103** · 5 changes from 1 contributor
