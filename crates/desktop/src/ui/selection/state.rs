@@ -2,12 +2,13 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use gpui::{
-    AnyElement, App, Bounds, ClipboardItem, ContentMask, Entity, IntoElement, KeyBinding,
-    ListState, Pixels, Point, SharedString, Styled, TextLayout, actions, canvas, fill, point, px,
+    AnyElement, App, Bounds, ClipboardItem, ContentMask, Entity, Hitbox, IntoElement, KeyBinding,
+    ListState, Pixels, Point, SharedString, Styled, TextLayout, Window, actions, canvas, fill,
+    point, px,
 };
 
 use super::text::{markdown, plain};
@@ -36,6 +37,8 @@ pub(super) struct Drawn {
     pub(super) reach: Pixels,
     /// The part of the text not clipped by the list it scrolls in.
     pub(super) visible: Bounds<Pixels>,
+    /// Where a press reaches it, unless something is drawn over it.
+    pub(super) hitbox: Hitbox,
 }
 
 /// Where a text sits in reading order: the list row it is in, then how far down and across that
@@ -97,6 +100,9 @@ pub(super) struct Selection {
     pub(super) dragging: bool,
     /// Where the pointer was when the drag was last worked out: every text hears each move.
     pub(super) seen: Option<Point<Pixels>>,
+    /// The texts on screen that something drawn over them, such as a dialog, keeps the pointer
+    /// from. A drag that starts above them passes them by.
+    pub(super) covered: HashSet<u64>,
     /// The right-click menu, while open, and where it opened.
     pub(super) menu: Option<(Entity<Menu>, Point<Pixels>)>,
 }
@@ -218,13 +224,37 @@ impl Selection {
         }
     }
 
+    /// Finds which texts on screen something drawn over them covers, by asking whether a press at
+    /// any corner or the middle of each would reach it.
+    pub(super) fn survey(&mut self, window: &Window) {
+        self.covered = self
+            .drawn
+            .iter()
+            .filter(|drawn| {
+                let v = drawn.visible;
+                let (left, right) = (v.left(), (v.right() - px(1.)).max(v.left()));
+                let (top, bottom) = (v.top(), (v.bottom() - px(1.)).max(v.top()));
+                ![
+                    v.center(),
+                    point(left, top),
+                    point(right, top),
+                    point(left, bottom),
+                    point(right, bottom),
+                ]
+                .into_iter()
+                .any(|at| drawn.hitbox.is_hovered_at(at, window))
+            })
+            .map(|drawn| drawn.id)
+            .collect();
+    }
+
     /// The text at `position` and the place in it, among the texts in view: the one under the
     /// pointer, or else the last one that starts above it, or else the first.
     pub(super) fn hit(&self, position: Point<Pixels>) -> Option<(u64, usize)> {
         let mut shown: Vec<&Drawn> = self
             .drawn
             .iter()
-            .filter(|drawn| !drawn.visible.is_empty())
+            .filter(|drawn| !drawn.visible.is_empty() && !self.covered.contains(&drawn.id))
             .collect();
         shown.sort_by(|a, b| {
             (a.visible.top(), a.visible.left())
@@ -282,7 +312,11 @@ impl Selection {
         let mut between: Vec<(Place, u64)> = self
             .known
             .iter()
-            .filter(|(_, known)| first_place <= known.place && known.place <= last_place)
+            .filter(|(id, known)| {
+                first_place <= known.place
+                    && known.place <= last_place
+                    && !self.covered.contains(id)
+            })
             .map(|(id, known)| (known.place, *id))
             .collect();
         between.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -330,7 +364,15 @@ pub fn overlay(list: ListState) -> impl IntoElement {
                 if selection.drag_to(at) {
                     window.request_animation_frame();
                 }
-                let past = if at.y < bounds.top() {
+                // A list under a dialog stays still while a drag runs over the dialog.
+                let under = !selection.drawn.is_empty()
+                    && selection
+                        .drawn
+                        .iter()
+                        .all(|drawn| selection.covered.contains(&drawn.id));
+                let past = if under {
+                    Pixels::ZERO
+                } else if at.y < bounds.top() {
                     at.y - bounds.top()
                 } else if at.y > bounds.bottom() {
                     at.y - bounds.bottom()
