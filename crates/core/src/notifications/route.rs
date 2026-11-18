@@ -59,7 +59,7 @@ impl Core {
     }
 
     /// Sends the desktop a notice of `event`, while Patchwork's window is out of focus and the
-    /// settings ask for one.
+    /// settings ask for one. A thread a chat app started tells only the chat app.
     pub(crate) fn notify_desktop(&self, thread_id: &str, event: &AgentEvent) {
         let relevant = matches!(
             event,
@@ -67,7 +67,7 @@ impl Core {
                 | AgentEvent::TurnCompleted { .. }
                 | AgentEvent::GoalUpdated { goal: Some(_) }
         );
-        if !relevant || self.window_focused() {
+        if !relevant || self.window_focused() || self.in_background(thread_id) {
             return;
         }
         let Some(thread) = self.store.thread(thread_id) else {

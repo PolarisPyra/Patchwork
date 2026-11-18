@@ -39,8 +39,12 @@ fn thread_summary(thread: &Thread) -> Thread {
 impl Core {
     /// Every thread, each with only the messages the task list reads: the last one, and any
     /// still streaming, running background tasks, queued, or waiting on an approval. `thread` returns one in full.
+    ///
+    /// Threads a chat app started run in the background and are left out.
     pub fn list_threads(&self) -> Vec<Arc<Thread>> {
+        let background = self.background_threads();
         let mut ts = self.store.summaries(thread_summary);
+        ts.retain(|t| !background.contains(&t.id));
         ts.sort_by_key(|t| t.position);
         ts
     }
