@@ -293,7 +293,12 @@ pub(super) fn thread_row(
                     })),
                 ),
         )
-        .children(worktree.map(|(mark, _)| mark))
+        .child(
+            div()
+                .w(px(13.))
+                .flex_none()
+                .children(worktree.map(|(mark, _)| mark)),
+        )
         .children(chat_app_mark(w, w.chat_apps.get(&th.id), &t))
         .child(
             div()
