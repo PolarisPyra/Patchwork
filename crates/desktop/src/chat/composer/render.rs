@@ -358,8 +358,7 @@ impl Render for Composer {
             )
             .role(Role::List)
             .aria_label("Attachments")
-            .self_start()
-            .mb(px(8.))
+            .min_w_0()
             .p(px(6.))
             .flex()
             .flex_wrap()
@@ -485,21 +484,34 @@ impl Render for Composer {
             .child(access_chip)
             .child(agent_chip)
             .child(div().flex_1())
+            // The worktree's status, at the end of the line before Format.
+            .children(worktree.map(|status| {
+                div()
+                    .min_w_0()
+                    .text_size(px(fs_xs()))
+                    .line_height(px(16.))
+                    .child(status)
+            }))
             .child(format_chip);
-        // The worktree's status and the token use share the line just above the pill, which
-        // attachments don't push up: they go above it.
-        let status_line = (worktree.is_some() || usage.is_some()).then(|| {
+        // The attachments and the token use share the line just above the pill.
+        let status_line = (attached.is_some() || usage.is_some()).then(|| {
             div()
                 .mb(px(6.))
                 .flex()
                 .items_end()
                 .gap_x(px(12.))
-                // In line with where the pill under it stops being round.
-                .px(px(crate::ui::pill::PILL_RADIUS))
-                .text_size(px(fs_xs()))
-                .line_height(px(16.))
-                .children(worktree)
-                .child(usage.unwrap_or_else(|| div().flex_1()))
+                .children(attached)
+                .child(
+                    div()
+                        .flex_1()
+                        .flex()
+                        .min_w_0()
+                        // In line with where the pill under it stops being round.
+                        .px(px(crate::ui::pill::PILL_RADIUS))
+                        .text_size(px(fs_xs()))
+                        .line_height(px(16.))
+                        .children(usage),
+                )
         });
         div()
             .id("composer")
@@ -508,7 +520,6 @@ impl Render for Composer {
             .flex()
             .flex_col()
             .children(notice)
-            .children(attached)
             .children(worktree_files)
             .children(status_line)
             .child(pill)

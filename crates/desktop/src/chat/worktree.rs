@@ -394,8 +394,8 @@ fn no_worktree(error: &str, t: &Theme) -> Stateful<gpui::Div> {
 }
 
 /// The open task's worktree, when it works in one and there is something to say about it: its
-/// status for the line above the composer, beside the token use, and its changed files when that
-/// status is opened, which go above that line.
+/// status for the composer's controls, before Format, and its changed files when that status is
+/// opened, which go above the composer.
 pub fn worktree_strip(
     w: &Workspace,
     t: &Theme,
