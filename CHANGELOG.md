@@ -3,6 +3,23 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.107] - 2026-11-18
+
+**26.11.107** · 2 changes from 1 contributor
+
+- **Worktree status and background commands.** See commits behind and update, switch back, or retry from a task worktree, and reopen background commands
+- **Unified controls and goals.** Set goals during any reply, clear them mid-turn, use the same controls with any agent, and Antigravity lists slash commands
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- A task's worktree now shows how many commits it is behind the project, with Update to catch up, Switch back when it is on another branch, and Retry when a git step times out; its menu copies the path or opens a terminal or file manager. Background commands that stopped when Patchwork closed stay in the chat with Run again and Dismiss, and the sidebar marks tasks that run in a worktree. by [PolarisPyra in #220](https://github.com/PolarisPyra/Patchwork/pull/220)
+- A chat now offers the same controls whichever agent runs it, so plan mode, the stop buttons on single subagents and background commands, the prompt to resume after a long pause, and the sub-agent slots in granular settings are gone, and the hooks in Settings → Extensions list only the five events every agent sends. Patchwork runs goals itself for every agent: you can set one while a reply is running, Clear goal shows during a turn, the messages that keep a goal going stay out of the chat, and a goal pauses after two replies that take no action. Antigravity chats list Patchwork's own slash commands in the chat box. by [PolarisPyra in #223](https://github.com/PolarisPyra/Patchwork/pull/223)
+
+</details>
+
 ## [26.11.106] - 2026-11-18
 
 **26.11.106** · 2 changes from 1 contributor
