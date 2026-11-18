@@ -8,4 +8,4 @@ mod render;
 mod sections;
 mod state;
 
-pub use state::BotPage;
+pub use state::{BotPage, Layout};

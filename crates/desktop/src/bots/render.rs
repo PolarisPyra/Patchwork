@@ -5,12 +5,12 @@
 
 use gpui::{Div, FontWeight, KeyDownEvent, Role, SharedString, Stateful, Window, div, prelude::*, px};
 use patchwork_core::bots::STARTING_POINTS;
-use crate::chat::backdrop::{backdrop_for, scheme_for};
+use crate::chat::backdrop::{backdrop_for, chat_backdrop, chat_scheme, scheme_for};
 use crate::ui::avatar::{Mood, avatar};
 use crate::ui::theme::{InScheme, Theme, fs_lg, fs_md, fs_sm, radius, radius_lg, radius_sm, theme};
 use crate::ui::{button, icon, icon_button, spinner, tooltip};
 use super::details::{radio, radio_group};
-use super::state::BotPage;
+use super::state::{BotPage, Layout};
 
 /// The widest the conversation gets.
 const COLUMN: f32 = 720.;
@@ -33,6 +33,29 @@ fn header_shadow() -> Vec<gpui::BoxShadow> {
 
 impl Render for BotPage {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.layout == Layout::BesideChat {
+            // Drawn over the chat's background as the bot's page draws its details over its own.
+            let scheme = self
+                .workspace
+                .upgrade()
+                .and_then(|w| chat_scheme(w.read(cx)));
+            let _scope = scheme.map(InScheme::enter);
+            let t = *theme(cx);
+            let backdrop = self
+                .workspace
+                .update(cx, |w, cx| chat_backdrop(w, &t, cx))
+                .ok()
+                .flatten();
+            return div()
+                .relative()
+                .flex()
+                .flex_none()
+                .min_h_0()
+                .bg(t.bg_editor)
+                .children(backdrop)
+                .child(self.details(window, cx))
+                .into_any_element();
+        }
         // Its own background, else the one every chat shares, drawn as a chat draws it.
         let background = self.workspace.upgrade().map(|w| {
             let w = w.read(cx);
@@ -103,6 +126,7 @@ impl Render for BotPage {
                     .child(self.composer(cx)),
             )
             .children(details)
+            .into_any_element()
     }
 }
 

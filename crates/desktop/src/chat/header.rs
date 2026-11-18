@@ -1,5 +1,5 @@
-//! The row above a chat's transcript: search, Android devices and "Open in editor", with the
-//! subagents card under them.
+//! The row above a chat's transcript: search, Android devices, "Open in editor" and a bot's
+//! details, with the subagents card under them.
 
 // Rust guideline compliant 2026-10-09
 
@@ -9,6 +9,17 @@ use crate::ui::{button, icon, tooltip};
 use crate::workspace::Workspace;
 use super::find;
 use super::lineage;
+
+/// The soft shadow under the header's buttons.
+fn shadow() -> Vec<gpui::BoxShadow> {
+    vec![gpui::BoxShadow {
+        color: gpui::hsla(0., 0., 0., 0.12),
+        offset: gpui::point(px(0.), px(1.)),
+        blur_radius: px(3.),
+        spread_radius: px(0.),
+        inset: false,
+    }]
+}
 
 /// Search, Android devices and "Open in editor" at the right, with the subagents card under them,
 /// in a row above the transcript so nothing covers it.
@@ -35,13 +46,7 @@ pub(super) fn header(
                 .border_color(t.border)
                 .bg(t.bg_panel)
                 .text_size(px(fs_sm()))
-                .shadow(vec![gpui::BoxShadow {
-                    color: gpui::hsla(0., 0., 0., 0.12),
-                    offset: gpui::point(px(0.), px(1.)),
-                    blur_radius: px(3.),
-                    spread_radius: px(0.),
-                    inset: false,
-                }])
+                .shadow(shadow())
                 .hover(move |s| s.bg(hover))
                 .child(icon("code", 14.))
                 .child("Open in editor")
@@ -55,6 +60,54 @@ pub(super) fn header(
                     .detach();
                 }))
         });
+    // A bot's chat without a project opens the bot's own folder.
+    let bot = w.chat_bot().map(|b| b.id.clone());
+    let open = open.or_else(|| {
+        let id = bot.clone()?;
+        let project = w.thread.as_ref().and_then(|t| t.project_id.clone());
+        Some(
+            button("open-in-editor", "Open in editor")
+                .h(px(28.))
+                .gap(px(6.))
+                .px(px(12.))
+                .rounded(px(radius()))
+                .border_1()
+                .border_color(t.border)
+                .bg(t.bg_panel)
+                .text_size(px(fs_sm()))
+                .shadow(shadow())
+                .hover(move |s| s.bg(hover))
+                .child(icon("code", 14.))
+                .child("Open in editor")
+                .on_click(cx.listener(move |w, _, _, cx| {
+                    let (core, id, project) =
+                        (std::sync::Arc::clone(&w.core), id.clone(), project.clone());
+                    cx.background_spawn(async move {
+                        if let Err(e) = core.open_bot_in_editor(&id, project.as_deref()) {
+                            log::warn!(error:% = e; "could not open the editor: {{error}}");
+                        }
+                    })
+                    .detach();
+                })),
+        )
+    });
+    let details = bot.map(|_| {
+        let shown = w.bot_details;
+        button("bot-details-toggle", "Bot details")
+            .aria_expanded(shown)
+            .flex_none()
+            .size(px(28.))
+            .justify_center()
+            .rounded(px(radius()))
+            .border_1()
+            .border_color(t.border)
+            .bg(t.bg_panel)
+            .shadow(shadow())
+            .hover(move |s| s.bg(hover))
+            .tooltip(tooltip("Bot details"))
+            .child(icon("gear-six", 14.))
+            .on_click(cx.listener(|w, _, _, cx| w.toggle_bot_details(cx)))
+    });
     let android = w.mobile.is_some().then(|| {
         let shown = w.android_open(cx);
         let fg = t.text;
@@ -68,13 +121,7 @@ pub(super) fn header(
             .border_color(t.border)
             .bg(t.bg_panel)
             .text_color(t.text_muted)
-            .shadow(vec![gpui::BoxShadow {
-                color: gpui::hsla(0., 0., 0., 0.12),
-                offset: gpui::point(px(0.), px(1.)),
-                blur_radius: px(3.),
-                spread_radius: px(0.),
-                inset: false,
-            }])
+            .shadow(shadow())
             .hover(move |s| s.bg(hover).text_color(fg))
             .tooltip(tooltip("Android devices"))
             .child(icon("device-mobile", 14.))
@@ -86,7 +133,8 @@ pub(super) fn header(
         .gap(px(8.))
         .child(find::find_field(w, t, cx))
         .children(android)
-        .children(open);
+        .children(open)
+        .children(details);
     div()
         .flex_none()
         .pt(px(12.))

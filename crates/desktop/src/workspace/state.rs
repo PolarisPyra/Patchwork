@@ -98,6 +98,8 @@ pub struct Workspace {
     /// The bot whose page shows in place of the chat, and its page once drawn.
     pub bot_shown: Option<String>,
     pub bot_page: Option<Entity<crate::bots::BotPage>>,
+    /// The bot's details are shown beside a bot's chat.
+    pub bot_details: bool,
     /// The chat apps each thread came from or has on it now, by thread id.
     pub chat_apps: HashMap<String, ChatApps>,
     /// Where each chat app's connection stands; one that is not listed is off.
@@ -321,6 +323,7 @@ impl Workspace {
             bots,
             bot_shown: None,
             bot_page: None,
+            bot_details: true,
             collapsed,
             chat_apps,
             chat_app_status,
