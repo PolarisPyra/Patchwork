@@ -3,6 +3,32 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.103] - 2026-11-18
+
+**26.11.103** · 5 changes from 1 contributor
+
+- **Isolated tasks.** Run tasks in their own project copies and branches, so parallel tasks never edit the same files.
+- **Bots sidebar.** Manage bots with their own pages, schedules, and allowed computer actions from the sidebar.
+- **Persistent command sessions.** Commands continue in the previous folder and keep its exported variables instead of restarting in the project folder.
+- **Background chat app conversations.** Chat app conversations now stay in the chat app and don't clutter the sidebar or notifications.
+- **Vault timeout.** Set the vault to open without its password after a chosen timeout, or never.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- Settings → Security has a Vault timeout dropdown for a vault with a password: 1 hour, 4 hours, On system lock, On restart or Never. With Never, the system keychain keeps the vault's key, so the vault opens without its password when Patchwork starts. by [PolarisPyra in #203](https://github.com/PolarisPyra/Patchwork/pull/203)
+- A new task in a git project now works in its own copy of the project on its own branch, so tasks running side by side never edit the same files. A strip above the chat box lists the task's changed files with Merge and Discard, and a project's right-click menu has Edit tasks in the project folder to turn this off. by [PolarisPyra in #208](https://github.com/PolarisPyra/Patchwork/pull/208)
+- The sidebar has a Bots section in place of Chats. Each bot has an avatar, its own page and chat box, and a Details panel with its conversations, files and computer, and it can run on a schedule from Settings → Scheduled. On a bot's Computer tab you can turn off running commands, editing files, fetching web pages and each MCP server, and its runs can't use them. Chats outside a project are found through search and the Archived page. by [PolarisPyra in #209](https://github.com/PolarisPyra/Patchwork/pull/209)
+
+### Changed
+
+- A conversation started from a connected chat app now runs in the background. It no longer appears as a new chat in the sidebar or sends desktop notifications, and its replies go only to the chat app. by [PolarisPyra in #204](https://github.com/PolarisPyra/Patchwork/pull/204)
+- When an agent runs commands through Patchwork, each command now starts in the folder where the previous one ended, as long as that folder is inside the project, and keeps the variables the previous one exported. Before, every command started fresh in the project folder. by [PolarisPyra in #205](https://github.com/PolarisPyra/Patchwork/pull/205)
+
+</details>
+
 ## [26.11.102] - 2026-11-17
 
 **26.11.102** · 1 change from 1 contributor
