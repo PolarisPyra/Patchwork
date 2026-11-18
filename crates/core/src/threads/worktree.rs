@@ -10,13 +10,13 @@
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::fs::File;
-use std::sync::Arc;
+use std::sync::{Arc, PoisonError};
 
 use serde::{Deserialize, Serialize};
 
 use crate::system::{new_id, ssh};
 use crate::threads::{NOT_FOUND, Role, Thread};
-use crate::workspace::{self, FileChange};
+use crate::workspace::{self, FileChange, landed};
 use crate::{Core, Error};
 
 /// A task's worktree, as stored under its `app_state` key.
@@ -29,6 +29,10 @@ pub struct Worktree {
     pub top: String,
     /// The branch the worktree is on.
     pub branch: String,
+    /// The branch the project was on when the worktree was made, which merging goes back into.
+    /// None for a worktree made from a detached HEAD, or stored before this was kept.
+    #[serde(default)]
+    pub base: Option<String>,
 }
 
 /// What a task's worktree holds that its project doesn't have yet.
@@ -45,6 +49,9 @@ pub struct WorktreeState {
     /// What the worktree is on instead of its branch, such as a branch the agent switched to.
     /// Merging and discarding wait until it is switched back.
     pub off_branch: Option<String>,
+    /// The branch that already has every file the worktree changed, as the worktree has it, while
+    /// the worktree has no commits of its own: cleaning it up loses nothing.
+    pub landed_on: Option<String>,
 }
 
 /// What a task's worktree needs from the user, as the sidebar marks it.
@@ -183,6 +190,61 @@ fn copy_included(top: &str, to: &str) {
     }
 }
 
+/// The commit a new worktree of the repository at `top` starts from: its branch's upstream when
+/// that is ahead of HEAD alone, as it is after a fetch the branch hasn't pulled, else HEAD. It is
+/// the upstream's commit rather than its name, so the new branch doesn't track it.
+fn start_point(top: &str) -> String {
+    git(top, &["rev-parse", "--verify", "-q", "@{upstream}"])
+        .map(|sha| sha.trim().to_owned())
+        .ok()
+        .filter(|sha| git(top, &["merge-base", "--is-ancestor", "HEAD", sha]).is_ok())
+        .unwrap_or_else(|| "HEAD".to_owned())
+}
+
+/// Takes back what a failed `worktree add` of folder `dir` on `branch` left in the repository at
+/// `top`: the folder, git's record of it, and the branch. Each step goes ahead when the one
+/// before fails, since the add may have stopped anywhere.
+fn undo_add(top: &str, dir: &str, branch: &str) {
+    let _ = git(top, &["worktree", "remove", "--force", "--", dir]);
+    if Path::new(dir).exists()
+        && let Err(e) = std::fs::remove_dir_all(dir)
+    {
+        log::warn!(error:% = e; "could not remove a task worktree that failed to be made: {{error}}");
+    }
+    let _ = git(top, &["worktree", "prune"]);
+    let _ = git(top, &["branch", "-D", "--", branch]);
+}
+
+/// The main folder of the repository the worktree at `top` belongs to: the first that
+/// `git worktree list` names. None for a bare repository, or when git can't tell.
+fn main_top(top: &str) -> Option<String> {
+    let list = git(top, &["worktree", "list", "--porcelain"]).ok()?;
+    let first = list.split("\n\n").next()?;
+    let path = first.lines().next()?.strip_prefix("worktree ")?;
+    (!first.lines().any(|l| l == "bare") && Path::new(path).is_dir()).then(|| path.to_owned())
+}
+
+/// Deletes `branch` from the repository at `top` when it is there and the repository's HEAD or
+/// the remote's default branch already has all of it, even under other commits, as a
+/// squash-merged pull request leaves it. Returns whether it was deleted.
+fn delete_if_landed(top: &str, branch: &str) -> Result<bool, Error> {
+    let full = format!("refs/heads/{branch}");
+    if git(top, &["rev-parse", "--verify", "-q", &full]).is_err() {
+        return Ok(false);
+    }
+    let landed = git(top, &["merge-base", "--is-ancestor", "--", &full, "HEAD"]).is_ok()
+        || landed(top, "HEAD", &full)
+        || workspace::base_ref(top).is_some_and(|base| landed(top, &base, &full));
+    if !landed {
+        return Ok(false);
+    }
+    git(top, &["branch", "-q", "-D", "--", branch])?;
+    Ok(true)
+}
+
+/// How old a folder in the worktrees folder that no record names must be before it is swept.
+const SWEEP_AFTER: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
 /// The `app_state` key of why a task's worktree could not be made.
 fn failed_key(thread_id: &str) -> String {
     format!("worktree-failed:{thread_id}")
@@ -198,23 +260,45 @@ fn unshipped(worktree: &Worktree, project_head: &str) -> Result<usize, Error> {
     let mut args = vec!["rev-list", "--count", "HEAD", "--not", project_head];
     args.extend(base.as_deref());
     let count = git(&worktree.top, &args)?.trim().parse().unwrap_or(0);
-    if count > 0 && base.is_some_and(|base| landed(&worktree.top, &base)) {
+    if count > 0 && base.is_some_and(|base| landed(&worktree.top, &base, "HEAD")) {
         return Ok(0);
     }
     Ok(count)
 }
 
-/// Whether merging the checkout's HEAD into `base` would leave `base`'s files as they are.
-fn landed(top: &str, base: &str) -> bool {
-    let merged = git(
-        top,
-        &["merge-tree", "--write-tree", "--no-messages", base, "HEAD"],
-    );
-    let tree = git(top, &["rev-parse", &format!("{base}^{{tree}}")]);
-    match (merged, tree) {
-        (Ok(merged), Ok(tree)) => merged.lines().next().map(str::trim) == Some(tree.trim()),
-        _ => false,
+/// The most changed files the check for changes already landed compares, one git call each.
+const LANDED_MAX: usize = 50;
+
+/// The first of `candidates`, as (name, commit), whose files match each of `changes`, named from
+/// the worktree's top, as the worktree has it. Files are hashed without the repository's
+/// filters, which it controls; a filtered file then fails to match, and nothing is cleaned up.
+fn changes_on(
+    worktree: &Worktree,
+    changes: &[FileChange],
+    candidates: Vec<(String, String)>,
+) -> Option<(String, String)> {
+    if changes.is_empty() || changes.len() > LANDED_MAX {
+        return None;
     }
+    let matches = |rev: &str, change: &FileChange| -> bool {
+        let at = format!("{rev}:{}", change.path);
+        match change.status.as_str() {
+            "deleted" => git(&worktree.top, &["cat-file", "-e", &at]).is_err(),
+            "modified" | "added" | "untracked" => {
+                let ours = git(
+                    &worktree.top,
+                    &["hash-object", "--no-filters", "--", &change.path],
+                );
+                let theirs = git(&worktree.top, &["rev-parse", "--verify", "-q", &at]);
+                matches!((ours, theirs), (Ok(a), Ok(b)) if a.trim() == b.trim())
+            }
+            // A rename's old path and a conflict can't be told apart this way.
+            _ => false,
+        }
+    };
+    candidates
+        .into_iter()
+        .find(|(_, rev)| changes.iter().all(|change| matches(rev, change)))
 }
 
 /// What `worktree` is on instead of its own branch: another branch's name, or "a detached HEAD".
@@ -228,6 +312,29 @@ fn off_branch(worktree: &Worktree) -> Option<String> {
             .map(|_| "a detached HEAD".to_owned())?,
     };
     (on != worktree.branch).then_some(on)
+}
+
+/// A task's hold on its worktree while a merge, update, discard, switch or removal works on it.
+/// It lets go as it drops.
+pub(crate) struct Step<'a> {
+    core: &'a Core,
+    thread_id: String,
+}
+
+impl Drop for Step<'_> {
+    fn drop(&mut self) {
+        self.core
+            .worktree_steps
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&self.thread_id);
+    }
+}
+
+/// Source Control's hold on the folder it commits or pulls in. It lets go as it drops.
+pub(crate) struct SourceHold<'a> {
+    _step: Option<Step<'a>>,
+    _merging: Option<File>,
 }
 
 /// The `app_state` key a task's worktree is stored under.
@@ -348,7 +455,15 @@ impl Core {
             return path.to_owned();
         }
         match self.add_worktree(&thread.id, path) {
-            Ok(Some(worktree)) => worktree.root,
+            Ok(Some(worktree)) => {
+                // An earlier first turn's failure no longer says where the task works.
+                if self.store.state(&failed_key(&thread.id)).is_some()
+                    && let Err(e) = self.store.clear_state(&failed_key(&thread.id))
+                {
+                    log::warn!(error:% = e; "could not forget why a task had no worktree: {{error}}");
+                }
+                worktree.root
+            }
             Ok(None) => path.to_owned(),
             Err(e) => {
                 log::warn!(error:% = e; "could not make the task's worktree, so it works in the project: {{error}}");
@@ -375,7 +490,9 @@ impl Core {
             "<worktree>\nYou work in a git worktree of this project, {}, on the branch {}. The \
              user merges that branch into the project from Patchwork. Stay on it: don't check out, \
              switch to or create another branch here, and don't rebase it onto another. Commit \
-             here; to push the work to a branch of its own, run `git push origin HEAD:<name>`.\n\
+             here; to push the work to a branch of its own, run \
+             `git push -u origin HEAD:<name>`, so Patchwork finds the pushed branch and its pull \
+             request.\n\
              </worktree>\n\n{text}",
             worktree.root, worktree.branch
         )
@@ -407,22 +524,33 @@ impl Core {
         let dir = self.worktrees_dir.join(format!("{name}-{short}"));
         let dir = dir.to_string_lossy().into_owned();
         let branch = format!("patchwork/{short}");
-        git(top, &["worktree", "add", "-b", &branch, "--", &dir, "HEAD"])?;
+        let start = start_point(top);
         let worktree = Worktree {
             root: Path::new(&dir)
                 .join(prefix.trim())
                 .to_string_lossy()
                 .trim_end_matches('/')
                 .to_owned(),
-            top: dir,
-            branch,
+            top: dir.clone(),
+            branch: branch.clone(),
+            base: workspace::git_branch(top),
         };
-        self.store.set_state(
-            &key(thread_id),
-            &serde_json::to_string(&worktree).map_err(|e| e.to_string())?,
-        )?;
+        let made = git(top, &["worktree", "add", "-b", &branch, "--", &dir, &start])
+            .and_then(|_| serde_json::to_string(&worktree).map_err(|e| e.to_string().into()))
+            .and_then(|stored| self.store.set_state(&key(thread_id), &stored));
+        if let Err(e) = made {
+            undo_add(top, &dir, &branch);
+            return Err(e);
+        }
         log::info!(branch:% = worktree.branch; "made a worktree for a task on {{branch}}");
         copy_included(top, &worktree.top);
+        let mut submodules = workspace::unattended_ssh(top);
+        submodules.extend(["submodule", "update", "--init", "--recursive"]);
+        if Path::new(&worktree.top).join(".gitmodules").is_file()
+            && let Err(e) = git(&worktree.top, &submodules)
+        {
+            log::warn!(error:% = e; "could not check out a task worktree's submodules: {{error}}");
+        }
         Ok(Some(worktree))
     }
 
@@ -481,13 +609,40 @@ impl Core {
             .parse()
             .unwrap_or(0);
         let off_branch = off_branch(&worktree);
+        let landed_on = if commits == 0 && off_branch.is_none() && !changes.is_empty() {
+            Self::landed_on(&worktree, &project, head.trim())?.map(|(name, _)| name)
+        } else {
+            None
+        };
         Ok(Some(WorktreeState {
             worktree,
             changes,
             commits,
             behind,
             off_branch,
+            landed_on,
         }))
+    }
+
+    /// The branch, the project's or the remote's default, that has every file `worktree`
+    /// changed as it has them, with the commit to reset to. `head` is the project's HEAD.
+    fn landed_on(
+        worktree: &Worktree,
+        project: &str,
+        head: &str,
+    ) -> Result<Option<(String, String)>, Error> {
+        // Every change in the worktree, also those outside the project's folder in it.
+        let changes = workspace::git_changes(&worktree.top)?;
+        let mut candidates = vec![(
+            workspace::git_branch(project).unwrap_or_else(|| "the project's HEAD".into()),
+            head.to_owned(),
+        )];
+        if let Some(base) = workspace::base_ref(&worktree.top)
+            && let Ok(rev) = git(&worktree.top, &["rev-parse", "--verify", "-q", &base])
+        {
+            candidates.push((base, rev.trim().to_owned()));
+        }
+        Ok(changes_on(worktree, &changes, candidates))
     }
 
     /// What each task worktree that needs the user has, by task id: work not merged yet, or a
@@ -579,11 +734,10 @@ impl Core {
         let worktree = self
             .thread_worktree(thread_id)
             .ok_or("This task doesn't have a worktree")?;
-        if self.busy(thread_id) {
-            return Err(
-                "Stop the task and its background commands before switching its branch".into(),
-            );
-        }
+        let _step = self.begin_step(
+            thread_id,
+            "Stop the task and its background commands before switching its branch",
+        )?;
         self.switch_back(thread_id, &worktree)
     }
 
@@ -611,23 +765,143 @@ impl Core {
             let ours =
                 t.id == thread_id || t.parent.as_ref().is_some_and(|p| p.thread_id == thread_id);
             ours && (self.runner.is_running(&t.id)
+                || self.runner.is_starting(&t.id)
                 || t.messages
                     .iter()
                     .any(|m| m.background.iter().any(|task| task.status.is_live())))
         })
     }
 
-    /// Commits whatever the worktree has that isn't committed, as `message`.
-    fn commit_worktree(worktree: &Worktree, message: &str) -> Result<(), Error> {
+    /// Holds task `thread_id`'s worktree for one step, refused with `while_busy` when the task or
+    /// one of its subagents is running or starting. The hold is taken before the check, and a
+    /// turn checks for it after claiming its start, so the two can't both go ahead.
+    fn begin_step(&self, thread_id: &str, while_busy: &str) -> Result<Step<'_>, Error> {
+        let step = self.hold_worktree(thread_id)?;
+        if self.busy(thread_id) {
+            return Err(while_busy.to_owned().into());
+        }
+        Ok(step)
+    }
+
+    /// Holds task `thread_id`'s worktree, refused while another step holds it.
+    fn hold_worktree(&self, thread_id: &str) -> Result<Step<'_>, Error> {
+        let fresh = self
+            .worktree_steps
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(thread_id.to_owned());
+        if !fresh {
+            return Err("Patchwork is already working on this task's worktree".into());
+        }
+        Ok(Step {
+            core: self,
+            thread_id: thread_id.to_owned(),
+        })
+    }
+
+    /// Whether a merge, update, discard or switch is working on the worktree `thread` runs in:
+    /// its own, or its parent's for a subagent. A turn doesn't start then.
+    pub(crate) fn worktree_step_running(&self, thread: &Thread) -> bool {
+        let steps = self
+            .worktree_steps
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        steps.contains(&thread.id)
+            || thread
+                .parent
+                .as_ref()
+                .is_some_and(|p| steps.contains(&p.thread_id))
+    }
+
+    /// Holds the worktree thread `thread_id` works in, its own or its parent task's, for a step
+    /// that rewrites its files, refused with `while_running` while the task or one of its
+    /// subagents is running or starting. None when the thread works in no worktree.
+    pub(crate) fn hold_turn_folder(
+        &self,
+        thread_id: &str,
+        while_running: &str,
+    ) -> Result<Option<Step<'_>>, Error> {
+        let thread = self.store.thread(thread_id).ok_or(NOT_FOUND)?;
+        let owner = thread
+            .parent
+            .as_ref()
+            .map_or(thread_id, |p| p.thread_id.as_str());
+        if self.thread_worktree(owner).is_none() {
+            return Ok(None);
+        }
+        let step = self.hold_worktree(owner)?;
+        let running = self.store.threads().iter().any(|t| {
+            let ours = t.id == owner || t.parent.as_ref().is_some_and(|p| p.thread_id == owner);
+            ours && (self.runner.is_running(&t.id) || self.runner.is_starting(&t.id))
+        });
+        if running {
+            return Err(while_running.to_owned().into());
+        }
+        Ok(Some(step))
+    }
+
+    /// Holds the folder Source Control commits or pulls in, `root`, for one step. In the open
+    /// task `thread_id`'s worktree that is the hold of [`Self::hold_turn_folder`]; in a project's
+    /// own folder on this computer, the lock merges into it take, so a task's merge doesn't land
+    /// in the middle.
+    pub(crate) fn hold_source_folder(
+        &self,
+        root: &str,
+        thread_id: Option<&str>,
+        while_running: &str,
+    ) -> Result<SourceHold<'_>, Error> {
+        let in_worktree = thread_id.is_some_and(|id| {
+            let thread = self.store.thread(id);
+            let owner = thread
+                .as_ref()
+                .and_then(|t| t.parent.as_ref())
+                .map_or(id, |p| p.thread_id.as_str());
+            self.thread_worktree(owner).is_some_and(|w| w.root == root)
+        });
+        if let Some(id) = thread_id.filter(|_| in_worktree) {
+            return Ok(SourceHold {
+                _step: self.hold_turn_folder(id, while_running)?,
+                _merging: None,
+            });
+        }
+        let merging = if ssh::is_remote(root) {
+            None
+        } else {
+            let top = git(root, &["rev-parse", "--show-toplevel"])?;
+            Some(merge_lock(top.trim(), || {})?)
+        };
+        Ok(SourceHold {
+            _step: None,
+            _merging: merging,
+        })
+    }
+
+    /// Commits whatever the worktree has that isn't committed, as `message`. Returns the new
+    /// commit, or None when there was nothing to commit.
+    fn commit_worktree(worktree: &Worktree, message: &str) -> Result<Option<String>, Error> {
         in_worktree(worktree, &["add", "-A"])?;
         if in_worktree(worktree, &["diff", "--cached", "--quiet"]).is_ok() {
-            return Ok(());
+            return Ok(None);
         }
         // A repository without a name to commit under still takes Patchwork's.
         let mut args = identity(&worktree.top);
         args.extend(["commit", "--no-verify", "-q", "-m", message]);
         in_worktree(worktree, &args)?;
-        Ok(())
+        Ok(Some(
+            in_worktree(worktree, &["rev-parse", "HEAD"])?
+                .trim()
+                .to_owned(),
+        ))
+    }
+
+    /// Records `hash`, committed in the folder `root` by a merge or update, as task
+    /// `thread_id`'s commit for the graph. A failure is logged: the commit stands either way.
+    fn record_step_commit(&self, root: &str, thread_id: &str, hash: Option<&str>) {
+        if let Some(hash) = hash
+            && let Err(e) = self.record_commit(root, thread_id, hash)
+        {
+            log::warn!(hash:%, error:% = e; "could not record the task of commit {{hash}}: {{error}}");
+        }
     }
 
     /// Merges task `thread_id`'s work into the branch its project is on, as a merge commit: what
@@ -644,11 +918,10 @@ impl Core {
         let worktree = self
             .thread_worktree(thread_id)
             .ok_or("This task doesn't have a worktree")?;
-        if self.busy(thread_id) {
-            return Err(
-                "Wait for the task and its background commands to finish before merging it".into(),
-            );
-        }
+        let _step = self.begin_step(
+            thread_id,
+            "Wait for the task and its background commands to finish before merging it",
+        )?;
         let title = self.thread(thread_id)?.title;
         let top = self.verify(thread_id, &worktree)?;
         let _merging = merge_lock(&top, waiting)?;
@@ -659,8 +932,23 @@ impl Core {
                     .into(),
             );
         }
-        Self::commit_worktree(&worktree, &title)?;
-        let into = workspace::git_branch(&top).unwrap_or_else(|| "HEAD".into());
+        // Committing in the middle of the worktree's own merge would record its conflicts.
+        if in_progress(&worktree.top) {
+            return Err(
+                "Finish or abort the merge, rebase or cherry-pick in progress in the task's worktree first"
+                    .into(),
+            );
+        }
+        let into = workspace::git_branch(&top)
+            .ok_or("The project is on a detached HEAD. Check out the branch to merge into first")?;
+        if let Some(base) = worktree.base.as_ref().filter(|base| **base != into) {
+            return Err(format!(
+                "The project is on {into}, but this task started from {base}. Check out {base} to merge into it"
+            )
+            .into());
+        }
+        let committed = Self::commit_worktree(&worktree, &title)?;
+        self.record_step_commit(&worktree.root, thread_id, committed.as_deref());
         if git(
             &top,
             &[
@@ -688,6 +976,8 @@ impl Core {
             &worktree.branch,
         ]);
         let Err(e) = git(&top, &args) else {
+            let merged = git(&top, &["rev-parse", "HEAD"]).ok();
+            self.record_step_commit(&top, thread_id, merged.as_deref().map(str::trim));
             return Ok(into);
         };
         if git(&top, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err() {
@@ -718,11 +1008,10 @@ impl Core {
         let worktree = self
             .thread_worktree(thread_id)
             .ok_or("This task doesn't have a worktree")?;
-        if self.busy(thread_id) {
-            return Err(
-                "Wait for the task and its background commands to finish before updating it".into(),
-            );
-        }
+        let _step = self.begin_step(
+            thread_id,
+            "Wait for the task and its background commands to finish before updating it",
+        )?;
         let title = self.thread(thread_id)?.title;
         let top = self.verify(thread_id, &worktree)?;
         if in_progress(&worktree.top) {
@@ -734,11 +1023,24 @@ impl Core {
         let from = workspace::git_branch(&top).unwrap_or_else(|| "HEAD".into());
         let head = git(&top, &["rev-parse", "HEAD"])?;
         let head = head.trim();
-        Self::commit_worktree(&worktree, &title)?;
+        let committed = Self::commit_worktree(&worktree, &title)?;
+        self.record_step_commit(&worktree.root, thread_id, committed.as_deref());
+        let before = in_worktree(&worktree, &["rev-parse", "HEAD"])?;
         let message = format!("Merge {from} into {}", worktree.branch);
         let mut args = identity(&worktree.top);
         args.extend(["merge", "--no-edit", "--no-verify", "-m", &message, head]);
         let Err(e) = in_worktree(&worktree, &args) else {
+            // Only a merge commit on top of the branch is the update's own; already up to date
+            // or fast-forwarded, it made none.
+            let parent = in_worktree(&worktree, &["rev-parse", "-q", "--verify", "HEAD^1"]);
+            if parent.is_ok_and(|p| p.trim() == before.trim()) {
+                let updated = in_worktree(&worktree, &["rev-parse", "HEAD"]).ok();
+                self.record_step_commit(
+                    &worktree.root,
+                    thread_id,
+                    updated.as_deref().map(str::trim),
+                );
+            }
             return Ok(from);
         };
         if in_worktree(&worktree, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err() {
@@ -767,11 +1069,10 @@ impl Core {
         let worktree = self
             .thread_worktree(thread_id)
             .ok_or("This task doesn't have a worktree")?;
-        if self.busy(thread_id) {
-            return Err(
-                "Stop the task and its background commands before discarding its changes".into(),
-            );
-        }
+        let _step = self.begin_step(
+            thread_id,
+            "Stop the task and its background commands before discarding its changes",
+        )?;
         let top = self.verify(thread_id, &worktree)?;
         let head = git(&top, &["rev-parse", "HEAD"])?;
         let base = in_worktree(&worktree, &["merge-base", "HEAD", head.trim()])?;
@@ -780,9 +1081,45 @@ impl Core {
         Ok(())
     }
 
-    /// Tidies task worktrees in the background as the app starts: git forgets the worktrees
-    /// whose folders are gone from each project's repository, and Patchwork the records of
-    /// worktrees whose folder is gone. A worktree still on disk is kept, with the work in it.
+    /// Resets task `thread_id`'s worktree to the branch that already has every file it changed,
+    /// once it has no commits of its own, so it stops showing changes the project has. Returns
+    /// that branch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the task has no worktree or is still running, when the worktree has
+    /// commits or changes the project doesn't, or when git fails.
+    pub fn clean_up_worktree(&self, thread_id: &str) -> Result<String, Error> {
+        let worktree = self
+            .thread_worktree(thread_id)
+            .ok_or("This task doesn't have a worktree")?;
+        let _step = self.begin_step(
+            thread_id,
+            "Wait for the task and its background commands to finish before cleaning it up",
+        )?;
+        let top = self.verify(thread_id, &worktree)?;
+        if in_progress(&worktree.top) {
+            return Err(
+                "Finish or abort the merge, rebase or cherry-pick in progress in the task's worktree first"
+                    .into(),
+            );
+        }
+        let head = git(&top, &["rev-parse", "HEAD"])?;
+        if unshipped(&worktree, head.trim())? > 0 {
+            return Err("This task's worktree has commits the project doesn't have yet".into());
+        }
+        let (on, rev) = Self::landed_on(&worktree, &top, head.trim())?
+            .ok_or("Some of this task's changes aren't on the project's branch. Merge or discard them instead")?;
+        in_worktree(&worktree, &["reset", "-q", "--hard", &rev])?;
+        log::info!(branch:% = worktree.branch, on:%; "cleaned up {{branch}}, whose changes {{on}} has");
+        Ok(on)
+    }
+
+    /// Tidies task worktrees in the background as the app starts. Git forgets the worktrees
+    /// whose folders are gone from each project's repository, and Patchwork their records, with
+    /// their branches once the project has all of them. A deleted task's worktree that couldn't
+    /// be removed then is removed now, and so is a clean worktree no task's record names. Work
+    /// a project doesn't have yet stays, on its branch.
     pub fn start_worktree_cleanup(self: &Arc<Self>) {
         if !self.store.owns_data() {
             return;
@@ -792,16 +1129,20 @@ impl Core {
     }
 
     fn clean_worktrees(&self) {
+        let mut tops = Vec::new();
         for project in self.store.settings().projects {
             if ssh::is_remote(&project.path) || !Path::new(&project.path).is_dir() {
                 continue;
             }
-            if git(&project.path, &["rev-parse", "--show-toplevel"]).is_ok()
-                && let Err(e) = git(&project.path, &["worktree", "prune"])
-            {
+            let Ok(top) = git(&project.path, &["rev-parse", "--show-toplevel"]) else {
+                continue;
+            };
+            if let Err(e) = git(&project.path, &["worktree", "prune"]) {
                 log::warn!(error:% = e; "could not prune a project's worktrees: {{error}}");
             }
+            tops.push(top.trim().to_owned());
         }
+        let mut recorded = Vec::new();
         for record in self.store.state_keys("worktree:") {
             let Some(stored) = self
                 .store
@@ -810,8 +1151,21 @@ impl Core {
             else {
                 continue;
             };
-            if Path::new(&stored.top).exists() {
+            let thread_id = record.strip_prefix("worktree:").unwrap_or(&record);
+            if let Ok(top) = std::fs::canonicalize(&stored.top) {
+                recorded.push(top);
+                if self.store.thread(thread_id).is_none() {
+                    self.remove_orphan(thread_id, &stored);
+                }
                 continue;
+            }
+            // Its folder is gone; its branch goes too once the project has all of it.
+            if stored.branch.starts_with("patchwork/") && !stored.branch.contains("..") {
+                for top in &tops {
+                    if let Err(e) = delete_if_landed(top, &stored.branch) {
+                        log::warn!(error:% = e; "could not delete a missing worktree's branch: {{error}}");
+                    }
+                }
             }
             match self.store.clear_state(&record) {
                 Ok(()) => {
@@ -820,64 +1174,161 @@ impl Core {
                 Err(e) => log::warn!(error:% = e; "could not forget a missing worktree: {{error}}"),
             }
         }
+        self.sweep_unrecorded(&recorded);
     }
 
     /// Removes task `thread_id`'s worktree as the task goes. What it hadn't committed is committed
-    /// to its branch first, and the branch stays unless the project already has all of it.
+    /// to its branch first, and the branch stays unless the project, or the remote's default
+    /// branch, already has all of it.
     pub(crate) fn remove_thread_worktree(&self, thread_id: &str) {
         let Some(worktree) = self.thread_worktree(thread_id) else {
             return;
         };
         let removed = (|| -> Result<(), Error> {
+            let _step = self.hold_worktree(thread_id)?;
+            // Committing in the middle of a merge would record its conflicts; the worktree stays.
+            if in_progress(&worktree.top) {
+                return Err("a merge, rebase or cherry-pick is in progress in it".into());
+            }
             // Its agent may have left it on another branch; what it holds goes to its own.
             self.switch_back(thread_id, &worktree)?;
             let top = self.verify(thread_id, &worktree)?;
-            Self::commit_worktree(&worktree, "Work left by a deleted Patchwork task")?;
-            let common = git(
-                &top,
-                &["rev-parse", "--path-format=absolute", "--git-common-dir"],
-            )?;
-            let git_dir = format!("--git-dir={}", common.trim());
-            let dir = self.worktrees_dir.to_string_lossy().into_owned();
-            git(
-                &dir,
-                &[
-                    &git_dir,
-                    "worktree",
-                    "remove",
-                    "--force",
-                    "--",
-                    &worktree.top,
-                ],
-            )?;
-            let merged = git(
-                &top,
-                &[
-                    "merge-base",
-                    "--is-ancestor",
-                    "--",
-                    &worktree.branch,
-                    "HEAD",
-                ],
-            )
-            .is_ok();
-            if merged {
-                git(
-                    &dir,
-                    &[&git_dir, "branch", "-q", "-D", "--", &worktree.branch],
-                )?;
-            } else {
-                log::info!(branch:% = worktree.branch; "kept the unmerged branch {{branch}} of a deleted task");
-            }
-            Ok(())
+            self.drop_worktree(&worktree, &top)
         })();
-        // A worktree left behind keeps its record, so the folder and its branch stay found.
+        // A worktree left behind keeps its record, so the folder and its branch stay found, and
+        // the next start tries again.
         if let Err(e) = removed {
             log::warn!(error:% = e; "could not remove a deleted task's worktree: {{error}}");
             return;
         }
         if let Err(e) = self.store.clear_state(&key(thread_id)) {
             log::warn!(error:% = e; "could not forget a deleted task's worktree: {{error}}");
+        }
+    }
+
+    /// Removes `worktree` of the repository whose main folder is `top`: what it hadn't committed
+    /// is committed to its branch first, and the branch goes too once `top` has all of it.
+    fn drop_worktree(&self, worktree: &Worktree, top: &str) -> Result<(), Error> {
+        Self::commit_worktree(worktree, "Work left by a deleted Patchwork task")?;
+        let common = git(
+            top,
+            &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        )?;
+        let git_dir = format!("--git-dir={}", common.trim());
+        let dir = self.worktrees_dir.to_string_lossy().into_owned();
+        git(
+            &dir,
+            &[
+                &git_dir,
+                "worktree",
+                "remove",
+                "--force",
+                "--",
+                &worktree.top,
+            ],
+        )?;
+        if !delete_if_landed(top, &worktree.branch)? {
+            log::info!(branch:% = worktree.branch; "kept the unmerged branch {{branch}} of a removed worktree");
+        }
+        Ok(())
+    }
+
+    /// Removes the worktree of task `thread_id`, which was deleted while its worktree couldn't be
+    /// removed, and forgets it. A worktree it can't remove yet stays, with its record.
+    fn remove_orphan(&self, thread_id: &str, worktree: &Worktree) {
+        if !self.owns(worktree) {
+            return;
+        }
+        let removed = (|| -> Result<(), Error> {
+            let _step = self.hold_worktree(thread_id)?;
+            let top = main_top(&worktree.top).ok_or("its repository is gone")?;
+            let shown = in_worktree(worktree, &["rev-parse", "--show-toplevel"])?;
+            if canonical(&shown)? != canonical(&worktree.top)? {
+                return Err("it is not the worktree Patchwork made".into());
+            }
+            if in_progress(&worktree.top) {
+                return Err("a merge, rebase or cherry-pick is in progress in it".into());
+            }
+            if off_branch(worktree).is_some() {
+                in_worktree(worktree, &["checkout", "-q", &worktree.branch, "--"])?;
+            }
+            self.drop_worktree(worktree, &top)
+        })();
+        if let Err(e) = removed {
+            log::warn!(branch:% = worktree.branch, error:% = e; "could not remove the worktree on {{branch}} of a deleted task: {{error}}");
+            return;
+        }
+        log::info!(branch:% = worktree.branch; "removed the worktree on {{branch}} of a deleted task");
+        if let Err(e) = self.store.clear_state(&key(thread_id)) {
+            log::warn!(error:% = e; "could not forget a deleted task's worktree: {{error}}");
+        }
+    }
+
+    /// Removes the folders in Patchwork's worktrees folder that no task's record names, as a
+    /// worktree that failed to be made or whose record was lost leaves: only a worktree on a
+    /// `patchwork/` branch with nothing uncommitted, which no project is in, and not one made in
+    /// the last hour, which may be a task's being made now. Its branch stays unless its
+    /// repository already has all of it. `recorded` holds the canonical folders records name.
+    fn sweep_unrecorded(&self, recorded: &[PathBuf]) {
+        let Ok(entries) = std::fs::read_dir(&self.worktrees_dir) else {
+            return;
+        };
+        let projects: Vec<PathBuf> = self
+            .store
+            .settings()
+            .projects
+            .iter()
+            .filter_map(|p| std::fs::canonicalize(&p.path).ok())
+            .collect();
+        for entry in entries.flatten() {
+            let Ok(path) = std::fs::canonicalize(entry.path()) else {
+                continue;
+            };
+            let recent = entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .map_or(true, |at| {
+                    at.elapsed().map_or(true, |age| age < SWEEP_AFTER)
+                });
+            if !path.is_dir()
+                || recent
+                || recorded.contains(&path)
+                || projects.iter().any(|p| p.starts_with(&path))
+            {
+                continue;
+            }
+            let top = path.to_string_lossy().into_owned();
+            let Ok(branch) = git(&top, &["symbolic-ref", "-q", "--short", "HEAD"]) else {
+                continue;
+            };
+            let branch = branch.trim();
+            let own_top = git(&top, &["rev-parse", "--show-toplevel"])
+                .ok()
+                .and_then(|shown| canonical(&shown).ok())
+                .is_some_and(|shown| shown == path);
+            let clean = git(&top, &["status", "--porcelain", "--untracked-files=all"])
+                .is_ok_and(|status| status.trim().is_empty());
+            let Some(main) = main_top(&top).filter(|main| canonical(main).is_ok_and(|m| m != path))
+            else {
+                continue;
+            };
+            if !branch.starts_with("patchwork/") || branch.contains("..") || !own_top || !clean {
+                continue;
+            }
+            let worktree = Worktree {
+                root: top.clone(),
+                top,
+                branch: branch.to_owned(),
+                base: None,
+            };
+            match self.drop_worktree(&worktree, &main) {
+                Ok(()) => {
+                    log::info!(branch:% = worktree.branch; "removed a worktree on {{branch}} no task had");
+                }
+                Err(e) => {
+                    log::warn!(branch:% = worktree.branch, error:% = e; "could not remove a worktree on {{branch}} no task had: {{error}}");
+                }
+            }
         }
     }
 }

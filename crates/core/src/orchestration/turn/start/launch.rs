@@ -128,6 +128,13 @@ impl Runner {
                     )
                     .into());
                 }
+                // Its start is claimed already, so a step that begins from here on sees it.
+                if core.worktree_step_running(&thread) {
+                    return Err(
+                        "Patchwork is merging, updating or discarding this task's worktree; send again once it's done"
+                            .into(),
+                    );
+                }
                 core.turn_root(&thread, id, &project.path)
             } else {
                 let dir = core.chat_dir(&thread_id);

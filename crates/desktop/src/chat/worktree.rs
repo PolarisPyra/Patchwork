@@ -32,6 +32,7 @@ enum Step {
     Update,
     Discard,
     SwitchBack,
+    CleanUp,
 }
 
 impl Step {
@@ -41,6 +42,7 @@ impl Step {
             Self::Update => "Updating…",
             Self::Discard => "Discarding…",
             Self::SwitchBack => "Switching back…",
+            Self::CleanUp => "Cleaning up…",
         }
     }
 
@@ -56,6 +58,9 @@ impl Step {
                 .map(|from| Some(format!("Brought in {from}"))),
             Self::Discard => core.discard_thread_changes(id).map(|()| None),
             Self::SwitchBack => core.restore_worktree_branch(id).map(|()| None),
+            Self::CleanUp => core
+                .clean_up_worktree(id)
+                .map(|_| Some("Cleaned up".to_owned())),
         }
     }
 }
@@ -101,17 +106,23 @@ impl Workspace {
     /// last read.
     pub(crate) fn load_worktree(&mut self, cx: &mut Context<Self>) {
         let Some(key) = key_of(self) else {
-            self.worktree = None;
+            self.park_worktree();
             return;
         };
         if self.worktree.as_ref().is_some_and(|s| s.key == key) {
             return;
         }
         let same_task = self.worktree.as_ref().is_some_and(|s| s.key.0 == key.0);
-        match self.worktree.as_mut().filter(|_| same_task) {
-            Some(strip) => strip.key = key.clone(),
-            None => {
-                self.worktree = Some(WorktreeStrip {
+        if let Some(strip) = self.worktree.as_mut().filter(|_| same_task) {
+            strip.key = key.clone();
+        } else {
+            self.park_worktree();
+            let strip = match self.parked_worktrees.remove(&key.0) {
+                Some(parked) => WorktreeStrip {
+                    key: key.clone(),
+                    ..parked
+                },
+                None => WorktreeStrip {
                     key: key.clone(),
                     state: None,
                     failed: None,
@@ -123,8 +134,9 @@ impl Workspace {
                     open: false,
                     menu: None,
                     menu_dismissed: None,
-                });
-            }
+                },
+            };
+            self.worktree = Some(strip);
         }
         let core = Arc::clone(&self.core);
         let id = key.0.clone();
@@ -158,6 +170,28 @@ impl Workspace {
         .detach();
     }
 
+    /// Sets the open task's strip aside as another task opens, keeping it while a step runs or
+    /// left something to say.
+    fn park_worktree(&mut self) {
+        let Some(mut strip) = self.worktree.take() else {
+            return;
+        };
+        strip.menu = None;
+        strip.menu_dismissed = None;
+        if strip.busy.is_some() || strip.error.is_some() || strip.note.is_some() || strip.conflicted
+        {
+            self.parked_worktrees.insert(strip.key.0.clone(), strip);
+        }
+    }
+
+    /// Task `id`'s strip, whether its task is open or was set aside.
+    fn strip_for(&mut self, id: &str) -> Option<&mut WorktreeStrip> {
+        match self.worktree.as_mut() {
+            Some(strip) if strip.key.0 == id => Some(strip),
+            _ => self.parked_worktrees.get_mut(id),
+        }
+    }
+
     /// Reads the open task's worktree again, whatever was read before.
     fn reload_worktree(&mut self, cx: &mut Context<Self>) {
         if let Some(strip) = self.worktree.as_mut() {
@@ -168,7 +202,14 @@ impl Workspace {
 
     /// Runs `step` on the open task's worktree off the main thread, then reads it again.
     fn worktree_step(&mut self, step: Step, cx: &mut Context<Self>) {
-        let Some(strip) = self.worktree.as_mut() else {
+        if let Some(id) = self.worktree.as_ref().map(|s| s.key.0.clone()) {
+            self.worktree_step_on(&id, step, cx);
+        }
+    }
+
+    /// Runs `step` on task `id`'s worktree, while its strip is still around.
+    fn worktree_step_on(&mut self, id: &str, step: Step, cx: &mut Context<Self>) {
+        let Some(strip) = self.strip_for(id) else {
             return;
         };
         if strip.busy.is_some() {
@@ -196,7 +237,7 @@ impl Workspace {
                 return;
             }
             let _ = this.update(cx, |this, cx| {
-                if let Some(strip) = this.worktree.as_mut().filter(|s| s.key.0 == held_id)
+                if let Some(strip) = this.strip_for(&held_id)
                     && strip.busy.is_some()
                 {
                     strip.busy = Some("Waiting for another merge…");
@@ -208,7 +249,7 @@ impl Workspace {
         cx.spawn(async move |this, cx| {
             let done = task.await;
             this.update(cx, |this, cx| {
-                if let Some(strip) = this.worktree.as_mut().filter(|s| s.key.0 == id) {
+                if let Some(strip) = this.strip_for(&id) {
                     strip.busy = None;
                     match done {
                         Ok(note) => {
@@ -234,9 +275,14 @@ impl Workspace {
     }
 
     fn discard_worktree(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(state) = self.worktree.as_ref().and_then(|s| s.state.as_ref()) else {
+        let Some(strip) = self.worktree.as_ref() else {
             return;
         };
+        let Some(state) = strip.state.as_ref() else {
+            return;
+        };
+        // The answer may come after another task opened; it discards this one's or nothing.
+        let id = strip.key.0.clone();
         let detail = discard_detail(state);
         let answer = window.prompt(
             PromptLevel::Warning,
@@ -249,7 +295,7 @@ impl Workspace {
             if answer.await != Ok(0) {
                 return;
             }
-            let _ = this.update(cx, |this, cx| this.worktree_step(Step::Discard, cx));
+            let _ = this.update(cx, |this, cx| this.worktree_step_on(&id, Step::Discard, cx));
         })
         .detach();
     }
@@ -417,6 +463,7 @@ pub fn worktree_strip(
     };
     let pending = !state.changes.is_empty() || state.commits > 0;
     let off_branch = state.off_branch.clone();
+    let landed_on = state.landed_on.clone();
     let idle = strip.busy.is_none() && !working;
     let (open, conflicted, retry) = (strip.open, strip.conflicted, strip.retry.is_some());
     let menu = strip.menu.clone();
@@ -430,7 +477,13 @@ pub fn worktree_strip(
                 (format!("On {on} instead of {branch}"), true)
             })
         })
-        .or_else(|| strip.note.clone().map(|n| (n, false)));
+        .or_else(|| strip.note.clone().map(|n| (n, false)))
+        .or_else(|| {
+            landed_on
+                .clone()
+                .filter(|_| idle)
+                .map(|on| (format!("{on} already has these changes"), false))
+        });
     let retry = idle && retry && strip.error.is_some();
     // Nothing to merge or bring in, nothing running and nothing to report: the line stays blank.
     if !pending && state.behind == 0 && strip.busy.is_none() && message.is_none() && !conflicted {
@@ -528,6 +581,15 @@ pub fn worktree_strip(
                         state.worktree.branch
                     )))
                     .on_click(cx.listener(|w, _, _, cx| w.worktree_step(Step::SwitchBack, cx))),
+            )
+        })
+        .when(idle && landed_on.is_some(), |d| {
+            d.child(
+                strip_action("worktree-clean-up", "Clean up", t)
+                    .tooltip(tooltip(
+                        "Reset the worktree to the branch that has its changes",
+                    ))
+                    .on_click(cx.listener(|w, _, _, cx| w.worktree_step(Step::CleanUp, cx))),
             )
         })
         .when(idle && state.behind > 0 && off_branch.is_none(), |d| {

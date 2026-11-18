@@ -9,7 +9,8 @@ use crate::workspace::{GitCommit, GitRef};
 
 use super::run::{git, git_branch, git_raw, git_succeeds, has_head};
 
-/// Stages every change, untracked files included, for a commit of everything. Refused while a
+/// Stages every change under `root`, untracked files included, for a commit of everything there.
+/// The rest of the repository stays as it is when `root` is one of its folders. Refused while a
 /// file is still in conflict, since staging it would commit its conflict markers.
 pub(crate) fn stage_all(root: &str) -> Result<(), Error> {
     if !git(root, &["diff", "--name-only", "--diff-filter=U"])?
@@ -20,7 +21,7 @@ pub(crate) fn stage_all(root: &str) -> Result<(), Error> {
             "Resolve the merge conflicts before committing".into(),
         ));
     }
-    git(root, &["add", "-A"]).map(|_| ())
+    git(root, &["add", "-A", "--", "."]).map(|_| ())
 }
 
 /// The first `max` characters of `text`, marked when cut.

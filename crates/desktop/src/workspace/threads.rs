@@ -473,7 +473,7 @@ impl Workspace {
                 Err(e) if self.threads.iter().any(|t| t.id == id) => {
                     log::warn!(thread:% = id, error:% = e; "reloading thread {{thread}}: {{error}}");
                 }
-                Err(_) => self.thread = None,
+                Err(_) => self.close_thread(cx),
             }
         }
         self.load_worktree_marks(cx);
@@ -482,7 +482,7 @@ impl Workspace {
 
     pub fn archive(&mut self, id: &str, cx: &mut Context<Self>) {
         if self.thread.as_ref().is_some_and(|t| t.id == id) {
-            self.thread = None;
+            self.close_thread(cx);
         }
         let id = id.to_string();
         self.change(
@@ -597,8 +597,18 @@ impl Workspace {
 
     /// Clears the chat pane so the next message starts a new chat.
     pub fn new_chat(&mut self, cx: &mut Context<Self>) {
-        self.thread = None;
+        self.close_thread(cx);
         cx.notify();
+    }
+
+    /// Closes the open thread, and points Source Control back at the project's folder when it
+    /// showed the thread's worktree.
+    pub(crate) fn close_thread(&mut self, cx: &mut Context<Self>) {
+        self.thread = None;
+        let folder = self.project().map(|p| p.path.clone());
+        if self.git_root.is_some() && self.git_root != folder {
+            self.read_git(false, cx);
+        }
     }
 
     /// Starts a chat (no project) or a task in `project`, at the top of `folder` when given, shows

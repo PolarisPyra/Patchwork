@@ -57,14 +57,31 @@ pub struct Folder {
     pub sorted_by: Option<AgentKind>,
 }
 
+/// The watcher on the folder Source Control shows, and what it was started for.
+#[derive(Debug)]
+pub(crate) struct ProjectWatch {
+    /// The `seq` of the newest `watch_project` call that asked for this folder.
+    seq: u64,
+    project_id: String,
+    folder: String,
+    _watcher: watch::ProjectWatcher,
+    /// While a task's worktree is shown, the watcher on the project's own folder that credits
+    /// replies with what they change.
+    _credit: Option<watch::ProjectWatcher>,
+}
+
 /// `app_state` key for the projects and folders the sidebar has collapsed (JSON array).
 const COLLAPSED_KEY: &str = "collapsed_sections";
 
 impl Core {
     /// Watches the folder Source Control shows for the project, which is the open task
     /// `thread_id`'s worktree when it has one, in place of any folder watched before. After each
-    /// settled burst it runs one `git status`, adds what replies under way in the project's own
-    /// folder changed to them, and passes the result to `on_change`.
+    /// settled burst it runs one `git status` and passes the result to `on_change`. Replies run
+    /// in the project's own folder, so what changes there is added to the replies under way,
+    /// with a second watcher on that folder while a worktree is shown.
+    ///
+    /// `seq` orders the calls: one older than the last is ignored, so a slow read cannot move
+    /// the watch back to a task that is no longer open.
     ///
     /// # Errors
     ///
@@ -73,46 +90,71 @@ impl Core {
         self: &Arc<Self>,
         project_id: &str,
         thread_id: Option<&str>,
+        seq: u64,
         on_change: impl Fn(crate::workspace::ProjectChanged) + Send + 'static,
     ) -> Result<(), Error> {
         let root = self.source_root(project_id, thread_id)?;
+        let project_root = self.project_root(project_id)?;
         let mut current = self
             .project_watch
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if current
-            .as_ref()
-            .is_some_and(|(id, watched, _)| id == project_id && *watched == root)
-        {
-            return Ok(());
+        if let Some(watching) = current.as_mut() {
+            if watching.seq > seq {
+                return Ok(());
+            }
+            if watching.project_id == project_id && watching.folder == root {
+                watching.seq = seq;
+                return Ok(());
+            }
         }
-        // Replies are credited with what changes in the project's folder, where they run.
-        let in_project = root == self.project_root(project_id)?;
-        let folder = root.clone();
-        // The watcher lives in the core, so it holds the core weakly.
+        let in_project = root == project_root;
+        // The watchers live in the core, so they hold it weakly.
         let core = Arc::downgrade(self);
         let id = project_id.to_string();
-        let on_burst = move |burst: Vec<watch::Change>| {
+        let folder = root.clone();
+        let watcher = start_watcher(&root, move |burst: Vec<watch::Change>| {
             let Some(core) = core.upgrade() else {
                 return;
             };
-            let changes = workspace::git_changes(&root).ok();
+            let changes = workspace::git_changes(&folder).ok();
             if let Some(changes) = changes.as_ref().filter(|_| in_project) {
                 core.note_project_changes(&id, changes, &burst);
             }
             on_change(crate::workspace::ProjectChanged {
                 project_id: id.clone(),
+                root: folder.clone(),
                 paths: burst.into_iter().map(|c| c.path).collect(),
-                branch: workspace::git_branch(&root),
+                branch: workspace::git_branch(&folder),
                 changes,
             });
-        };
-        let watcher = if ssh::is_remote(&folder) {
-            watch::ProjectWatcher::poll(&folder, on_burst)?
+        })?;
+        let credit = if in_project {
+            None
         } else {
-            watch::ProjectWatcher::start(&PathBuf::from(&folder), on_burst)?
+            let core = Arc::downgrade(self);
+            let id = project_id.to_string();
+            let folder = project_root.clone();
+            start_watcher(&project_root, move |burst: Vec<watch::Change>| {
+                let Some(core) = core.upgrade() else {
+                    return;
+                };
+                if let Ok(changes) = workspace::git_changes(&folder) {
+                    core.note_project_changes(&id, &changes, &burst);
+                }
+            })
+            .inspect_err(|e| {
+                log::warn!(error:% = e; "could not watch the project for replies: {{error}}");
+            })
+            .ok()
         };
-        *current = Some((project_id.to_string(), folder, watcher));
+        *current = Some(ProjectWatch {
+            seq,
+            project_id: project_id.to_string(),
+            folder: root,
+            _watcher: watcher,
+            _credit: credit,
+        });
         Ok(())
     }
 
@@ -222,7 +264,7 @@ impl Core {
                 .project_watch
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if watch.as_ref().is_some_and(|(watched, _, _)| watched == id) {
+            if watch.as_ref().is_some_and(|w| w.project_id == id) {
                 *watch = None;
             }
             drop(watch);
@@ -502,5 +544,17 @@ impl Core {
     pub fn remove_folder(&self, id: &str) -> Result<(), Error> {
         self.folder(id)?;
         self.store.delete_folder(id)
+    }
+}
+
+/// Watches `folder`, polling it when it is on an SSH host.
+fn start_watcher(
+    folder: &str,
+    on_burst: impl FnMut(Vec<watch::Change>) + Send + 'static,
+) -> Result<watch::ProjectWatcher, Error> {
+    if ssh::is_remote(folder) {
+        watch::ProjectWatcher::poll(folder, on_burst)
+    } else {
+        watch::ProjectWatcher::start(&PathBuf::from(folder), on_burst)
     }
 }

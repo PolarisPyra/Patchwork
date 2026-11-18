@@ -377,6 +377,11 @@ impl Core {
         if self.runner.is_running(thread_id) || self.runner.is_starting(thread_id) {
             return Err("Stop the running turn before restoring a checkpoint".into());
         }
+        // Its task and subagents share the worktree whose files are restored.
+        let _step = self.hold_turn_folder(
+            thread_id,
+            "Stop the task and its subagents before restoring a checkpoint",
+        )?;
         // An idle agent still holds the session being undone.
         self.runner.retire_idle(thread_id);
         let root = self
@@ -423,6 +428,10 @@ impl Core {
         if self.runner.is_running(thread_id) || self.runner.is_starting(thread_id) {
             return Err("Stop the running turn before undoing a reply".into());
         }
+        let _step = self.hold_turn_folder(
+            thread_id,
+            "Stop the task and its subagents before undoing a reply",
+        )?;
         let root = self
             .checkpoint_root(thread_id)
             .ok_or("Only project tasks have replies to undo")?;

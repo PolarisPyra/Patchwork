@@ -14,10 +14,10 @@ pub(crate) use commits::{stage_all, staged_summary, truncated};
 pub use commits::{commit, git_log};
 pub(crate) use remote::{
     CheckState, base_ref, branch_summary, check_state, create_pull_request, fetch_remote, gh,
-    pull_request_checks, pull_request_view,
+    landed, pull_request_checks, pull_request_view, unattended_ssh,
 };
 #[doc(inline)]
-pub use remote::{git_sync_state, push};
+pub use remote::{git_sync_state, pull, push};
 pub(crate) use run::git;
 #[doc(inline)]
 pub use run::git_branch;

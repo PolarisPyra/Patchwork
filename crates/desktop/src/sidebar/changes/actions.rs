@@ -27,6 +27,7 @@ impl ChangesView {
             return;
         };
         let thread = self.thread_id(cx);
+        let shown = self.root.clone();
         let message = self.message.read(cx).content.clone();
         let commit = matches!(
             action,
@@ -37,8 +38,11 @@ impl ChangesView {
             GitAction::CommitPush | GitAction::CommitPushPr | GitAction::Push
         );
         let pr = matches!(action, GitAction::CommitPushPr | GitAction::OpenPr);
+        let pull = action == GitAction::Pull;
         self.busy = Some(
-            if !commit {
+            if pull {
+                "Pulling…"
+            } else if !commit {
                 if push {
                     "Pushing…"
                 } else {
@@ -55,8 +59,17 @@ impl ChangesView {
         cx.spawn(async move |this, cx| {
             let mut done: Option<(String, Option<PullRequest>)> = None;
             let mut failed = None;
+            if pull {
+                let (core, id, thread) = (Arc::clone(&core), id.clone(), thread.clone());
+                match cx
+                    .background_spawn(async move { core.pull_changes(&id, thread.as_deref()) })
+                    .await
+                {
+                    Ok(from) => done = Some((format!("Pulled from {from}"), None)),
+                    Err(e) => failed = Some(e),
+                }
+            }
             if commit {
-                let project = id.clone();
                 let (core, id, thread) = (Arc::clone(&core), id.clone(), thread.clone());
                 match cx
                     .background_spawn(async move {
@@ -67,9 +80,11 @@ impl ChangesView {
                     Ok((hash, subject)) => {
                         done = Some((format!("Committed {hash}: {subject}"), None));
                         let _ = this.update(cx, |this, cx| {
-                            // The project showing now may not be the one that was committed.
-                            this.drafts.remove(&project);
-                            if this.project_id.as_ref() == Some(&project) {
+                            // The folder showing now may not be the one that was committed.
+                            if let Some(root) = &shown {
+                                this.drafts.remove(root);
+                            }
+                            if this.root == shown {
                                 this.message.update(cx, |m, cx| m.set_text("", cx));
                             }
                         });
@@ -79,8 +94,10 @@ impl ChangesView {
             }
             if failed.is_none() && push {
                 let _ = this.update(cx, |this, cx| {
-                    this.busy = Some("Pushing…".into());
-                    cx.notify();
+                    if this.root == shown {
+                        this.busy = Some("Pushing…".into());
+                        cx.notify();
+                    }
                 });
                 let (core, id, thread) = (Arc::clone(&core), id.clone(), thread.clone());
                 match cx
@@ -96,8 +113,10 @@ impl ChangesView {
             }
             if failed.is_none() && pr {
                 let _ = this.update(cx, |this, cx| {
-                    this.busy = Some("Opening pull request…".into());
-                    cx.notify();
+                    if this.root == shown {
+                        this.busy = Some("Opening pull request…".into());
+                        cx.notify();
+                    }
                 });
                 let (core, id) = (Arc::clone(&core), id.clone());
                 match cx
@@ -109,10 +128,13 @@ impl ChangesView {
                 }
             }
             let _ = this.update(cx, |this, cx| {
-                // What finished before a failure still shows, above the error.
-                this.set_result(done, cx);
-                this.error = failed.map(|e| e.to_string());
-                this.busy = None;
+                // Another task's folder shows its own state; this one's result is not its.
+                if this.root == shown {
+                    // What finished before a failure still shows, above the error.
+                    this.set_result(done, cx);
+                    this.error = failed.map(|e| e.to_string());
+                    this.busy = None;
+                }
                 this.refresh_all(cx);
                 cx.notify();
             });
@@ -139,23 +161,29 @@ impl ChangesView {
         self.error = None;
         self.busy = Some("Writing message…".into());
         cx.notify();
-        let project = id.clone();
+        let shown = self.root.clone();
         let task =
             cx.background_spawn(async move { core.write_commit_message(&id, thread.as_deref()) });
         cx.spawn(async move |this, cx| {
             let written = task.await;
             this.update(cx, |this, cx| {
+                let here = this.root == shown;
                 match written {
                     Ok(text) => {
-                        // The project showing now may not be the one the message is for.
-                        if this.project_id.as_ref() == Some(&project) {
+                        // The folder showing now may not be the one the message is for.
+                        if here {
                             this.message.update(cx, |m, cx| m.set_text(&text, cx));
                         }
-                        this.drafts.insert(project, text);
+                        if let Some(root) = shown {
+                            this.drafts.insert(root, text);
+                        }
                     }
-                    Err(e) => this.error = Some(e.to_string()),
+                    Err(e) if here => this.error = Some(e.to_string()),
+                    Err(_) => {}
                 }
-                this.busy = None;
+                if here {
+                    this.busy = None;
+                }
                 this.refresh_all(cx);
                 cx.notify();
             })
@@ -175,6 +203,7 @@ impl ChangesView {
         };
         let thread = self.thread_id(cx);
         self.error = None;
+        let shown = self.root.clone();
         let task = cx.background_spawn(async move {
             let root = core.source_root(&id, thread.as_deref())?;
             for file in &files {
@@ -185,7 +214,9 @@ impl ChangesView {
         cx.spawn(async move |this, cx| {
             let done = task.await;
             this.update(cx, |this, cx| {
-                this.error = done.err().map(|e| e.to_string());
+                if this.root == shown {
+                    this.error = done.err().map(|e| e.to_string());
+                }
                 if let Some(w) = this.workspace.upgrade() {
                     w.update(cx, crate::workspace::Workspace::load_git);
                 }
@@ -239,7 +270,7 @@ impl ChangesView {
         self.error = None;
         self.resolving = true;
         cx.notify();
-        let project = id.clone();
+        let shown = self.root.clone();
         let thread = self.thread_id(cx);
         let task = cx.background_spawn(async move { core.conflict_prompt(&id, thread.as_deref()) });
         cx.spawn(async move |this, cx| {
@@ -247,8 +278,8 @@ impl ChangesView {
             this.update(cx, |this, cx| {
                 this.resolving = false;
                 match prompt {
-                    // The task would start in the project showing now, with another's conflicts.
-                    Ok(_) if this.project_id.as_ref() != Some(&project) => {}
+                    // The task would start in the folder showing now, with another's conflicts.
+                    Ok(_) if this.root != shown => {}
                     Ok(text) => {
                         if let Some(w) = this.workspace.upgrade() {
                             w.update(cx, |w, cx| {
@@ -273,7 +304,7 @@ impl ChangesView {
         self.pr_error = None;
         self.pr_busy = true;
         cx.notify();
-        let project = id.clone();
+        let shown = self.root.clone();
         let thread = self.thread_id(cx);
         let task =
             cx.background_spawn(async move { core.pull_request_feedback(&id, thread.as_deref()) });
@@ -282,8 +313,8 @@ impl ChangesView {
             this.update(cx, |this, cx| {
                 this.pr_busy = false;
                 match feedback {
-                    // The task would start in the project showing now, with another's feedback.
-                    Ok(_) if this.project_id.as_ref() != Some(&project) => {}
+                    // The task would start in the folder showing now, with another's feedback.
+                    Ok(_) if this.root != shown => {}
                     Ok((thread, prompt)) => {
                         if let Some(w) = this.workspace.upgrade() {
                             w.update(cx, |w, cx| {
