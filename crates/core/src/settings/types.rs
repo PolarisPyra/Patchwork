@@ -137,6 +137,8 @@ pub struct Settings {
     pub density: Density,
     /// The color scheme and accent of projects that have their own, by project id.
     pub project_looks: HashMap<String, ProjectLook>,
+    /// The projects whose new tasks edit the project folder itself, not a worktree each, by id.
+    pub edit_in_place: Vec<String>,
     /// Legacy switch for the import log, migrated into `logging` on load.
     #[serde(skip_serializing)]
     pub import_log_disabled: bool,
