@@ -25,6 +25,8 @@ fn row(id: impl Into<SharedString>, label: &str, glyph: &str, t: &Theme) -> Stat
         .gap(px(8.))
         .h(px(30.))
         .px(px(8.))
+        // Its icon lines up with the first letter of the section's heading.
+        .mx(px(-8.))
         .rounded(px(radius_sm()))
         .hover(move |s| s.bg(hover))
         .text_size(px(fs_md()))
@@ -249,18 +251,25 @@ impl BotPage {
             .flex()
             .flex_col()
             .pt(px(8.));
+        let gateway = self.bot.chat_app.is_some();
         if let Some(run) = usage.runs.first() {
             list = list
-                .child(fact("Conversation", display_title(&run.title), t))
+                // A chat app's bot has only the one conversation, so it is not named.
+                .when(!gateway, |d| {
+                    d.child(fact("Conversation", display_title(&run.title), t))
+                })
                 .child(fact("Started", format_relative(run.started_at), t))
                 .child(fact("Input", format_tokens(run.usage.input), t))
                 .child(fact("Output", format_tokens(run.usage.output), t))
                 .child(fact("Cache read", format_tokens(run.usage.cache_read), t))
                 .child(fact("Cache write", format_tokens(run.usage.cache_write), t));
         }
-        list.child(fact("Conversations", usage.runs.len().to_string(), t))
-            .child(fact("All tokens", format_tokens(sum(&usage.total)), t))
-            .into_any_element()
+        // A chat app's bot keeps one conversation, so it has no count to show.
+        list.when(!gateway, |d| {
+            d.child(fact("Conversations", usage.runs.len().to_string(), t))
+        })
+        .child(fact("All tokens", format_tokens(sum(&usage.total)), t))
+        .into_any_element()
     }
 
     /// What the bot is told at the start of each conversation.
