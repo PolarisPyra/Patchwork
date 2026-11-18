@@ -139,11 +139,26 @@ impl Core {
     /// result and reads them from the cache; other agents, and replies without a cursor, are
     /// given the conversation as a transcript on the fork's first turn.
     ///
+    /// A fork of a task in a worktree works in that worktree too, or with `new_worktree`, in one
+    /// of its own made from it with what it hadn't committed. None follows the project's setting.
+    /// Making a worktree runs git, so this belongs off the UI thread.
+    ///
     /// # Errors
     ///
     /// Returns an error when the thread or the message is not found, or the fork cannot be saved.
-    pub fn fork_thread(&self, thread_id: &str, message_id: &str) -> Result<Thread, Error> {
+    pub fn fork_thread(
+        &self,
+        thread_id: &str,
+        message_id: &str,
+        new_worktree: Option<bool>,
+    ) -> Result<Thread, Error> {
         let source = self.thread(thread_id)?;
+        // A subagent works in the worktree of the task that started it.
+        let worktree_of = source
+            .parent
+            .as_ref()
+            .map_or(thread_id, |p| p.thread_id.as_str())
+            .to_owned();
         let end = source
             .messages
             .iter()
@@ -199,6 +214,12 @@ impl Core {
         if let Some((_, point)) = &branch {
             self.set_resume_point(&thread.id, Some(point))?;
         }
+        self.give_fork_worktree(
+            &worktree_of,
+            &thread.id,
+            thread.project_id.as_deref(),
+            new_worktree,
+        )?;
         note(
             &thread.id,
             format!("forked from {thread_id} at message {message_id}"),

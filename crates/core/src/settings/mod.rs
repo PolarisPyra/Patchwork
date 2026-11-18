@@ -15,5 +15,5 @@ pub use crate::notifications::NotificationSettings;
 pub use types::{
     CheckSettings, CursorStyle, DetectLocale, Integrations, LoggingSettings, LogLevel,
     ResumeAtLaunch, RightClickBehavior, Settings, TerminalSettings, TextSize, Theme, TokenSettings,
-    UpdateSettings, VisionModel,
+    UpdateSettings, VisionModel, KeepWorktrees, WorktreeCleanup, WorktreeSettings,
 };

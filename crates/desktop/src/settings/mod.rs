@@ -28,6 +28,7 @@ mod terminal;
 mod themes;
 mod tokens;
 mod updates;
+mod worktrees;
 
 pub(crate) use general::{LOG_LEVELS, show_app_icon};
 pub use dialog::{SettingsDialog, SettingsEvent};

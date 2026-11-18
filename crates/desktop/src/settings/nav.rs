@@ -118,6 +118,18 @@ const INDEX: &[(&str, &[&str])] = &[
     ("projects", &["Imports", "Run checks after every task"]),
     ("scheduled", &["Scheduled tasks", "Weekly report"]),
     (
+        "worktrees",
+        &[
+            "Fork into a new worktree",
+            "Delete with deleted tasks",
+            "Delete merged",
+            "Delete inactive",
+            "Delete archived",
+            "Delete unchanged",
+            "Keep when",
+        ],
+    ),
+    (
         "terminal",
         &[
             "Shell",

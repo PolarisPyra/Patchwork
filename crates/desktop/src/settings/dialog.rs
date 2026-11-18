@@ -173,6 +173,10 @@ pub(super) const ENTRIES: &[Entry] = &[
                 id: "scheduled",
                 label: "Scheduled",
             },
+            Pane {
+                id: "worktrees",
+                label: "Worktrees",
+            },
         ],
     },
     Entry {

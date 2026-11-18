@@ -584,15 +584,37 @@ impl Workspace {
         .detach();
     }
 
-    /// Starts a chat from the open one's history up to `message_id`, and opens it.
-    pub fn fork(&mut self, thread_id: &str, message_id: &str, cx: &mut Context<Self>) {
-        match self.core.fork_thread(thread_id, message_id) {
-            Ok(thread) => {
-                self.reload(cx);
-                self.open_thread(&thread.id, cx);
-            }
-            Err(e) => log::warn!(error:% = e; "could not fork the chat: {{error}}"),
-        }
+    /// Starts a chat from the open one's history up to `message_id`, and opens it. A task's fork
+    /// works in its worktree, or with `new_worktree`, in one of its own; None follows the
+    /// project's setting.
+    pub fn fork(
+        &mut self,
+        thread_id: &str,
+        message_id: &str,
+        new_worktree: Option<bool>,
+        cx: &mut Context<Self>,
+    ) {
+        let core = Arc::clone(&self.core);
+        let (thread_id, message_id) = (thread_id.to_owned(), message_id.to_owned());
+        let task =
+            cx.background_spawn(
+                async move { core.fork_thread(&thread_id, &message_id, new_worktree) },
+            );
+        cx.spawn(async move |this, cx| {
+            let forked = task.await;
+            this.update(cx, |this, cx| match forked {
+                Ok(thread) => {
+                    this.reload(cx);
+                    this.open_thread(&thread.id, cx);
+                }
+                Err(e) => {
+                    log::warn!(error:% = e; "could not fork the chat: {{error}}");
+                    this.error = Some(e.to_string());
+                    cx.notify();
+                }
+            })
+        })
+        .detach();
     }
 
     /// Clears the chat pane so the next message starts a new chat.
