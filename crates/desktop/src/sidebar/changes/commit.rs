@@ -27,6 +27,7 @@ impl ChangesView {
         } else {
             match primary {
                 Some(GitAction::Push) => "arrow-up",
+                Some(GitAction::Pull) => "arrow-down",
                 Some(GitAction::OpenPr | GitAction::ViewPr) => "git-pull-request",
                 _ => "check",
             }

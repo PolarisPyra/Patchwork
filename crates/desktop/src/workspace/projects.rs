@@ -22,12 +22,15 @@ impl Workspace {
     /// Like [`Self::load_git`], but asks where the branch stands (over the network) only when
     /// `sync` is set or Source Control's folder changed, as it does on moving to another task.
     pub(crate) fn read_git(&mut self, sync: bool, cx: &mut Context<Self>) {
+        self.git_seq += 1;
+        let seq = self.git_seq;
         let Some(project) = self.project() else {
             self.branch = None;
             self.changes.clear();
             self.git_root = None;
+            self.changes_generation += 1;
             self.changes_view
-                .update(cx, |v, cx| v.refresh(None, true, cx));
+                .update(cx, |v, cx| v.refresh(None, None, true, cx));
             return;
         };
         let id = project.id.clone();
@@ -36,20 +39,22 @@ impl Workspace {
         let read = id.clone();
         let task = cx.background_spawn(async move {
             let root = core.source_root(&read, thread.as_deref())?;
-            let watched = core.watch_project(&read, thread.as_deref(), move |changed| {
+            let watched = core.watch_project(&read, thread.as_deref(), seq, move |changed| {
                 let _ = events.unbounded_send(changed);
             });
             let branch = patchwork_core::workspace::git_branch(&root);
-            let changes = patchwork_core::workspace::git_changes(&root).unwrap_or_else(|e| {
-                log::warn!(error:% = e; "could not list the changed files: {{error}}");
-                Vec::new()
-            });
+            let changes = patchwork_core::workspace::git_changes(&root)
+                .inspect_err(|e| {
+                    log::warn!(error:% = e; "could not list the changed files: {{error}}");
+                })
+                .ok();
             Ok::<_, patchwork_core::Error>((root, watched, branch, changes))
         });
         cx.spawn(async move |this, cx| {
             let read = task.await;
             this.update(cx, |this, cx| {
-                if this.project().map(|p| &p.id) != Some(&id) {
+                // A newer read, for another task or project, has started since.
+                if this.git_seq != seq {
                     return;
                 }
                 let (root, watched, branch, changes) = match read {
@@ -63,11 +68,19 @@ impl Workspace {
                     this.error = Some(e.to_string());
                 }
                 let moved = this.git_root.as_ref() != Some(&root);
-                this.git_root = Some(root);
+                match changes {
+                    Some(changes) => this.changes = changes,
+                    // A failed read keeps the last good list of the same folder, and shows none
+                    // of another's.
+                    None if moved => this.changes.clear(),
+                    None => {}
+                }
+                this.git_root = Some(root.clone());
                 this.branch = branch;
-                this.changes = changes;
-                this.changes_view
-                    .update(cx, |v, cx| v.refresh(Some(id), sync || moved, cx));
+                this.changes_generation += 1;
+                this.changes_view.update(cx, |v, cx| {
+                    v.refresh(Some(id), Some(root), sync || moved, cx);
+                });
                 cx.notify();
             })
         })
@@ -76,7 +89,10 @@ impl Workspace {
 
     /// Git's state after a settled burst of changes in the watched project.
     pub(super) fn on_project_changed(&mut self, changed: ProjectChanged, cx: &mut Context<Self>) {
-        if self.project().map(|p| &p.id) != Some(&changed.project_id) {
+        // A burst from a folder Source Control no longer shows, sent before its watch ended.
+        if self.project().map(|p| &p.id) != Some(&changed.project_id)
+            || self.git_root.as_ref() != Some(&changed.root)
+        {
             return;
         }
         if let Some(canvas) = &self.canvas {
@@ -107,9 +123,9 @@ impl Workspace {
         self.branch = changed.branch;
         self.changes = files;
         self.changes_generation += 1;
-        let id = changed.project_id;
+        let (id, root) = (changed.project_id, changed.root);
         self.changes_view
-            .update(cx, |v, cx| v.refresh(Some(id), git, cx));
+            .update(cx, |v, cx| v.refresh(Some(id), Some(root), git, cx));
         cx.notify();
     }
 

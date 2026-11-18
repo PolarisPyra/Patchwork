@@ -41,7 +41,6 @@ use std::sync::Arc;
 use orchestration::Runner;
 use extensions::{agents, hooks, skills};
 use persistence::Store;
-use workspace::watch;
 
 use crate::events::AgentEventEnvelope;
 
@@ -66,11 +65,14 @@ pub struct Core {
     installers_dir: PathBuf,
     /// The git worktrees tasks work in apart from their project, one folder each.
     worktrees_dir: PathBuf,
+    /// The tasks whose worktree a merge, update, discard or branch switch is working on, so no
+    /// turn starts in it and no second step runs at the same time.
+    worktree_steps: std::sync::Mutex<std::collections::HashSet<String>>,
     /// One folder per bot, which holds the files it knows.
     bots_dir: PathBuf,
     sink: EventSink,
-    /// The watcher on the active project, with that project's id and the folder it watches.
-    project_watch: std::sync::Mutex<Option<(String, String, watch::ProjectWatcher)>>,
+    /// The watcher on the folder Source Control shows for the active project.
+    project_watch: std::sync::Mutex<Option<projects::ProjectWatch>>,
     /// The watcher on the skills folder, while Settings shows the skills.
     skills_watch: std::sync::Mutex<Option<skills::Watcher>>,
     themes_watch: std::sync::Mutex<Option<themes::Watcher>>,
@@ -157,6 +159,7 @@ impl Core {
             backgrounds_dir: data_dir.join("backgrounds"),
             installers_dir: data_dir.join("installers"),
             worktrees_dir: data_dir.join("worktrees"),
+            worktree_steps: std::sync::Mutex::default(),
             bots_dir: data_dir.join("bots"),
             sink,
             project_watch: std::sync::Mutex::default(),

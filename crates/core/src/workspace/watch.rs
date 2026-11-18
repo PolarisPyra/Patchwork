@@ -13,7 +13,7 @@
 
 use crate::Error;
 use std::collections::BTreeMap;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::time::{Duration, Instant};
@@ -142,6 +142,21 @@ fn run(
         return;
     };
     backend::watch_project(&mut lock(&shared), root);
+    // A linked worktree keeps its HEAD and index in its own folder under the main repository's
+    // `.git`, and its branches in that repository's refs: both sit outside `root`.
+    let linked = LinkedGit::find(root);
+    if let Some(linked) = &linked {
+        let mut watcher = lock(&shared);
+        watch_or_warn(
+            &mut watcher,
+            &linked.own,
+            notify::RecursiveMode::NonRecursive,
+        );
+        for refs in ["heads", "remotes", "tags"] {
+            let refs = linked.refs.join(refs);
+            watch_or_warn(&mut watcher, &refs, notify::RecursiveMode::Recursive);
+        }
+    }
     drop(shared);
     let filter = Filter::new(root);
 
@@ -165,8 +180,16 @@ fn run(
                 }
                 let before = changed.len();
                 for path in &event.paths {
-                    let Ok(rel) = path.strip_prefix(root) else {
-                        continue;
+                    let mapped;
+                    let rel = match path.strip_prefix(root) {
+                        Ok(rel) => rel,
+                        Err(_) => match linked.as_ref().and_then(|l| l.as_git_path(path)) {
+                            Some(git) => {
+                                mapped = git;
+                                &mapped
+                            }
+                            None => continue,
+                        },
                     };
                     if !filter.keeps(path, rel) {
                         continue;
@@ -203,6 +226,43 @@ fn run(
             }
             Err(RecvTimeoutError::Disconnected) => return,
         }
+    }
+}
+
+/// Where a linked worktree's git state lives, outside the worktree itself.
+struct LinkedGit {
+    /// The worktree's own git folder, holding its HEAD and index.
+    own: PathBuf,
+    /// The main repository's `refs` folder, which every worktree shares.
+    refs: PathBuf,
+}
+
+impl LinkedGit {
+    /// The git folders behind `root` when its `.git` is a file, as in a linked worktree.
+    fn find(root: &Path) -> Option<Self> {
+        let dot_git = root.join(".git");
+        if !dot_git.is_file() {
+            return None;
+        }
+        let text = std::fs::read_to_string(&dot_git).ok()?;
+        let own = root.join(text.trim().strip_prefix("gitdir:")?.trim());
+        let own = own.canonicalize().ok()?;
+        let common = std::fs::read_to_string(own.join("commondir")).ok()?;
+        let common = own.join(common.trim()).canonicalize().ok()?;
+        Some(Self {
+            own,
+            refs: common.join("refs"),
+        })
+    }
+
+    /// `path` as the same file would sit in an ordinary `.git` folder, so the filter treats it
+    /// alike: the worktree's HEAD becomes `.git/HEAD`, a branch `.git/refs/heads/<name>`.
+    fn as_git_path(&self, path: &Path) -> Option<PathBuf> {
+        if let Ok(rel) = path.strip_prefix(&self.refs) {
+            return Some(Path::new(".git/refs").join(rel));
+        }
+        let rel = path.strip_prefix(&self.own).ok()?;
+        Some(Path::new(".git").join(rel))
     }
 }
 
@@ -320,7 +380,7 @@ mod linux {
     /// branches and tags.
     pub(super) fn watch_project(watcher: &mut RecommendedWatcher, root: &Path) {
         watch_tree(watcher, root);
-        // In a linked worktree `.git` is a file, and only the working tree is watched.
+        // In a linked worktree `.git` is a file; `run` watches its git folders.
         let git_dir = root.join(".git");
         if git_dir.is_dir() {
             watch_or_warn(watcher, &git_dir, RecursiveMode::NonRecursive);

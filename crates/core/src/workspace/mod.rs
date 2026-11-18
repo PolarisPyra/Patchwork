@@ -30,11 +30,12 @@ pub use hunks::{apply_hunk, staged_hunks};
 #[doc(inline)]
 pub use git::{
     accept_file, commit, git_branch, git_changes, git_file_diff, git_log, git_sync_state,
-    list_files, push, revert_file,
+    list_files, pull, push, revert_file,
 };
 pub(crate) use git::{
     CheckState, base_ref, branch_summary, check_state, create_pull_request, fetch_remote, gh,
-    git as run_git, pull_request_checks, pull_request_view, stage_all, staged_summary, truncated,
+    git as run_git, landed, pull_request_checks, pull_request_view, stage_all, staged_summary,
+    truncated, unattended_ssh,
 };
 #[doc(inline)]
 pub use media::{FileMedia, PreviewKind, file_media};

@@ -18,6 +18,10 @@ pub struct FileChange {
 /// Where the project's branch stands against its remote, for the commit and push button.
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate fact about the branch that the push button reads"
+)]
 pub struct GitSyncState {
     /// None outside a git repository, or on a detached HEAD.
     pub branch: Option<String>,
@@ -30,6 +34,9 @@ pub struct GitSyncState {
     /// Commits on the branch that its upstream doesn't have.
     pub ahead: u32,
     pub behind: u32,
+    /// The default branch already has everything the branch changed, as it has once its pull
+    /// request is merged, so there is nothing to push or open a pull request for.
+    pub merged: bool,
     /// The open pull request for the branch, when `gh` is installed and signed in.
     pub pull_request: Option<PullRequest>,
 }
@@ -91,6 +98,8 @@ pub struct GitRef {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectChanged {
     pub project_id: String,
+    /// The folder watched: the project's, or the open task's worktree.
+    pub root: String,
     /// Project-relative paths the burst touched; `.git/...` for commits, staging and checkouts.
     pub paths: Vec<String>,
     pub branch: Option<String>,

@@ -122,7 +122,7 @@ impl Workspace {
             let _ = this.update(cx, |this, cx| {
                 let open = this.thread.as_ref().and_then(|t| t.project_id.as_ref());
                 if open.is_some_and(|id| removed.contains(id)) {
-                    this.thread = None;
+                    this.close_thread(cx);
                 }
                 this.settings = this.core.settings();
                 if failed.is_some() {
@@ -203,7 +203,7 @@ impl Workspace {
                 .await;
             let _ = this.update(cx, |this, cx| {
                 if this.thread.as_ref().is_some_and(|t| ids.contains(&t.id)) {
-                    this.thread = None;
+                    this.close_thread(cx);
                 }
                 this.reload(cx);
             });

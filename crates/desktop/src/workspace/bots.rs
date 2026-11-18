@@ -97,7 +97,7 @@ impl Workspace {
         self.page = super::Page::Chats;
         self.peeking = false;
         // The composer under the page starts the bot's runs, so no chat is open behind it.
-        self.thread = None;
+        self.close_thread(cx);
         if self.bot_shown.as_deref() != Some(id)
             && let Some(bot) = self.bots.iter().find(|b| b.id == id)
         {

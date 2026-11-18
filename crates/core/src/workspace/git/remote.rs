@@ -3,14 +3,13 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
-use std::process::Stdio;
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use crate::workspace::{GitSyncState, PullRequest};
 
 use super::commits::truncated;
-use super::run::{git, git_branch, git_succeeds, has_head};
+use super::run::{NETWORK_LIMIT, git, git_branch, git_succeeds, has_head, output_within};
 
 /// The remote to push to: `origin`, else the first one. None in a repository without remotes.
 fn push_remote(root: &str) -> Option<String> {
@@ -80,6 +79,19 @@ const FETCH_RETRY_MAX: Duration = Duration::from_secs(15 * 60);
 /// many fetches of it failed in a row.
 static FETCHES: Mutex<Vec<(String, Instant, u32)>> = Mutex::new(Vec::new());
 
+/// The settings for a git command nobody watches in the repository at `root`, so ssh fails
+/// rather than ask for a passphrase or a new host's key, unless the user picked the ssh command
+/// git runs.
+pub(crate) fn unattended_ssh(root: &str) -> Vec<&'static str> {
+    if crate::system::login_var("GIT_SSH_COMMAND").is_some()
+        || crate::system::login_var("GIT_SSH").is_some()
+        || git(root, &["config", "--get", "core.sshCommand"]).is_ok()
+    {
+        return Vec::new();
+    }
+    vec!["-c", "core.sshCommand=ssh -o BatchMode=yes"]
+}
+
 /// Fetches the remote of the repository at `root`, so what is compared with its default branch
 /// is what the remote has. A repository is fetched at most every 15 seconds, however many
 /// worktrees ask, and a failed fetch waits longer each time before the next try. Callers that
@@ -111,20 +123,25 @@ pub(crate) fn fetch_remote(root: &str) {
             0
         }
     };
-    let result = git(
-        root,
-        &[
-            "fetch",
-            "--quiet",
-            "--no-tags",
-            "--no-auto-gc",
-            "--no-write-fetch-head",
-            "--",
-            &remote,
-        ],
-    );
+    let mut args = unattended_ssh(root);
+    // Pruned, so a branch the remote deleted, as a merged pull request's is, stops counting as
+    // pushed.
+    args.extend([
+        "fetch",
+        "--quiet",
+        "--prune",
+        "--no-tags",
+        "--no-auto-gc",
+        "--no-write-fetch-head",
+        "--",
+        &remote,
+    ]);
+    let result = git(root, &args);
     let (wait, failures) = match result {
-        Ok(_) => (FETCH_EVERY, 0),
+        Ok(_) => {
+            remember_default_branch(root, &remote);
+            (FETCH_EVERY, 0)
+        }
         Err(e) => {
             log::warn!(error:% = e; "could not fetch the project's remote: {{error}}");
             let wait = FETCH_RETRY
@@ -137,6 +154,33 @@ pub(crate) fn fetch_remote(root: &str) {
     if let Some(entry) = fetches.iter_mut().find(|(k, ..)| *k == key) {
         entry.1 = Instant::now() + wait;
         entry.2 = failures;
+    }
+}
+
+/// Asks `remote` which branch is its default, once, when the clone doesn't know: a repository
+/// added with `git remote add` has no `<remote>/HEAD`, and guessing `main` or `master` gets a
+/// default such as `develop` wrong.
+fn remember_default_branch(root: &str, remote: &str) {
+    let head = format!("refs/remotes/{remote}/HEAD");
+    if git_succeeds(root, &["symbolic-ref", "-q", &head]) {
+        return;
+    }
+    if let Err(e) = git(root, &["remote", "set-head", remote, "--auto"]) {
+        log::warn!(error:% = e; "could not learn the remote's default branch: {{error}}");
+    }
+}
+
+/// Whether merging `head` into `base` would leave `base`'s files as they are: everything `head`
+/// changed is on `base` already, even under other commits, as a squash-merge leaves it.
+pub(crate) fn landed(root: &str, base: &str, head: &str) -> bool {
+    let merged = git(
+        root,
+        &["merge-tree", "--write-tree", "--no-messages", base, head],
+    );
+    let tree = git(root, &["rev-parse", &format!("{base}^{{tree}}")]);
+    match (merged, tree) {
+        (Ok(merged), Ok(tree)) => merged.lines().next().map(str::trim) == Some(tree.trim()),
+        _ => false,
     }
 }
 
@@ -173,10 +217,14 @@ pub fn git_sync_state(root: &str) -> GitSyncState {
         (0, 0)
     };
     let on_default = default_branch.as_deref() == Some(branch.as_str());
-    let pull_request = (has_upstream && !on_default)
+    let merged = !on_default
+        && has_head(root)
+        && base_ref(root).is_some_and(|base| landed(root, &base, "HEAD"));
+    let pull_request = (has_upstream && !on_default && !merged)
         .then(|| open_pull_request(root))
         .flatten();
     GitSyncState {
+        merged,
         has_changes: git(root, &["status", "--porcelain"]).is_ok_and(|s| !s.trim().is_empty()),
         has_remote: remote.is_some(),
         has_upstream,
@@ -188,21 +236,25 @@ pub fn git_sync_state(root: &str) -> GitSyncState {
     }
 }
 
-/// Runs `gh <args>` in `root`, without prompts. A missing `gh` is said plainly.
+/// Runs `gh <args>` in `root`, without prompts. A missing `gh` is said plainly, and one still
+/// waiting on the network after git's limit for the network is stopped.
 pub(crate) fn gh(root: &str, args: &[&str]) -> Result<String, Error> {
     let mut cmd = crate::system::host_command("gh");
     cmd.args(args)
         .current_dir(root)
         .env("GH_PROMPT_DISABLED", "1");
-    let out = crate::system::ssh::prepare(cmd)?
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|e| match e.kind() {
+    let what = format!(
+        "gh {}",
+        args.iter().take(2).copied().collect::<Vec<_>>().join(" ")
+    );
+    let out = output_within(crate::system::ssh::prepare(cmd)?, NETWORK_LIMIT, &what).map_err(
+        |e| match e.kind() {
             std::io::ErrorKind::NotFound => Error::Message(
                 "Pull requests need the GitHub CLI: install gh and run gh auth login".into(),
             ),
             _ => Error::Message(format!("Failed to run gh: {e}")),
-        })?;
+        },
+    )?;
     if out.status.success() {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     } else {
@@ -297,7 +349,17 @@ pub fn push(root: &str) -> Result<String, Error> {
         .filter(|b| b != "HEAD")
         .ok_or_else(|| Error::Message("Check out a branch to push".into()))?;
     if git_succeeds(root, &["rev-parse", "--verify", "-q", "@{u}"]) {
-        git(root, &["push"])?;
+        // Named in full, so an upstream with another name than the branch, as an agent's
+        // `git push -u origin HEAD:<name>` sets, takes the push that `push.default` would refuse.
+        let config = |key: &str| {
+            git(
+                root,
+                &["config", "--get", &format!("branch.{branch}.{key}")],
+            )
+            .map(|v| v.trim().to_string())
+        };
+        let (remote, merge) = (config("remote")?, config("merge")?);
+        git(root, &["push", &remote, &format!("HEAD:{merge}")])?;
         return Ok(git(root, &["rev-parse", "--abbrev-ref", "@{u}"])?
             .trim()
             .to_string());
@@ -306,6 +368,42 @@ pub fn push(root: &str) -> Result<String, Error> {
         .ok_or_else(|| Error::Message("This repository has no remote to push to".into()))?;
     git(root, &["push", "-u", &remote, "HEAD"])?;
     Ok(format!("{remote}/{branch}"))
+}
+
+/// Brings the upstream's new commits into the branch, replaying its own on top.
+///
+/// A pull that conflicts is undone and leaves the branch as it was. Returns the upstream, such
+/// as `origin/main`.
+///
+/// # Errors
+///
+/// Returns an error when the branch has no upstream, or when `git pull` fails or conflicts.
+pub fn pull(root: &str) -> Result<String, Error> {
+    let upstream = git(root, &["rev-parse", "--abbrev-ref", "@{u}"]).map_err(|e| {
+        log::info!(error:% = e; "found no upstream to pull from: {{error}}");
+        Error::Message("This branch has no upstream to pull from".into())
+    })?;
+    let mut args = unattended_ssh(root);
+    args.extend(["pull", "--quiet", "--rebase", "--no-autostash"]);
+    let Err(e) = git(root, &args) else {
+        return Ok(upstream.trim().to_string());
+    };
+    let rebasing = ["rebase-merge", "rebase-apply"].iter().any(|name| {
+        git(
+            root,
+            &["rev-parse", "--path-format=absolute", "--git-path", name],
+        )
+        .is_ok_and(|path| std::path::Path::new(path.trim()).exists())
+    });
+    if rebasing {
+        if let Err(abort) = git(root, &["rebase", "--abort"]) {
+            log::error!(error:% = abort; "could not undo a conflicted pull: {{error}}");
+        }
+        return Err(Error::Message(format!(
+            "Pulling would conflict with this branch's commits, so nothing changed. {e}"
+        )));
+    }
+    Err(e)
 }
 
 /// What pull request text is written from: the branches, the commits since the default branch,

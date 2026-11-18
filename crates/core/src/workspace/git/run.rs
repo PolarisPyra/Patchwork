@@ -8,7 +8,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 /// How long a git command that talks to a remote may run before it is stopped.
-const NETWORK_LIMIT: Duration = Duration::from_secs(600);
+pub(in crate::workspace) const NETWORK_LIMIT: Duration = Duration::from_secs(600);
 
 /// How long any other git command may run before it is stopped, so a stuck lock or a hung
 /// filesystem fails the action instead of holding it forever.
@@ -30,8 +30,23 @@ pub(in crate::workspace) fn git_output(root: &str, args: &[&str]) -> std::io::Re
         // watcher would report as a change.
         .env("GIT_OPTIONAL_LOCKS", "0")
         // There is no terminal to type a password in, so a push fails instead of waiting.
-        .env("GIT_TERMINAL_PROMPT", "0");
-    let mut cmd = crate::system::ssh::prepare(cmd).map_err(std::io::Error::other)?;
+        .env("GIT_TERMINAL_PROMPT", "0")
+        // Git's messages in English, which the checks of its errors read, such as "not a git
+        // repository"; file names keep the user's own character set.
+        .env_remove("LC_ALL")
+        .env("LC_MESSAGES", "C");
+    let cmd = crate::system::ssh::prepare(cmd).map_err(std::io::Error::other)?;
+    let what = format!("git {}", subcommand(args).unwrap_or_default());
+    output_within(cmd, limit(args), &what)
+}
+
+/// Runs `cmd` without input and returns its output. A command still running after `limit` is
+/// killed with what it started, and fails as timed out, naming it as `what`.
+pub(in crate::workspace) fn output_within(
+    mut cmd: std::process::Command,
+    limit: Duration,
+    what: &str,
+) -> std::io::Result<Output> {
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -44,7 +59,6 @@ pub(in crate::workspace) fn git_output(root: &str, args: &[&str]) -> std::io::Re
     std::thread::spawn(move || {
         let _ = send.send(child.wait_with_output());
     });
-    let limit = limit(args);
     if let Ok(out) = done.recv_timeout(limit) {
         return out;
     }
@@ -54,8 +68,7 @@ pub(in crate::workspace) fn git_output(root: &str, args: &[&str]) -> std::io::Re
     Err(std::io::Error::new(
         std::io::ErrorKind::TimedOut,
         format!(
-            "git {} was still running after {} s and was stopped",
-            subcommand(args).unwrap_or_default(),
+            "{what} was still running after {} s and was stopped",
             limit.as_secs()
         ),
     ))

@@ -122,6 +122,8 @@ pub struct Workspace {
     pub branch: Option<String>,
     /// The folder Source Control last read: the open task's worktree, or the project's folder.
     pub git_root: Option<String>,
+    /// Counts the reads of git's state, so only the newest one is applied.
+    pub(super) git_seq: u64,
     /// The project's uncommitted files, as git reports them.
     pub changes: Vec<FileChange>,
     /// The reply whose "Show changes" was clicked: its files lead the Changes view.
@@ -146,6 +148,9 @@ pub struct Workspace {
     pub goal_closed: Option<u64>,
     /// The open task's worktree and the strip that offers merging it.
     pub worktree: Option<WorktreeStrip>,
+    /// The strips of tasks switched away from while a step ran or had something to say, by task
+    /// id, so coming back shows it.
+    pub parked_worktrees: HashMap<String, WorktreeStrip>,
     /// What each task's worktree needs from the user, as the sidebar marks it.
     pub worktree_marks: HashMap<String, WorktreeMark>,
     /// The tasks as they were when the marks were last read, so a change reads them again.
@@ -341,6 +346,7 @@ impl Workspace {
             orchestrator,
             branch: None,
             git_root: None,
+            git_seq: 0,
             changes: Vec::new(),
             change_focus: None,
             allow_menu: None,
@@ -357,6 +363,7 @@ impl Workspace {
             goal_clear: None,
             goal_closed: None,
             worktree: None,
+            parked_worktrees: HashMap::new(),
             worktree_marks: HashMap::new(),
             worktree_marks_key: None,
             ticking: false,

@@ -72,6 +72,11 @@ impl Core {
         message: &str,
     ) -> Result<(String, String), Error> {
         let root = self.source_root(project_id, thread_id)?;
+        let _hold = self.hold_source_folder(
+            &root,
+            thread_id,
+            "Wait for the task to finish before committing its worktree",
+        )?;
         workspace::stage_all(&root)?;
         let message = match message.trim() {
             "" => self.staged_message(&root, thread_id)?,
@@ -90,14 +95,51 @@ impl Core {
         Ok((hash.chars().take(7).collect(), subject))
     }
 
+    /// Pulls the commits the upstream of the branch Source Control shows has, rebasing the
+    /// branch's own onto them. Returns the upstream's name.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the project is unknown, when the open task is running, when the
+    /// branch has no upstream, or when the pull fails or would conflict, which leaves the branch
+    /// as it was.
+    pub fn pull_changes(&self, project_id: &str, thread_id: Option<&str>) -> Result<String, Error> {
+        let root = self.source_root(project_id, thread_id)?;
+        let _hold = self.hold_source_folder(
+            &root,
+            thread_id,
+            "Wait for the task to finish before pulling into its worktree",
+        )?;
+        workspace::pull(&root)
+    }
+
     /// Records that `hash` was committed from the thread, with the replies since its last
-    /// commit that changed a file the commit has.
-    fn record_commit(&self, root: &str, thread_id: &str, hash: &str) -> Result<(), Error> {
+    /// commit that changed a file the commit has. A merge commit's files are those it brought
+    /// onto its first parent.
+    pub(crate) fn record_commit(
+        &self,
+        root: &str,
+        thread_id: &str,
+        hash: &str,
+    ) -> Result<(), Error> {
         let files = workspace::run_git(
             root,
-            &["show", "--name-only", "--relative", "--format=", hash],
+            &[
+                "show",
+                "-z",
+                "--name-only",
+                "--relative",
+                "--diff-merges=first-parent",
+                "--format=",
+                hash,
+            ],
         )?;
-        let files: HashSet<&str> = files.lines().collect();
+        // Unquoted, so a name with spaces or accents matches the reply's own.
+        let files: HashSet<&str> = files
+            .split('\0')
+            .map(str::trim)
+            .filter(|f| !f.is_empty())
+            .collect();
         let last = self.store.state(&format!("{LAST_COMMITTED}{thread_id}"));
         let replies = self
             .store

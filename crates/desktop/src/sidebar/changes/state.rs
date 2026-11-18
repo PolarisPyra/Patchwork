@@ -28,6 +28,7 @@ pub(super) enum GitAction {
     Commit,
     CommitPush,
     CommitPushPr,
+    Pull,
     Push,
     OpenPr,
     ViewPr,
@@ -39,6 +40,7 @@ impl GitAction {
             Self::Commit => "Commit",
             Self::CommitPush => "Commit & Push",
             Self::CommitPushPr => "Commit, Push & Open Pull Request",
+            Self::Pull => "Pull",
             Self::Push => "Push",
             Self::OpenPr => "Open Pull Request",
             Self::ViewPr => "View Pull Request",
@@ -60,8 +62,20 @@ pub(super) fn git_actions(
     };
     let on_default = state.branch == state.default_branch;
     let pr = state.pull_request.as_ref();
-    let can_pr = state.has_remote && !on_default && state.default_branch.is_some() && pr.is_none();
-    let can_push = state.has_remote && (!state.has_upstream || state.ahead > 0);
+    // A merged branch has nothing to open a pull request for, or to publish again.
+    let can_pr = state.has_remote
+        && !on_default
+        && !state.merged
+        && state.default_branch.is_some()
+        && pr.is_none();
+    let can_push = state.has_remote
+        && if state.has_upstream {
+            state.ahead > 0
+        } else {
+            !state.merged
+        };
+    // Git refuses to pull onto uncommitted changes.
+    let can_pull = state.has_upstream && state.behind > 0 && !has_changes;
     let mut menu = Vec::new();
     if has_changes {
         menu.push(GitAction::Commit);
@@ -71,6 +85,9 @@ pub(super) fn git_actions(
         if can_pr {
             menu.push(GitAction::CommitPushPr);
         }
+    }
+    if can_pull {
+        menu.push(GitAction::Pull);
     }
     if can_push {
         menu.push(GitAction::Push);
@@ -83,6 +100,9 @@ pub(super) fn git_actions(
     }
     let primary = if has_changes {
         (Some(GitAction::Commit), commit())
+    } else if can_pull {
+        // A push would be refused until the upstream's commits are in.
+        (Some(GitAction::Pull), format!("Pull ↓{}", state.behind))
     } else if can_push && !state.has_upstream {
         (Some(GitAction::Push), "Publish Branch".into())
     } else if can_push {
@@ -107,6 +127,8 @@ pub(super) fn git_actions(
 pub struct ChangesView {
     pub(super) workspace: WeakEntity<Workspace>,
     pub(super) project_id: Option<String>,
+    /// The folder shown: the open task's worktree, or the project's folder.
+    pub(super) root: Option<String>,
     pub(super) sync: Option<GitSyncState>,
     pub commits: Vec<GitCommit>,
     pages: usize,
@@ -118,7 +140,7 @@ pub struct ChangesView {
     /// Where a divider drag started: the pointer's y and the Graph's height then.
     pub(super) resizing: Option<(f32, f32)>,
     pub(super) message: Entity<TextArea>,
-    /// Unsent commit messages by project.
+    /// Unsent commit messages by folder.
     pub(super) drafts: HashMap<String, String>,
     pub(super) busy: Option<String>,
     pub(super) result: Option<(String, Option<PullRequest>)>,
@@ -164,7 +186,7 @@ impl ChangesView {
         })
         .detach();
         cx.subscribe(&message, |this, area, _: &Changed, cx| {
-            if let Some(id) = &this.project_id {
+            if let Some(id) = &this.root {
                 this.drafts
                     .insert(id.clone(), area.read(cx).content.clone());
             }
@@ -174,6 +196,7 @@ impl ChangesView {
         Self {
             workspace,
             project_id: None,
+            root: None,
             sync: None,
             commits: Vec::new(),
             pages: 1,
@@ -215,23 +238,35 @@ impl ChangesView {
             .is_some_and(|w| !w.read(cx).changes.is_empty())
     }
 
-    /// Reads git's state again for `project`: the graph always, and where the branch stands
-    /// (which asks `gh` over the network) when `sync` is set or the project changed.
-    pub fn refresh(&mut self, project: Option<String>, sync: bool, cx: &mut Context<Self>) {
-        let switched = project != self.project_id;
+    /// Reads git's state again for `project`, shown at `root`: the graph always, and where the
+    /// branch stands (which asks `gh` over the network) when `sync` is set or the folder changed.
+    pub fn refresh(
+        &mut self,
+        project: Option<String>,
+        root: Option<String>,
+        sync: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let switched = root != self.root;
         if switched {
             self.pages = 1;
             self.sync = None;
             self.commits.clear();
+            self.more = false;
+            self.log_error = None;
             self.error = None;
             self.result = None;
-            let draft = project
+            self.busy = None;
+            self.pr_error = None;
+            self.missing.clear();
+            let draft = root
                 .as_ref()
-                .and_then(|id| self.drafts.get(id).cloned())
+                .and_then(|r| self.drafts.get(r).cloned())
                 .unwrap_or_default();
             self.message.update(cx, |m, cx| m.set_text(&draft, cx));
-            self.project_id = project;
+            self.root = root;
         }
+        self.project_id = project;
         if self.project_id.is_none() {
             return cx.notify();
         }
@@ -251,19 +286,18 @@ impl ChangesView {
     }
 
     fn load_sync(&mut self, cx: &mut Context<Self>) {
-        let (Some(core), Some(id)) = (self.core(cx), self.project_id.clone()) else {
+        let Some(root) = self.root.clone() else {
             return;
         };
-        let thread = self.thread_id(cx);
         let task = cx.background_spawn(async move {
-            let root = core.source_root(&id, thread.as_deref())?;
-            Ok::<_, patchwork_core::Error>((id, patchwork_core::workspace::git_sync_state(&root)))
+            let state = patchwork_core::workspace::git_sync_state(&root);
+            Ok::<_, patchwork_core::Error>((root, state))
         });
         cx.spawn(async move |this, cx| {
             let read = task.await;
             this.update(cx, |this, cx| {
                 match read {
-                    Ok((id, state)) if Some(&id) == this.project_id.as_ref() => {
+                    Ok((root, state)) if Some(&root) == this.root.as_ref() => {
                         let branch = state.branch.clone();
                         this.sync = Some(state);
                         this.message.update(cx, |m, cx| {
@@ -288,19 +322,22 @@ impl ChangesView {
     }
 
     fn load_log(&mut self, cx: &mut Context<Self>) {
-        let (Some(core), Some(id)) = (self.core(cx), self.project_id.clone()) else {
+        let (Some(core), Some(id), Some(root)) =
+            (self.core(cx), self.project_id.clone(), self.root.clone())
+        else {
             return;
         };
         let limit = PAGE * self.pages;
         let thread = self.thread_id(cx);
         let task = cx.background_spawn(async move {
             let log = core.git_log(&id, thread.as_deref(), 0, limit);
-            (id, log)
+            (root, log)
         });
         cx.spawn(async move |this, cx| {
-            let (id, log) = task.await;
+            let (root, log) = task.await;
             this.update(cx, |this, cx| {
-                if Some(&id) != this.project_id.as_ref() {
+                // Another folder, or a longer page, was asked for since.
+                if Some(&root) != this.root.as_ref() || limit != PAGE * this.pages {
                     return;
                 }
                 match log {
@@ -317,28 +354,45 @@ impl ChangesView {
         .detach();
     }
 
-    /// Which of the focused reply's files are gone from the project (`useMissingFiles`).
+    /// Which of the focused reply's files are gone from the folder its task works in
+    /// (`useMissingFiles`).
     fn load_missing(&mut self, cx: &mut Context<Self>) {
-        let Some(workspace) = self.workspace.upgrade() else {
+        let (Some(workspace), Some(core)) = (self.workspace.upgrade(), self.core(cx)) else {
             return;
         };
         let w = workspace.read(cx);
         let files = reply_files(w);
-        let Some(root) = w.project().map(|p| p.path.clone()) else {
+        let Some((thread, _)) = w.change_focus.clone() else {
+            self.missing.clear();
             return;
         };
         if files.is_empty() {
             self.missing.clear();
             return;
         }
-        let task =
-            cx.background_spawn(
-                async move { patchwork_core::workspace::missing_files(&root, &files) },
-            );
+        let focus = w.change_focus.clone();
+        let task = cx.background_spawn(async move {
+            let root = core.thread_root(&thread)?;
+            Ok::<_, patchwork_core::Error>(patchwork_core::workspace::missing_files(&root, &files))
+        });
         cx.spawn(async move |this, cx| {
             let missing = task.await;
             this.update(cx, |this, cx| {
-                this.missing = missing.into_iter().collect();
+                // Another reply may have been focused since.
+                let current = this
+                    .workspace
+                    .upgrade()
+                    .and_then(|w| w.read(cx).change_focus.clone());
+                if current != focus {
+                    return;
+                }
+                match missing {
+                    Ok(missing) => this.missing = missing.into_iter().collect(),
+                    Err(e) => {
+                        log::warn!(error:% = e; "could not tell which files are gone: {{error}}");
+                        this.missing.clear();
+                    }
+                }
                 cx.notify();
             })
         })
