@@ -243,14 +243,18 @@ impl BotPage {
             }))
     }
 
-    /// The bot's conversations, the newest one's tools, and its routines.
+    /// The bot's conversations, the newest one's tools, and its routines. A chat app's bot
+    /// keeps one conversation, which only its chat app starts, so it lists none.
     fn details_tab(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let t = *theme(cx);
+        let gateway = self.bot.chat_app.is_some();
         div()
             .flex()
             .flex_col()
-            .child(heading("Conversations", &t))
-            .child(self.conversations(&t, cx))
+            .when(!gateway, |d| {
+                d.child(heading("Conversations", &t))
+                    .child(self.conversations(&t, cx))
+            })
             .children(self.this_conversation(&t, cx))
             .child(self.routines(&t, cx))
             .into_any_element()
@@ -264,6 +268,8 @@ impl BotPage {
                 .gap(px(8.))
                 .h(px(30.))
                 .px(px(8.))
+                // Its icon lines up with the first letter of the section's heading.
+                .mx(px(-8.))
                 .rounded(px(radius_sm()))
                 .hover(move |s| s.bg(hover))
                 .text_size(px(fs_md()))
