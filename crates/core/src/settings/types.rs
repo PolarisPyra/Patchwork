@@ -258,60 +258,27 @@ impl CheckSettings {
     }
 }
 
-/// Task worktrees: whether a fork shares its source task's worktree, and when a worktree's
-/// folder is cleaned up. Each has a default and the projects that answer for themselves.
+/// Task worktrees: whether a fork shares its source task's worktree, and what cleaning one up
+/// keeps.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct WorktreeSettings {
     /// Whether a fork gets a worktree of its own, rather than working in its source task's.
     pub fork_into_new: bool,
-    /// Projects that answer for themselves about forks, by project id.
-    pub fork_projects: HashMap<String, bool>,
-    /// The cleanup rules of a project without its own.
+    /// Whether deleting a task removes its worktree, and what keeps one from being cleaned up.
     pub cleanup: WorktreeCleanup,
-    /// Projects with cleanup rules of their own, by project id.
-    pub projects: HashMap<String, WorktreeCleanup>,
 }
 
-impl WorktreeSettings {
-    /// Whether a fork in `project_id` gets a worktree of its own.
-    #[must_use]
-    pub fn forks_into_new(&self, project_id: &str) -> bool {
-        self.fork_projects
-            .get(project_id)
-            .copied()
-            .unwrap_or(self.fork_into_new)
-    }
-
-    /// The cleanup rules `project_id` follows.
-    #[must_use]
-    pub fn cleanup_for(&self, project_id: &str) -> &WorktreeCleanup {
-        self.projects.get(project_id).unwrap_or(&self.cleanup)
-    }
-}
-
-/// When a task's worktree is cleaned up. Deleting the task removes the worktree with its
-/// branch; the other rules remove only its folder, which the task's next turn makes again.
+/// What happens to task worktrees as they are cleaned up.
+///
+/// Deleting the task removes the worktree with its branch; cleaning one up from the settings
+/// removes only its folder, which the task's next turn makes again.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "each flag is a separate rule the user turns on or off"
-)]
 pub struct WorktreeCleanup {
     /// Whether deleting a task removes its worktree.
     pub with_deleted_tasks: bool,
-    /// Whether a worktree whose branch the project or a merged pull request has is removed.
-    pub merged: bool,
-    /// Whether a worktree whose task has had no message for `inactive_days` is removed.
-    pub inactive: bool,
-    pub inactive_days: u32,
-    /// Whether a worktree whose task has been archived for `archived_days` is removed.
-    pub archived: bool,
-    pub archived_days: u32,
-    /// Whether a worktree with no commits or changes of its own is removed.
-    pub unchanged: bool,
-    /// Which local changes keep a worktree from every rule but deleting its task.
+    /// Which local changes keep a worktree from being cleaned up, unless its task is deleted.
     pub keep: KeepWorktrees,
 }
 
@@ -319,12 +286,6 @@ impl Default for WorktreeCleanup {
     fn default() -> Self {
         Self {
             with_deleted_tasks: true,
-            merged: false,
-            inactive: false,
-            inactive_days: 14,
-            archived: false,
-            archived_days: 0,
-            unchanged: false,
             keep: KeepWorktrees::default(),
         }
     }

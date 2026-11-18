@@ -100,12 +100,9 @@ pub(super) fn foot(
             .filter(|p| p.role == MessageRole::User)
             .map(|p| p.id.clone());
         let (thread_id, message_id) = (thread.id.clone(), m.id.clone());
-        // In a worktree, a second button forks the other way than the project's setting.
+        // In a worktree, a second button forks the other way than the setting.
         let other_fork = w.thread_folder().map(|_| {
-            let new = !thread
-                .project_id
-                .as_deref()
-                .is_some_and(|p| w.settings.worktrees.forks_into_new(p));
+            let new = thread.project_id.is_none() || !w.settings.worktrees.fork_into_new;
             let label = if new {
                 "Fork into a new worktree"
             } else {

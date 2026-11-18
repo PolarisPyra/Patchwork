@@ -1,5 +1,5 @@
-//! The worktree cleanup rules of the settings, which the background cleanup runs. A rule removes
-//! a task's worktree folder and keeps its branch and the task, so the task's next turn makes the
+//! Cleaning up task worktrees from the settings. Each kind removes the folders of the task
+//! worktrees it picks once, and keeps their branches and tasks, so a task's next turn makes its
 //! worktree again where it was.
 
 // Rust guideline compliant 2026-10-09
@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use crate::Core;
-use crate::settings::{KeepWorktrees, WorktreeCleanup};
+use crate::settings::KeepWorktrees;
 use crate::system::{now_ms, ssh};
 use crate::threads::Thread;
 use crate::workspace;
@@ -18,12 +18,30 @@ use super::worktree::{Worktree, git, in_progress, main_top, merge_lock, unshippe
 /// A day, in milliseconds.
 const DAY_MS: u64 = 24 * 60 * 60 * 1000;
 
+/// How long a task goes without a message before its worktree counts as inactive.
+const INACTIVE_DAYS: u32 = 14;
+
+/// Which task worktrees a cleanup removes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorktreeSweep {
+    /// Those whose branch the project or a merged pull request has.
+    Merged,
+    /// Those whose tasks have had no message for two weeks.
+    Inactive,
+    /// Those whose tasks are all archived.
+    Archived,
+    /// Those with no commits or changes of their own.
+    Unchanged,
+}
+
 impl Core {
-    /// Removes the folders of the task worktrees a cleanup rule picks: once for each worktree,
-    /// by the rules of its first task's project. A worktree a task is running in, or that a
-    /// merge, update or other step holds, is left for the next run.
-    pub(super) fn apply_cleanup_rules(&self) {
+    /// Removes the folders of the task worktrees `sweep` picks, once for each worktree, and
+    /// returns how many it removed. A worktree the keep setting keeps, a task is running in, or
+    /// a merge, update or other step holds, stays.
+    pub fn clean_up_worktrees(&self, sweep: WorktreeSweep) -> usize {
+        let keep = self.store.settings().worktrees.cleanup.keep;
         let mut seen = HashSet::new();
+        let mut removed = 0;
         for record in self.store.state_keys("worktree:") {
             let Some(id) = record.strip_prefix("worktree:") else {
                 continue;
@@ -42,58 +60,56 @@ impl Core {
             let Some(first) = threads.iter().min_by_key(|t| t.created_at) else {
                 continue;
             };
-            let Some(project) = first.project_id.as_deref() else {
-                continue;
-            };
-            let rules = self.cleanup_rules(Some(project));
-            if !(rules.merged || rules.inactive || rules.archived || rules.unchanged) {
-                continue;
-            }
-            if let Err(e) = self.clean_by_rules(&first.id, &worktree, &threads, &rules) {
-                log::warn!(branch:% = worktree.branch, error:% = e; "could not clean up the worktree on {{branch}}: {{error}}");
+            match self.clean_by(sweep, keep, &first.id, &worktree, &threads) {
+                Ok(true) => removed += 1,
+                Ok(false) => {}
+                Err(e) => {
+                    log::warn!(branch:% = worktree.branch, error:% = e; "could not clean up the worktree on {{branch}}: {{error}}");
+                }
             }
         }
+        removed
     }
 
-    /// Removes the folder of `worktree`, which `threads` share with `owner` first, when one of
-    /// `rules` picks it and its keep rule doesn't keep it.
-    fn clean_by_rules(
+    /// Removes the folder of `worktree`, which `threads` share with `owner` first, when `sweep`
+    /// picks it and `keep` doesn't keep it. Returns whether it did.
+    fn clean_by(
         &self,
+        sweep: WorktreeSweep,
+        keep: KeepWorktrees,
         owner: &str,
         worktree: &Worktree,
         threads: &[Thread],
-        rules: &WorktreeCleanup,
-    ) -> Result<(), crate::Error> {
+    ) -> Result<bool, crate::Error> {
         let Some(top) = main_top(&worktree.top) else {
-            return Ok(());
+            return Ok(false);
         };
         if ssh::is_remote(&top) || !Path::new(&worktree.top).is_dir() {
-            return Ok(());
+            return Ok(false);
         }
         // Taken before the busy check, which a turn makes after claiming its start.
         let Ok(_step) = self.hold_worktree(owner) else {
-            return Ok(());
+            return Ok(false);
         };
         if self.busy(owner) || in_progress(&worktree.top) {
-            return Ok(());
+            return Ok(false);
         }
         let _merging = merge_lock(&top, || {})?;
-        if kept(worktree, rules.keep)? {
-            return Ok(());
+        if kept(worktree, keep)? {
+            return Ok(false);
         }
-        let reason = if rules.archived && archived_for(threads, rules.archived_days) {
-            "archived"
-        } else if rules.inactive && inactive_for(threads, rules.inactive_days) {
-            "inactive"
-        } else if rules.unchanged && self.unchanged(owner)? {
-            "unchanged"
-        } else if rules.merged && merged(worktree, &top)? {
-            "merged"
-        } else {
-            return Ok(());
+        let picked = match sweep {
+            WorktreeSweep::Archived => archived(threads),
+            WorktreeSweep::Inactive => inactive_for(threads, INACTIVE_DAYS),
+            WorktreeSweep::Unchanged => self.unchanged(owner)?,
+            WorktreeSweep::Merged => merged(worktree, &top)?,
         };
-        log::info!(branch:% = worktree.branch, reason:%; "cleaning up the {{reason}} worktree on {{branch}}");
-        self.park_worktree(worktree, &top)
+        if !picked {
+            return Ok(false);
+        }
+        log::info!(branch:% = worktree.branch, sweep:? = sweep; "cleaning up the worktree on {{branch}}: {{sweep}}");
+        self.park_worktree(worktree, &top)?;
+        Ok(true)
     }
 
     /// Whether task `thread_id`'s worktree has neither commits nor changes of its own.
@@ -115,13 +131,9 @@ fn kept(worktree: &Worktree, keep: KeepWorktrees) -> Result<bool, crate::Error> 
     Ok(!git(&worktree.top, args)?.trim().is_empty())
 }
 
-/// Whether every task in `threads` is archived, the last of them `days` ago or longer.
-fn archived_for(threads: &[Thread], days: u32) -> bool {
-    let last = threads
-        .iter()
-        .map(|t| t.archived_at)
-        .try_fold(0, |last, at| at.map(|at| last.max(at)));
-    last.is_some_and(|at| now_ms().saturating_sub(at) >= u64::from(days) * DAY_MS)
+/// Whether every task in `threads` is archived.
+fn archived(threads: &[Thread]) -> bool {
+    threads.iter().all(|t| t.archived_at.is_some())
 }
 
 /// Whether no task in `threads` has had a message for `days` days.
