@@ -10,7 +10,6 @@ use gpui::{
     Div, FocusHandle, deferred, FontWeight, Role, SharedString, Stateful, Window, div, prelude::*,
     px, relative,
 };
-use patchwork_core::provider::AgentKind;
 use patchwork_core::threads::{Role as MessageRole, StepStatus, Thread, ToolCall};
 
 use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_lg, Theme};
@@ -108,16 +107,6 @@ impl Workspace {
         })
         .detach();
     }
-
-    fn stop_subagent(&mut self, tool_id: &str, cx: &mut Context<Self>) {
-        let Some(thread) = self.thread.as_ref().map(|t| t.id.clone()) else {
-            return;
-        };
-        if let Err(e) = self.core.stop_subagent(&thread, tool_id) {
-            self.error = Some(e.to_string());
-        }
-        cx.notify();
-    }
 }
 
 /// Floating card to the left of a row: what the subagent is and what it did last.
@@ -210,8 +199,7 @@ fn details_card(tool: &ToolCall, tools: &[&ToolCall], elapsed: Option<u64>, t: &
         }))
 }
 
-/// One subagent: provider avatar with a status dot, title, elapsed time, and a stop button while
-/// running.
+/// One subagent: provider avatar with a status dot, title, and elapsed time.
 #[expect(
     clippy::too_many_arguments,
     reason = "each argument is a separate piece of what it draws"
@@ -232,7 +220,6 @@ fn subagent_row(
         .or_insert_with(|| cx.focus_handle())
         .clone();
     let elapsed = elapsed_ms(tool, now);
-    let stoppable = tool.status == StepStatus::Running && thread.agent == AgentKind::Claude;
     let title = title_of(tool);
     let dot = match tool.status {
         StepStatus::Pending => t.text_subtle,
@@ -241,7 +228,6 @@ fn subagent_row(
         StepStatus::Error => t.danger,
     };
     let hover = t.bg_hover;
-    let group = SharedString::from(format!("subagent-{}", tool.id));
     let trailing = if tool.status == StepStatus::Error {
         div()
             .text_size(px(fs_xs()))
@@ -250,44 +236,16 @@ fn subagent_row(
             .into_any_element()
     } else {
         div()
-            .when(stoppable, |d| {
-                d.group_hover(group.clone(), |s| s.opacity(0.))
-            })
             .text_size(px(fs_xs()))
             .text_color(t.text_subtle)
             .children(elapsed.map(compact_elapsed))
             .into_any_element()
     };
-    let stop = stoppable.then(|| {
-        let id = tool.id.clone();
-        button(
-            SharedString::from(format!("stop-subagent-{}", tool.id)),
-            format!("Stop subagent {title}"),
-        )
-        .tooltip(crate::ui::tooltip("Stop subagent"))
-        .absolute()
-        .right_0()
-        .size(px(20.))
-        .justify_center()
-        .rounded(px(radius()))
-        .text_color(t.danger)
-        .opacity(0.)
-        .group_hover(group.clone(), |s| s.opacity(1.))
-        .focus(|s| s.opacity(1.))
-        .hover(move |s| s.bg(hover))
-        .child(icon("square-fill", 10.))
-        .on_click(cx.listener(move |w, _, _, cx| {
-            // The row behind opens the thread; the stop button only stops.
-            cx.stop_propagation();
-            w.stop_subagent(&id, cx);
-        }))
-    });
     // Focus shows the details too, so the keyboard reaches what hovering shows.
     let shown = lineage.details.as_deref() == Some(tool.id.as_str()) || focus.is_focused(window);
     let hover_id = tool.id.clone();
     div()
         .id(SharedString::from(format!("subagent-row-{}", tool.id)))
-        .group(group)
         .role(Role::ListItem)
         .aria_label(title.clone())
         .tab_index(0)
@@ -349,8 +307,7 @@ fn subagent_row(
                 .items_center()
                 .justify_end()
                 .min_w(px(20.))
-                .child(trailing)
-                .children(stop),
+                .child(trailing),
         )
         .when(shown, |d| d.child(details_card(tool, tools, elapsed, t)))
 }

@@ -155,9 +155,6 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
             };
             (Info, "goal", None, text)
         }
-        AgentEvent::GoalChecking { message_id } => {
-            (Info, "goal checking", Some(message_id), String::new())
-        }
         AgentEvent::Compacting { message_id } => {
             (Info, "compacting", Some(message_id), String::new())
         }

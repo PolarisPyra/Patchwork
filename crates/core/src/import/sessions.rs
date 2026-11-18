@@ -171,7 +171,6 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
         background: None,
         archived_at: None,
         parent: None,
-        plan_mode: false,
         slash_commands: vec![],
         messages: session
             .messages

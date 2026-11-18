@@ -1,23 +1,18 @@
-//! The goal on the composer's top edge: its state and usage, then the objective. Its last state
-//! remains visible until the agent confirms the goal is cleared.
+//! The goal on the composer's top edge: its state and usage, then the objective.
 
 // Rust guideline compliant 2026-10-09
 
 use std::sync::Arc;
 use gpui::{FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
-use patchwork_core::provider::AgentKind;
 use patchwork_core::threads::{Goal, GoalStatus};
 
 use crate::ui::theme::{fs_sm, fs_xs, radius_sm, Theme};
-use crate::ui::{button, format_tokens, full_elapsed, icon, now_ms, tooltip};
+use crate::ui::{button, full_elapsed, icon, now_ms, tooltip};
 use crate::workspace::{Workspace, is_working};
 
-/// A goal clear in the banner: pending while its error is none, failed otherwise. `ran` is set
-/// once the clear's run is seen.
+/// A goal clear that failed, for the goal `key` names.
 pub struct GoalClear {
     key: String,
-    error: Option<String>,
-    ran: bool,
 }
 
 /// The tallest the objective grows before it scrolls: about five lines, so a long goal leaves the
@@ -29,30 +24,20 @@ fn label(goal: &Goal, working: bool) -> &'static str {
         GoalStatus::Active if !working => "Goal set",
         GoalStatus::Active => "Pursuing goal",
         GoalStatus::Paused => "Goal paused",
+        GoalStatus::Stalled => "Goal stalled",
         GoalStatus::Blocked => "Goal blocked",
-        GoalStatus::UsageLimited => "Goal stopped at usage limit",
-        GoalStatus::BudgetLimited => "Goal reached token budget",
         GoalStatus::Complete => "Goal complete",
     }
 }
 
 /// A goal that stopped part way and can carry on. A blocked goal has been judged impossible.
 fn can_resume(goal: &Goal) -> bool {
-    matches!(
-        goal.status,
-        GoalStatus::Paused | GoalStatus::UsageLimited | GoalStatus::BudgetLimited
-    )
+    matches!(goal.status, GoalStatus::Paused | GoalStatus::Stalled)
 }
 
-/// The tokens, time, and checks of a goal, joined for the banner. Time shows from a minute.
+/// The time and checks of a goal, joined for the banner. Time shows from a minute.
 fn usage(goal: &Goal, seconds: u64) -> Option<String> {
     let mut usage = Vec::new();
-    if let Some(used) = goal.tokens_used.filter(|&n| n > 0) {
-        usage.push(match goal.token_budget {
-            None => format!("{} tokens", format_tokens(used)),
-            Some(budget) => format!("{} / {} tokens", format_tokens(used), format_tokens(budget)),
-        });
-    }
     if seconds >= 60 {
         usage.push(full_elapsed(seconds * 1000));
     }
@@ -86,7 +71,7 @@ pub fn strip_action(id: &'static str, label: &'static str, t: &Theme) -> Statefu
 }
 
 impl Workspace {
-    /// Clears the goal, in the agent's session too. The banner offers it once no turn is running.
+    /// Clears the goal. A reply still running finishes, and nothing carries the goal on after it.
     fn clear_goal(&mut self, cx: &mut Context<Self>) {
         let Some((id, goal)) = self
             .thread
@@ -96,20 +81,15 @@ impl Workspace {
             return;
         };
         let key = goal_key(&id, &goal);
-        self.goal_clear = Some(GoalClear {
-            key: key.clone(),
-            error: None,
-            ran: false,
-        });
+        self.goal_clear = None;
         let core = Arc::clone(&self.core);
         let task = cx.background_spawn(async move { core.stop_goal(&id) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             this.update(cx, |this, cx| {
-                if let Err(e) = result
-                    && let Some(clear) = this.goal_clear.as_mut().filter(|c| c.key == key)
-                {
-                    clear.error = Some(e.to_string());
+                if let Err(e) = result {
+                    log::warn!(error:% = e; "failed to clear a goal: {{error}}");
+                    this.goal_clear = Some(GoalClear { key });
                 }
                 this.reload(cx);
             })
@@ -118,18 +98,9 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Codex takes /goal resume; Claude and Antigravity have no such command, so a message
-    /// carries the goal on.
+    /// Carries the goal on in a new turn.
     fn resume_goal(&mut self, cx: &mut Context<Self>) {
-        let Some(agent) = self.thread.as_ref().map(|t| t.agent) else {
-            return;
-        };
-        let text = if agent == AgentKind::Codex {
-            "/goal resume"
-        } else {
-            "Continue the goal."
-        };
-        self.send(text.into(), Vec::new(), None, None, cx);
+        self.send("/goal resume".into(), Vec::new(), None, None, cx);
     }
 }
 
@@ -143,32 +114,15 @@ pub fn goal_banner(
     let goal = thread.goal.clone()?;
     let working = is_working(thread);
     let key = goal_key(&thread.id, &goal);
-    // A clear still pending once its run has ended was not confirmed by the agent, so the
-    // banner goes back to offering it.
-    if let Some(clear) = w.goal_clear.as_mut().filter(|c| c.error.is_none()) {
-        if working {
-            clear.ran = true;
-        } else if clear.ran {
-            w.goal_clear = None;
-        }
-    }
-    let clear = w.goal_clear.as_ref().filter(|c| c.key == key);
-    let clearing = clear.is_some_and(|c| c.error.is_none());
-    let clear_error = clear.and_then(|c| c.error.clone());
+    let clear_failed = w.goal_clear.as_ref().is_some_and(|c| c.key == key);
     let active = goal.status == GoalStatus::Active;
     // Only an active goal's elapsed time moves; the others show the time they stopped at.
     if active {
         w.tick_each_second(cx);
     }
-    let seconds = goal
-        .time_used_seconds
-        .unwrap_or_else(|| now_ms().saturating_sub(goal.started_at) / 1000);
+    let seconds = goal.seconds_used(now_ms());
     let usage = usage(&goal, seconds);
-    let label: SharedString = if clearing {
-        "Clearing goal".into()
-    } else {
-        label(&goal, working).into()
-    };
+    let label: SharedString = label(&goal, working).into();
     let open = w.goal_closed != Some(goal.started_at);
     let (muted, fg) = (t.text_muted, t.text);
     let started = goal.started_at;
@@ -225,21 +179,21 @@ pub fn goal_banner(
         .flex_none()
         .items_center()
         .gap(px(8.))
-        .when(!clearing && working && active, |d| {
+        .when(working && active, |d| {
             d.child(
                 strip_action("goal-stop", "Stop", t)
                     .tooltip(tooltip("Pause the goal"))
                     .on_click(cx.listener(|w, _, _, cx| w.stop(cx))),
             )
         })
-        .when(!clearing && !working && can_resume(&goal), |d| {
+        .when(!working && can_resume(&goal), |d| {
             d.child(
                 strip_action("goal-resume", "Resume", t)
                     .tooltip(tooltip("Carry on with the goal"))
                     .on_click(cx.listener(|w, _, _, cx| w.resume_goal(cx))),
             )
         })
-        .when(!clearing && !working && clear_error.is_some(), |d| {
+        .when(clear_failed, |d| {
             d.child(
                 div()
                     .id("goal-clear-error")
@@ -250,17 +204,11 @@ pub fn goal_banner(
                     .child("Couldn't clear goal"),
             )
         })
-        .when(!clearing && !working, |d| {
-            let label = if clear_error.is_some() {
-                "Retry"
-            } else {
-                "Clear goal"
-            };
-            d.child(
-                strip_action("goal-clear", label, t)
-                    .tooltip(tooltip("Drop the goal"))
-                    .on_click(cx.listener(|w, _, _, cx| w.clear_goal(cx))),
-            )
+        .child({
+            let label = if clear_failed { "Retry" } else { "Clear goal" };
+            strip_action("goal-clear", label, t)
+                .tooltip(tooltip("Drop the goal"))
+                .on_click(cx.listener(|w, _, _, cx| w.clear_goal(cx)))
         });
     Some(
         div()

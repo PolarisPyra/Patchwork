@@ -30,7 +30,6 @@ use crate::orchestration::messages::queue::Steers;
 use crate::orchestration::output::stream::publish;
 use crate::orchestration::output::stream::Unsaved;
 use crate::orchestration::tasks::subagents::Controls;
-use crate::orchestration::tasks::subagents::Tasks;
 
 /// Everything the stdout reader needs to persist and publish one turn's events.
 #[expect(
@@ -54,7 +53,6 @@ pub(in crate::orchestration) struct Turn {
     pub(in crate::orchestration) native: NativeTurn,
     pub(in crate::orchestration) steers: Steers,
     pub(in crate::orchestration) queue: Queue,
-    pub(in crate::orchestration) tasks: Tasks,
     pub(in crate::orchestration) controls: Controls,
     pub(in crate::orchestration) idle: Arc<AtomicBool>,
     /// When the agent last said anything (ms since epoch), which `watch` reads to tell the user
@@ -70,7 +68,6 @@ pub(in crate::orchestration) struct Turn {
     /// The turn's message carried the conversation so far, for an agent with no session of it.
     pub(in crate::orchestration) sent_context: bool,
     pub(in crate::orchestration) mode: AccessMode,
-    pub(in crate::orchestration) plan: bool,
     pub(in crate::orchestration) effort: Option<String>,
     pub(in crate::orchestration) compact_window: u64,
     /// What `spec` passes as `TurnSpec::unlimited_steps`.
@@ -161,7 +158,6 @@ impl Turn {
             vision_model: self.vision_model.as_ref(),
             text: &self.text,
             mode: self.mode,
-            plan: self.plan,
             effort: self.effort.as_deref(),
             compact_window: self.compact_window,
             unlimited_steps: self.unlimited_steps,

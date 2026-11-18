@@ -426,8 +426,9 @@ fn transcript_row(
     });
     // Whatever the chat's first message draws as keeps the gap above it.
     let top = first && message == 0;
-    if m.role == MessageRole::User && rail::is_goal_clear(&m.text) {
-        // The green notice in the reply already says the goal was cleared.
+    if m.role == MessageRole::User && rail::is_goal_upkeep(&m.text) {
+        // The goal above the composer already shows what the command did, and a continuation
+        // only carries the goal on.
         return div()
             .id(row)
             .when(top, |d| d.pt(px(24.)))

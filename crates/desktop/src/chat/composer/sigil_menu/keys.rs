@@ -6,7 +6,6 @@ use super::commands::{Runs, runs_of};
 use std::ops::Range;
 use std::sync::Arc;
 use gpui::{PromptLevel, Window, prelude::*};
-use patchwork_core::provider::AgentKind;
 use crate::chat::composer::Composer;
 use crate::chat::composer::menus::Menu;
 use crate::ui::sigils::{SigilKind, Sigils};
@@ -153,27 +152,6 @@ impl Composer {
         match name {
             "/compact" => workspace.update(cx, |w, cx| w.send_command("/compact", cx)),
             "/model" => self.open_menu(Menu::Model, window, cx),
-            "/plan" | "/default" => {
-                let on = name == "/plan";
-                let picks = self.picks(workspace.read(cx));
-                let thread = workspace.read(cx).thread.as_ref().map(|t| t.id.clone());
-                if picks.agent == AgentKind::Antigravity {
-                    workspace.update(cx, |w, cx| {
-                        w.error = Some("Plan mode is not supported by Antigravity.".into());
-                        cx.notify();
-                    });
-                } else if let Some(id) = thread {
-                    workspace.update(cx, |w, cx| {
-                        w.change(
-                            "change plan mode",
-                            move |core| core.set_thread_plan_mode(&id, on),
-                            cx,
-                        );
-                    });
-                } else {
-                    self.draft.plan_mode = on;
-                }
-            }
             // /new starts a fresh chat; the current one is kept in the sidebar.
             "/new" => workspace.update(cx, crate::workspace::Workspace::new_chat),
             _ => {}

@@ -105,7 +105,6 @@ impl Render for Composer {
         let queue_next = self.queue_next.unwrap_or_else(|| queue_by_default(w));
         // The send menu checks what the button does.
         self.queues = queue_next;
-        let plan_ready = w.ready_plan().is_some();
         let can_compact = thread.is_some_and(|t| !t.messages.is_empty()) && !working;
         let editor = self.editor.read(cx);
         let empty = editor.content.trim().is_empty() && self.attachments.is_empty();
@@ -170,8 +169,6 @@ impl Render for Composer {
         });
         let send_label = if editing {
             "Update queued message"
-        } else if !working && empty && plan_ready {
-            "Implement plan"
         } else if !working {
             "Send"
         } else if queue_next {
@@ -181,8 +178,6 @@ impl Render for Composer {
         };
         let send_tip = if editing {
             "Update queued message"
-        } else if !working && empty && plan_ready {
-            "Implement plan"
         } else if !working {
             "Send"
         } else if queue_next {
@@ -192,8 +187,7 @@ impl Render for Composer {
         };
         let split = working && !editing;
         let send = (!working || !empty || editing).then(|| {
-            // With a plan ready, an empty send implements it, as Enter does.
-            let blocked = folder_missing || (empty && !editing && !plan_ready);
+            let blocked = folder_missing || (empty && !editing);
             let base = send_button("send", send_label, !blocked, t.text, t.bg_editor)
                 .tooltip(tooltip(send_tip))
                 .map(|b| {
@@ -207,7 +201,7 @@ impl Render for Composer {
             if blocked {
                 base
             } else {
-                base.on_click(cx.listener(|this, _, window, cx| this.send(false, true, window, cx)))
+                base.on_click(cx.listener(|this, _, window, cx| this.send(false, window, cx)))
             }
         });
         let send_mode = (split && !empty).then(|| {

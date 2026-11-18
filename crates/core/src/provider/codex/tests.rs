@@ -29,7 +29,6 @@ fn spec(session_id: Option<&'static str>, mode: AccessMode) -> TurnSpec<'static>
         vision_model: None,
         text: "go",
         mode,
-        plan: false,
         effort: None,
         compact_window: 0,
         unlimited_steps: false,
@@ -74,10 +73,9 @@ fn codex_starts_or_resumes_then_starts_the_turn() {
     let response = json!({"id": THREAD_REQUEST, "result": {"thread": {
         "id": "t1", "model": "codex-resolved-model"
     }}});
-    let mut plan_spec = spec(None, AccessMode::Supervised);
-    plan_spec.model = None;
-    plan_spec.plan = true;
-    let out = parse(&response, &plan_spec, "m1");
+    let mut default_spec = spec(None, AccessMode::Supervised);
+    default_spec.model = None;
+    let out = parse(&response, &default_spec, "m1");
     assert!(matches!(&out[0], Parsed::SessionId(id) if id == "t1"));
     let turn = &sent(&out)[0];
     assert_eq!(turn["method"], "turn/start");
@@ -85,7 +83,7 @@ fn codex_starts_or_resumes_then_starts_the_turn() {
     assert_eq!(turn["params"]["input"][0]["text"], "go");
     assert_eq!(turn["params"]["approvalPolicy"], "untrusted");
     assert_eq!(turn["params"]["sandboxPolicy"]["type"], "readOnly");
-    assert_eq!(turn["params"]["collaborationMode"]["mode"], "plan");
+    assert_eq!(turn["params"]["collaborationMode"]["mode"], "default");
     assert_eq!(
         turn["params"]["collaborationMode"]["settings"]["model"],
         "codex-resolved-model"

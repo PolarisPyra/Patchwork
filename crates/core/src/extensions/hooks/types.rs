@@ -40,14 +40,7 @@ pub struct Hook {
 #[serde(rename_all = "camelCase")]
 pub enum HookEvent {
     UserPromptSubmit,
-    SessionStart,
     PreToolUse,
-    PermissionRequest,
-    PostToolUse,
-    PreCompact,
-    PostCompact,
-    SubagentStart,
-    SubagentStop,
     Stop,
     Interrupt,
     SessionEnd,

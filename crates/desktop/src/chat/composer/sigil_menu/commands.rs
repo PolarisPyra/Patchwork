@@ -19,16 +19,10 @@ pub(super) enum Runs {
 }
 
 /// `SLASH_COMMANDS`: the commands Patchwork offers for every agent.
-pub(super) const SLASH_COMMANDS: [(&str, &str, Runs); 7] = [
+pub(super) const SLASH_COMMANDS: [(&str, &str, Runs); 5] = [
     (
         "/model",
         "Switch the response model for this chat",
-        Runs::Pick,
-    ),
-    ("/plan", "Switch this chat into plan mode", Runs::Pick),
-    (
-        "/default",
-        "Switch this chat back to normal mode",
         Runs::Pick,
     ),
     (
@@ -171,8 +165,6 @@ pub(super) fn commands(agent: AgentKind, provider: &[ProviderSlashCommand]) -> V
     };
     SLASH_COMMANDS
         .iter()
-        // Patchwork does not run /goal in OpenCode.
-        .filter(|(name, _, _)| agent != AgentKind::OpenCode || *name != "/goal")
         .map(|&(name, description, _)| Item {
             name: name.into(),
             description: description.into(),

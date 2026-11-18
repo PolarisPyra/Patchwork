@@ -1,20 +1,16 @@
-//! A thread's plans above the composer: the steps of the
-//! reply running now, and the "Plan ready" bar for a plan the last reply proposed in plan mode.
+//! A thread's plan above the composer: the steps of the reply running now.
 
 // Rust guideline compliant 2026-10-09
 
 use std::time::Duration;
 
-use gpui::{Div, FontWeight, Role, Stateful, div, prelude::*, px, relative};
-use patchwork_core::threads::{
-    ApprovalStatus, MessageStatus, NewThread, Part, PlanStep, Role as MessageRole, StepStatus,
-};
+use gpui::{Div, FontWeight, Role, div, prelude::*, px, relative};
+use patchwork_core::threads::{MessageStatus, PlanStep, Role as MessageRole, StepStatus};
 
 use crate::ui::theme::{fs_sm, radius, Theme};
-use crate::ui::{BtnKind, btn, button, icon, mix, spinner};
+use crate::ui::{button, icon, mix, spinner};
 use crate::workspace::{Workspace, is_working};
 
-const IMPLEMENT: &str = "PLEASE IMPLEMENT THIS PLAN:\n";
 /// How long a finished list stays before it folds away.
 const FOLD_MS: u64 = 1200;
 
@@ -102,58 +98,6 @@ impl Workspace {
             .detach();
         }
         steps
-    }
-
-    /// The plan the last reply proposed in plan mode, once nothing runs or waits on an answer.
-    pub fn ready_plan(&self) -> Option<String> {
-        let thread = self.thread.as_ref()?;
-        let last = thread.messages.iter().rev().find(|m| !m.queued)?;
-        let asking = thread
-            .messages
-            .iter()
-            .flat_map(|m| &m.approvals)
-            .any(|a| a.status == ApprovalStatus::Pending);
-        if !thread.plan_mode || is_working(thread) || asking || last.role != MessageRole::Assistant
-        {
-            return None;
-        }
-        last.parts.iter().rev().find_map(|p| match p {
-            Part::Plan { text } => Some(text.clone()),
-            _ => None,
-        })
-    }
-
-    /// Implementing leaves plan mode, in this thread or a new one named after the plan.
-    pub fn implement_plan(&mut self, new_thread: bool, cx: &mut Context<Self>) {
-        let (Some(thread), Some(plan)) = (&self.thread, self.ready_plan()) else {
-            return;
-        };
-        let id = thread.id.clone();
-        let new = new_thread.then(|| NewThread {
-            id: None,
-            project_id: thread.project_id.clone(),
-            agent: thread.agent,
-            model: thread.model.clone(),
-            access_mode: thread.access_mode,
-            effort: thread.effort.clone(),
-            compact_window: thread.compact_window,
-            plan_mode: false,
-        });
-        let text = format!("{IMPLEMENT}{}", plan.trim());
-        self.error = None;
-        if let Some(new) = new {
-            let title: String = format!("Implement {}", plan_title(&plan))
-                .chars()
-                .take(60)
-                .collect();
-            self.start_thread(new, &title, text, cx);
-        } else {
-            if let Err(e) = self.core.set_thread_plan_mode(&id, false) {
-                self.error = Some(e.to_string());
-            }
-            self.send(text, Vec::new(), None, None, cx);
-        }
-        cx.notify();
     }
 }
 
@@ -282,60 +226,4 @@ pub fn plan_panel(
                     })),
             )
         })
-}
-
-/// "Plan ready": the plan's title, with Implement here or in a new thread.
-pub fn ready_bar(plan: &str, t: &Theme, cx: &mut Context<Workspace>) -> Stateful<Div> {
-    div()
-        .id("plan-ready")
-        .tooltip(crate::ui::tooltip(
-            "Write feedback to refine the plan, or send nothing to implement it",
-        ))
-        .mb(px(6.))
-        .flex()
-        .items_center()
-        .gap(px(8.))
-        .rounded(px(radius()))
-        .border_1()
-        .border_color(t.border)
-        .bg(t.bg_panel)
-        .px(px(10.))
-        .py(px(6.))
-        .text_size(px(fs_sm()))
-        .child(
-            icon("list-checks", 14.)
-                .flex_none()
-                .text_color(t.text_muted),
-        )
-        .child(
-            div()
-                .flex_none()
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(t.text_muted)
-                .child("Plan ready"),
-        )
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .text_color(t.text)
-                .child(plan_title(plan)),
-        )
-        .child(
-            btn(
-                "implement-new",
-                "Implement in a new thread",
-                BtnKind::Plain,
-                false,
-                t,
-            )
-            .child("Implement in a new thread")
-            .on_click(cx.listener(|w, _, _, cx| w.implement_plan(true, cx))),
-        )
-        .child(
-            btn("implement", "Implement", BtnKind::Primary, false, t)
-                .child("Implement")
-                .on_click(cx.listener(|w, _, _, cx| w.implement_plan(false, cx))),
-        )
 }

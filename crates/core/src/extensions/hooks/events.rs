@@ -5,16 +5,9 @@
 use super::HookEvent;
 
 impl HookEvent {
-    pub const ALL: [HookEvent; 12] = [
+    pub const ALL: [HookEvent; 5] = [
         HookEvent::UserPromptSubmit,
-        HookEvent::SessionStart,
         HookEvent::PreToolUse,
-        HookEvent::PermissionRequest,
-        HookEvent::PostToolUse,
-        HookEvent::PreCompact,
-        HookEvent::PostCompact,
-        HookEvent::SubagentStart,
-        HookEvent::SubagentStop,
         HookEvent::Stop,
         HookEvent::Interrupt,
         HookEvent::SessionEnd,
@@ -25,14 +18,7 @@ impl HookEvent {
     pub fn name(self) -> &'static str {
         match self {
             HookEvent::UserPromptSubmit => "userPromptSubmit",
-            HookEvent::SessionStart => "sessionStart",
             HookEvent::PreToolUse => "preToolUse",
-            HookEvent::PermissionRequest => "permissionRequest",
-            HookEvent::PostToolUse => "postToolUse",
-            HookEvent::PreCompact => "preCompact",
-            HookEvent::PostCompact => "postCompact",
-            HookEvent::SubagentStart => "subagentStart",
-            HookEvent::SubagentStop => "subagentStop",
             HookEvent::Stop => "stop",
             HookEvent::Interrupt => "interrupt",
             HookEvent::SessionEnd => "sessionEnd",

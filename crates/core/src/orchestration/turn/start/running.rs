@@ -19,7 +19,6 @@ use crate::orchestration::turn::process::Stdin;
 use crate::orchestration::messages::queue::Queue;
 use crate::orchestration::messages::queue::Steers;
 use crate::orchestration::tasks::subagents::Controls;
-use crate::orchestration::tasks::subagents::Tasks;
 
 /// An approval waiting for the user.
 pub(in crate::orchestration) struct PendingApproval {
@@ -53,7 +52,6 @@ pub(in crate::orchestration) struct RunningTurn {
     pub(in crate::orchestration) native: NativeTurn,
     pub(in crate::orchestration) steers: Steers,
     pub(in crate::orchestration) queue: Queue,
-    pub(in crate::orchestration) tasks: Tasks,
     pub(in crate::orchestration) controls: Controls,
     /// The agent has finished its reply and stays up only for shell commands it left running;
     /// the thread counts as idle, and the next message starts a new reply in this process.

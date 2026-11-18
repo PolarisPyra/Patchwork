@@ -465,7 +465,6 @@ impl Core {
             access_mode: settings.gateway.access,
             effort: (agent == bot.agent).then(|| bot.effort.clone()).flatten(),
             compact_window: None,
-            plan_mode: false,
         })?;
         let id = thread.id.clone();
         // Linked before the first turn, which reads it for the bot's instructions.

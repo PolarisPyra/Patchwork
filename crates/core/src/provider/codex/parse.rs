@@ -5,7 +5,6 @@
 use serde_json::{Value, json};
 use super::subagents::{SUBAGENT_READ, subagent_started};
 
-use crate::provider::{GoalCommand, goal_command};
 use crate::permissions::Target;
 use crate::events::AgentEvent;
 use crate::threads::TokenUsage;
@@ -15,7 +14,6 @@ use crate::threads::Question;
 use crate::threads::QuestionOption;
 use crate::threads::Refusal;
 use crate::provider::file_touched;
-use crate::provider::GoalUpdate;
 use crate::provider::one_line;
 use crate::provider::Parsed;
 use crate::provider::relative;
@@ -27,8 +25,8 @@ use crate::provider::ToolStart;
 use crate::provider::TurnSpec;
 
 use super::{
-    begin, goal_of, goal_reply, GOAL_REQUEST, GOAL_SETUP, INTERRUPT_REQUEST, SKILLS_REQUEST,
-    STEER_REQUEST, thread_params, THREAD_REQUEST, TURN_REQUEST,
+    begin, GOAL_CLEAR_REQUEST, INTERRUPT_REQUEST, SKILLS_REQUEST, STEER_REQUEST, thread_params,
+    THREAD_REQUEST,
 };
 
 /// Maps `item/started` / `item/completed`.
@@ -315,18 +313,15 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 .and_then(|id| id.strip_prefix(SUBAGENT_READ)?.trim_start().split_once(' '));
             if let Some((thread, name)) = subagent {
                 out.push(subagent_started(thread, name, v, spec, message_id));
-            } else if id == SKILLS_REQUEST || id == INTERRUPT_REQUEST {
-                // Nothing to do: the skills folder is only an addition, and Stop sends SIGTERM to
-                // an agent that does not end its turn when interrupted.
+            } else if id == SKILLS_REQUEST || id == INTERRUPT_REQUEST || id == GOAL_CLEAR_REQUEST {
+                // Nothing to do: the skills folder is only an addition, Stop sends SIGTERM to an
+                // agent that does not end its turn when interrupted, and a thread with no goal of
+                // Codex's own has nothing to clear.
             } else if id == STEER_REQUEST {
                 out.push(match error {
                     Some(message) => Parsed::SteerRejected(message.into()),
                     None => Parsed::Steered,
                 });
-            } else if id == GOAL_SETUP {
-                out.extend(
-                    goal_of(&v["result"]["goal"]).map(|g| Parsed::Goal(GoalUpdate::Reported(g))),
-                );
             } else if id == THREAD_REQUEST
                 && spec.session_id.is_some()
                 && error.is_some_and(|m| m.starts_with("no rollout found"))
@@ -348,30 +343,6 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                     thread_id,
                     v["result"]["thread"]["model"].as_str(),
                 ));
-            } else if id == TURN_REQUEST
-                && matches!(
-                    goal_command(spec.text),
-                    Some(GoalCommand::Set(_) | GoalCommand::Resume)
-                )
-                && let Some(thread_id) = spec.session_id
-            {
-                // Its turn is running, so the goal can go active without Codex starting another.
-                out.push(Parsed::Send(
-                    json!({"id": GOAL_SETUP, "method": "thread/goal/set", "params": {
-                        "threadId": thread_id, "status": "active",
-                    }})
-                    .to_string(),
-                ));
-            } else if id == GOAL_REQUEST {
-                let result = &v["result"];
-                if result.get("cleared").is_some() {
-                    out.push(Parsed::Goal(GoalUpdate::Cleared));
-                }
-                out.extend(goal_of(&result["goal"]).map(|g| Parsed::Goal(GoalUpdate::Reported(g))));
-                out.extend([
-                    text_delta(message_id, &goal_reply(spec, result)),
-                    Parsed::Finished,
-                ]);
             }
         }
         (Some(_), Some(_)) => out.push(codex_server_request(v)),
@@ -390,10 +361,6 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                 &mut out,
             );
         }
-        (None, Some("thread/goal/updated")) => {
-            out.extend(goal_of(&params["goal"]).map(|g| Parsed::Goal(GoalUpdate::Reported(g))));
-        }
-        (None, Some("thread/goal/cleared")) => out.push(Parsed::Goal(GoalUpdate::Cleared)),
         (None, Some("item/reasoning/summaryTextDelta")) => {
             let delta = params["delta"].as_str().unwrap_or_default();
             if !delta.is_empty() {

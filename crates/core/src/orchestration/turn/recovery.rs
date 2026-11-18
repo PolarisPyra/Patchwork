@@ -88,10 +88,8 @@ pub(crate) fn recover(store: &Store) -> Result<(), Error> {
             store.update_thread(&thread.id, |t| {
                 if dismissed {
                     t.goal = None;
-                } else if let Some(goal) =
-                    t.goal.as_mut().filter(|g| g.status == GoalStatus::Active)
-                {
-                    goal.status = GoalStatus::Paused;
+                } else if let Some(goal) = t.goal.take_if(|g| g.status == GoalStatus::Active) {
+                    t.goal = Some(goal.with_status(GoalStatus::Paused, now_ms()));
                 }
                 for message in &mut t.messages {
                     // Only a message with something to change is copied.

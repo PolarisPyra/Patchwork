@@ -50,7 +50,7 @@ pub(in crate::orchestration) fn mark_call(turn: &Turn, tool: &mut ToolCall) {
     let store = &turn.core.store;
     let Some(pick) = store
         .thread(&turn.thread_id)
-        .and_then(|thread| sub_agent_of(store, &store.settings(), &thread))
+        .and_then(|thread| sub_agent_of(&thread))
     else {
         return;
     };
@@ -108,7 +108,6 @@ fn child_thread(parent: Thread, pick: AgentPick, ask: &Ask, call: Option<Called>
             thread_id: parent.id,
             tool_id,
         }),
-        plan_mode: false,
         slash_commands: vec![],
         imported_from: None,
         context_pending: false,
@@ -197,7 +196,7 @@ impl Runner {
             .store
             .thread(thread_id)
             .ok_or("This chat is no longer here")?;
-        let pick = sub_agent_of(&core.store, &core.store.settings(), &parent)
+        let pick = sub_agent_of(&parent)
             .ok_or("This chat's sub agents run on its own agent; start one with your own tool")?;
         // Only Patchwork's own agent is offered the background, and the tool that ends it.
         let background = ask.background && parent.agent == AgentKind::Api;

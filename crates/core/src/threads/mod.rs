@@ -23,8 +23,8 @@ pub use messages::{
     ReviewStatus, TaskStatus, TokenUsage, ToolCall, tool_output, TurnChecks, TurnReview, TurnTrees,
 };
 #[doc(inline)]
-pub use granular::{AgentPick, Granular, Reserves, delegates_sub_agents, runs_sub_agents_at};
-pub(crate) use granular::{fall_back, fallback_of, project_key, reviewer_of, sub_agent_of, sub_pick};
+pub use granular::{AgentPick, Granular, Reserves};
+pub(crate) use granular::{fall_back, fallback_of, project_key, reviewer_of, sub_agent_of};
 #[doc(inline)]
 pub use lifecycle::NewThread;
 #[doc(inline)]

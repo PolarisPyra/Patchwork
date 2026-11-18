@@ -31,12 +31,9 @@ impl Composer {
         let token = editor
             .caret()
             .and_then(|caret| token(&editor.content, caret, &sigils))
-            // Antigravity reads the message as a prompt, so there are no commands or skills to
-            // offer, but an agent summoned with "&" goes with any message.
-            .filter(|tk| {
-                agent != AgentKind::Antigravity
-                    || matches!(tk.kind, SigilKind::Files | SigilKind::Agents)
-            });
+            // Antigravity has no skills to offer; Patchwork's own commands run for it as for
+            // any agent.
+            .filter(|tk| agent != AgentKind::Antigravity || tk.kind != SigilKind::Skills);
         let kind = token.as_ref().map(|tk| tk.kind);
         let project = self
             .workspace

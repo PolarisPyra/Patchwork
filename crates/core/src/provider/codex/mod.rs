@@ -12,12 +12,11 @@ mod subagents;
 pub use config::{home, auth, configured_model, models, rollout_files};
 #[doc(inline)]
 pub use input::{
-    turn_args, agents_args, sub_agent_args, compact_args, turn_input, goal_pause, steer_input,
-    interrupt, approval_reply,
+    turn_args, agents_args, compact_args, turn_input, steer_input, interrupt, approval_reply,
 };
 use input::{
-    THREAD_REQUEST, thread_params, SKILLS_REQUEST, TURN_REQUEST, begin, GOAL_REQUEST, GOAL_SETUP,
-    goal_of, goal_reply, STEER_REQUEST, INTERRUPT_REQUEST,
+    THREAD_REQUEST, thread_params, SKILLS_REQUEST, begin, STEER_REQUEST, INTERRUPT_REQUEST,
+    GOAL_CLEAR_REQUEST,
 };
 #[doc(inline)]
 pub use parse::parse;

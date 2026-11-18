@@ -65,7 +65,6 @@ pub(in crate::orchestration) fn live_turn(agent: AgentKind, mode: AccessMode) {
         vision_model: None,
         text: "Create a file named hello.txt whose only content is the two letters hi (no period). Do nothing else.",
         mode,
-        plan: false,
         effort: None,
         compact_window: 0,
         unlimited_steps: false,

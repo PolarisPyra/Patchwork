@@ -18,26 +18,14 @@ use crate::permissions::hook::HOOK_ARG;
 use crate::extensions::hooks::{AgentHook, HookAction, HookEvent};
 use crate::provider::{AgentKind, TurnSpec};
 
-/// Whether `agent` runs hooks on `event` itself.
+/// Whether the agent runs hooks on `event` itself.
 ///
-/// Patchwork runs the turn's own events for every agent; Claude Code and Codex run all the others,
-/// Antigravity its session start and tool calls, and Patchwork's own agent its tool calls. OpenCode
-/// has no hooks of its own, but asks Patchwork before a call, so Patchwork runs the hooks for
-/// before a tool call on that request: see `opencode_call`.
+/// Patchwork runs the turn's own events for every agent, and every agent runs the hooks before a
+/// tool call. OpenCode has no hooks of its own, but asks Patchwork before a call, so Patchwork runs
+/// them on that request: see `opencode_call`.
 #[must_use]
-pub fn runs(agent: AgentKind, event: HookEvent) -> bool {
-    if event.runs_in_patchwork() {
-        return false;
-    }
-    match agent {
-        AgentKind::Claude | AgentKind::Codex => true,
-        AgentKind::Antigravity => matches!(
-            event,
-            HookEvent::SessionStart | HookEvent::PreToolUse | HookEvent::PostToolUse
-        ),
-        AgentKind::Api => matches!(event, HookEvent::PreToolUse | HookEvent::PostToolUse),
-        AgentKind::OpenCode => event == HookEvent::PreToolUse,
-    }
+pub fn runs(event: HookEvent) -> bool {
+    event == HookEvent::PreToolUse
 }
 
 /// The tool call an OpenCode permission request stands for, as a hook reads one.
@@ -85,12 +73,12 @@ fn command_line(hook: &AgentHook) -> &str {
     command
 }
 
-/// The hooks `agent` runs, in the `hooks.json` shape Claude Code and Antigravity read:
+/// The hooks an agent runs, in the `hooks.json` shape Claude Code and Antigravity read:
 /// `{ "hooks": { "PreToolUse": [ { "matcher": …, "hooks": [ … ] } ] } }`.
 #[must_use]
-pub fn hooks_json(hooks: &[AgentHook], agent: AgentKind) -> Value {
+pub fn hooks_json(hooks: &[AgentHook]) -> Value {
     let mut by_event = serde_json::Map::new();
-    for hook in hooks.iter().filter(|hook| runs(agent, hook.event)) {
+    for hook in hooks.iter().filter(|hook| runs(hook.event)) {
         let command = command_line(hook);
         let mut group = json!({ "hooks": [{
             "type": "command",
@@ -202,11 +190,7 @@ pub fn codex_args(spec: &TurnSpec) -> Vec<String> {
              permission rules"
         );
     }
-    for hook in spec
-        .hooks
-        .iter()
-        .filter(|hook| runs(AgentKind::Codex, hook.event))
-    {
+    for hook in spec.hooks.iter().filter(|hook| runs(hook.event)) {
         let command = command_line(hook);
         let matcher = hook
             .matcher
@@ -423,7 +407,7 @@ pub fn antigravity_dir(spec: &TurnSpec) -> Option<std::path::PathBuf> {
 
 /// The hooks file Antigravity runs, or None when there are no hooks to run.
 fn antigravity_hooks(spec: &TurnSpec) -> Option<String> {
-    let mut hooks = hooks_json(spec.hooks, AgentKind::Antigravity);
+    let mut hooks = hooks_json(spec.hooks);
     // The prompt is the session's first system message, so a resumed conversation keeps the one
     // it started with.
     if antigravity_prompt(spec).is_some() {

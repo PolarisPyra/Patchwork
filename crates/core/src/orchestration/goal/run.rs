@@ -1,124 +1,153 @@
-//! A goal while turns pursue it: how long the agent's input stays open while Codex works toward
-//! one, and how the goal is settled once a turn ends.
+//! A goal while turns pursue it: what the agent is told, how each turn's end settles the goal,
+//! and the message that carries it on. Patchwork runs the goal the same way for every agent.
 
 // Rust guideline compliant 2026-10-09
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
 
-use super::state::{agent_keeps, held_key, signature};
-use super::stop::clear_command;
+use crate::Core;
 use crate::events::AgentEvent;
-use crate::orchestration::turn::process::close_stdin_unless_steered;
 use crate::orchestration::turn::start::Turn;
-use crate::provider::{self, AgentKind};
+use crate::persistence::Store;
+use super::state::stalled;
+use crate::system::now_ms;
+use crate::provider::{GoalCommand, goal_command};
 use crate::threads::{Goal, GoalStatus, MessageStatus};
 
-/// How long Codex has to start its next turn toward an active goal after one ends. It starts
-/// one within milliseconds, so a longer wait means the goal is not being pursued.
-const CODEX_GOAL_GRACE: Duration = Duration::from_secs(30);
+/// The line a reply ends with once the goal is met.
+const MET: &str = "GOAL MET";
 
-/// Ends the agent's input once its turn is over. While Codex pursues a goal, the input stays
-/// open for the grace window: a turn started inside it continues the run, and otherwise the
-/// input closes. Starting a turn advances `round`, which cancels a close still waiting.
-pub(in crate::orchestration) fn end_input(turn: &Turn, goal_run: bool, round: &Arc<AtomicU64>) {
-    if !goal_run {
-        close_stdin_unless_steered(&turn.stdin, &turn.steers);
-        return;
+/// The start of the line a reply ends with when the goal cannot be met without the user.
+const BLOCKED: &str = "GOAL BLOCKED";
+
+/// What the agent is told to work toward `objective`, and how to say where it stands.
+fn brief(objective: &str) -> String {
+    format!(
+        "Work toward this goal until it is fully met:\n\n{objective}\n\n\
+         After each of your replies you are asked to continue, until a reply ends with a line \
+         that reads {MET} once the goal is met and checked, or {BLOCKED}: and the reason when it \
+         cannot be met without the user."
+    )
+}
+
+/// How the message that carries a goal on starts.
+const CONTINUE: &str = "Continue working toward the goal: ";
+
+/// What carries the goal on after a reply that did not end it.
+fn carry_on(objective: &str) -> String {
+    format!(
+        "{CONTINUE}{objective}\n\n\
+         End your reply with {MET} once it is met and checked, or {BLOCKED}: and the reason."
+    )
+}
+
+/// Whether `text` is the message Patchwork sent to carry a goal on, which the chat does not show.
+#[must_use]
+pub fn is_goal_continuation(text: &str) -> bool {
+    text.starts_with(CONTINUE)
+}
+
+/// The text the agent gets for `text`: a `/goal` that sets or resumes the goal becomes its brief,
+/// and any other message is unchanged.
+pub(crate) fn agent_text(store: &Store, thread_id: &str, text: String) -> String {
+    match goal_command(&text) {
+        Some(GoalCommand::Set(objective)) => brief(objective),
+        Some(GoalCommand::Resume) => store
+            .thread(thread_id)
+            .and_then(|t| t.goal)
+            .map_or(text, |g| brief(&g.objective)),
+        _ => text,
     }
-    let armed = round.fetch_add(1, Ordering::SeqCst) + 1;
-    let (round, stdin, steers) = (
-        Arc::clone(round),
-        Arc::clone(&turn.stdin),
-        Arc::clone(&turn.steers),
-    );
-    std::thread::spawn(move || {
-        std::thread::sleep(CODEX_GOAL_GRACE);
-        if round.load(Ordering::SeqCst) == armed {
-            close_stdin_unless_steered(&stdin, &steers);
-        }
-    });
 }
 
-/// Whether the agent pursues `goal` in a run: an active one, or for Claude a paused one, which
-/// Claude takes up again with the next message.
-pub(in crate::orchestration) fn pursued(agent: AgentKind, goal: &Goal) -> bool {
-    goal.status == GoalStatus::Active
-        || (agent == AgentKind::Claude && goal.status == GoalStatus::Paused)
+/// Where a reply leaves the goal, from the line it ends with: met, blocked, or still active.
+fn verdict(reply: &str) -> GoalStatus {
+    let last = reply
+        .lines()
+        .rev()
+        .map(|line| line.trim().trim_matches(['*', '_', '`']).trim())
+        .find(|line| !line.is_empty())
+        .unwrap_or_default();
+    if last.eq_ignore_ascii_case(MET) {
+        GoalStatus::Complete
+    } else if last
+        .get(..BLOCKED.len())
+        .is_some_and(|start| start.eq_ignore_ascii_case(BLOCKED))
+    {
+        GoalStatus::Blocked
+    } else {
+        GoalStatus::Active
+    }
 }
 
-/// Settles the goal once a turn ends, from how it ended. `checked` says Claude's evaluator
-/// checked a reply of this run against the goal. Returns the message that has the agent drop
-/// its goal in a turn of its own, when it would otherwise take the goal up again.
+/// Settles the goal once a turn ends, from how it ended and the line the last of its `replies`
+/// ends with. A goal whose replies twice in a row used no tools is going nowhere, so it pauses.
+/// Returns whether the goal goes on in another turn.
 pub(in crate::orchestration) fn settle(
     turn: &Turn,
     status: MessageStatus,
     cancelled: bool,
-    checked: bool,
-) -> Option<&'static str> {
-    // The stored goal is read again, since the user may have cleared it meanwhile.
+    replies: &[String],
+) -> bool {
+    // The stored goal is read again, since the user may have paused or cleared it meanwhile.
     let thread = turn.core.store.thread(&turn.thread_id);
-    let goal = thread.as_ref().and_then(|t| t.goal.clone());
-    let pursued = |g: &&Goal| pursued(turn.agent, g);
-    let mut next = goal.clone();
-    // Claude ended its run while still holding the goal, which it would take up again.
-    let mut claude_holds = false;
-    if let Some(g) = goal.as_ref().filter(pursued) {
-        let status = if turn.agent == AgentKind::Claude && status == MessageStatus::Complete {
-            // Without a session there is no verdict to read, and nothing is left pursuing
-            // the goal.
-            let judged = turn.session_id.as_deref().map_or(GoalStatus::Paused, |id| {
-                provider::claude::goal_outcome(id, &g.objective)
-            });
-            // The evaluator only lets a checked reply end the run once the goal is met. When
-            // it records no verdict (it can give up after 30 seconds and let the reply stand),
-            // Claude still holds the goal, so it is cleared there too.
-            if judged == GoalStatus::Paused && checked {
-                claude_holds = turn.session_id.is_some();
-                if claude_holds
-                    && let Err(e) = turn
-                        .core
-                        .store
-                        .set_state(&held_key(&turn.thread_id), &signature(g))
-                {
-                    log::warn!(error:% = e; "failed to note a held goal: {{error}}");
-                }
-                GoalStatus::Complete
-            } else {
-                judged
-            }
-        } else if turn.agent == AgentKind::Antigravity && status == MessageStatus::Complete {
-            // Antigravity blocks stopping until its goal is verified, so a clean end meets it.
-            GoalStatus::Complete
-        } else {
-            // Failed or killed (a crash, the app quitting, a timeout): no agent is left
-            // pursuing the goal, so it stays paused to resume.
-            GoalStatus::Paused
-        };
-        next = Some(Goal {
-            status,
-            ..g.clone()
-        });
-    }
-    // Keep the final goal state visible until the user closes it. Clear the agent's internal
-    // goal instructions when pursuit ends, while retaining the app-side status for the banner.
-    let user_stopped = cancelled
-        && goal.as_ref().as_ref().is_some_and(pursued)
-        && thread.as_ref().is_some_and(|t| t.archived_at.is_none());
-    let done = next
+    let Some(goal) = thread
         .as_ref()
-        .is_some_and(|g| matches!(g.status, GoalStatus::Complete | GoalStatus::Blocked));
-    // The agent is told to drop a goal it would otherwise take up again.
-    let mut clear_in_agent = None;
-    if user_stopped || done {
-        let ended = next.as_ref().map_or(GoalStatus::Paused, |g| g.status);
-        if turn.session_id.is_some() && (claude_holds || agent_keeps(turn.agent, ended)) {
-            clear_in_agent = Some(clear_command(turn.agent));
+        .and_then(|t| t.goal.clone())
+        .filter(|g| g.status == GoalStatus::Active)
+    else {
+        return false;
+    };
+    let next = if cancelled || status != MessageStatus::Complete {
+        // Stopped, failed or killed: nothing pursues the goal, so it waits to be resumed.
+        GoalStatus::Paused
+    } else {
+        let replies: Vec<_> = thread
+            .as_ref()
+            .map(|t| {
+                t.messages
+                    .iter()
+                    .filter(|m| replies.contains(&m.id))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
+        let last = replies.last().map(|m| m.text.as_str()).unwrap_or_default();
+        let idle = replies.iter().all(|m| m.tools.is_empty());
+        match verdict(last) {
+            GoalStatus::Active if stalled(&turn.core.store, &turn.thread_id, &goal, idle) => {
+                GoalStatus::Stalled
+            }
+            verdict => verdict,
         }
-    }
-    if next != goal {
-        turn.publish(AgentEvent::GoalUpdated { goal: next });
-    }
-    clear_in_agent
+    };
+    let goal = Goal {
+        checks: Some(goal.checks.unwrap_or(0) + 1),
+        ..goal.with_status(next, now_ms())
+    };
+    turn.publish(AgentEvent::GoalUpdated { goal: Some(goal) });
+    next == GoalStatus::Active
+}
+
+/// Once the turn has ended, sends the messages queued meanwhile or, with none queued, the one
+/// that carries the goal on.
+pub(in crate::orchestration) fn carry_on_later(core: &Arc<Core>, thread_id: &str) {
+    let core = Arc::clone(core);
+    let thread_id = thread_id.to_string();
+    std::thread::spawn(move || {
+        let Some(thread) = core.store.thread(&thread_id) else {
+            return;
+        };
+        let sent = if thread.messages.iter().any(|m| m.queued) {
+            core.resume_queued(&thread_id)
+        } else if let Some(goal) = thread.goal.filter(|g| g.status == GoalStatus::Active) {
+            core.send_message(thread_id, carry_on(&goal.objective), vec![], false)
+                .map(|_| ())
+        } else {
+            Ok(())
+        };
+        if let Err(e) = sent {
+            log::warn!(error:% = e; "failed to carry the goal on: {{error}}");
+        }
+    });
 }

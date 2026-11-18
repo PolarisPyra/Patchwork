@@ -2,14 +2,12 @@
 
 // Rust guideline compliant 2026-10-09
 
-mod goal;
 mod requests;
 mod stream;
 mod tasks;
 mod todos;
 
 #[doc(inline)]
-pub use goal::{goal_outcome};
 pub(crate) use requests::claude_target;
 use stream::{block_text, claude_tool_use};
 #[doc(inline)]

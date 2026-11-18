@@ -219,8 +219,6 @@ pub struct Workspace {
     pub backgrounds: crate::chat::backdrop::Backgrounds,
     pub checks: crate::chat::checks::ChecksState,
     pub secrets: crate::chat::secret::SecretState,
-    /// The resume prompt, while it waits for an answer.
-    pub resume_ask: Option<crate::chat::resume::ResumeAsk>,
     /// The project folder last looked for, and whether it was found once the look is done.
     pub folder_check: Option<(String, Option<bool>)>,
     /// Replies seen streaming, whose steps start open once they settle.
@@ -398,7 +396,6 @@ impl Workspace {
             open_steps: HashSet::new(),
             open_agents: HashSet::new(),
             open_reviews: HashSet::new(),
-            resume_ask: None,
             checks: crate::chat::checks::ChecksState::default(),
             secrets: crate::chat::secret::SecretState::default(),
             folder_check: None,

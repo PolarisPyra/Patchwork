@@ -16,7 +16,6 @@ use super::goal;
 use super::plan;
 use super::prompts;
 use super::queue;
-use super::resume;
 use super::scheme::in_scheme;
 
 /// How long a chat just chosen waits for the files under its last replies before it shows anyway.
@@ -75,7 +74,6 @@ pub fn render(
     let background = background::background_tasks(w, &t, cx);
     let steps = w.plan_steps(cx);
     let plan = (!steps.is_empty()).then(|| plan::plan_panel(w, &steps, &t, cx));
-    let ready = w.ready_plan().map(|p| plan::ready_bar(&p, &t, cx));
     let banner = w.approval_banner(cx);
     w.shown_choice = None;
     let prompt = w.prompt().map(|p| prompts::choice_panel(w, p, &t, cx));
@@ -84,7 +82,6 @@ pub fn render(
     // The composer shows the worktree's status on the line above it.
     w.load_worktree(cx);
     let missing = folder::missing_folder(w, &t, cx);
-    let resume = resume::resume_prompt(w, &t, cx);
     let backdrop = backdrop::chat_backdrop(w, &t, cx);
     let parent = subagent_footer(w, &t, cx);
     let header = (!is_new).then(|| header(w, &t, window, cx));
@@ -115,10 +112,8 @@ pub fn render(
                     .pb(px(16.))
                     .children(background)
                     .children(plan)
-                    .children(ready)
                     .children(banner)
                     .children(missing)
-                    .children(resume)
                     .children(prompt)
                     .children(queued)
                     .children(goal)

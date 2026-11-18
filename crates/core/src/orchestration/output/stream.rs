@@ -192,7 +192,6 @@ pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str
         | AgentEvent::MessageQueued { message_id, .. }
         | AgentEvent::MessageSteered { message_id }
         | AgentEvent::MessageCutOff { message_id }
-        | AgentEvent::GoalChecking { message_id }
         | AgentEvent::Compacting { message_id }
         | AgentEvent::Compacted { message_id, .. }
         | AgentEvent::Retrying { message_id, .. }
@@ -475,7 +474,6 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         }
         AgentEvent::MessageStarted { .. }
         | AgentEvent::GoalUpdated { .. }
-        | AgentEvent::GoalChecking { .. }
         | AgentEvent::Retrying { .. }
         | AgentEvent::Quiet { .. }
         | AgentEvent::SlashCommandsUpdated { .. }

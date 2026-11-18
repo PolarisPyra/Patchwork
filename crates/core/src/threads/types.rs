@@ -71,9 +71,6 @@ pub struct Thread {
     /// read-only and not listed in the sidebar.
     #[serde(default)]
     pub parent: Option<ThreadParent>,
-    /// Turns run in plan mode: the agent plans and proposes, without changing files.
-    #[serde(default)]
-    pub plan_mode: bool,
     /// Provider-native commands discovered from the CLI's initialization frame.
     #[serde(default)]
     pub slash_commands: Vec<ProviderSlashCommand>,
@@ -125,10 +122,13 @@ pub struct ResumePoint {
 #[serde(rename_all = "camelCase")]
 pub enum GoalStatus {
     Active,
+    /// Paused by the user, or by a reply that failed or was stopped. The agents' own usage and
+    /// budget stops, which goals no longer have, read as paused.
+    #[serde(alias = "usageLimited", alias = "budgetLimited")]
     Paused,
+    /// Paused after replies in a row that did no work toward it.
+    Stalled,
     Blocked,
-    UsageLimited,
-    BudgetLimited,
     Complete,
 }
 
@@ -140,12 +140,45 @@ pub struct Goal {
     pub status: GoalStatus,
     /// Unix epoch milliseconds.
     pub started_at: u64,
-    /// Evaluator checks that came back unmet (Claude).
+    /// Replies that ended with the goal still unmet.
     pub checks: Option<u32>,
-    /// What the agent reports having spent on the goal (Codex).
-    pub tokens_used: Option<u64>,
-    pub token_budget: Option<u64>,
+    /// Seconds spent pursuing the goal before it was last made active.
     pub time_used_seconds: Option<u64>,
+    /// Unix epoch milliseconds when the goal was last made active; the start when unset.
+    pub active_since: Option<u64>,
+}
+
+impl Goal {
+    /// The goal with `status` at `now` (Unix epoch milliseconds). Its time stops when it stops
+    /// being pursued, and runs again when it is taken up.
+    #[must_use]
+    pub fn with_status(self, status: GoalStatus, now: u64) -> Self {
+        let was_active = self.status == GoalStatus::Active;
+        let active = status == GoalStatus::Active;
+        let (time_used_seconds, active_since) = match (was_active, active) {
+            (true, false) => (Some(self.seconds_used(now)), None),
+            (false, true) => (self.time_used_seconds, Some(now)),
+            _ => (self.time_used_seconds, self.active_since),
+        };
+        Self {
+            status,
+            time_used_seconds,
+            active_since,
+            ..self
+        }
+    }
+
+    /// Seconds spent pursuing the goal by `now` (Unix epoch milliseconds).
+    #[must_use]
+    pub fn seconds_used(&self, now: u64) -> u64 {
+        let before = self.time_used_seconds.unwrap_or(0);
+        if self.status == GoalStatus::Active {
+            let since = self.active_since.unwrap_or(self.started_at);
+            before + now.saturating_sub(since) / 1000
+        } else {
+            before
+        }
+    }
 }
 
 /// The error for a chat or task that no longer exists. People see chat for either.
@@ -174,7 +207,6 @@ impl Thread {
             folder_id: self.folder_id.clone(),
             archived_at: self.archived_at,
             parent: self.parent.clone(),
-            plan_mode: self.plan_mode,
             slash_commands: self.slash_commands.clone(),
             imported_from: self.imported_from.clone(),
             context_pending: self.context_pending,

@@ -7,7 +7,7 @@ use crate::provider::TurnSpec;
 
 use super::request::serve_permissions;
 
-fn spec(mode: AccessMode, plan: bool) -> TurnSpec<'static> {
+fn spec(mode: AccessMode) -> TurnSpec<'static> {
     TurnSpec {
         root: "/w",
         host: None,
@@ -17,7 +17,6 @@ fn spec(mode: AccessMode, plan: bool) -> TurnSpec<'static> {
         vision_model: None,
         text: "go",
         mode,
-        plan,
         effort: None,
         compact_window: 0,
         unlimited_steps: false,
@@ -65,7 +64,7 @@ fn every_action_a_rule_can_answer_asks_patchwork() {
         AccessMode::Auto,
         AccessMode::FullAccess,
     ] {
-        let rules = serve_permissions(&spec(mode, false));
+        let rules = serve_permissions(&spec(mode));
         for action in ["shell", "edit", "external_directory", "webfetch"] {
             assert_eq!(
                 effect_of(&rules, action).as_deref(),
@@ -83,25 +82,14 @@ fn every_action_a_rule_can_answer_asks_patchwork() {
     }
 }
 
-#[test]
-fn plan_mode_still_refuses_edits() {
-    let rules = serve_permissions(&spec(AccessMode::Auto, true));
-    assert_eq!(
-        effect_of(&rules, "edit").as_deref(),
-        Some("deny"),
-        "{rules}"
-    );
-}
-
 mod dump_rules {
     #[test]
     fn print_rules() {
-        for (mode, plan) in [
-            (crate::threads::AccessMode::Supervised, false),
-            (crate::threads::AccessMode::AutoAcceptEdits, false),
-            (crate::threads::AccessMode::Auto, false),
-            (crate::threads::AccessMode::FullAccess, false),
-            (crate::threads::AccessMode::Supervised, true),
+        for mode in [
+            crate::threads::AccessMode::Supervised,
+            crate::threads::AccessMode::AutoAcceptEdits,
+            crate::threads::AccessMode::Auto,
+            crate::threads::AccessMode::FullAccess,
         ] {
             let spec = crate::provider::TurnSpec {
                 root: "/w",
@@ -112,7 +100,6 @@ mod dump_rules {
                 vision_model: None,
                 text: "go",
                 mode,
-                plan,
                 effort: None,
                 compact_window: 0,
                 unlimited_steps: false,
@@ -127,7 +114,7 @@ mod dump_rules {
                 dispatcher: false,
             };
             println!(
-                "RULES {mode:?} plan={plan} {}",
+                "RULES {mode:?} {}",
                 super::super::request::serve_permissions(&spec)
             );
         }

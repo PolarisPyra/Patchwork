@@ -183,7 +183,7 @@ pub(super) const CHATS: &[Capability] = &[
     Capability {
         id: "set_chat_options",
         area: "chats",
-        about: "Show or change what a chat runs with: its agent, its model, its access (supervised, auto-edits, auto or full) and plan mode. Pass only what should change; with nothing to change it returns what the chat runs with. Changing access asks the person first.",
+        about: "Show or change what a chat runs with: its agent, its model, and its access (supervised, auto-edits, auto or full). Pass only what should change; with nothing to change it returns what the chat runs with. Changing access asks the person first.",
         args: &[
             text(
                 "chat_id",
@@ -199,7 +199,6 @@ pub(super) const CHATS: &[Capability] = &[
             ),
             text("model", "The model id, from list_models, or default."),
             text("access", "supervised, auto-edits, auto or full."),
-            flag("plan", "Whether the chat plans before it acts."),
         ],
         returns: "What the chat runs with now.",
         resources: &["chat"],

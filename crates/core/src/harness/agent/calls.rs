@@ -42,14 +42,14 @@ impl Agent {
         };
         let summary = crate::harness::tools::summary(&call.name, &args, &self.root);
         emit(&json!({"type": "api.tool", "id": call.id, "name": call.name, "summary": summary}));
-        // A call to a tool this turn does not offer, such as an edit copied from earlier history
-        // into a plan turn, is refused before it can run.
+        // A call to a tool this turn does not offer, such as one copied from earlier history, is
+        // refused before it can run.
         if !self.offers(&call.name) {
             let reason = format!("{} is not available in this turn", call.name);
             emit(&json!({"type": "api.tool_done", "id": call.id, "error": true, "output": reason}));
             return (reason, false);
         }
-        if let Some(reason) = self.run_hooks(HookEvent::PreToolUse, &call.name, &args, None) {
+        if let Some(reason) = self.run_hooks(&call.name, &args) {
             emit(&json!({"type": "api.tool_done", "id": call.id, "error": true, "output": reason}));
             return (reason, false);
         }
@@ -75,15 +75,6 @@ impl Agent {
                 "update_plan" => {
                     emit(&json!({"type": "api.todos", "steps": args["steps"]}));
                     (Ok(PLAN_SHOWN.to_string()), false, false)
-                }
-                "propose_plan" => {
-                    let plan = args["plan"].as_str().unwrap_or_default();
-                    emit(&json!({"type": "api.plan", "text": plan}));
-                    (
-                        Ok("The plan was shown to the user, who will reply.".to_string()),
-                        false,
-                        true,
-                    )
                 }
                 "ask_user" => match self.ask(&call.id, &args) {
                     Ok(answer) => (Ok(answer), false, false),
@@ -141,15 +132,9 @@ impl Agent {
                 }
             }
         };
-        let text = match result {
+        let mut text = match result {
             Ok(text) => self.fit(&call.id, text),
             Err(e) => self.fit(&call.id, e.to_string()),
-        };
-        // The call has run, so a refusal here only tells the model.
-        let mut text = match self.run_hooks(HookEvent::PostToolUse, &call.name, &args, Some(&text))
-        {
-            Some(reason) => format!("{text}\n\n{reason}"),
-            None => text,
         };
         if let Some(nudge) = self.repeated(&call.name, &args) {
             let _ = write!(text, "\n\n{nudge}");
@@ -169,29 +154,20 @@ impl Agent {
         (text, stop)
     }
 
-    /// Runs the hooks for `event` that match the tool, with the call as Claude Code gives
+    /// Runs the hooks before a tool call that match the tool, with the call as Claude Code gives
     /// it to its hooks, and returns the first one's reason for refusing it.
-    pub(super) fn run_hooks(
-        &self,
-        event: HookEvent,
-        tool: &str,
-        args: &Value,
-        response: Option<&str>,
-    ) -> Option<String> {
+    pub(super) fn run_hooks(&self, tool: &str, args: &Value) -> Option<String> {
         let hooks = self
             .request
             .hooks
             .iter()
-            .filter(|hook| hook.event == event && hook.matches(tool));
+            .filter(|hook| hook.event == HookEvent::PreToolUse && hook.matches(tool));
         let mut input = json!({
             "session_id": self.session_id,
             "cwd": self.request.root,
             "tool_name": tool,
             "tool_input": args,
         });
-        if let Some(response) = response {
-            input["tool_response"] = Value::from(response);
-        }
         hooks.into_iter().find_map(|hook| {
             input["hook_event_name"] = Value::from(hook.event.cli_name());
             crate::extensions::hooks::run_tool_hook(hook, &input, &self.request.root)

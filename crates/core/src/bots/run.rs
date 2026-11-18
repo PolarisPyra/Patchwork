@@ -37,7 +37,6 @@ impl Core {
             access_mode: bot.access_mode,
             effort: bot.effort.clone(),
             compact_window: None,
-            plan_mode: false,
         };
         self.start_bot_run(&bot, new, prompt, Vec::new(), false)
     }

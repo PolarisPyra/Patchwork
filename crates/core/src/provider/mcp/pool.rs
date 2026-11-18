@@ -67,7 +67,7 @@ pub(super) fn live_servers() -> Vec<(String, Arc<Conn>)> {
 /// How many MCP tools a turn may offer, after Patchwork's own.
 pub fn tool_budget() -> usize {
     MAX_TOOLS.saturating_sub(
-        crate::harness::tools::definitions(false)
+        crate::harness::tools::definitions()
             .as_array()
             .map_or(0, Vec::len),
     )
@@ -109,15 +109,14 @@ fn ready_servers() -> Vec<(String, McpServer, Arc<Conn>)> {
     out
 }
 
-/// The tools of every running server, for a turn, up to `tool_budget`. Plan mode gets only
-/// the read-only ones.
+/// The tools of every running server, for a turn, up to `tool_budget`.
 #[must_use]
-pub fn turn_tools(plan: bool) -> Vec<TurnTool> {
+pub fn turn_tools() -> Vec<TurnTool> {
     let mut taken = std::collections::HashSet::new();
     let mut out = Vec::new();
     for (server, config, conn) in ready_servers() {
         for tool in &conn.tools {
-            if (plan && !tool.read_only) || config.disabled_tools.contains(&tool.name) {
+            if config.disabled_tools.contains(&tool.name) {
                 continue;
             }
             let mut name = format!("mcp__{}__{}", clean(&server), clean(&tool.name));

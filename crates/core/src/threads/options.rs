@@ -1,4 +1,4 @@
-//! What a thread runs with: its model, access, plan mode, effort and compact window.
+//! What a thread runs with: its model, access, effort and compact window.
 
 // Rust guideline compliant 2026-10-09
 
@@ -83,22 +83,6 @@ impl Core {
         // An idle agent was started with the old setting.
         if thread.access_mode != mode {
             note(id, format!("{mode:?} access"));
-            self.runner.retire_idle(id);
-        }
-        Ok(())
-    }
-
-    /// Takes effect from the thread's next turn.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when the thread is unknown or the change cannot be saved.
-    pub fn set_thread_plan_mode(&self, id: &str, on: bool) -> Result<(), Error> {
-        let thread = self.thread(id)?;
-        self.store.update_thread(id, |t| t.plan_mode = on)?;
-        // An idle agent was started with the old setting.
-        if thread.plan_mode != on {
-            note(id, format!("plan mode {on}"));
             self.runner.retire_idle(id);
         }
         Ok(())

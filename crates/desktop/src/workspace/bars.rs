@@ -328,7 +328,6 @@ impl Workspace {
             m.status == MessageStatus::Complete && m.role == MessageRole::Assistant
         });
         let agent = thread.map_or_else(|| self.settings.default_agent(), |t| t.agent);
-        let plan_mode = thread.is_some_and(|t| t.plan_mode);
         let (hover, fg) = (t.bg_hover, t.text);
         let state = if working {
             div()
@@ -413,17 +412,6 @@ impl Workspace {
                     this.change_focus = None;
                     cx.notify();
                 })),
-            )
-            .child(
-                div()
-                    .h(px(20.))
-                    .flex()
-                    .items_center()
-                    .px(px(6.))
-                    .child(format!(
-                        "Chat Mode: {}",
-                        if plan_mode { "Plan" } else { "Default" }
-                    )),
             )
             .child(
                 div()

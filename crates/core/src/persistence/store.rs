@@ -124,10 +124,10 @@ impl Store {
         for t in threads.iter_mut().filter(|_| owner.is_some()) {
             if let Some(goal) = t
                 .goal
-                .as_mut()
-                .filter(|g| g.status == crate::threads::GoalStatus::Active)
+                .take_if(|g| g.status == crate::threads::GoalStatus::Active)
             {
-                goal.status = crate::threads::GoalStatus::Paused;
+                let paused = crate::threads::GoalStatus::Paused;
+                t.goal = Some(goal.with_status(paused, crate::system::now_ms()));
                 save_thread_row(&tx, t).map_err(err)?;
                 goals_cut_off.push(t.id.clone());
             }

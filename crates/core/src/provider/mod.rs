@@ -13,7 +13,7 @@ pub use locate::{agent_shell, set_agent_paths, user_command};
 pub(crate) use locate::{agent_command, remote_turn_command, turn_command};
 use locate::{command_at, located, located_or, find_binary};
 #[doc(inline)]
-pub use parsed::{TaskEvent, Parsed, GoalUpdate};
+pub use parsed::{TaskEvent, Parsed};
 pub(crate) use parsed::{one_line, step_status};
 use parsed::{
     relative, ToolStart, tool_started, tool_finished, thinking, file_touched, text_delta,
@@ -25,11 +25,10 @@ use probe::{probe_at, stop};
 #[doc(inline)]
 pub use turn::{
     GoalCommand, goal_argument, goal_command, TurnSpec, Image, load_images, prompt, Prompt,
-    steer_input, goal_pause, interrupt, stop_subagent, is_goal_command, turn_args, turn_env,
-    withheld_env, turn_input, parse_line, approval_reply,
+    steer_input, interrupt, is_goal_command, turn_args, turn_env, withheld_env, turn_input,
+    parse_line, approval_reply,
 };
 pub(crate) use turn::{without_attachments};
-use turn::prompt_text;
 
 mod install;
 mod types;

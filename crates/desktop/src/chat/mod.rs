@@ -21,7 +21,6 @@ pub mod proposed;
 pub mod queue;
 pub mod rail;
 mod reply;
-pub mod resume;
 pub mod review;
 mod scheme;
 pub mod secret;

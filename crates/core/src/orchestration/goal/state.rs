@@ -1,11 +1,10 @@
-//! What the app keeps about a thread's goal: how the agent's reports change it, which goal the
-//! user dismissed, and which one Claude still holds.
+//! What the app keeps about a thread's goal: a new one, which goal the user dismissed, whether
+//! its last reply went nowhere, and which one the app's closing cut off.
 
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
 use crate::persistence::Store;
-use crate::provider::{AgentKind, GoalUpdate};
 use crate::system::now_ms;
 use crate::threads::{Goal, GoalStatus};
 
@@ -26,70 +25,43 @@ pub(crate) fn clear_dismissal(store: &Store, thread_id: &str) -> Result<(), Erro
     store.set_state(&dismissal_key(thread_id), "")
 }
 
-pub(crate) fn update_is_dismissed(store: &Store, thread_id: &str, update: &GoalUpdate) -> bool {
-    match update {
-        GoalUpdate::Reported(goal) => is_dismissed(store, thread_id, goal),
-        GoalUpdate::Set { objective, .. } => store
-            .state(&dismissal_key(thread_id))
-            .and_then(|value| value.split_once(':').map(|(_, text)| text == objective))
-            .unwrap_or(false),
-        GoalUpdate::Checked | GoalUpdate::Checking | GoalUpdate::Cleared => false,
-    }
-}
-
-pub(super) fn held_key(thread_id: &str) -> String {
-    format!("held-goal:{thread_id}")
-}
-
-/// Whether `update` is Claude dropping a met goal it still held (see `settle`). The goal stays
-/// shown as complete, and only this one clear is taken that way.
-pub(crate) fn update_releases_held(
-    store: &Store,
-    thread_id: &str,
-    current: Option<&Goal>,
-    update: &GoalUpdate,
-) -> bool {
-    let held = store.state(&held_key(thread_id));
-    let releases = matches!(update, GoalUpdate::Cleared)
-        && current.is_some_and(|g| held.as_deref() == Some(signature(g).as_str()));
-    if releases && let Err(e) = store.set_state(&held_key(thread_id), "") {
-        log::warn!(error:% = e; "failed to forget a held goal: {{error}}");
-    }
-    releases
-}
-
-/// The thread's goal after the agent reports `update`.
-pub(crate) fn next_goal(current: Option<&Goal>, update: GoalUpdate) -> Option<Goal> {
-    match update {
-        GoalUpdate::Set { objective, checks } => Some(Goal {
-            // Restating the same goal keeps when it was set.
-            started_at: current
-                .filter(|g| g.objective == objective)
-                .map_or_else(now_ms, |g| g.started_at),
-            objective,
+/// The goal `/goal <objective>` sets. Restating the current goal keeps when it was set and the
+/// time spent on it.
+pub(crate) fn new_goal(current: Option<&Goal>, objective: &str) -> Goal {
+    let now = now_ms();
+    match current.filter(|g| g.objective == objective) {
+        Some(goal) => Goal {
+            checks: Some(0),
+            ..goal.clone().with_status(GoalStatus::Active, now)
+        },
+        None => Goal {
+            started_at: now,
+            objective: objective.to_string(),
             status: GoalStatus::Active,
-            checks,
-            tokens_used: None,
-            token_budget: None,
+            checks: Some(0),
             time_used_seconds: None,
-        }),
-        GoalUpdate::Checked => current.map(|g| Goal {
-            status: GoalStatus::Active,
-            checks: Some(g.checks.unwrap_or(0) + 1),
-            ..g.clone()
-        }),
-        GoalUpdate::Checking => current.cloned(),
-        GoalUpdate::Cleared => None,
-        GoalUpdate::Reported(goal) => Some(goal),
+            active_since: None,
+        },
     }
 }
 
-/// Whether the agent still holds a goal that ended in `status`, and so has to be told to drop
-/// it: Claude restores an unmet goal whenever its session resumes, Codex keeps a stopped goal
-/// paused, and Antigravity keeps a goal per conversation. Claude has already dropped a goal its
-/// evaluator judged impossible (blocked).
-pub(crate) fn agent_keeps(agent: AgentKind, status: GoalStatus) -> bool {
-    status != GoalStatus::Complete && !(agent == AgentKind::Claude && status == GoalStatus::Blocked)
+fn stall_key(thread_id: &str) -> String {
+    format!("stalled-goal:{thread_id}")
+}
+
+/// Whether `goal` is going nowhere: this reply, which used no tools when `idle`, is the second
+/// such reply in a row. A reply that used tools starts the count again.
+pub(crate) fn stalled(store: &Store, thread_id: &str, goal: &Goal, idle: bool) -> bool {
+    let key = stall_key(thread_id);
+    let mark = signature(goal);
+    let before = store.state(&key).as_deref() == Some(mark.as_str());
+    let note = if idle && !before { mark } else { String::new() };
+    if store.state(&key).unwrap_or_default() != note
+        && let Err(e) = store.set_state(&key, &note)
+    {
+        log::warn!(error:% = e; "failed to note a goal reply that used no tools: {{error}}");
+    }
+    idle && before
 }
 
 fn cut_off_key(thread_id: &str) -> String {

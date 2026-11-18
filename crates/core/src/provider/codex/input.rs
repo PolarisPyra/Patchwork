@@ -7,14 +7,11 @@ use std::collections::HashMap;
 
 use serde_json::{Value, json};
 
-use crate::provider::{GoalCommand, goal_command};
 use crate::threads::AccessMode;
 use crate::threads::Attachment;
 use crate::threads::AttachmentKind;
-use crate::threads::Goal;
 use crate::provider::Parsed;
 use crate::provider::prompt;
-use crate::provider::prompt_text;
 use crate::provider::TurnSpec;
 
 use super::{configured_model, models};
@@ -46,20 +43,6 @@ pub fn compact_args(spec: &TurnSpec) -> Vec<String> {
         "-c".into(),
         format!("model_auto_compact_token_limit={}", spec.compact_window),
     ]
-}
-
-/// `-c` overrides that set the model and effort Codex starts its subagents at, in place of the
-/// chat's own.
-#[must_use]
-pub fn sub_agent_args(pick: &crate::threads::AgentPick) -> Vec<String> {
-    [
-        ("agents.default_subagent_model", &pick.model),
-        ("agents.default_subagent_reasoning_effort", &pick.effort),
-    ]
-    .into_iter()
-    .filter_map(|(key, value)| Some(format!("{key}={}", json!(value.as_deref()?))))
-    .flat_map(|set| ["-c".to_string(), set])
-    .collect()
 }
 
 /// `-c` overrides that give Codex the custom agents as roles its `spawn_agent` starts by name.
@@ -155,114 +138,30 @@ pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
 /// method, does not end the turn.
 pub(super) const SKILLS_REQUEST: u64 = 12;
 
-/// How Codex is asked to present its plan in plan mode, so it arrives as a plan item.
-const PLAN_INSTRUCTIONS: &str = "You are in plan mode: investigate and plan, but do not change \
-files. When the plan is ready, present it once, wrapped in a <proposed_plan> block with the \
-opening and closing tags each on their own line and Markdown inside. Give it a clear title, a \
-short summary, the key changes, how to test them, and any assumptions. Do not ask whether to \
-proceed; the user implements or refines the plan from there.";
-
 /// Request id of `turn/start`.
 pub(super) const TURN_REQUEST: u64 = THREAD_REQUEST + 1;
 
-/// What the conversation's first request does once the thread id is known: start the
-/// turn, or carry out a `/goal` command.
+/// Request id of `thread/goal/clear`; its response needs nothing.
+pub(super) const GOAL_CLEAR_REQUEST: u64 = 10;
+
+/// What the conversation's first request does once the thread id is known: start the turn.
+/// A resumed thread first drops any goal Codex kept from before Patchwork ran goals itself, so
+/// it does not pursue one of its own beside Patchwork's.
 pub(super) fn begin(spec: &TurnSpec, thread_id: &str, resolved_model: Option<&str>) -> Vec<Parsed> {
-    let send = |v: Value| Parsed::Send(v.to_string());
-    let goal =
-        |params: Value| json!({"id": GOAL_REQUEST, "method": "thread/goal/set", "params": params});
-    match goal_command(spec.text) {
-        // Codex compacts in a turn of its own, which it starts and reports like any other.
-        None if spec.text.trim() == "/compact" && spec.attachments.is_empty() => vec![send(
-            json!({"id": TURN_REQUEST, "method": "thread/compact/start", "params": {"threadId": thread_id}}),
-        )],
-        None => vec![Parsed::Send(turn_start(
-            spec,
-            thread_id,
-            &prompt(spec),
-            resolved_model,
-        ))],
-        // The goal waits paused until its first turn runs, so Codex does not start one first.
-        Some(GoalCommand::Set(objective)) => vec![
-            send(
-                json!({"id": GOAL_SETUP, "method": "thread/goal/clear", "params": {"threadId": thread_id}}),
-            ),
-            send(
-                json!({"id": GOAL_SETUP, "method": "thread/goal/set", "params": {
-                    "threadId": thread_id, "objective": objective, "status": "paused",
-                }}),
-            ),
-            // The turn carries the attachments; the goal itself is the objective alone.
-            Parsed::Send(turn_start(
-                spec,
-                thread_id,
-                &prompt_text(objective, spec.attachments),
-                resolved_model,
-            )),
-        ],
-        Some(GoalCommand::Resume) => vec![Parsed::Send(turn_start(
-            spec,
-            thread_id,
-            "",
-            resolved_model,
-        ))],
-        Some(GoalCommand::Show) => vec![send(
-            json!({"id": GOAL_REQUEST, "method": "thread/goal/get", "params": {"threadId": thread_id}}),
-        )],
-        Some(GoalCommand::Clear) => vec![send(
-            json!({"id": GOAL_REQUEST, "method": "thread/goal/clear", "params": {"threadId": thread_id}}),
-        )],
-        Some(GoalCommand::Pause) => vec![send(goal(
-            json!({"threadId": thread_id, "status": "paused"}),
-        ))],
-    }
-}
-
-/// Request id of a `/goal` command's request; its response ends the turn.
-pub(super) const GOAL_REQUEST: u64 = 10;
-/// Request id of the goal requests around a goal's turn; only their goal is kept.
-pub(super) const GOAL_SETUP: u64 = 11;
-
-#[must_use]
-pub fn goal_pause(thread_id: &str) -> String {
-    json!({"id": GOAL_SETUP, "method": "thread/goal/set", "params": {
-        "threadId": thread_id, "status": "paused",
-    }})
-    .to_string()
-}
-
-/// The goal in a `thread/goal/*` response or notification.
-pub(super) fn goal_of(v: &Value) -> Option<Goal> {
-    let status = serde_json::from_value(v["status"].clone()).ok()?;
-    // Codex counts seconds; older builds may count milliseconds.
-    let created = v["createdAt"].as_u64().unwrap_or(0);
-    Some(Goal {
-        objective: v["objective"].as_str()?.into(),
-        status,
-        started_at: if created < 1_000_000_000_000 {
-            created * 1000
-        } else {
-            created
-        },
-        checks: None,
-        tokens_used: v["tokensUsed"].as_u64(),
-        token_budget: v["tokenBudget"].as_u64(),
-        time_used_seconds: v["timeUsedSeconds"].as_u64(),
-    })
-}
-
-pub(super) fn goal_reply(spec: &TurnSpec, result: &Value) -> String {
-    match goal_command(spec.text) {
-        Some(GoalCommand::Clear) if result["cleared"] == true => "Goal cleared.".into(),
-        Some(GoalCommand::Clear) => "No goal to clear.".into(),
-        Some(GoalCommand::Pause) => "Goal paused. Send /goal resume to continue.".into(),
-        Some(GoalCommand::Set(_) | GoalCommand::Resume | GoalCommand::Show) | None => {
-            match goal_of(&result["goal"]) {
-                Some(goal) => format!("Goal: {}", goal.objective),
-                None => "No goal is set.".into(),
-            }
-        }
-    }
+    let clear = spec.session_id.map(|_| {
+        Parsed::Send(
+            json!({"id": GOAL_CLEAR_REQUEST, "method": "thread/goal/clear", "params": {"threadId": thread_id}})
+                .to_string(),
+        )
+    });
+    // Codex compacts in a turn of its own, which it starts and reports like any other.
+    let request = if spec.text.trim() == "/compact" && spec.attachments.is_empty() {
+        json!({"id": TURN_REQUEST, "method": "thread/compact/start", "params": {"threadId": thread_id}})
+            .to_string()
+    } else {
+        turn_start(spec, thread_id, &prompt(spec), resolved_model)
+    };
+    clear.into_iter().chain([Parsed::Send(request)]).collect()
 }
 
 /// The approval policy, reviewer, and sandbox for each access mode.
@@ -292,23 +191,18 @@ fn turn_start(
     if let Some(e) = spec.effort {
         params["effort"] = json!(e);
     }
-    // Plan mode is a collaboration mode, which names its model; the turn leaves it again in
-    // default mode. Without a model to name, the mode is not sent.
+    // Each turn runs in Codex's default collaboration mode, so a session left in another mode
+    // leaves it. The mode names its model; without a model to name, it is not sent.
     if let Some(model) = spec
         .model
         .map(String::from)
         .or_else(|| resolved_model.map(String::from))
         .or_else(configured_model)
     {
-        let (mode, instructions) = if spec.plan {
-            ("plan", Some(PLAN_INSTRUCTIONS))
-        } else {
-            ("default", None)
-        };
-        params["collaborationMode"] = json!({"mode": mode, "settings": {
+        params["collaborationMode"] = json!({"mode": "default", "settings": {
             "model": model,
             "reasoning_effort": spec.effort,
-            "developer_instructions": instructions,
+            "developer_instructions": null,
         }});
     }
     json!({"id": TURN_REQUEST, "method": "turn/start", "params": params}).to_string()

@@ -15,7 +15,7 @@ use gpui::{
     App, Div, FocusHandle, FontWeight, KeyDownEvent, ListOffset, Pixels, Role, Window, div,
     prelude::*, px,
 };
-use patchwork_core::orchestration::{Upkeep, upkeep};
+use patchwork_core::orchestration::{Upkeep, is_goal_continuation, upkeep};
 use patchwork_core::threads::{Message, Role as MessageRole};
 
 use crate::ui::theme::{fs_lg, fs_md, radius_lg, Theme};
@@ -65,14 +65,16 @@ impl RailState {
     }
 }
 
-/// A `/compact` is a divider and a goal clear is not shown, so neither starts a turn.
+/// A `/compact` is a divider, and a goal's pause, clear or continuation is not shown, so none
+/// starts a turn.
 pub fn starts_turn(m: &Message) -> bool {
-    m.role == MessageRole::User && upkeep(&m.text).is_none()
+    m.role == MessageRole::User && upkeep(&m.text).is_none() && !is_goal_continuation(&m.text)
 }
 
-/// A message that has the agent drop its goal, in any of the forms the core sends or reads.
-pub fn is_goal_clear(text: &str) -> bool {
-    upkeep(text) == Some(Upkeep::GoalClear)
+/// A goal message the chat does not show: a `/goal` command Patchwork answers itself, such as a
+/// pause or a clear, or the message Patchwork sends to carry the goal on.
+pub fn is_goal_upkeep(text: &str) -> bool {
+    upkeep(text) == Some(Upkeep::Goal) || is_goal_continuation(text)
 }
 
 /// Whether the chat has a rail: turns enough, and a transcript tall enough to hold one. The

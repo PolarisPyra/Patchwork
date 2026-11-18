@@ -30,9 +30,6 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
     if spec.mode == AccessMode::FullAccess {
         args.push("--auto".into());
     }
-    if spec.plan {
-        args.extend(["--agent".into(), "plan".into()]);
-    }
     if let Some(id) = spec.session_id {
         args.extend(["--session".into(), id.into()]);
     }

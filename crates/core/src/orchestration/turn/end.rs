@@ -17,7 +17,7 @@ use crate::logging::{AGENT_LOG, Data, Source};
 use crate::settings::LogLevel;
 use crate::orchestration::messages::queue::FollowUp;
 use crate::orchestration::changes::checkpoint;
-use crate::orchestration::goal::clear_command;
+use crate::orchestration::goal;
 use crate::orchestration::output::stream::publish;
 use crate::orchestration::turn::start::{Turn, TurnRequest};
 
@@ -26,7 +26,8 @@ pub(in crate::orchestration) struct TurnEnd {
     pub(in crate::orchestration) status: MessageStatus,
     pub(in crate::orchestration) error: Option<String>,
     pub(in crate::orchestration) cancelled: bool,
-    pub(in crate::orchestration) clear_in_agent: Option<&'static str>,
+    /// The goal goes on in another turn once this one ends.
+    pub(in crate::orchestration) goal_continues: bool,
     pub(in crate::orchestration) session_lost: bool,
 }
 
@@ -103,8 +104,8 @@ pub(in crate::orchestration) fn hold_unanswered(turn: &Turn, ids: &[String]) {
 
 /// Ends a turn whose agent has exited.
 ///
-/// Forgets the turn, completes each of its messages, then starts the turn that drops its goal or
-/// answers the steering messages it never took. When the agent lost the session the turn resumed
+/// Forgets the turn, completes each of its messages, then starts the turn that answers the
+/// steering messages it never took, sends the queued ones, or carries the goal on. When the agent lost the session the turn resumed
 /// (`session_lost`), the turn runs again in a new session instead, given the conversation so far as
 /// a transcript.
 #[expect(
@@ -116,7 +117,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         status,
         error,
         cancelled,
-        clear_in_agent,
+        goal_continues,
         session_lost,
     } = end;
     // Forget the turn before announcing it. Queued messages remain persisted in the
@@ -297,37 +298,11 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
     if !cancelled
         && status == MessageStatus::Error
         && unanswered.is_empty()
-        && clear_in_agent.is_none()
         && turn.core.fall_back(&turn.thread_id)
     {
         return;
     }
 
-    // The agent drops the goal in a turn of its own; unanswered steers wait as queued messages,
-    // as the queued ones do.
-    if let Some(command) = clear_in_agent {
-        let core = &turn.core;
-        match core.send_message(turn.thread_id.clone(), command.into(), vec![], false) {
-            Ok(_) => {
-                // Held as queued messages, all of them: the turn's queue takes one, and the
-                // rest would stay in the thread as sent with nothing to send them.
-                hold_unanswered(
-                    &turn,
-                    &unanswered
-                        .iter()
-                        .flat_map(FollowUp::ids)
-                        .collect::<Vec<_>>(),
-                );
-                return;
-            }
-            Err(e) => {
-                log::warn!(
-                    error:% = e;
-                    "failed to clear the goal in the agent's session: {{error}}"
-                );
-            }
-        }
-    }
     // Unanswered steers have already been delivered, so clear their pending UI state
     // before continuing them in a new turn.
     for f in &unanswered {
@@ -367,13 +342,12 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         ) {
             log::warn!(error:% = e; "failed to start the turn for queued messages: {{error}}");
         }
-    } else if !cancelled
-        && status == MessageStatus::Complete
-        && turn.text != clear_command(turn.agent)
-    {
+    } else if goal_continues {
+        // Messages queued meanwhile go first; the goal carries on after them.
+        goal::carry_on_later(&turn.core, &turn.thread_id);
+    } else if !cancelled && status == MessageStatus::Complete {
         // Queued messages go once the turn has finished; after Stop or an error they wait for
-        // the user to send them. The turn that only drops the goal after a Stop is not a turn
-        // the user ended, so the messages it held keep waiting too.
+        // the user to send them.
         turn.core.send_queued_later(&turn.thread_id);
     }
 }

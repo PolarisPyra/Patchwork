@@ -63,7 +63,6 @@ fn thread(messages: Vec<Message>) -> Thread {
         background: None,
         archived_at: None,
         parent: None,
-        plan_mode: false,
         slash_commands: vec![],
         imported_from: None,
         context_pending: false,

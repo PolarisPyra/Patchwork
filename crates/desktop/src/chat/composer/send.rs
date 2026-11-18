@@ -15,14 +15,7 @@ use super::sigil_menu;
 impl Composer {
     /// Sends the draft. While a turn runs it queues or steers, as the send menu picked;
     /// `alternate` (Ctrl+Enter) does the other one, or steers with the first queued message.
-    /// `ask_resume` asks first when the session has gone cold, unless that was just answered.
-    pub(super) fn send(
-        &mut self,
-        alternate: bool,
-        ask_resume: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn send(&mut self, alternate: bool, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.editor.read(cx).content.trim().to_string();
         let Some(workspace) = self.workspace.upgrade() else {
             return;
@@ -43,26 +36,10 @@ impl Composer {
             cx.defer(move |cx| workspace.update(cx, Workspace::update_queued));
             return;
         }
-        // With a plan ready, sending nothing implements it; anything written refines it.
-        if text.is_empty() && self.attachments.is_empty() && w.ready_plan().is_some() {
-            workspace.update(cx, |w, cx| w.implement_plan(false, cx));
-            return;
-        }
         if self.attachments.is_empty()
             && let Some(command) = sigil_menu::local_command(&text)
         {
             return self.run_local(command, None, window, cx);
-        }
-        // Mid-turn, /goal clear is the Stop button: the agent's session drops the goal once it
-        // exits.
-        if working
-            && w.thread.as_ref().is_some_and(|t| t.goal.is_some())
-            && crate::chat::rail::is_goal_clear(&text)
-            && self.attachments.is_empty()
-        {
-            self.editor.update(cx, |e, cx| e.clear(window, cx));
-            workspace.update(cx, crate::workspace::Workspace::stop);
-            return;
         }
         let queue_next = self.queue_next.unwrap_or_else(|| queue_by_default(w));
         let queue = working && (alternate != queue_next);
@@ -81,10 +58,6 @@ impl Composer {
         if text.is_empty() && self.attachments.is_empty() {
             return;
         }
-        // Resuming a large session whose cache has expired re-reads all of it at full price.
-        if ask_resume && workspace.update(cx, crate::workspace::Workspace::ask_before_resume) {
-            return;
-        }
         let picks = self.picks(workspace.read(cx));
         let new = NewThread {
             id: None,
@@ -94,7 +67,6 @@ impl Composer {
             access_mode: picks.access,
             effort: picks.effort,
             compact_window: picks.compact,
-            plan_mode: self.draft.plan_mode,
         };
         let attachments = std::mem::take(&mut self.attachments);
         // On a bot's page the message starts a run of the bot.
@@ -121,11 +93,6 @@ impl Composer {
         self.editor.update(cx, |e, cx| e.clear(window, cx));
         self.queue_next = None;
         cx.notify();
-    }
-
-    /// Sends the draft once the resume prompt is answered with Continue.
-    pub fn send_unasked(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.send(false, false, window, cx);
     }
 
     pub fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {

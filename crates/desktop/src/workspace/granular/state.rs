@@ -1,4 +1,4 @@
-//! What the card holds and what its buttons do: whose settings they are, the five agents it
+//! What the card holds and what its buttons do: whose settings they are, the three agents it
 //! sets, and opening, saving, resetting and closing it.
 
 // Rust guideline compliant 2026-10-09
@@ -7,9 +7,7 @@ use std::sync::Arc;
 
 use gpui::{Entity, FocusHandle, Focusable, SharedString, Window, prelude::*};
 use patchwork_core::provider::AgentKind;
-use patchwork_core::threads::{
-    AgentPick, Attachment, Granular, NewThread, Reserves, delegates_sub_agents, runs_sub_agents_at,
-};
+use patchwork_core::threads::{AgentPick, Attachment, Granular, NewThread, Reserves};
 
 use crate::ui::menu::Menu;
 use crate::workspace::Workspace;
@@ -21,24 +19,20 @@ pub enum GranularScope {
     Project(String),
 }
 
-/// One of the five agents the card sets.
+/// One of the three agents the card sets.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Slot {
     Main,
     Fallback,
-    Sub,
-    SubFallback,
     Review,
 }
 
 impl Slot {
-    /// The slot's name, which is unique among the five for a screen reader.
+    /// The slot's name, which is unique among the three for a screen reader.
     pub(super) fn name(self) -> &'static str {
         match self {
             Slot::Main => "Agent",
             Slot::Fallback => "Fallback",
-            Slot::Sub => "Sub agents",
-            Slot::SubFallback => "Fallback sub agents",
             Slot::Review => "Reviewer",
         }
     }
@@ -75,116 +69,46 @@ pub struct GranularDialog {
     pub(super) error: Option<SharedString>,
 }
 
-/// The agent that starts a sub agent slot's sub agents: the chat's, or its fallback. None for the
-/// other slots, and for the sub agents of a fallback not picked.
-pub(super) fn starter_of(value: &Granular, slot: Slot) -> Option<AgentKind> {
-    match slot {
-        Slot::Main | Slot::Fallback | Slot::Review => None,
-        Slot::Sub => Some(value.main.agent),
-        Slot::SubFallback => value.reserves.fallback.as_ref().map(|f| f.agent),
-    }
-}
-
-/// The agent the slot's pick runs on. None for a fallback not picked, and for sub agents whose
-/// model and effort cannot be set: those of an agent whose CLI cannot be told what to run its
-/// own at.
+/// The agent the slot's pick runs on. None for a fallback or reviewer not picked.
 pub(super) fn agent_of(value: &Granular, slot: Slot) -> Option<AgentKind> {
-    match slot {
-        Slot::Main => Some(value.main.agent),
-        Slot::Fallback => value.reserves.fallback.as_ref().map(|f| f.agent),
-        Slot::Review => value.reserves.review.as_ref().map(|r| r.agent),
-        Slot::Sub | Slot::SubFallback => {
-            let starter = starter_of(value, slot)?;
-            let picked = pick_of(value, slot).map_or(starter, |p| p.agent);
-            let set = if picked == starter {
-                runs_sub_agents_at(starter)
-            } else {
-                delegates_sub_agents(starter)
-            };
-            set.then_some(picked)
-        }
-    }
+    pick_of(value, slot).map(|p| p.agent)
 }
 
 pub(super) fn pick_of(value: &Granular, slot: Slot) -> Option<&AgentPick> {
     match slot {
         Slot::Main => Some(&value.main),
         Slot::Fallback => value.reserves.fallback.as_ref(),
-        Slot::Sub => value.reserves.sub.as_ref(),
-        Slot::SubFallback => value.reserves.sub_fallback.as_ref(),
         Slot::Review => value.reserves.review.as_ref(),
     }
 }
 
-/// Changes the slot's model or effort. Sub agents on the agent that starts them, left at the
-/// default for both, are not kept.
+/// Changes the slot's model or effort.
 pub(super) fn edit(value: &mut Granular, slot: Slot, change: impl FnOnce(&mut AgentPick)) {
-    let Some(agent) = agent_of(value, slot) else {
-        return;
-    };
-    let own = starter_of(value, slot) == Some(agent);
     let held = match slot {
-        Slot::Main => return change(&mut value.main),
-        Slot::Fallback | Slot::Review => {
-            let held = if slot == Slot::Fallback {
-                &mut value.reserves.fallback
-            } else {
-                &mut value.reserves.review
-            };
-            if let Some(pick) = held {
-                change(pick);
-            }
-            return;
-        }
-        Slot::Sub => &mut value.reserves.sub,
-        Slot::SubFallback => &mut value.reserves.sub_fallback,
+        Slot::Main => Some(&mut value.main),
+        Slot::Fallback => value.reserves.fallback.as_mut(),
+        Slot::Review => value.reserves.review.as_mut(),
     };
-    let unset = AgentPick {
-        agent,
-        model: None,
-        effort: None,
-    };
-    let mut pick = held
-        .take()
-        .filter(|p| p.agent == agent)
-        .unwrap_or_else(|| unset.clone());
-    change(&mut pick);
-    *held = (!own || pick != unset).then_some(pick);
+    if let Some(pick) = held {
+        change(pick);
+    }
 }
 
-/// Puts `pick` in a slot that names an agent, and drops the sub agents of the agent it replaces.
-/// Sub agents put on the agent that starts them are that agent's own again.
+/// Puts `pick` in a slot that names an agent, when it names another agent than the slot's.
 pub(super) fn set_agent(value: &mut Granular, slot: Slot, pick: Option<AgentPick>) {
     match (slot, pick) {
-        (Slot::Main, Some(pick)) if pick.agent != value.main.agent => {
-            value.main = pick;
-            value.reserves.sub = None;
-        }
+        (Slot::Main, Some(pick)) if pick.agent != value.main.agent => value.main = pick,
         (Slot::Fallback, pick)
             if pick.as_ref().map(|p| p.agent)
                 != value.reserves.fallback.as_ref().map(|f| f.agent) =>
         {
             value.reserves.fallback = pick;
-            value.reserves.sub_fallback = None;
         }
         (Slot::Review, pick)
             if pick.as_ref().map(|p| p.agent)
                 != value.reserves.review.as_ref().map(|r| r.agent) =>
         {
             value.reserves.review = pick;
-        }
-        (Slot::Sub | Slot::SubFallback, Some(pick)) => {
-            let Some(starter) = starter_of(value, slot) else {
-                return;
-            };
-            let held = if slot == Slot::Sub {
-                &mut value.reserves.sub
-            } else {
-                &mut value.reserves.sub_fallback
-            };
-            if pick.agent != held.as_ref().map_or(starter, |p| p.agent) {
-                *held = (pick.agent != starter).then_some(pick);
-            }
         }
         _ => {}
     }
@@ -409,8 +333,6 @@ impl Workspace {
             Slot::Main if main.agent == value.main.agent => value.main = main,
             Slot::Main => set_agent(value, slot, Some(main)),
             Slot::Fallback => set_agent(value, slot, None),
-            Slot::Sub => value.reserves.sub = None,
-            Slot::SubFallback => value.reserves.sub_fallback = None,
             Slot::Review => value.reserves.review = None,
         }
         dialog.error = None;

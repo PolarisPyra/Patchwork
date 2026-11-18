@@ -1,4 +1,4 @@
-//! The system prompt the agent runs with: Patchwork's guidance, the plan-mode and computer-use parts, the project's instructions, and the provider's own prompt from Settings.
+//! The system prompt the agent runs with: Patchwork's guidance, the computer-use part, the project's instructions, and the provider's own prompt from Settings.
 
 // Rust guideline compliant 2026-10-09
 
@@ -27,9 +27,7 @@ pub(super) fn system_prompt(request: &Request, root_dir: &Path) -> String {
     if let Some(instructions) = &request.instructions {
         let _ = write!(prompt, "\n\n{instructions}");
     }
-    if request.plan {
-        let _ = write!(prompt, "\n\n{PLAN_MODE}");
-    } else if crate::computer::enabled() {
+    if crate::computer::enabled() {
         let _ = write!(prompt, "\n\n{COMPUTER_USE}");
     }
     for name in ["AGENTS.md", "CLAUDE.md"] {
@@ -69,7 +67,3 @@ something. Only on a scaled display is its width not screenWidth; then multiply 
 screenWidth divided by the picture's width. Take a screenshot \
 before acting, and again after, because the screen only changes when you act. Prefer a tool over \
 the screen whenever one exists. Stop and report when a step needs the user's password.";
-
-const PLAN_MODE: &str = "\
-Plan mode is on: do not change anything. Research with the read-only tools, then call propose_plan \
-once with a concrete, step-by-step implementation plan in Markdown, and stop.";

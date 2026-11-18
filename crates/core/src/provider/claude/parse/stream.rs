@@ -15,7 +15,6 @@ use crate::threads::TaskStatus;
 use crate::threads::TokenUsage;
 use crate::provider::edit_lines;
 use crate::provider::file_touched;
-use crate::provider::GoalUpdate;
 use crate::provider::without_attachments;
 use crate::provider::Parsed;
 use crate::provider::TaskEvent;
@@ -27,7 +26,6 @@ use crate::provider::tool_started;
 use crate::provider::ToolStart;
 
 use super::super::PLAN_CAPTURED;
-use super::goal::goal_from_command;
 use super::requests::claude_control_request;
 use super::tasks::{claude_ended_status, claude_task_status, subagent_of, tool_result};
 
@@ -269,22 +267,16 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
                     out.push(thinking(message_id, text));
                 }
             }
-            if parent.is_none()
-                && v["event"]["type"] == "message_delta"
-                && delta["stop_reason"] == "end_turn"
-            {
-                out.push(Parsed::Goal(GoalUpdate::Checking));
-            }
         }
-        // Command output such as `/goal` comes as a whole synthetic message, not streamed.
+        // Command output comes as a whole synthetic message, not streamed.
         Some("assistant") if parent.is_none() && v["message"]["model"] == "<synthetic>" => {
             let text = block_text(blocks);
-            // A goal echoes the attachment list it was sent with; the message already shows them.
+            // Command output may echo the attachment list it was sent with; the message already
+            // shows them.
             let shown = without_attachments(&text);
             if !shown.is_empty() {
                 out.push(text_delta(message_id, shown));
             }
-            out.extend(goal_from_command(&text).map(Parsed::Goal));
         }
         Some("assistant") => {
             // A safety classifier stopped this reply. The CLI tells Claude so and the turn goes on,
@@ -325,17 +317,6 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
                     .filter(|b| b["type"] == "tool_result")
                     .map(|block| tool_result(block, message_id)),
             );
-            // Each `/goal` check that finds the goal unmet returns as Stop hook feedback.
-            let content = &v["message"]["content"];
-            let text = content
-                .as_str()
-                .map_or_else(|| block_text(blocks), String::from);
-            if parent.is_none()
-                && v["isSynthetic"] == true
-                && text.starts_with("Stop hook feedback:\n[")
-            {
-                out.push(Parsed::Goal(GoalUpdate::Checked));
-            }
         }
         Some("result") => {
             let is_error = v["is_error"].as_bool().unwrap_or(false);

@@ -313,7 +313,6 @@ fn only_a_finished_reply_that_changed_files_is_checked() {
         folder_id: None,
         archived_at: None,
         parent: None,
-        plan_mode: false,
         slash_commands: vec![],
         imported_from: None,
         context_pending: false,

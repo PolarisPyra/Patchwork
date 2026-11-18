@@ -301,21 +301,6 @@ impl Jobs {
             .cloned()
     }
 
-    /// Stops the job the call `tool_id` started, as the user asks from its listing. None when
-    /// no job of the thread came from that call; false when it had already ended.
-    pub(in crate::orchestration) fn stop_listed(
-        &self,
-        thread_id: &str,
-        tool_id: &str,
-    ) -> Option<bool> {
-        let job = self
-            .lock()
-            .values()
-            .find(|job| job.thread_id == thread_id && job.tool_id == tool_id)
-            .cloned()?;
-        Some(job.stop())
-    }
-
     /// Stops every job and what each left running, waiting up to [`STOP_GRACE`] for them, so
     /// none outlives the app. A listed job still running is published as stopped.
     pub(in crate::orchestration) fn stop_all(&self, core: &Core) {

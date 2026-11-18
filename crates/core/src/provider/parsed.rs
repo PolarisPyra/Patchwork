@@ -6,8 +6,8 @@ use serde_json::Value;
 use crate::events::AgentEvent;
 use crate::system::now_ms;
 use crate::threads::{
-    StepStatus, ToolCall, tool_output, SubAgent, Question, TokenUsage, Goal, BackgroundTask,
-    TaskStatus, EditLines,
+    StepStatus, ToolCall, tool_output, SubAgent, Question, TokenUsage, BackgroundTask, TaskStatus,
+    EditLines,
 };
 use crate::usage::UsageWindow;
 use super::ProviderSlashCommand;
@@ -124,26 +124,8 @@ pub enum Parsed {
     Steered,
     /// The agent refused a steering message, so it waits for the turn to end.
     SteerRejected(String),
-    Goal(GoalUpdate),
     /// The turn is over; stdin is closed so the agent exits.
     Finished,
-}
-
-/// A change to the thread's `/goal`, as the agent reports it.
-#[derive(Debug)]
-pub enum GoalUpdate {
-    /// Claude set the goal, or restated it with the checks made so far.
-    Set {
-        objective: String,
-        checks: Option<u32>,
-    },
-    /// Claude's evaluator found the goal not met yet, so the agent keeps going.
-    Checked,
-    /// Claude ended a reply, so its evaluator checks the goal, if one is set.
-    Checking,
-    Cleared,
-    /// Codex reports the whole goal.
-    Reported(Goal),
 }
 
 /// Collapses whitespace and caps the length, for tool summaries.

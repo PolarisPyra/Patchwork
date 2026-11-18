@@ -1,23 +1,26 @@
-//! Stopping a goal: the message that has the agent drop it, and clearing it from the thread.
+//! The `/goal` commands Patchwork answers itself, which never reach the agent: pausing and
+//! clearing the goal.
 
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
 use std::sync::Arc;
 
-use super::state::{held_key, signature};
+use super::state::signature;
 use crate::Core;
-use crate::events::{AgentEvent, AgentEventEnvelope};
-use crate::provider::{AgentKind, GoalCommand};
+use crate::orchestration;
+use crate::events::AgentEvent;
+use crate::provider::GoalCommand;
+use crate::system::now_ms;
+use crate::threads::GoalStatus;
 
 /// The messages the app also sends on its own rather than as work for the agent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Upkeep {
     /// `/compact`: the conversation is summarized.
     Compact,
-    /// `/goal clear`, one of its aliases, or the message that asks an agent with no such command
-    /// to drop its goal.
-    GoalClear,
+    /// A `/goal` command Patchwork answers itself: `/goal` alone, a clear, or a pause.
+    Goal,
 }
 
 /// What upkeep `text` is, or None when it is work for the agent.
@@ -26,13 +29,11 @@ pub fn upkeep(text: &str) -> Option<Upkeep> {
     let text = text.trim();
     if text == "/compact" {
         Some(Upkeep::Compact)
-    } else if text == STOP_GOAL
-        || matches!(
-            crate::provider::goal_command(text),
-            Some(GoalCommand::Clear)
-        )
-    {
-        Some(Upkeep::GoalClear)
+    } else if matches!(
+        crate::provider::goal_command(text),
+        Some(GoalCommand::Show | GoalCommand::Clear | GoalCommand::Pause)
+    ) {
+        Some(Upkeep::Goal)
     } else {
         None
     }
@@ -44,55 +45,38 @@ pub fn is_upkeep(text: &str) -> bool {
     upkeep(text).is_some()
 }
 
-/// What an agent with no command to clear a goal is asked instead.
-const STOP_GOAL: &str = "Stop the current goal.";
-
-/// The message that has the agent drop its goal. Antigravity has no command to clear a goal;
-/// its docs say to ask the agent.
-pub(crate) fn clear_command(agent: AgentKind) -> &'static str {
-    match agent {
-        AgentKind::Antigravity | AgentKind::OpenCode | AgentKind::Api => STOP_GOAL,
-        AgentKind::Claude | AgentKind::Codex => "/goal clear",
-    }
-}
-
 impl Core {
-    /// Clears the goal, in the agent's session too, so the agent does not pick it up again.
-    /// A goal's final status remains in the thread until the user clears it. The agent's own
-    /// instructions are still cleared when pursuit ends (see `settle`).
+    /// Clears the goal. A reply still running finishes, and nothing carries the goal on after it.
     ///
     /// # Errors
     ///
-    /// Returns an error when a turn is running, or when the goal's dismissal or held state cannot
-    /// be saved or the stop message cannot be sent.
+    /// Returns an error when the goal's dismissal cannot be saved.
     pub fn stop_goal(self: &Arc<Self>, thread_id: &str) -> Result<(), Error> {
-        let Some(thread) = self.store.thread(thread_id) else {
+        let Some(goal) = self.store.thread(thread_id).and_then(|t| t.goal) else {
             return Ok(());
         };
-        // A `/goal` command runs as a turn of its own, so a running turn must be stopped first.
-        if self.runner.is_running(thread_id) {
-            return Err("Stop the running turn before clearing the goal".into());
-        }
-        let Some(goal) = thread.goal.as_ref() else {
-            return Ok(());
-        };
-        self.store.dismiss_goal(thread_id, &signature(goal))?;
-        self.store.set_state(&held_key(thread_id), "")?;
-        // Claude and Codex report the clear back, so the banner stays until their reply, as it
-        // does while the goal runs. Other agents report nothing, so the banner clears now.
-        let reports_clear = matches!(thread.agent, AgentKind::Claude | AgentKind::Codex);
-        if thread.session_id.is_none() || !reports_clear {
-            self.emit(AgentEventEnvelope {
-                thread_id: thread_id.into(),
-                event: AgentEvent::GoalUpdated { goal: None },
-            });
-        }
-        // Explicitly closing the banner must clear the CLI's session state too, including a
-        // goal marked complete: some CLIs can report that cached goal again on resume.
-        if thread.session_id.is_some() {
-            let stop = clear_command(thread.agent);
-            self.send_message(thread_id.into(), stop.into(), vec![], false)?;
-        }
+        self.store.dismiss_goal(thread_id, &signature(&goal))?;
+        orchestration::publish(self, thread_id, AgentEvent::GoalUpdated { goal: None });
         Ok(())
+    }
+
+    /// Pauses the goal. A reply still running finishes, and nothing carries the goal on after it
+    /// until it is resumed.
+    pub(crate) fn pause_goal(self: &Arc<Self>, thread_id: &str) {
+        let Some(goal) = self
+            .store
+            .thread(thread_id)
+            .and_then(|t| t.goal)
+            .filter(|g| g.status == GoalStatus::Active)
+        else {
+            return;
+        };
+        orchestration::publish(
+            self,
+            thread_id,
+            AgentEvent::GoalUpdated {
+                goal: Some(goal.with_status(GoalStatus::Paused, now_ms())),
+            },
+        );
     }
 }

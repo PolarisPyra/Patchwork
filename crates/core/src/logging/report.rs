@@ -119,11 +119,10 @@ fn chat(thread: &Thread, project: Option<Result<String, Error>>) -> String {
         "goal": thread.goal.as_ref().map(|goal| serde_json::json!({
             "status": goal.status,
             "checks": goal.checks,
-            "tokensUsed": goal.tokens_used,
+            "secondsUsed": goal.seconds_used(crate::system::now_ms()),
         })),
         "parent": thread.parent,
         "archived": thread.archived_at.is_some(),
-        "planMode": thread.plan_mode,
         "role": thread.role,
         "importedFrom": thread.imported_from.as_deref().map(|path| shown(Path::new(path))),
         "contextPending": thread.context_pending,

@@ -219,15 +219,6 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         ))
         .into_any_element(),
         switch_row(
-            "ask-resume",
-            "Ask before resuming a large task",
-            Some("When its prompt cache has expired, so resuming would re-read the whole context"),
-            tokens.ask_before_resume,
-            |t, on| t.ask_before_resume = on,
-            cx,
-        )
-        .into_any_element(),
-        switch_row(
             "generate-titles",
             "Generate chat and task titles",
             None,

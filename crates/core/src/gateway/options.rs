@@ -1,5 +1,4 @@
-//! What a chat runs with, as it is changed from a chat app: its agent, model, access and plan
-//! mode.
+//! What a chat runs with, as it is changed from a chat app: its agent, model and access.
 
 // Rust guideline compliant 2026-10-09
 
@@ -19,8 +18,8 @@ pub(crate) const ACCESS: [(&str, AccessMode); 4] = [
 ];
 
 impl Core {
-    /// Sets what `thread` runs with: its `model`, `agent` (with a model after its name), `plan`
-    /// mode (on or off) or `access`, as `word` says.
+    /// Sets what `thread` runs with: its `model`, `agent` (with a model after its name) or
+    /// `access`, as `word` says.
     ///
     /// # Errors
     ///
@@ -37,11 +36,6 @@ impl Core {
                 self.set_thread_model(&thread.id, thread.agent, model)?;
             }
             "agent" => self.switch_agent_named(thread, value)?,
-            "plan" => match value.to_lowercase().as_str() {
-                "on" => self.set_thread_plan_mode(&thread.id, true)?,
-                "off" => self.set_thread_plan_mode(&thread.id, false)?,
-                _ => return Err("Plan mode is on or off".into()),
-            },
             "access" => {
                 let lower = value.to_lowercase();
                 let Some((_, mode)) = ACCESS.iter().find(|(name, _)| *name == lower) else {
@@ -85,9 +79,8 @@ pub(crate) fn options(thread: &Thread) -> String {
         .iter()
         .find(|(_, mode)| *mode == thread.access_mode)
         .map_or("full", |(name, _)| *name);
-    let plan = if thread.plan_mode { "on" } else { "off" };
     format!(
-        "{}: {:?}, model {}, access {access}, plan mode {plan}.",
+        "{}: {:?}, model {}, access {access}.",
         thread.title,
         thread.agent,
         thread.model.as_deref().unwrap_or("default"),
