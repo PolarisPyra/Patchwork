@@ -12,7 +12,7 @@ use patchwork_core::gateway::ChatAppCall;
 use patchwork_core::vault::{Method, Saved, Status, status};
 use zeroize::{Zeroize, Zeroizing};
 
-use self::rows::{activity_rows, idle_row, protected_row, recovery_row, saved_rows, screen_row};
+use self::rows::{activity_rows, protected_row, recovery_row, saved_rows, timeout_row};
 use super::controls::{FieldKind, alert, token_row, vault_notice};
 use super::dialog::{SettingsDialog, SettingsEvent};
 use crate::ui::theme::{fs_sm, theme};
@@ -541,11 +541,7 @@ fn open_rows(
         .into_iter()
         .collect();
     if has_password {
-        rows.push(idle_row(d, cx));
-        // Only Linux has the listener for the screen and for sleep.
-        if cfg!(target_os = "linux") {
-            rows.push(screen_row(d, cx));
-        }
+        rows.push(timeout_row(d, cx));
         rows.push(password_row(
             d,
             CURRENT,

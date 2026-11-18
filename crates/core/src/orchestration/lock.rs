@@ -1,6 +1,6 @@
 //! Locking the vault under what runs: an agent or a server that started with a secret holds
-//! it until it ends, so a lock ends them, and an unattended vault locks itself: after a time
-//! without use, when the screen is locked, and when the computer goes to sleep.
+//! it until it ends, so a lock ends them, and an unattended vault locks itself as its timeout
+//! says: after a time without use, or when the screen is locked or the computer goes to sleep.
 
 // Rust guideline compliant 2026-10-09
 
@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use crate::vault::{Method, Status, status};
+use crate::vault::{Method, Status, VaultTimeout, status};
 use crate::{Core, Error};
 
 /// How often the vault is checked for having been left alone.
@@ -61,7 +61,10 @@ impl Core {
                 let Some(core) = core.upgrade() else {
                     return;
                 };
-                let after = u64::from(core.store.settings().vault.lock_after_mins) * 60_000;
+                let after = match core.store.settings().vault.timeout {
+                    VaultTimeout::Minutes(mins) => u64::from(mins) * 60_000,
+                    _ => 0,
+                };
                 if after != 0 && core.idle_ms() >= after {
                     core.lock_left("Patchwork's window went unused");
                 } else if left.load(Ordering::Relaxed)
@@ -168,7 +171,7 @@ fn watch(bus: Bus, core: &std::sync::Weak<Core>, left: &AtomicBool) -> zbus::Res
             return Ok(());
         };
         let held_off = gone
-            && core.store.settings().vault.lock_with_screen
+            && core.store.settings().vault.timeout == VaultTimeout::SystemLock
             && !core.lock_left("the screen was locked or the computer went to sleep");
         left.store(held_off, Ordering::Relaxed);
     }

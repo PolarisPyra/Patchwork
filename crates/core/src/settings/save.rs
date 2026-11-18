@@ -95,6 +95,8 @@ impl Core {
             || old.disabled_hooks != settings.disabled_hooks;
         // Which chat apps are connected, and how, is what the gateway connects with.
         let gateway_changed = old.gateway.platforms != settings.gateway.platforms;
+        let timeout =
+            (old.vault.timeout != settings.vault.timeout).then_some(settings.vault.timeout);
         let changed = changed_sections(&old, &settings);
         self.update_settings(|s| *s = settings)?;
         if !changed.is_empty() {
@@ -106,6 +108,12 @@ impl Core {
         // prompt, skills or hooks, so the next message starts a new one.
         if guards_changed || prompt_changed || extensions_changed {
             self.runner.retire_all_idle();
+        }
+        // Keeping or dropping the key that opens a vault that never locks waits on the keychain.
+        if let Some(timeout) = timeout {
+            std::thread::spawn(move || {
+                crate::vault::keep_open(timeout == crate::vault::VaultTimeout::Never);
+            });
         }
         if gateway_changed {
             let core = Arc::clone(self);

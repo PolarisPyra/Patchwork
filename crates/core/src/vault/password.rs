@@ -10,7 +10,6 @@ use std::time::{Duration, Instant};
 use chacha20poly1305::aead::OsRng;
 use chacha20poly1305::aead::rand_core::RngCore;
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
-use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
 use super::crypt::{
@@ -22,26 +21,6 @@ use super::state::{
     KEY_FILE, Method, Sealed, State, Status, Vault, keychain_key, set_status, state, status,
 };
 use crate::{Core, Error, provider, settings};
-
-/// How a vault with a password is kept shut.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
-pub struct VaultSettings {
-    /// The minutes without a key or the mouse in Patchwork's window after which the vault
-    /// locks. 0 never locks it.
-    pub lock_after_mins: u32,
-    /// Whether the vault locks when the screen is locked or the computer goes to sleep.
-    pub lock_with_screen: bool,
-}
-
-impl Default for VaultSettings {
-    fn default() -> Self {
-        Self {
-            lock_after_mins: 0,
-            lock_with_screen: true,
-        }
-    }
-}
 
 /// The fewest characters a password has.
 const MIN_PASSWORD: usize = 8;
@@ -179,8 +158,11 @@ pub(super) fn data_key_with(password: &str) -> Result<Zeroizing<[u8; KEY_LEN]>, 
     let (nonce, wrapped, salt) = row.ok_or("The vault has no password")?;
     // Derived without holding the vault, which other threads read meanwhile.
     let wrapping = derive(password, &salt)?;
-    data_key(&wrapping, &nonce, &wrapped)
-        .map_err(|_wrong_password| "That is not the vault's password".into())
+    let key = data_key(&wrapping, &nonce, &wrapped)
+        .map_err(|_wrong_password| "That is not the vault's password")?;
+    // The password proved right: a vault that never locks keeps what it gave.
+    super::timeout::hold(&wrapping);
+    Ok(key)
 }
 
 /// Opens a vault that waits for its password.
@@ -228,6 +210,7 @@ fn lock() -> Result<(), Error> {
             set_status(Status::Waiting);
             known::clear();
             set_confirmed(None);
+            super::timeout::release();
             log::info!("the vault is locked until its password is entered");
             Ok(())
         }
@@ -334,11 +317,13 @@ pub(super) fn change_password(new: &str) -> Result<String, Error> {
     let (shown, recovery) = new_recovery();
     if before == Status::Unset {
         make(&wrapping, &salt, &recovery)?;
+        super::timeout::hold(&wrapping);
         set_confirmed(Some(Instant::now()));
         return Ok(shown);
     }
     let config = config()?;
     rekey(Method::Password, &wrapping, Some(&salt), Some(&recovery))?;
+    super::timeout::hold(&wrapping);
     set_confirmed(Some(Instant::now()));
     if before == Status::Open(Method::File) {
         // The key file opens nothing now.
@@ -396,5 +381,7 @@ fn remove_password(current: &str) -> Result<(), Error> {
     data_key_with(current)?;
     let wrapping =
         keychain_key().map_err(|e| format!("The vault keeps its password on this system. {e}"))?;
-    rekey(Method::Keychain, &wrapping, None, None)
+    rekey(Method::Keychain, &wrapping, None, None)?;
+    super::timeout::release();
+    Ok(())
 }
