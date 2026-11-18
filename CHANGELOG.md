@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.109] - 2026-11-18
+
+**26.11.109** · 2 changes from 1 contributor
+
+- **Accurate merge status.** Patchwork now fetches the remote in the background and ignores commits already on the default branch after squash merges
+
+<details>
+<summary>Full changelog</summary>
+
+### Changed
+
+- A task's worktree status (files changed, commits and its menu) now sits at the right end of the composer's controls, just before Format. Attached images take its old place on the line just above the message box. by [PolarisPyra in #226](https://github.com/PolarisPyra/Patchwork/pull/226)
+
+### Fixed
+
+- A task's worktree kept showing a commit to merge after its pull request was squash-merged. Patchwork now fetches the project's remote in the background and no longer counts commits whose changes are already on the remote's default branch. by [PolarisPyra in #225](https://github.com/PolarisPyra/Patchwork/pull/225)
+
+</details>
+
 ## [26.11.108] - 2026-11-18
 
 **26.11.108** · 1 change from 1 contributor
