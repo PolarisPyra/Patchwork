@@ -46,6 +46,7 @@ impl Workspace {
         match target {
             Target::Archived(_) | Target::Many(_) => {}
             Target::Bot(_) => {
+                items.push(item("Details", "robot", Act::Details));
                 items.push(item("Background…", "image", Act::Background));
                 items.push(Item {
                     danger: true,
@@ -275,6 +276,7 @@ impl Workspace {
             (Target::Thread(id), Act::Background) => {
                 return self.open_background_dialog(id, window, cx);
             }
+            (Target::Bot(id), Act::Details) => return self.open_bot_page(id, cx),
             (Target::Bot(id), Act::Background) => {
                 return self.open_bot_background_dialog(id, window, cx);
             }

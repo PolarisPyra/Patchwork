@@ -11,11 +11,11 @@ use patchwork_core::bots::Bot;
 use patchwork_core::threads::{ApprovalStatus, Thread};
 use crate::ui::avatar::{Mood, avatar};
 use crate::ui::theme::fs_sm;
-use crate::ui::{agent_label, agent_logo, button, icon, icon_button};
+use crate::ui::{agent_label, agent_logo, button, icon, icon_button, now_ms};
 use crate::ui::theme::{radius_sm, theme};
 use crate::workspace::{Workspace, is_busy};
 use super::render::{empty_row, section_label};
-use super::tree::thread_row;
+use super::tree::{chat_app_presence, phone_mark, presence_word, thread_row};
 
 /// The most runs listed under a bot; its page lists them all.
 const RUNS_SHOWN: usize = 5;
@@ -61,7 +61,13 @@ pub(super) fn bots_section(
         } else {
             Mood::Idle
         };
-        let shown = w.bot_shown.as_ref() == Some(&bot.id);
+        // Its chat opens from its row, so it is not listed under it.
+        let chat = bot
+            .thread_id
+            .as_ref()
+            .filter(|id| mine.iter().any(|th| &th.id == *id));
+        let shown = w.bot_shown.as_ref() == Some(&bot.id)
+            || (chat.is_some() && chat.map(String::as_str) == selected);
         let (fill, hover) = if shown {
             (t.bg_accent_soft, t.tree_selected)
         } else {
@@ -78,22 +84,27 @@ pub(super) fn bots_section(
                 .child(bot.name.clone())
                 .into_any_element()
         });
-        // The latest thing said in its newest run, or its greeting before it has run.
-        let said = mine
-            .first()
-            .and_then(|th| th.messages.iter().rev().find(|m| !m.text.trim().is_empty()))
-            .map_or_else(
-                || format!("Hi, I'm {}. What would you like me to do?", bot.name),
-                |m| {
-                    m.text
-                        .chars()
-                        .take(200)
-                        .collect::<String>()
-                        .split_whitespace()
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                },
-            );
+        // The latest thing said in its chat, or its newest run, or its greeting before it has
+        // run. A chat app's bot is named for what it is, since its chat shows what was said.
+        let said = if bot.chat_app.is_some() {
+            "Gateway conversation".to_string()
+        } else {
+            chat.and_then(|id| mine.iter().find(|th| &th.id == id))
+                .or(mine.first())
+                .and_then(|th| th.messages.iter().rev().find(|m| !m.text.trim().is_empty()))
+                .map_or_else(
+                    || format!("Hi, I'm {}. What would you like me to do?", bot.name),
+                    |m| {
+                        m.text
+                            .chars()
+                            .take(200)
+                            .collect::<String>()
+                            .split_whitespace()
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    },
+                )
+        };
         out.push(
             div()
                 .id(SharedString::from(format!("bot:{}", bot.id)))
@@ -137,20 +148,38 @@ pub(super) fn bots_section(
                                 .child(said),
                         ),
                 )
+                // In the same columns as the marks on its runs' rows, which sit 8px further in.
                 .child(
                     div()
-                        .id("agent")
-                        .role(Role::Image)
-                        .aria_label(agent_label(bot.agent))
-                        .size(px(20.))
                         .flex_none()
-                        // Centred under the New bot button, where the archive button shows.
-                        .mr(px(-2.))
                         .flex()
                         .items_center()
-                        .justify_center()
-                        .group_hover(group.clone(), gpui::Styled::invisible)
-                        .child(agent_logo(bot.agent, bot.model.as_deref(), 14.)),
+                        .gap(px(6.))
+                        .mr(px(8.))
+                        .children(bot.chat_app.map(|platform| {
+                            let in_use = mine.iter().any(|th| {
+                                w.chat_apps
+                                    .get(&th.id)
+                                    .is_some_and(|apps| apps.in_use(now_ms()))
+                            });
+                            let presence = chat_app_presence(w, platform, in_use);
+                            let label =
+                                format!("{}: {}", platform.label(), presence_word(presence));
+                            phone_mark("chat-app", label, presence, &t)
+                        }))
+                        .child(
+                            div()
+                                .id("agent")
+                                .role(Role::Image)
+                                .aria_label(agent_label(bot.agent))
+                                .size(px(16.))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .group_hover(group.clone(), gpui::Styled::invisible)
+                                .child(agent_logo(bot.agent, bot.model.as_deref(), 14.)),
+                        ),
                 )
                 .child(
                     button(
@@ -158,7 +187,8 @@ pub(super) fn bots_section(
                         format!("Archive {}", bot.name),
                     )
                     .absolute()
-                    .right(px(6.))
+                    // Over the agent's logo.
+                    .right(px(14.))
                     .size(px(20.))
                     .justify_center()
                     .rounded(px(radius_sm()))
@@ -185,7 +215,12 @@ pub(super) fn bots_section(
                 }))
                 .into_any_element(),
         );
-        for th in mine.into_iter().take(RUNS_SHOWN) {
+        let chat = chat.cloned();
+        for th in mine
+            .into_iter()
+            .filter(|th| Some(&th.id) != chat.as_ref())
+            .take(RUNS_SHOWN)
+        {
             rows.push(Target::Thread(th.id.clone()));
             out.push(thread_row(w, th, 1, selected, cx).into_any_element());
         }

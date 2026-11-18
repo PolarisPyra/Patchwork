@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::backgrounds::ChatBackground;
+use crate::gateway::Platform;
 use crate::permissions::{Effect, PermissionKind, PermissionRule};
 use crate::provider::AgentKind;
 use crate::threads::{AccessMode, TokenUsage};
@@ -35,6 +36,13 @@ pub struct Bot {
     /// The tools its runs may not use, refused on every provider.
     #[serde(default)]
     pub blocked: BlockedTools,
+    /// The chat app whose messages it answers; None for a bot started only in Patchwork.
+    #[serde(default)]
+    pub chat_app: Option<Platform>,
+    /// Its chat, which its page and its chat app's conversations carry on; None until the
+    /// first message. Its routines and `/new` from a chat app start runs of their own.
+    #[serde(default)]
+    pub thread_id: Option<String>,
 }
 
 /// Why a call the bot blocks is refused, as the chat and the agent are told.

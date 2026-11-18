@@ -7,13 +7,12 @@ use gpui::{
     AnyElement, ClickEvent, Div, Hsla, MouseButton, MouseDownEvent, Role, SharedString, Stateful,
     div, prelude::*, px,
 };
-use patchwork_core::gateway::ChatApps;
+use patchwork_core::gateway::{ChatApps, Platform, Presence};
 use patchwork_core::threads::{ApprovalStatus, MessageStatus, Thread};
 use crate::ui::avatar::{Mood, avatar};
 use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
 use crate::ui::{
-    agent_label, agent_logo, button, display_title, format_relative, icon, now_ms, platform_logo,
-    spinner,
+    agent_label, agent_logo, button, display_title, format_relative, icon, now_ms, spinner,
 };
 use crate::workspace::{Workspace, is_busy};
 
@@ -230,7 +229,7 @@ pub(super) fn thread_row(
                     })),
                 ),
         )
-        .children(chat_app_mark(w.chat_apps.get(&th.id), &t))
+        .children(chat_app_mark(w, w.chat_apps.get(&th.id), &t))
         .child(
             div()
                 .id("agent")
@@ -258,26 +257,59 @@ pub(super) fn thread_row(
 }
 
 /// The logo of the chat app that is on a chat now, dimmed once it has gone unused a while.
-fn chat_app_mark(apps: Option<&ChatApps>, t: &Theme) -> Option<AnyElement> {
+fn chat_app_mark(w: &Workspace, apps: Option<&ChatApps>, t: &Theme) -> Option<AnyElement> {
     let apps = apps?;
     let platform = apps.chats.first()?.platform;
     let mut names: Vec<&str> = apps.chats.iter().map(|b| b.platform.label()).collect();
     names.dedup();
-    let label = format!("{} is on this chat", names.join(", "));
-    let opacity = if apps.in_use(now_ms()) { 1. } else { 0.5 };
-    Some(
-        div()
-            .id("chat-app")
-            .role(Role::Image)
-            .aria_label(label)
-            .size(px(16.))
-            .flex_none()
-            .flex()
-            .items_center()
-            .justify_center()
-            .opacity(opacity)
-            .text_color(t.text_muted)
-            .child(platform_logo(platform, 14.))
-            .into_any_element(),
-    )
+    let presence = chat_app_presence(w, platform, apps.in_use(now_ms()));
+    let label = format!(
+        "{} is on this chat, {}",
+        names.join(", "),
+        presence_word(presence)
+    );
+    Some(phone_mark("chat-app", label, presence, t))
+}
+
+/// How chat app `platform` shows: its connection, and whether a conversation used it lately.
+pub(super) fn chat_app_presence(w: &Workspace, platform: Platform, in_use: bool) -> Presence {
+    w.chat_app_status
+        .iter()
+        .find(|(p, _)| *p == platform)
+        .map_or(Presence::Offline, |(_, status)| status.presence(in_use))
+}
+
+/// The word a screen reader says for `presence`.
+pub(super) fn presence_word(presence: Presence) -> &'static str {
+    match presence {
+        Presence::Online => "online",
+        Presence::Away => "away",
+        Presence::Offline => "offline",
+    }
+}
+
+/// A mobile device in green when online, yellow when away and red when offline, named `label`.
+pub(super) fn phone_mark(
+    id: &'static str,
+    label: String,
+    presence: Presence,
+    t: &Theme,
+) -> AnyElement {
+    let colour = match presence {
+        Presence::Online => t.success,
+        Presence::Away => t.warning,
+        Presence::Offline => t.danger,
+    };
+    div()
+        .id(id)
+        .role(Role::Image)
+        .aria_label(label)
+        .size(px(16.))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_color(colour)
+        .child(icon("device-mobile", 14.))
+        .into_any_element()
 }

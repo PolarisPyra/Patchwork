@@ -39,16 +39,20 @@ impl Core {
             compact_window: None,
             plan_mode: false,
         };
-        self.start_bot_run(&bot, new, prompt, Vec::new())
+        self.start_bot_run(&bot, new, prompt, Vec::new(), false)
     }
 
-    /// Starts a run of bot `id` on `prompt` and `attachments` with the agent, model, effort,
-    /// access, context window and project in `new`, and returns the thread. The bot keeps the
-    /// agent, model, effort and access for its later runs, such as its routines.
+    /// Sends `prompt` and `attachments` to bot `id`'s chat, and returns the chat.
+    ///
+    /// Without a chat yet, it starts one with the agent, model, effort, access, context window
+    /// and project in `new`, and the bot keeps the agent, model, effort and access for its
+    /// later runs, such as its routines. A chat app's bot starts its chat as its chat app's
+    /// messages would.
     ///
     /// # Errors
     ///
-    /// Returns an error as `run_bot` does, or when the bot cannot be saved.
+    /// Returns an error as `run_bot` does, or when the bot cannot be saved or the message
+    /// cannot be sent.
     pub fn run_bot_with(
         self: &Arc<Self>,
         id: &str,
@@ -57,6 +61,25 @@ impl Core {
         attachments: Vec<Attachment>,
     ) -> Result<Thread, Error> {
         let mut bot = self.bot(id).ok_or("The bot no longer exists")?;
+        if let Some(chat) = self.bot_chat(&bot) {
+            let queue = self.runner.is_running(&chat) && !self.store.settings().steer_while_working;
+            self.send_message(chat.clone(), prompt.to_string(), attachments, queue)?;
+            return self.thread(&chat);
+        }
+        if bot.chat_app.is_some() {
+            let thread = self.open_chat_app_run(&bot, None, true)?;
+            if let Err(error) =
+                self.send_message(thread.id.clone(), prompt.to_string(), attachments, false)
+            {
+                self.delete_thread(&thread.id);
+                self.emit(AgentEventEnvelope {
+                    thread_id: thread.id,
+                    event: AgentEvent::ThreadDeleted,
+                });
+                return Err(error);
+            }
+            return self.thread(&thread.id);
+        }
         if (bot.agent, &bot.model, &bot.effort, bot.access_mode)
             != (new.agent, &new.model, &new.effort, new.access_mode)
         {
@@ -66,16 +89,36 @@ impl Core {
             bot.access_mode = new.access_mode;
             bot = self.save_bot(bot)?;
         }
-        self.start_bot_run(&bot, new, prompt, attachments)
+        self.start_bot_run(&bot, new, prompt, attachments, true)
     }
 
-    /// Starts `bot`'s run in a thread made from `new`. See `run_bot`.
+    /// The id of `bot`'s chat, while it is there and not archived.
+    pub(crate) fn bot_chat(&self, bot: &Bot) -> Option<String> {
+        let id = bot.thread_id.as_ref()?;
+        self.store
+            .with_threads(|threads| {
+                threads
+                    .iter()
+                    .any(|t| &t.id == id && t.archived_at.is_none())
+            })
+            .then(|| id.clone())
+    }
+
+    /// Makes thread `thread_id` bot `id`'s chat.
+    pub(crate) fn set_bot_chat(&self, id: &str, thread_id: &str) -> Result<(), Error> {
+        let mut bot = self.bot(id).ok_or("The bot no longer exists")?;
+        bot.thread_id = Some(thread_id.to_string());
+        self.store.save_bot(&bot)
+    }
+
+    /// Starts `bot`'s run in a thread made from `new`, as its chat when `main`. See `run_bot`.
     fn start_bot_run(
         self: &Arc<Self>,
         bot: &Bot,
         new: NewThread,
         prompt: &str,
         attachments: Vec<Attachment>,
+        main: bool,
     ) -> Result<Thread, Error> {
         let prompt = prompt.trim();
         if prompt.is_empty() && attachments.is_empty() {
@@ -94,10 +137,18 @@ impl Core {
         }
         let thread = self.create_thread(NewThread { id: None, ..new })?;
         // Linked before the first turn, which reads it for the bot's instructions.
-        if let Err(e) = self
+        // Its chat is recorded before it is announced, so it is never listed as a run.
+        let linked = self
             .store
             .update_thread(&thread.id, |t| t.bot_id = Some(bot.id.clone()))
-        {
+            .and_then(|()| {
+                if main {
+                    self.set_bot_chat(&bot.id, &thread.id)
+                } else {
+                    Ok(())
+                }
+            });
+        if let Err(e) = linked {
             self.delete_thread(&thread.id);
             return Err(e);
         }

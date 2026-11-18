@@ -11,6 +11,7 @@ use super::hub::{Place, Seen};
 use super::outbound::savable;
 use super::platform::Platform;
 use super::types::Incoming;
+use crate::bots::Bot;
 use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::permissions::{Effect, PermissionRule, PermissionScope, RuleRef};
 use crate::provider::AgentKind;
@@ -99,9 +100,13 @@ impl Core {
         }
         let (platform, chat) = (message.platform, message.chat.as_str());
         self.note_chat(platform, &message.sender, chat);
-        let thread = self
-            .bound_thread(platform, chat)
-            .filter(|id| self.store.thread(id).is_some());
+        // An archived chat lets go of the conversation, which then goes to the platform's bot's
+        // chat, where it can be seen.
+        let thread = self.bound_thread(platform, chat).filter(|id| {
+            self.store
+                .thread(id)
+                .is_some_and(|t| t.archived_at.is_none())
+        });
         let text = message.text.trim();
         let command = text.starts_with('/');
         if !command
@@ -325,7 +330,7 @@ impl Core {
         let (id, new) = match thread {
             Some(id) => (id, false),
             None => match self.open_gateway_thread(platform, chat) {
-                Ok(id) => (id, true),
+                Ok(opened) => opened,
                 Err(error) => {
                     self.say(
                         platform,
@@ -390,32 +395,54 @@ impl Core {
         }
     }
 
-    /// Starts a thread for a chat app conversation and binds the conversation to it.
-    ///
-    /// Without a place picked by `/new`, the thread is a dispatcher: it has no project and its
-    /// agent drives Patchwork's chats without reaching the computer. Only Claude and Patchwork's
-    /// own agent can be launched that way; with neither set up, and after `/new <project>` or
-    /// `/new chat`, the thread is a working chat with the gateway's access.
+    /// Binds a chat app conversation to the platform's bot's chat, and returns the chat's id
+    /// and whether it was made for this message. The bot is made the first time its platform
+    /// sends a message, and its chat with the first conversation; `/new` starts a run of its own.
     fn open_gateway_thread(
         self: &Arc<Self>,
         platform: Platform,
         chat: &str,
-    ) -> Result<String, Error> {
-        let settings = self.store.settings();
+    ) -> Result<(String, bool), Error> {
+        let bot = self.chat_app_bot(platform)?;
         let chosen = self
             .gateway
             .lock()
             .chats
             .get_mut(&(platform, chat.to_string()))
             .and_then(|c| c.project.take());
-        let default = settings.default_agent();
+        if chosen.is_none()
+            && let Some(id) = self.bot_chat(&bot)
+        {
+            self.bind_chat(platform, chat, Some(&id));
+            return Ok((id, false));
+        }
+        let main = chosen.is_none();
+        let id = self.open_chat_app_run(&bot, chosen, main)?.id;
+        self.bind_chat(platform, chat, Some(&id));
+        Ok((id, true))
+    }
+
+    /// Starts a run of chat app `bot` in `chosen`, the place picked by `/new`, as its chat when
+    /// `main`.
+    ///
+    /// Without a place, the run is a dispatcher: it has no project and its agent drives
+    /// Patchwork's chats without reaching the computer. Only Claude and Patchwork's own agent
+    /// can be launched that way; with neither set up, and in a picked place, the run is a
+    /// working chat with the gateway's access.
+    pub(crate) fn open_chat_app_run(
+        self: &Arc<Self>,
+        bot: &Bot,
+        chosen: Option<Place>,
+        main: bool,
+    ) -> Result<Thread, Error> {
+        let settings = self.store.settings();
         let dispatcher = if chosen.is_some() {
             None
         } else {
-            [default, AgentKind::Claude, AgentKind::Api]
+            [bot.agent, AgentKind::Claude, AgentKind::Api]
                 .into_iter()
                 .filter(|agent| matches!(agent, AgentKind::Claude | AgentKind::Api))
-                .find(|agent| *agent == default || settings.agents.contains(agent))
+                .find(|agent| *agent == bot.agent || settings.agents.contains(agent))
         };
         let project_id = match chosen {
             Some(Place::Chat) => None,
@@ -424,34 +451,51 @@ impl Core {
             None => settings.gateway.project_id.clone(),
         }
         .filter(|id| settings.projects.iter().any(|p| &p.id == id));
-        let agent = dispatcher.unwrap_or(default);
+        let agent = dispatcher.unwrap_or(bot.agent);
+        let model = if agent == bot.agent {
+            bot.model.clone()
+        } else {
+            settings.tokens.default_models.get(&agent).cloned()
+        };
         let thread = self.create_thread(NewThread {
             id: None,
             project_id,
             agent,
-            model: settings.tokens.default_models.get(&agent).cloned(),
+            model,
             access_mode: settings.gateway.access,
-            effort: None,
+            effort: (agent == bot.agent).then(|| bot.effort.clone()).flatten(),
             compact_window: None,
             plan_mode: false,
         })?;
-        let thread = self.store.thread(&thread.id).unwrap_or(thread);
         let id = thread.id.clone();
-        let marked = if dispatcher.is_some() {
-            self.mark_dispatcher(&id)
-        } else {
-            self.mark_opened(&id)
-        };
+        // Linked before the first turn, which reads it for the bot's instructions.
+        let linked = self
+            .store
+            .update_thread(&id, |t| t.bot_id = Some(bot.id.clone()));
+        let marked = match linked {
+            Ok(()) if dispatcher.is_some() => self.mark_dispatcher(&id),
+            done => done,
+        }
+        // Recorded before it is announced, so it is never listed as a run.
+        .and_then(|()| {
+            if main {
+                self.set_bot_chat(&bot.id, &id)
+            } else {
+                Ok(())
+            }
+        });
         if let Err(error) = marked {
             self.delete_thread(&id);
             return Err(error);
         }
+        let thread = self.store.thread(&id).unwrap_or(thread);
         self.emit(AgentEventEnvelope {
-            thread_id: id.clone(),
-            event: AgentEvent::ThreadCreated { thread },
+            thread_id: id,
+            event: AgentEvent::ThreadCreated {
+                thread: thread.clone(),
+            },
         });
-        self.bind_chat(platform, chat, Some(&id));
-        Ok(id)
+        Ok(thread)
     }
 }
 
