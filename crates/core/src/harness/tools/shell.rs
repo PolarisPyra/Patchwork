@@ -1,23 +1,96 @@
 //! The `bash` tool: a command in bash, in the environment the user's shell sets up, with a time
 //! limit. Patchwork runs it rather than the agent's process, so one still running at its limit
 //! carries on as a background job; this is the command it runs and what the model is told of it.
+//!
+//! Each command starts where the thread's last one ended: in its folder, when that is in the
+//! project, and with the variables it exported. Bash writes both to the thread's shell file as
+//! the command exits, and the next command reads them back before it runs.
 
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub const BASH_TIMEOUT: u64 = 120;
 
 pub const MAX_BASH_TIMEOUT: u64 = 600;
 
-/// `command` as the bash tool runs it, in `root`.
-pub(crate) fn bash_command(command: &str, root: &Path) -> Result<Command, Error> {
-    let mut cmd = crate::system::shell_command(command)
-        .ok_or_else(|| "No shell was found to run the command in".to_string())?;
-    cmd.current_dir(root);
+/// Runs `PATCHWORK_COMMAND` after reading back the shell file, and, when `PATCHWORK_SHELL_KEEP`
+/// is set, writes the folder (as a comment) and exported variables back as bash exits, to a
+/// file only the user can read. Variables that let a later command load code of its own
+/// choosing are left out.
+const CARRY: &str = r##"__pw_file=$PATCHWORK_SHELL
+__pw_keep=$PATCHWORK_SHELL_KEEP
+__pw_cmd=$PATCHWORK_COMMAND
+unset PATCHWORK_SHELL PATCHWORK_SHELL_KEEP PATCHWORK_COMMAND
+if [ -n "$__pw_keep" ]; then
+  trap '__pw_s=$?
+  umask 077
+  {
+    case $PWD in *$'"'"'\n'"'"'*) ;; *) printf "# %s\n" "$PWD" ;; esac
+    for __pw_v in $(compgen -e); do
+      case $__pw_v in
+        SHLVL|_|PWD|OLDPWD|BASH_ENV|ENV|PROMPT_COMMAND|LD_*) ;;
+        *) printf "export %s=%q\n" "$__pw_v" "${!__pw_v}" ;;
+      esac
+    done
+  } > "$__pw_file" 2>/dev/null
+  exit $__pw_s' EXIT
+fi
+[ -f "$__pw_file" ] && . "$__pw_file" 2>/dev/null
+eval "$__pw_cmd""##;
+
+/// The file thread `thread_id`'s shell is kept in between its commands.
+pub(crate) fn shell_file(thread_id: &str) -> PathBuf {
+    let name: String = thread_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+        .collect();
+    crate::system::dirs()
+        .cache
+        .join("shell")
+        .join(format!("{name}.sh"))
+}
+
+/// `command` as the bash tool runs it, starting from the shell kept in `file`, or in `root` when
+/// there is none. With `keep`, the shell it leaves is written back to `file`.
+pub(crate) fn bash_command(
+    command: &str,
+    root: &Path,
+    file: &Path,
+    keep: bool,
+) -> Result<Command, Error> {
+    let carries = crate::system::command_shell()
+        .is_some_and(|shell| crate::system::shell_name(&shell) == "bash");
+    let Some(mut cmd) = crate::system::shell_command(if carries { CARRY } else { command }) else {
+        return Err("No shell was found to run the command in".into());
+    };
+    if !carries {
+        cmd.current_dir(root);
+        return Ok(cmd);
+    }
+    cmd.current_dir(last_dir(file, root).unwrap_or_else(|| root.to_path_buf()));
+    cmd.env("PATCHWORK_COMMAND", command)
+        .env("PATCHWORK_SHELL", file);
+    if keep {
+        if let Some(dir) = file.parent()
+            && let Err(e) = std::fs::create_dir_all(dir)
+        {
+            log::warn!("Could not make the folder for shell files: {e}");
+        }
+        cmd.env("PATCHWORK_SHELL_KEEP", "1");
+    }
     Ok(cmd)
+}
+
+/// The folder the last command in `file` ended in, while it is still inside `root`.
+fn last_dir(file: &Path, root: &Path) -> Option<PathBuf> {
+    let text = std::fs::read_to_string(file).ok()?;
+    let dir = text.lines().next()?.strip_prefix("# ")?;
+    let dir = std::fs::canonicalize(dir).ok()?;
+    let root = std::fs::canonicalize(root).ok()?;
+    (dir.starts_with(&root) && dir.is_dir()).then_some(dir)
 }
 
 /// What the model is told of a command that printed `text` and exited with `code`, None when a
