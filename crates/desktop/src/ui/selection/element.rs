@@ -228,6 +228,7 @@ impl Element for Selectable {
             gutter: self.gutter,
             reach: self.reach,
             visible: text_bounds.intersect(&window.content_mask().bounds),
+            hitbox: prepaint.clone(),
         });
         // Its place on screen, until the list it is in, if any, gives its row.
         selection.known.insert(
@@ -335,6 +336,7 @@ impl Element for Selectable {
                 return;
             }
             selection.seen = Some(event.position);
+            selection.survey(window);
             if selection.drag_to(event.position) {
                 window.refresh();
             }
