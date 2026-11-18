@@ -9,15 +9,20 @@ name: Release
 # reads. The finalize job then commits the version and the notes to main and points the website
 # at the release, which the Site workflow deploys, and the announce job posts it on Discord. docs/release.md explains it.
 #
-# Run it by hand (Actions → Release → Run workflow) to build all three without publishing. The
-# daily scheduled run does the same on main, which saves the Rust caches the tag builds restore:
-# a tag's own run can't save one that the next tag could read.
+# Run it by hand (Actions → Release → Run workflow) to build all three without publishing. A push
+# to main that changes the dependencies or this workflow does the same, as does a daily scheduled
+# run, which saves the Rust caches the tag builds restore: a tag's own run can't save one that the
+# next tag could read. Each release commit changes Cargo.lock, so the caches are fresh for the next
+# tag; cron runs alone are sometimes skipped, and a tag then built on a days-old cache.
 #
 # Actions are pinned to commits; the comment after each names the version it was.
 
 on:
   push:
     tags: ["[0-9]*.[0-9]*.[0-9]*"]
+    branches: [main]
+    # A push to main only builds, to save the caches; these are what change them.
+    paths: ["Cargo.lock", "**/Cargo.toml", ".github/workflows/release.yml"]
   workflow_dispatch:
   schedule:
     - cron: "23 7 * * *"
@@ -32,7 +37,7 @@ jobs:
   # The release notes, and the Cargo.toml, Cargo.lock and CHANGELOG.md the builds use: the tag's
   # version, and its notes at the top of CHANGELOG.md, which the app shows in Settings → Updates.
   notes:
-    if: github.event_name == 'push'
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -194,7 +199,7 @@ jobs:
 
   linux:
     needs: notes
-    if: ${{ !cancelled() && (needs.notes.result == 'success' || github.event_name != 'push') }}
+    if: ${{ !cancelled() && (needs.notes.result == 'success' || !startsWith(github.ref, 'refs/tags/')) }}
     # The oldest Ubuntu runner, so the AppImage links against an older glibc and runs on newer
     # distributions too.
     runs-on: ubuntu-22.04
@@ -207,7 +212,7 @@ jobs:
 
       # The tag's version and notes, from the notes job.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: github.event_name == 'push'
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           name: notes
 
@@ -252,7 +257,7 @@ jobs:
 
   windows:
     needs: notes
-    if: ${{ !cancelled() && (needs.notes.result == 'success' || github.event_name != 'push') }}
+    if: ${{ !cancelled() && (needs.notes.result == 'success' || !startsWith(github.ref, 'refs/tags/')) }}
     runs-on: windows-2022
     timeout-minutes: 45
     steps:
@@ -260,7 +265,7 @@ jobs:
 
       # The tag's version and notes, from the notes job.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: github.event_name == 'push'
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           name: notes
 
@@ -288,7 +293,7 @@ jobs:
 
   macos:
     needs: notes
-    if: ${{ !cancelled() && (needs.notes.result == 'success' || github.event_name != 'push') }}
+    if: ${{ !cancelled() && (needs.notes.result == 'success' || !startsWith(github.ref, 'refs/tags/')) }}
     # macos-15 runs on Apple silicon, so the build is native arm64. When GitHub has no arm64 Mac
     # free, the job waits about 15 minutes, is cancelled with "The job was not acquired by Runner
     # of type hosted even after multiple attempts", and nothing publishes; re-run the failed jobs.
@@ -300,7 +305,7 @@ jobs:
 
       # The tag's version and notes, from the notes job.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: github.event_name == 'push'
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           name: notes
 
