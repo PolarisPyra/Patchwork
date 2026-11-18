@@ -95,7 +95,7 @@ fn pinned_key(thread_id: &str) -> String {
 }
 
 /// The `app_state` keys of a thread's settings, which go when the thread does.
-pub(super) fn thread_state_keys(thread_id: &str) -> [String; 13] {
+pub(super) fn thread_state_keys(thread_id: &str) -> [String; 14] {
     [
         // The replies of it that failed on a usage limit and still warn of it.
         format!("limit-failed:{thread_id}"),
@@ -117,6 +117,8 @@ pub(super) fn thread_state_keys(thread_id: &str) -> [String; 13] {
         // What became of its goal, which `orchestration/goal/state.rs` keeps.
         format!("dismissed-goal:{thread_id}"),
         format!("held-goal:{thread_id}"),
+        // Why its worktree could not be made, which `threads/worktree.rs` keeps.
+        format!("worktree-failed:{thread_id}"),
     ]
 }
 
@@ -130,9 +132,9 @@ pub(super) fn save_message(
         "INSERT INTO messages
              (id, thread_id, position, role, text, created_at, status, tools, plan, files, error,
               approvals, attachments, steer, finished_at, usage, queued, parts, cut_off, refusal,
-              turn, checks, cursor, review, via)
+              turn, checks, cursor, review, via, background)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20, ?21, ?22, ?23, ?24, ?25)
+                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26)
          ON CONFLICT (id) DO UPDATE SET position = excluded.position, text = excluded.text,
              status = excluded.status, tools = excluded.tools, plan = excluded.plan,
              files = excluded.files, error = excluded.error, approvals = excluded.approvals,
@@ -140,7 +142,7 @@ pub(super) fn save_message(
              usage = excluded.usage, steer = excluded.steer, queued = excluded.queued,
              parts = excluded.parts, cut_off = excluded.cut_off, refusal = excluded.refusal,
              turn = excluded.turn, checks = excluded.checks, cursor = excluded.cursor,
-             review = excluded.review, via = excluded.via",
+             review = excluded.review, via = excluded.via, background = excluded.background",
         params![
             m.id,
             thread_id,
@@ -166,7 +168,8 @@ pub(super) fn save_message(
             m.checks.as_ref().map(json),
             m.cursor,
             m.review.as_ref().map(json),
-            m.via.as_ref().map(json)
+            m.via.as_ref().map(json),
+            (!m.background.is_empty()).then(|| json(&m.background))
         ],
     )?;
     Ok(())
@@ -252,7 +255,7 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
     let mut stmt = conn.prepare(
         "SELECT id, role, text, created_at, status, tools, plan, files, error, approvals,
                 attachments, steer, finished_at, usage, queued, parts, cut_off, refusal, turn,
-                checks, cursor, review, via
+                checks, cursor, review, via, background
          FROM messages WHERE thread_id = ?1 ORDER BY position",
     )?;
     for t in &mut threads {
@@ -272,8 +275,12 @@ pub(super) fn load_threads(conn: &Connection) -> rusqlite::Result<Vec<Thread>> {
                     attachments: from_json(r.get(10)?),
                     steer: r.get(11)?,
                     queued: r.get(14)?,
-                    // Live only: the processes behind background commands die with the app.
-                    background: Vec::new(),
+                    // A task still live here was cut off by the app closing; recovery marks it
+                    // stopped.
+                    background: r
+                        .get::<_, Option<String>>(23)?
+                        .and_then(|j| serde_json::from_str(&j).ok())
+                        .unwrap_or_default(),
                     finished_at: r.get(12)?,
                     usage: r
                         .get::<_, Option<String>>(13)?

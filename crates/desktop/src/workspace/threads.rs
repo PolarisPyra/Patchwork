@@ -473,6 +473,7 @@ impl Workspace {
                 Err(_) => self.thread = None,
             }
         }
+        self.load_worktree_marks(cx);
         cx.notify();
     }
 

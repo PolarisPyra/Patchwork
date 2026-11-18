@@ -119,6 +119,17 @@ impl Workspace {
         cx.notify();
     }
 
+    /// Opens a new terminal in the folder `cwd` on the project's machine.
+    pub fn new_terminal_in(&mut self, cwd: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.sync_panel(cx);
+        self.panel_open = true;
+        self.panel.update(cx, |p, cx| {
+            p.new_terminal_in(cwd, cx);
+            p.focus_terminal(window, cx);
+        });
+        cx.notify();
+    }
+
     pub(super) fn toggle_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.panel_open {
             self.close_panel(window, cx);

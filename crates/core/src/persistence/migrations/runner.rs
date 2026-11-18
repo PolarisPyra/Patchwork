@@ -202,6 +202,11 @@ const MIGRATIONS: &[Migration] = &[
         name: "bot_thread",
         sql: include_str!("0038_bot_thread.sql"),
     },
+    Migration {
+        id: 39,
+        name: "message_background",
+        sql: include_str!("0039_message_background.sql"),
+    },
 ];
 
 fn fail(m: &Migration, e: impl std::fmt::Display) -> Error {

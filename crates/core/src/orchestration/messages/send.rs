@@ -14,7 +14,7 @@ use crate::logging::{Data, Source, THREAD_LOG};
 use crate::provider::AgentKind;
 use crate::settings::LogLevel;
 use crate::system::{now_ms, new_id};
-use crate::threads::{Role, MessageStatus, StepStatus, Attachment, Message, GoalStatus};
+use crate::threads::{Role, MessageStatus, StepStatus, Attachment, Message, GoalStatus, BackgroundTask};
 use crate::extensions::skills;
 use crate::{orchestration, provider};
 use crate::threads::title;
@@ -557,6 +557,27 @@ impl Core {
             return Ok(());
         }
         self.runner.stop_subagent(thread_id, tool_id)
+    }
+
+    /// Drops the note on chat `thread_id`'s background task `tool_id` that Patchwork closing ended
+    /// it, once the user has dismissed it or asked for it again.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the change cannot be saved.
+    pub fn dismiss_cut_off_task(&self, thread_id: &str, tool_id: &str) -> Result<(), Error> {
+        let cut_off = |task: &BackgroundTask| task.cut_off && task.tool_id == tool_id;
+        self.store.update_thread(thread_id, |t| {
+            for message in &mut t.messages {
+                if message.background.iter().any(cut_off) {
+                    for task in &mut Arc::make_mut(message).background {
+                        if cut_off(task) {
+                            task.cut_off = false;
+                        }
+                    }
+                }
+            }
+        })
     }
 
     /// Answers a pending approval in the thread's running turn.

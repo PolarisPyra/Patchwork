@@ -119,6 +119,7 @@ pub(crate) fn recover(store: &Store) -> Result<(), Error> {
                     for task in &mut message.background {
                         if task.status.is_live() {
                             task.status = TaskStatus::Stopped;
+                            task.cut_off = true;
                         }
                     }
                     for tool in &mut message.tools {

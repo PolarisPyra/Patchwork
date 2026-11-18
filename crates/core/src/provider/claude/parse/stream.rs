@@ -135,6 +135,7 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
                     started_at: now_ms(),
                     summary: None,
                     output: None,
+                    cut_off: false,
                 };
                 out.push(Parsed::Task(TaskEvent::Started {
                     task,

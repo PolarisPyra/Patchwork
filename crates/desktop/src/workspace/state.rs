@@ -16,7 +16,7 @@ use patchwork_core::gateway::ChatApps;
 use patchwork_core::permissions::PermissionKind;
 use patchwork_core::projects::{Folder, Project};
 use patchwork_core::settings::Settings;
-use patchwork_core::threads::{Message, MessageStatus, Part, Thread};
+use patchwork_core::threads::{Message, MessageStatus, Part, Thread, WorktreeMark};
 use patchwork_core::vault::{Method, Status};
 use patchwork_core::workspace::{FileChange, ProjectChanged};
 use crate::canvas::Canvas;
@@ -144,6 +144,10 @@ pub struct Workspace {
     pub goal_closed: Option<u64>,
     /// The open task's worktree and the strip that offers merging it.
     pub worktree: Option<WorktreeStrip>,
+    /// What each task's worktree needs from the user, as the sidebar marks it.
+    pub worktree_marks: HashMap<String, WorktreeMark>,
+    /// The tasks as they were when the marks were last read, so a change reads them again.
+    pub worktree_marks_key: Option<u64>,
     /// A redraw is due in a second, for the elapsed times on screen.
     pub(super) ticking: bool,
     pub queue_open: bool,
@@ -352,6 +356,8 @@ impl Workspace {
             goal_clear: None,
             goal_closed: None,
             worktree: None,
+            worktree_marks: HashMap::new(),
+            worktree_marks_key: None,
             ticking: false,
             queue_open: true,
             queue_scroll: ScrollHandle::new(),

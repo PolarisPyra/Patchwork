@@ -192,6 +192,7 @@ impl Runner {
         };
         let text = core.chat_app_voice(&thread_id, text, session_id.is_none());
         let text = core.bot_brief(&thread_id, text, session_id.is_none());
+        let text = core.worktree_brief(&thread_id, text, session_id.is_none());
         let text = core.chat_app_context(&thread_id, text);
         let text = match context {
             Some(context) => format!("{context}{text}"),
@@ -394,6 +395,9 @@ impl Runner {
                 crate::system::ssh::here(&root),
             ))
             .current_dir(&root);
+        if !remote {
+            cmd.envs(core.worktree_env(&root));
+        }
         // Another provider's key is not this agent's to read, nor its commands'.
         let vision = spec.vision_model.map(|vision| vision.agent);
         for var in provider::withheld_env(agent, vision) {

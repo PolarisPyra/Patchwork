@@ -2,13 +2,16 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::sync::Arc;
+
 use super::menu::Target;
 use gpui::{
     AnyElement, ClickEvent, Div, Hsla, MouseButton, MouseDownEvent, Role, SharedString, Stateful,
     div, prelude::*, px,
 };
 use patchwork_core::gateway::{ChatApps, Platform, Presence};
-use patchwork_core::threads::{ApprovalStatus, MessageStatus, Thread};
+use patchwork_core::threads::{ApprovalStatus, MessageStatus, Thread, WorktreeMark};
 use crate::ui::avatar::{Mood, avatar};
 use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
 use crate::ui::{
@@ -83,6 +86,59 @@ pub(super) fn reveal_button(id: &str, label: String, name: &str, t: &Theme) -> S
 }
 
 /// `ThreadRow`: a chat or task with its time, or what it is waiting on, and its agent's mark.
+impl Workspace {
+    /// Reads what each task's worktree needs from the user off the main thread, when a task
+    /// changed since they were last read.
+    pub(crate) fn load_worktree_marks(&mut self, cx: &mut Context<Self>) {
+        let mut hasher = DefaultHasher::new();
+        for th in &self.threads {
+            (&th.id, th.messages.len(), is_busy(th)).hash(&mut hasher);
+        }
+        let key = hasher.finish();
+        if self.worktree_marks_key == Some(key) {
+            return;
+        }
+        self.worktree_marks_key = Some(key);
+        let core = Arc::clone(&self.core);
+        let task = cx.background_spawn(async move { core.worktree_marks() });
+        cx.spawn(async move |this, cx| {
+            let marks = task.await;
+            this.update(cx, |this, cx| {
+                if this.worktree_marks != marks {
+                    this.worktree_marks = marks;
+                    cx.notify();
+                }
+            })
+        })
+        .detach();
+    }
+
+    /// Reads the worktree marks again, whatever was read before.
+    pub(crate) fn reload_worktree_marks(&mut self, cx: &mut Context<Self>) {
+        self.worktree_marks_key = None;
+        self.load_worktree_marks(cx);
+    }
+}
+
+/// The sidebar's mark on a task whose worktree needs the user, and what it says.
+fn worktree_mark(mark: WorktreeMark, t: &Theme) -> (AnyElement, &'static str) {
+    let (label, color) = match mark {
+        WorktreeMark::Unmerged => ("Unmerged changes", t.accent_text),
+        WorktreeMark::OffBranch => ("Worktree on another branch", t.warning),
+    };
+    let element = div()
+        .id("worktree-mark")
+        .role(Role::Image)
+        .aria_label(label)
+        .flex_none()
+        .flex()
+        .items_center()
+        .text_color(color)
+        .child(icon("git-branch", 13.))
+        .into_any_element();
+    (element, label)
+}
+
 pub(super) fn thread_row(
     w: &Workspace,
     th: &Thread,
@@ -169,13 +225,21 @@ pub(super) fn thread_row(
             .into_any_element()
     });
     let (btn_hover, fg) = (t.border_strong, t.text);
+    let worktree = w
+        .worktree_marks
+        .get(&th.id)
+        .map(|mark| worktree_mark(*mark, &t));
+    let label: SharedString = match &worktree {
+        Some((_, says)) => format!("{title}, {}", says.to_lowercase()).into(),
+        None => title.clone().into(),
+    };
     div()
         .id(SharedString::from(format!("thread:{}", th.id)))
         .group(group.clone())
         .role(Role::TreeItem)
         .aria_level(depth + 1)
         .aria_selected(picked)
-        .aria_label(title.clone())
+        .aria_label(label)
         .tab_index(0)
         .h(px(crate::ui::theme::roomy(28.)))
         .flex_none()
@@ -229,6 +293,7 @@ pub(super) fn thread_row(
                     })),
                 ),
         )
+        .children(worktree.map(|(mark, _)| mark))
         .children(chat_app_mark(w, w.chat_apps.get(&th.id), &t))
         .child(
             div()

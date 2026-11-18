@@ -414,6 +414,23 @@ impl Store {
         Ok(())
     }
 
+    /// The keys in the app state that start with `prefix`.
+    pub(crate) fn state_keys(&self, prefix: &str) -> Vec<String> {
+        let store = self.lock();
+        let keys = store
+            .conn
+            .prepare("SELECT key FROM app_state WHERE substr(key, 1, length(?1)) = ?1")
+            .and_then(|mut query| {
+                query
+                    .query_map([prefix], |r| r.get(0))?
+                    .collect::<Result<Vec<String>, _>>()
+            });
+        keys.unwrap_or_else(|e| {
+            log::warn!(prefix:% = prefix, error:% = e; "could not list the app state under {{prefix}}: {{error}}");
+            Vec::new()
+        })
+    }
+
     /// Forgets a stored value, so `state` answers None for it again.
     pub(crate) fn clear_state(&self, key: &str) -> Result<(), Error> {
         self.lock()

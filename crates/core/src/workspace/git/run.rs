@@ -4,6 +4,15 @@
 
 use crate::Error;
 use std::process::{Output, Stdio};
+use std::sync::mpsc;
+use std::time::Duration;
+
+/// How long a git command that talks to a remote may run before it is stopped.
+const NETWORK_LIMIT: Duration = Duration::from_secs(600);
+
+/// How long any other git command may run before it is stopped, so a stuck lock or a hung
+/// filesystem fails the action instead of holding it forever.
+const LOCAL_LIMIT: Duration = Duration::from_secs(120);
 
 /// Runs `git <args>` in `root` and returns its raw output.
 pub(in crate::workspace) fn git_raw(root: &str, args: &[&str]) -> Result<Output, Error> {
@@ -11,6 +20,8 @@ pub(in crate::workspace) fn git_raw(root: &str, args: &[&str]) -> Result<Output,
 }
 
 /// `git_raw` with the error from starting git as it came, so a caller can tell git is missing.
+/// A command still running at its time limit is killed with what it started, and fails as
+/// timed out.
 pub(in crate::workspace) fn git_output(root: &str, args: &[&str]) -> std::io::Result<Output> {
     let mut cmd = crate::system::host_command("git");
     cmd.args(args)
@@ -20,17 +31,65 @@ pub(in crate::workspace) fn git_output(root: &str, args: &[&str]) -> std::io::Re
         .env("GIT_OPTIONAL_LOCKS", "0")
         // There is no terminal to type a password in, so a push fails instead of waiting.
         .env("GIT_TERMINAL_PROMPT", "0");
-    crate::system::ssh::prepare(cmd)
-        .map_err(std::io::Error::other)?
-        .stdin(Stdio::null())
-        .output()
+    let mut cmd = crate::system::ssh::prepare(cmd).map_err(std::io::Error::other)?;
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    // A group of its own, so stopping it also stops the helpers it started.
+    #[cfg(unix)]
+    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
+    let child = cmd.spawn()?;
+    let pid = child.id();
+    let (send, done) = mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = send.send(child.wait_with_output());
+    });
+    let limit = limit(args);
+    if let Ok(out) = done.recv_timeout(limit) {
+        return out;
+    }
+    crate::system::processes::signal_process_group(pid, crate::system::processes::SIGKILL);
+    // Its output is read to the end once it is killed; the result says only that it timed out.
+    let _ = done.recv();
+    Err(std::io::Error::new(
+        std::io::ErrorKind::TimedOut,
+        format!(
+            "git {} was still running after {} s and was stopped",
+            subcommand(args).unwrap_or_default(),
+            limit.as_secs()
+        ),
+    ))
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "an adapter for `map_err`, which passes the error by value"
-)]
+/// The git command in `args`, past the options before it, such as `-c name=value`.
+fn subcommand<'a>(args: &[&'a str]) -> Option<&'a str> {
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        match *arg {
+            "-c" | "-C" => {
+                args.next();
+            }
+            a if a.starts_with('-') => {}
+            a => return Some(a),
+        }
+    }
+    None
+}
+
+/// How long the git command in `args` may run.
+fn limit(args: &[&str]) -> Duration {
+    match subcommand(args) {
+        Some("push" | "pull" | "fetch" | "clone" | "ls-remote" | "submodule") => NETWORK_LIMIT,
+        _ => LOCAL_LIMIT,
+    }
+}
+
+/// The error for git that could not be run, or that ran out of time.
 pub(in crate::workspace) fn git_failed(e: std::io::Error) -> Error {
+    // Its message already names the command, and the kind lets a caller offer to try again.
+    if e.kind() == std::io::ErrorKind::TimedOut {
+        return e.into();
+    }
     Error::Git(format!("Failed to run git: {e}"))
 }
 

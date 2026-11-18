@@ -187,6 +187,9 @@ pub struct BackgroundTask {
     pub summary: Option<String>,
     /// The file its output was written to.
     pub output: Option<String>,
+    /// It was still running when Patchwork closed, which ended it. Cleared once the user dismisses
+    /// it or asks for it again.
+    pub cut_off: bool,
 }
 
 /// A subagent an agent started, e.g. with Claude Code's Task tool.

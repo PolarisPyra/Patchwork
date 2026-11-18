@@ -63,10 +63,30 @@ fn turn_diff_fields(
 
 /// What the turn did to each of `paths` (project-relative), and where each file stands now.
 ///
+/// A path outside the project, such as a file the agent wrote in its own settings, has no entry:
+/// the turn's snapshots hold only the project.
+///
 /// # Errors
 ///
 /// Returns an error when a `git` command that compares the turn's snapshots fails.
 pub fn turn_files(root: &str, turn: &TurnTrees, paths: &[String]) -> Result<Vec<TurnFile>, Error> {
+    // Git refuses the whole comparison over one path outside the repository.
+    let paths: Vec<String> = paths
+        .iter()
+        .filter(|p| {
+            let path = std::path::Path::new(p.as_str());
+            path.is_relative()
+                && !path
+                    .components()
+                    .any(|c| matches!(c, std::path::Component::ParentDir))
+        })
+        .cloned()
+        .collect();
+    // With no paths, `diff-tree` would compare the whole project.
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    let paths = paths.as_slice();
     // `A\0path\0` pairs, and `added\tdeleted\tpath\0` lines (`-` for binary files).
     let status: Vec<String> = turn_diff_fields(root, turn, "--name-status", paths)?;
     let status: std::collections::HashMap<&str, &str> = status
