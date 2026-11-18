@@ -45,7 +45,7 @@ pub(super) const TEXT_PER_PIECE: usize = 600;
 /// show: its head line, each step it shows (a long group of calls a few calls at a time, a long
 /// text a few blocks at a time), then its files, notices and actions.
 pub fn pieces_of(w: &Workspace, m: &Message) -> Vec<Piece> {
-    let steps = steps_of(m);
+    let steps = steps_of(m, w.shows_notes());
     if clears_goal(&steps) {
         return vec![Piece::Whole];
     }
@@ -141,7 +141,7 @@ pub(super) fn goal_cleared(
     t: &Theme,
     cx: &mut Context<Workspace>,
 ) -> Div {
-    let text = steps_of(m)
+    let text = steps_of(m, w.shows_notes())
         .iter()
         .filter_map(|s| match s {
             Step::Text(text) => Some(*text),

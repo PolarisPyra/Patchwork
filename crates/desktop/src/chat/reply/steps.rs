@@ -14,6 +14,7 @@ use crate::chat::timeline::{
     lines_of, steps_of, work_key,
 };
 use crate::chat::{approvals, proposed, subagents};
+use super::note::note_pill;
 
 /// Step `i` of a reply; of a group of calls only the calls in `part`, of a text only its bytes in
 /// `part`.
@@ -26,7 +27,7 @@ pub(super) fn reply_step(
     t: &Theme,
     cx: &mut Context<Workspace>,
 ) -> Div {
-    let steps = steps_of(m);
+    let steps = steps_of(m, w.shows_notes());
     let Some(step) = steps.get(i) else {
         return div();
     };
@@ -80,6 +81,7 @@ pub(super) fn reply_step(
                     .map(|e| entry_row(w, m, e, t, cx)),
             ),
         Step::Agents(tools) => subagents::subagents(w, m, tools, t, cx),
+        Step::Note(tool) => note_pill(m, i, tool, t),
         Step::Approvals(ids) => approvals::approvals(w, m, ids, t, cx),
         Step::Compaction(running) => div().pb(px(20.)).child(
             div()

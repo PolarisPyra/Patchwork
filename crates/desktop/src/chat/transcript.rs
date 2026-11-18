@@ -223,7 +223,7 @@ impl Workspace {
             return first;
         }
         let mut seen = 0;
-        for (i, step) in steps_of(m).iter().enumerate() {
+        for (i, step) in steps_of(m, self.shows_notes()).iter().enumerate() {
             if let Step::Text(text) = step {
                 let found = find_in(text, needle);
                 if let Some(&at) = found.get(nth - seen) {
