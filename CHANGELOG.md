@@ -3,6 +3,29 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.105] - 2026-11-18
+
+**26.11.105** · 5 changes from 1 contributor
+
+- **Bot details in chat.** See a bot's details beside its chat, toggle them with the gear button, and open its files in the editor.
+- **Restore last view on open.** Patchwork reopens the same chat, bot page, or Orchestrator page you had open.
+
+<details>
+<summary>Full changelog</summary>
+
+### Added
+
+- A bot's chat shows the bot's details beside it, as the bot's page does, open by default and over the chat's own background. A gear button in the chat's header shows or hides them, and "Open in editor" opens the bot's files. Bot details in a bot's sidebar menu opens its chat with the details beside it. by [PolarisPyra in #212](https://github.com/PolarisPyra/Patchwork/pull/212)
+
+### Changed
+
+- Hovering a bot in the sidebar shows an archive button where its chat app mark sits, and the bot's agent logo lines up with the logos on the chat rows below it. by [PolarisPyra in #213](https://github.com/PolarisPyra/Patchwork/pull/213)
+- A bot that answers in a chat app keeps one ongoing chat, so its details no longer show "New conversation" or a list of conversations, and its Activity tab no longer counts conversations. Other bots keep all three. The icons in the details rows line up with the first letter of their headings. by [PolarisPyra in #214](https://github.com/PolarisPyra/Patchwork/pull/214)
+- In the chat of a bot that answers in a chat app, each Patchwork tool the bot runs, such as reading a chat or starting one, shows as a small centred pill with an icon and a few words in place of a full tool step, so the bot's history is quicker to scan. by [PolarisPyra in #215](https://github.com/PolarisPyra/Patchwork/pull/215)
+- Patchwork opens on whatever it showed when it was closed: the same chat, the same bot's page, or the Orchestrator page. Before, it always opened on the Orchestrator page with the last chat behind it. by [PolarisPyra in #216](https://github.com/PolarisPyra/Patchwork/pull/216)
+
+</details>
+
 ## [26.11.104] - 2026-11-18
 
 **26.11.104** · 2 changes from 1 contributor
