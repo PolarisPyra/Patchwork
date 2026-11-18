@@ -3,6 +3,24 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.112] - 2026-11-18
+
+**v26.11.112** · 3 changes from 1 contributor
+
+- **Source Control pull.** Source Control now has a Pull button and shows when a branch is behind its remote.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* docs(git): a push from a task worktree commits on the task branch first by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/231
+* fix(source-control): task worktrees pull, prune and clean up after themselves by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/232
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.111...26.11.112
+
+</details>
+
 ## [26.11.111] - 2026-11-18
 
 ## What's Changed
