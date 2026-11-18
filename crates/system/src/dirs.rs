@@ -37,28 +37,6 @@ pub struct Dirs {
     pub released: Option<Box<Dirs>>,
 }
 
-/// The database and the files SQLite keeps beside it, which move together or not at all.
-const DATABASE: [&str; 3] = ["patchwork.db", "patchwork.db-wal", "patchwork.db-shm"];
-
-/// What older versions left in the config folder that nothing reads now: the files handed to the
-/// CLIs, rebuilt at each launch in the cache, and the leftovers of versions before those.
-const LEFT_BEHIND: [&str; 11] = [
-    "claude",
-    "codex",
-    "opencode",
-    "antigravity-hooks",
-    "claude-agents",
-    "codex-agents",
-    "claude-plugin",
-    "settings.json.bak",
-    "threads.json.bak",
-    "hooks.log",
-    "model-manifest.json",
-];
-
-/// The relay file, which each start rewrites in the state folder.
-const RELAY_FILE: &str = "mcp-relay.json";
-
 impl Dirs {
     /// Patchwork's folders inside the platform's config, local data and cache folders. macOS has
     /// one folder for config and data, and Windows one for data and cache, so the second goes in a
@@ -129,98 +107,6 @@ impl Dirs {
     pub fn launch(&self, cli: &str) -> PathBuf {
         self.cache.join("launch").join(cli)
     }
-
-    /// Moves what older versions kept in the config folder to the folder it belongs in now, and
-    /// deletes what nothing reads any more. Something already in its new place stays and the old
-    /// copy is left. Returns what could not be moved, to log once the logger runs.
-    #[must_use]
-    pub fn adopt_old_layout(&self) -> Vec<String> {
-        let old = &self.config;
-        let mut failed = Vec::new();
-        if !self.data.join(DATABASE[0]).exists() && old.join(DATABASE[0]).exists() {
-            for name in DATABASE {
-                if let Err(e) = move_file(&old.join(name), &self.data.join(name)) {
-                    failed.push(format!("{name}: {e}"));
-                }
-            }
-        }
-        let moves = [
-            ("api-sessions", self.data.join("api-sessions")),
-            ("mcp-servers.json", self.config.join("mcp.json")),
-            ("api-providers.json", self.config.join("providers.json")),
-            ("mcp-cli-tools.json", self.cache.join("mcp-cli-tools.json")),
-            ("screenshots", self.cache.join("screenshots")),
-            ("logs", self.logs.clone()),
-        ];
-        for (name, to) in moves {
-            let from = old.join(name);
-            if from.exists()
-                && !to.exists()
-                && let Err(e) = move_path(&from, &to)
-            {
-                failed.push(format!("{name}: {e}"));
-            }
-        }
-        self.split_mcp_file(&mut failed);
-        for name in LEFT_BEHIND {
-            let path = old.join(name);
-            let _ = if path.is_dir() {
-                std::fs::remove_dir_all(&path)
-            } else {
-                std::fs::remove_file(&path)
-            };
-        }
-        // Where the state folder is the config folder, the file there is the live one.
-        if self.state != self.config {
-            let _ = std::fs::remove_file(old.join(RELAY_FILE));
-        }
-        failed
-    }
-
-    /// Splits the `mcp.json` older versions listed every MCP server in into one file per server
-    /// in `mcp/`, named after it. The old file stays when a server in it could not be written.
-    fn split_mcp_file(&self, failed: &mut Vec<String>) {
-        #[derive(serde::Deserialize)]
-        struct Old {
-            #[serde(default, rename = "mcpServers")]
-            servers: serde_json::Map<String, serde_json::Value>,
-        }
-        let old_file = self.config.join("mcp.json");
-        let dir = self.config.join("mcp");
-        let Ok(text) = std::fs::read_to_string(&old_file) else {
-            return;
-        };
-        let old: Old = match serde_json::from_str(&text) {
-            Ok(old) => old,
-            Err(e) => return failed.push(format!("mcp.json: {e}")),
-        };
-        if let Err(e) = std::fs::create_dir_all(&dir) {
-            return failed.push(format!("mcp: {e}"));
-        }
-        let mut all = true;
-        for (name, server) in old.servers {
-            // Split on an earlier start, and possibly edited since, so it is left as it is.
-            if super::fs::is_plain_file_name(&name) && dir.join(format!("{name}.json")).exists() {
-                continue;
-            }
-            let written = if super::fs::is_plain_file_name(&name) {
-                serde_json::to_string_pretty(&server)
-                    .map_err(|e| e.to_string().into())
-                    .and_then(|text| {
-                        super::fs::write_private(&dir.join(format!("{name}.json")), &text)
-                    })
-            } else {
-                Err("the name cannot be a file name".into())
-            };
-            if let Err(e) = written {
-                failed.push(format!("mcp.json: {name}: {e}"));
-                all = false;
-            }
-        }
-        if all {
-            let _ = std::fs::remove_file(&old_file);
-        }
-    }
 }
 
 /// Copies the folder `from` to `to`, with everything in it.
@@ -236,24 +122,6 @@ fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
         }
     }
     Ok(())
-}
-
-/// Moves a file, copying it when `to` is on another drive.
-fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
-    if !from.exists() {
-        return Ok(());
-    }
-    move_path(from, to).or_else(|_| {
-        std::fs::copy(from, to)?;
-        std::fs::remove_file(from)
-    })
-}
-
-fn move_path(from: &Path, to: &Path) -> std::io::Result<()> {
-    if let Some(parent) = to.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::rename(from, to)
 }
 
 /// Sets the folders; called once when the core opens.
