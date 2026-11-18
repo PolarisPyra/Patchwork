@@ -277,6 +277,27 @@ impl Job {
 }
 
 impl crate::orchestration::Runner {
+    /// Stops the thread's commands still running, in the background or not, with what each
+    /// started. Their ends publish as stopped. A command the turn starts after this sees the
+    /// turn stopped and stops itself.
+    pub(in crate::orchestration) fn stop_jobs(&self, thread_id: &str) {
+        let jobs: Vec<Arc<Job>> = self
+            .jobs
+            .lock()
+            .values()
+            .filter(|job| job.thread_id == thread_id)
+            .cloned()
+            .collect();
+        // Off the caller's thread, which can be the UI's: a stop asks systemd.
+        std::thread::spawn(move || {
+            for job in jobs {
+                if !job.stop() && job.range.running() {
+                    job.range.stop();
+                }
+            }
+        });
+    }
+
     /// Drops the output kept for the thread's ended jobs, and its shell, as the thread is deleted.
     pub(crate) fn forget_jobs(&self, thread_id: &str) {
         self.jobs.forget(thread_id);
@@ -468,6 +489,11 @@ fn bash(
     job.read(Arc::clone(core), out);
     job.read(Arc::clone(core), err);
     job.watch(Arc::clone(core), child);
+    // Checked once the job is held, so a stop either sees it there or is seen here.
+    if stopped() {
+        job.stop();
+        return Err("The turn was stopped, and the command with it".into());
+    }
     if args["run_in_background"] == true {
         job.list(core, &from.message_id);
         return Ok(format!(
