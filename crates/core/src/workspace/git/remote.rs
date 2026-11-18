@@ -4,6 +4,8 @@
 
 use crate::Error;
 use std::process::Stdio;
+use std::sync::{Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use crate::workspace::{GitSyncState, PullRequest};
 
@@ -64,6 +66,78 @@ pub(crate) fn base_ref(root: &str) -> Option<String> {
             .filter(|r| git_succeeds(root, &["rev-parse", "--verify", "-q", r]))
             .unwrap_or(base),
     )
+}
+
+/// How long after a fetch of a repository's remote the next one is due.
+const FETCH_EVERY: Duration = Duration::from_secs(15);
+
+/// How long after a failed fetch the next try waits. It doubles with each failure in a row, up
+/// to [`FETCH_RETRY_MAX`].
+const FETCH_RETRY: Duration = Duration::from_secs(30);
+const FETCH_RETRY_MAX: Duration = Duration::from_secs(15 * 60);
+
+/// When each repository's remote, keyed by git folder and remote, may be fetched next, and how
+/// many fetches of it failed in a row.
+static FETCHES: Mutex<Vec<(String, Instant, u32)>> = Mutex::new(Vec::new());
+
+/// Fetches the remote of the repository at `root`, so what is compared with its default branch
+/// is what the remote has. A repository is fetched at most every 15 seconds, however many
+/// worktrees ask, and a failed fetch waits longer each time before the next try. Callers that
+/// arrive while a fetch runs read the refs as they are.
+pub(crate) fn fetch_remote(root: &str) {
+    let Some(remote) = push_remote(root) else {
+        return;
+    };
+    let Ok(common) = git(
+        root,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    ) else {
+        return;
+    };
+    let key = format!("{}\n{remote}", common.trim());
+    let now = Instant::now();
+    let failures = {
+        let mut fetches = FETCHES.lock().unwrap_or_else(PoisonError::into_inner);
+        // Held until the fetch ends, so a caller meanwhile doesn't start another.
+        let held = now + FETCH_RETRY_MAX;
+        if let Some(entry) = fetches.iter_mut().find(|(k, ..)| *k == key) {
+            if now < entry.1 {
+                return;
+            }
+            entry.1 = held;
+            entry.2
+        } else {
+            fetches.push((key.clone(), held, 0));
+            0
+        }
+    };
+    let result = git(
+        root,
+        &[
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "--no-auto-gc",
+            "--no-write-fetch-head",
+            "--",
+            &remote,
+        ],
+    );
+    let (wait, failures) = match result {
+        Ok(_) => (FETCH_EVERY, 0),
+        Err(e) => {
+            log::warn!(error:% = e; "could not fetch the project's remote: {{error}}");
+            let wait = FETCH_RETRY
+                .saturating_mul(2u32.saturating_pow(failures))
+                .min(FETCH_RETRY_MAX);
+            (wait, failures.saturating_add(1))
+        }
+    };
+    let mut fetches = FETCHES.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(entry) = fetches.iter_mut().find(|(k, ..)| *k == key) {
+        entry.1 = Instant::now() + wait;
+        entry.2 = failures;
+    }
 }
 
 fn rev_count(root: &str, args: &[&str]) -> u32 {

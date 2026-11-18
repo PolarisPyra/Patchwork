@@ -37,7 +37,8 @@ pub struct WorktreeState {
     pub worktree: Worktree,
     /// Files changed in the worktree and not committed there yet.
     pub changes: Vec<FileChange>,
-    /// Commits on the worktree's branch that the project's branch doesn't have.
+    /// Commits on the worktree's branch that neither the project's branch nor the remote's
+    /// default branch has.
     pub commits: usize,
     /// Commits on the project's branch that the worktree's branch doesn't have yet.
     pub behind: usize,
@@ -185,6 +186,35 @@ fn copy_included(top: &str, to: &str) {
 /// The `app_state` key of why a task's worktree could not be made.
 fn failed_key(thread_id: &str) -> String {
     format!("worktree-failed:{thread_id}")
+}
+
+/// How many commits on `worktree`'s branch neither the project's branch, at `project_head`, nor
+/// the remote's default branch has. The remote is fetched first, every so often. It is none once
+/// the branch's changes are all on the remote's default branch, even under other commits, as a
+/// squash-merged pull request leaves them.
+fn unshipped(worktree: &Worktree, project_head: &str) -> Result<usize, Error> {
+    workspace::fetch_remote(&worktree.top);
+    let base = workspace::base_ref(&worktree.top);
+    let mut args = vec!["rev-list", "--count", "HEAD", "--not", project_head];
+    args.extend(base.as_deref());
+    let count = git(&worktree.top, &args)?.trim().parse().unwrap_or(0);
+    if count > 0 && base.is_some_and(|base| landed(&worktree.top, &base)) {
+        return Ok(0);
+    }
+    Ok(count)
+}
+
+/// Whether merging the checkout's HEAD into `base` would leave `base`'s files as they are.
+fn landed(top: &str, base: &str) -> bool {
+    let merged = git(
+        top,
+        &["merge-tree", "--write-tree", "--no-messages", base, "HEAD"],
+    );
+    let tree = git(top, &["rev-parse", &format!("{base}^{{tree}}")]);
+    match (merged, tree) {
+        (Ok(merged), Ok(tree)) => merged.lines().next().map(str::trim) == Some(tree.trim()),
+        _ => false,
+    }
 }
 
 /// What `worktree` is on instead of its own branch: another branch's name, or "a detached HEAD".
@@ -444,11 +474,7 @@ impl Core {
         let changes = workspace::git_changes(&worktree.root)?;
         let project = self.project_top(thread_id)?;
         let head = git(&project, &["rev-parse", "HEAD"])?;
-        let range = format!("{}..HEAD", head.trim());
-        let commits = git(&worktree.top, &["rev-list", "--count", &range])?
-            .trim()
-            .parse()
-            .unwrap_or(0);
+        let commits = unshipped(&worktree, head.trim())?;
         let ahead = format!("HEAD..{}", head.trim());
         let behind = git(&worktree.top, &["rev-list", "--count", &ahead])?
             .trim()
@@ -488,9 +514,7 @@ impl Core {
                 .is_ok_and(|out| !out.trim().is_empty());
             let ahead = || {
                 let head = git(&self.project_top(id).ok()?, &["rev-parse", "HEAD"]).ok()?;
-                let range = format!("{}..HEAD", head.trim());
-                let count = git(&worktree.top, &["rev-list", "--count", &range]).ok()?;
-                Some(count.trim() != "0")
+                Some(unshipped(&worktree, head.trim()).ok()? > 0)
             };
             if dirty || ahead().unwrap_or(false) {
                 marks.insert(id.to_owned(), WorktreeMark::Unmerged);
