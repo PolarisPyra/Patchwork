@@ -326,7 +326,6 @@ impl Workspace {
             m.status == MessageStatus::Complete && m.role == MessageRole::Assistant
         });
         let agent = thread.map_or_else(|| self.settings.default_agent(), |t| t.agent);
-        let (hover, fg) = (t.bg_hover, t.text);
         let state = if working {
             div()
                 .flex()
@@ -377,22 +376,6 @@ impl Workspace {
                     }),
             )
             .child(div().flex_1())
-            .child(
-                button(
-                    "open-changes",
-                    format!("Open changes: {}", self.changes.len()),
-                )
-                .h(px(20.))
-                .rounded(px(3.))
-                .px(px(6.))
-                .hover(move |s| s.bg(hover).text_color(fg))
-                .child(format!("{} changes", self.changes.len()))
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.view = Some(View::Changes);
-                    this.change_focus = None;
-                    cx.notify();
-                })),
-            )
             .child(
                 div()
                     .h(px(20.))
