@@ -3,6 +3,27 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.115] - 2026-11-18
+
+**v26.11.115** · 4 changes from 1 contributor
+
+- **Archived bot deletion.** Right-click an archived bot to restore or delete it directly, with confirmation before deleting, without restoring it first.
+
+### Plus 1 more bug fix.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* fix(sidebar): task rows show their worktree mark from the start, and hide the time under the archive button by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/241
+* feat(settings): clean up worktrees with buttons, and one set of worktree settings for every project by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/242
+* feat(sidebar): delete or restore an archived bot by right-clicking it by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/240
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.114...26.11.115
+
+</details>
+
 ## [26.11.114] - 2026-11-18
 
 **v26.11.114** · 3 changes from 1 contributor
