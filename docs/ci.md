@@ -9,13 +9,18 @@ secrets it reads, and how long it takes.
 | --- | --- | --- |
 | CI (`ci.yml`) | Every PR, and each push to `main` that changes more than `site/`, `docs/` or `*.md` | One job, `check`: rustfmt, clippy with `-D warnings`, `cargo test --workspace` |
 | Site (`site.yml`) | A PR or a push to `main` that changes `site/`, `.github/deploy/` or the workflow | Checks the pages; on `main`, deploys `site/` to Cloudflare Pages and checks the deployed page |
-| Release (`release.yml`) | A pushed tag `YY.M.N`, or by hand | Writes the notes, builds the three apps, signs and publishes them, commits the version to `main` ([Releasing](release.md)) |
+| Release (`release.yml`), run "Release YY.M.N" | A pushed tag `YY.M.N` | Writes the notes, builds the three apps, signs and publishes them, commits the version to `main` ([Releasing](release.md)) |
+| Release (`release.yml`), run "Release build check" | By hand, daily, and a push to `main` that changes `Cargo.lock`, a `Cargo.toml` or the workflow | Builds the three apps to save their Rust caches; publishes nothing |
 | Audit (`audit.yml`) | Mondays, and a push to `main` that changes `Cargo.lock` | `cargo audit` |
+
+The "Release YY.M.N" commit the Release workflow pushes to `main` changes only the version, the
+changelog and the website's download links. Site deploys it; CI, Audit and the Release build check
+skip their jobs on it, as a PR checked the code and the caches hold no version.
 
 The ruleset on `main` requires a PR, squash merging, and the `check` check.
 GitHub offers merge queues only for repositories an organization owns, and this one belongs to a
 user account, so there is none. A PR's checks run on its merge with `main` as it was at the last
-push to the PR, and CI runs once more on `main` after the merge.
+push to the PR, and CI runs once more on `main` after the merge, though not on a release commit.
 
 ## The app and the website
 
