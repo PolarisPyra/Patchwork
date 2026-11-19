@@ -191,6 +191,8 @@ fn claude_args_include_resume_model_and_mode() {
             "bypassPermissions",
             "--permission-prompt-tool",
             "stdio",
+            "--allowedTools",
+            "Skill",
             "--resume",
             "sid",
             "--model",
