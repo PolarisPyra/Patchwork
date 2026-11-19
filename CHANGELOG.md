@@ -3,6 +3,23 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.118] - 2026-11-19
+
+**v26.11.118** · 2 changes from 1 contributor
+
+- **Sidebar task times.** Task rows in the sidebar always show the time, even while a task is running, and no longer leave an empty gap in projects without git.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* feat(sidebar): task rows show the time instead of a spinner by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/250
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.117...26.11.118
+
+</details>
+
 ## [26.11.117] - 2026-11-19
 
 **v26.11.117** · 4 changes from 1 contributor
