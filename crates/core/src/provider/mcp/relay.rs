@@ -274,6 +274,13 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
         let _ = writeln!(stream, "raised");
         return;
     }
+    // Git's helper asks one sign-in question and waits for the user's answer.
+    if let Some(prompt) = hello["askpass"].as_str() {
+        let answer = crate::workspace::answer_askpass(prompt);
+        let mut stream = stream;
+        let _ = writeln!(stream, "{}", json!({"answer": answer}));
+        return;
+    }
     // A permission hook asks once and waits for the answer.
     if !hello["hook"].is_null() {
         let answer = HOOK_HANDLER

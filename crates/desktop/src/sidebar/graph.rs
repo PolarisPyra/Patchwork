@@ -288,15 +288,6 @@ fn shorten(text: &str) -> String {
     }
 }
 
-/// "Nov 8, 2026, 10:21 PM", in local time.
-fn format_date(secs: i64) -> String {
-    use chrono::{Local, TimeZone};
-    match Local.timestamp_opt(secs, 0).single() {
-        Some(d) => d.format("%b %-d, %Y, %-I:%M %p").to_string(),
-        None => String::new(),
-    }
-}
-
 /// The undo menu's rows: one per reply the commit took in.
 fn undo_items(view: &Context<ChangesView>, commit: &GitCommit, thread: &str) -> Vec<MenuItem> {
     let entity = view.entity().downgrade();
@@ -391,7 +382,7 @@ pub fn section(
             "{}\n{}, {}\n{}{}",
             commit.subject,
             commit.author,
-            format_date(commit.time),
+            crate::ui::format_date(commit.time),
             commit.hash.chars().take(8).collect::<String>(),
             if commit.pushed { "" } else { "\nNot pushed" }
         );
@@ -462,7 +453,53 @@ pub fn section(
                     v.open_menu("Undo a reply", items, at, Some(hash.clone()), window, cx);
                 }))
         });
-        let context = undoable.then(|| (commit.clone(), thread_id.clone().unwrap_or_default()));
+        let more_key = format!("more:{}", commit.hash);
+        let more_open = view.menu_for(&more_key);
+        let detail_open = view.detail_open(&commit.hash);
+        // A commit's menu, with the replies it can undo under a line.
+        let items = {
+            let (commit, thread) = (commit.clone(), thread_id.clone().unwrap_or_default());
+            move |v: &ChangesView, cx: &mut Context<ChangesView>| {
+                let mut items = v.commit_items(&commit, cx);
+                if undoable {
+                    let undo = undo_items(cx, &commit, &thread).into_iter().enumerate();
+                    items
+                        .extend(undo.map(|(i, item)| if i == 0 { item.separated() } else { item }));
+                }
+                items
+            }
+        };
+        let more = {
+            let (items, key) = (items.clone(), more_key.clone());
+            button(
+                SharedString::from(format!("more:{}", commit.hash)),
+                "Commit actions",
+            )
+            .size(px(16.))
+            .flex_none()
+            .justify_center()
+            .rounded(px(radius_sm()))
+            .text_color(t.text_muted)
+            .hover(move |s| s.bg(hover))
+            .tooltip(tooltip("Commit actions"))
+            .aria_expanded(more_open)
+            .when(!more_open, |b| {
+                b.opacity(0.)
+                    .group_hover(group.clone(), |s| s.opacity(1.))
+                    .focus(|s| s.opacity(1.))
+            })
+            .child(crate::ui::icon("dots-three", 12.))
+            .on_click(cx.listener(move |v, e: &gpui::ClickEvent, window, cx| {
+                cx.stop_propagation();
+                if v.just_dismissed(e) {
+                    return;
+                }
+                let items = items(v, cx);
+                let at = e.position() + point(px(-8.), px(12.));
+                v.open_menu("Commit actions", items, at, Some(key.clone()), window, cx);
+            }))
+        };
+        let detail_hash = commit.hash.clone();
         let refs = (head.is_some() || !remotes.is_empty()).then(|| {
             div()
                 .max_w(px(120.))
@@ -493,12 +530,16 @@ pub fn section(
                 .child(row_graph(row, t.bg_panel))
                 .children(mark)
                 .child(
-                    div()
-                        .min_w_0()
-                        .truncate()
-                        .text_size(px(fs_md()))
-                        .when(head.is_some(), |d| d.font_weight(FontWeight::SEMIBOLD))
-                        .child(commit.subject.clone()),
+                    button(
+                        SharedString::from(format!("subject:{}", commit.hash)),
+                        commit.subject.clone(),
+                    )
+                    .min_w_0()
+                    .text_size(px(fs_md()))
+                    .when(head.is_some(), |d| d.font_weight(FontWeight::SEMIBOLD))
+                    .aria_expanded(detail_open)
+                    .child(div().min_w_0().truncate().child(commit.subject.clone()))
+                    .on_click(cx.listener(move |v, _, _, cx| v.toggle_detail(&detail_hash, cx))),
                 )
                 .child(
                     div()
@@ -510,24 +551,18 @@ pub fn section(
                         .child(commit.author.clone()),
                 )
                 .children(undo)
+                .child(more)
                 .children(refs)
-                .when_some(context, |d, (commit, thread)| {
-                    d.on_mouse_down(
-                        MouseButton::Right,
-                        cx.listener(move |v, e: &MouseDownEvent, window, cx| {
-                            let items = undo_items(cx, &commit, &thread);
-                            v.open_menu(
-                                "Undo a reply",
-                                items,
-                                e.position,
-                                Some(commit.hash.clone()),
-                                window,
-                                cx,
-                            );
-                        }),
-                    )
-                }),
+                .on_mouse_down(
+                    MouseButton::Right,
+                    cx.listener(move |v, e: &MouseDownEvent, window, cx| {
+                        let items = items(v, cx);
+                        let key = Some(more_key.clone());
+                        v.open_menu("Commit actions", items, e.position, key, window, cx);
+                    }),
+                ),
         );
+        list = list.children(view.detail_view(&commit.hash, t));
     }
     if view.more {
         list = list.child(

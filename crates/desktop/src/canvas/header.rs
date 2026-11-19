@@ -167,6 +167,7 @@ impl Canvas {
                 (CanvasTab::Plan, "Plan", plan),
                 (CanvasTab::Code, "Code", 0),
                 (CanvasTab::Diff, "Diff", diff_count),
+                (CanvasTab::History, "History", 0),
             ],
         };
         let (fg, muted, selected) = (t.text, t.text_muted, t.bg_selected_muted);
@@ -217,9 +218,28 @@ impl Canvas {
                     })
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.tab = id;
+                        if id == CanvasTab::History && this.history.is_none() {
+                            this.load_history(false, cx);
+                        }
                         cx.notify();
                     }))
             }))
+            .when(active == CanvasTab::Code, |d| {
+                let on = self.blame_on;
+                d.child(div().ml_auto().children(self.conflict_nav(t, cx)))
+                    .child(
+                        btn("toggle-blame", "Blame", BtnKind::Plain, false, t)
+                            .aria_toggled(if on {
+                                gpui::Toggled::True
+                            } else {
+                                gpui::Toggled::False
+                            })
+                            .when(on, |b| b.bg(selected).text_color(fg))
+                            .child(icon("git-commit", 14.))
+                            .child("Blame")
+                            .on_click(cx.listener(|this, _, _, cx| this.toggle_blame(cx))),
+                    )
+            })
             .when(active == CanvasTab::Diff, |d| {
                 d.child(
                     div()

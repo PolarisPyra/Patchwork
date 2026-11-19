@@ -48,8 +48,12 @@ fn reports_modified_and_untracked_files() {
         ("untracked", 2, false)
     );
 
-    assert!(git_file_diff(&root, "a.txt").unwrap().contains("+three"));
-    assert_ne!(git_file_diff(&root, "b.txt").unwrap(), "");
+    assert!(
+        git_file_diff(&root, "a.txt", DiffSide::All)
+            .unwrap()
+            .contains("+three")
+    );
+    assert_ne!(git_file_diff(&root, "b.txt", DiffSide::All).unwrap(), "");
 
     accept_file(&root, "a.txt").unwrap();
     let changes = git_changes(&root).unwrap();

@@ -7,13 +7,14 @@ use gpui::{
     div, list, prelude::*, px,
 };
 use patchwork_core::threads::AccessMode;
-use patchwork_core::workspace::FileChange;
+use patchwork_core::workspace::{DiffSide, FileChange};
 
 use crate::sidebar::graph;
 use crate::ui::menu::Menu;
 use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme, theme};
 use crate::ui::{button, icon, list_scrollbar, scrollbar, tooltip};
 use super::list::{Entry, Group};
+use super::repo::REPO_MENU;
 use super::rows::reply_files;
 use super::state::{ChangesView, PANE_MIN};
 
@@ -115,8 +116,39 @@ impl Render for ChangesView {
             .iter()
             .filter(|c| !replies.contains(&c.path) && c.status != "conflicted")
             .collect();
-        let staged: Vec<&FileChange> = rest.iter().copied().filter(|c| c.staged).collect();
-        let unstaged: Vec<&FileChange> = rest.iter().copied().filter(|c| !c.staged).collect();
+        // A file in both groups opens the side of its diff its row is for.
+        let staged: Vec<(FileChange, DiffSide)> = rest
+            .iter()
+            .filter(|c| c.staged)
+            .map(|c| {
+                let side = match c.worktree {
+                    Some(_) => DiffSide::Staged,
+                    None => DiffSide::All,
+                };
+                let change = FileChange {
+                    worktree: None,
+                    ..(*c).clone()
+                };
+                (change, side)
+            })
+            .collect();
+        // A staged file changed again since is in both groups, here with the change not staged.
+        let unstaged: Vec<(FileChange, DiffSide)> = rest
+            .iter()
+            .filter_map(|c| match &c.worktree {
+                _ if !c.staged => Some(((*c).clone(), DiffSide::All)),
+                Some(worktree) => {
+                    let change = FileChange {
+                        status: worktree.clone(),
+                        staged: false,
+                        worktree: None,
+                        ..(*c).clone()
+                    };
+                    Some((change, DiffSide::Unstaged))
+                }
+                None => None,
+            })
+            .collect();
 
         let mut entries = Vec::new();
         if has_project {
@@ -128,7 +160,11 @@ impl Render for ChangesView {
                 count: conflicted.len(),
                 group: Group::Merge,
             });
-            entries.extend(conflicted.iter().map(|c| Entry::Change((*c).clone())));
+            entries.extend(
+                conflicted
+                    .iter()
+                    .map(|c| Entry::Change((*c).clone(), DiffSide::All)),
+            );
         }
         if !replies.is_empty() {
             entries.push(Entry::Header {
@@ -136,7 +172,11 @@ impl Render for ChangesView {
                 count: replies.len(),
                 group: Group::Reply,
             });
-            entries.extend(pinned.iter().map(|c| Entry::Change((*c).clone())));
+            entries.extend(
+                pinned
+                    .iter()
+                    .map(|c| Entry::Change((*c).clone(), DiffSide::All)),
+            );
             entries.extend(
                 replies
                     .iter()
@@ -148,17 +188,17 @@ impl Render for ChangesView {
             entries.push(Entry::Header {
                 title: "Staged Changes",
                 count: staged.len(),
-                group: Group::Staged,
+                group: Group::Staged(staged.iter().map(|(c, _)| c.path.clone()).collect()),
             });
-            entries.extend(staged.iter().map(|c| Entry::Change((*c).clone())));
+            entries.extend(staged.into_iter().map(|(c, side)| Entry::Change(c, side)));
         }
         if !unstaged.is_empty() {
             entries.push(Entry::Header {
                 title: "Changes",
                 count: unstaged.len(),
-                group: Group::Unstaged(unstaged.iter().map(|c| c.path.clone()).collect()),
+                group: Group::Unstaged(unstaged.iter().map(|(c, _)| c.path.clone()).collect()),
             });
-            entries.extend(unstaged.iter().map(|c| Entry::Change((*c).clone())));
+            entries.extend(unstaged.into_iter().map(|(c, side)| Entry::Change(c, side)));
         }
         entries.push(Entry::End);
         self.full_access = full_access;
@@ -234,6 +274,7 @@ impl Render for ChangesView {
         });
 
         let menu = self.menu.as_ref().map(|(m, at, _)| Menu::view(m, *at));
+        let repo_open = self.menu_for(REPO_MENU);
         div()
             .flex_1()
             .min_h_0()
@@ -252,15 +293,43 @@ impl Render for ChangesView {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Source Control")
                     .child(
-                        button("refresh-changes", "Refresh")
-                            .size(px(28.))
-                            .justify_center()
-                            .rounded(px(radius_sm()))
-                            .text_color(t.text_muted)
-                            .hover(move |s| s.bg(hover).text_color(fg))
-                            .tooltip(tooltip("Refresh"))
-                            .child(icon("arrows-clockwise", 18.).mt(px(1.)))
-                            .on_click(cx.listener(|this, _, _, cx| this.refresh_all(cx))),
+                        div()
+                            .flex()
+                            .flex_none()
+                            .child(
+                                button("refresh-changes", "Refresh")
+                                    .size(px(28.))
+                                    .justify_center()
+                                    .rounded(px(radius_sm()))
+                                    .text_color(t.text_muted)
+                                    .hover(move |s| s.bg(hover).text_color(fg))
+                                    .tooltip(tooltip("Refresh"))
+                                    .child(icon("arrows-clockwise", 18.).mt(px(1.)))
+                                    .on_click(cx.listener(|this, _, _, cx| this.refresh_all(cx))),
+                            )
+                            .when(has_project, |d| {
+                                d.child(
+                                    button("repository-actions", "Repository actions")
+                                        .size(px(28.))
+                                        .justify_center()
+                                        .rounded(px(radius_sm()))
+                                        .text_color(t.text_muted)
+                                        .hover(move |s| s.bg(hover).text_color(fg))
+                                        .aria_expanded(repo_open)
+                                        .tooltip(tooltip("Repository actions"))
+                                        .child(icon("dots-three", 18.))
+                                        .on_click(cx.listener(
+                                            |this, e: &gpui::ClickEvent, window, cx| {
+                                                if this.busy.is_some() || this.just_dismissed(e) {
+                                                    return;
+                                                }
+                                                let at =
+                                                    e.position() + gpui::point(px(-160.), px(14.));
+                                                this.open_repo_menu(at, window, cx);
+                                            },
+                                        )),
+                                )
+                            }),
                     ),
             )
             .child(

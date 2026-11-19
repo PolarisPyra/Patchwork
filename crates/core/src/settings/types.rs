@@ -263,6 +263,9 @@ impl CheckSettings {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct WorktreeSettings {
+    /// Whether tasks edit their project's own folder rather than getting a worktree each, in
+    /// every project.
+    pub disabled: bool,
     /// Whether a fork gets a worktree of its own, rather than working in its source task's.
     pub fork_into_new: bool,
     /// Whether deleting a task removes its worktree, and what keeps one from being cleaned up.

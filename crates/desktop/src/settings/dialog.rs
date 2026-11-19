@@ -43,10 +43,12 @@ pub enum SettingsEvent {
     Closed,
 }
 
-/// One pane: its id and its name, which is its row under an entry that holds more than one.
+/// One pane: its id, and its name and icon, which are its row under an entry that holds more
+/// than one.
 pub(super) struct Pane {
     pub(super) id: &'static str,
     pub(super) label: &'static str,
+    pub(super) icon: &'static str,
 }
 
 /// One entry of the list: its name, its icon and the panes it holds.
@@ -65,14 +67,17 @@ pub(super) const ENTRIES: &[Entry] = &[
             Pane {
                 id: "general",
                 label: "General",
+                icon: "gear-six",
             },
             Pane {
                 id: "notifications",
                 label: "Notifications",
+                icon: "bell",
             },
             Pane {
                 id: "updates",
                 label: "Updates",
+                icon: "arrow-circle-up",
             },
         ],
     },
@@ -83,22 +88,27 @@ pub(super) const ENTRIES: &[Entry] = &[
             Pane {
                 id: "themes",
                 label: "Window theme",
+                icon: "palette",
             },
             Pane {
                 id: "code-theme",
                 label: "Syntax theme",
+                icon: "code",
             },
             Pane {
                 id: "orchestrator-background",
                 label: "Orchestrator theme",
+                icon: "robot",
             },
             Pane {
                 id: "chat-background",
                 label: "Chat theme",
+                icon: "chat-circle",
             },
             Pane {
                 id: "interface",
                 label: "Interface",
+                icon: "desktop",
             },
         ],
     },
@@ -108,6 +118,7 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[Pane {
             id: "shortcuts",
             label: "Shortcuts",
+            icon: "keyboard",
         }],
     },
     Entry {
@@ -117,10 +128,12 @@ pub(super) const ENTRIES: &[Entry] = &[
             Pane {
                 id: "providers",
                 label: "Providers",
+                icon: "sparkle",
             },
             Pane {
                 id: "tokens",
                 label: "Usage",
+                icon: "chart-bar",
             },
         ],
     },
@@ -131,10 +144,12 @@ pub(super) const ENTRIES: &[Entry] = &[
             Pane {
                 id: "extensions",
                 label: "Extensions",
+                icon: "puzzle-piece",
             },
             Pane {
                 id: "mcp",
                 label: "MCP Servers",
+                icon: "plugs-connected",
             },
         ],
     },
@@ -144,6 +159,7 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[Pane {
             id: "gateway",
             label: "Gateway",
+            icon: "chats",
         }],
     },
     Entry {
@@ -152,6 +168,7 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[Pane {
             id: "permissions",
             label: "Permissions",
+            icon: "shield-check",
         }],
     },
     Entry {
@@ -160,6 +177,7 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[Pane {
             id: "security",
             label: "Security",
+            icon: "fingerprint",
         }],
     },
     Entry {
@@ -169,14 +187,17 @@ pub(super) const ENTRIES: &[Entry] = &[
             Pane {
                 id: "projects",
                 label: "Projects",
+                icon: "folder-simple",
             },
             Pane {
                 id: "scheduled",
                 label: "Scheduled",
+                icon: "clock",
             },
             Pane {
                 id: "worktrees",
                 label: "Worktrees",
+                icon: "git-branch",
             },
         ],
     },
@@ -186,6 +207,7 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[Pane {
             id: "terminal",
             label: "Terminal",
+            icon: "terminal-window",
         }],
     },
     Entry {
@@ -194,6 +216,7 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[Pane {
             id: "ssh",
             label: "Devices",
+            icon: "devices",
         }],
     },
 ];

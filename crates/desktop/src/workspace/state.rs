@@ -264,6 +264,8 @@ pub struct Workspace {
     pub(super) add_project: Option<Entity<AddProject>>,
     pub(super) background_dialog: Option<background_dialog::BackgroundDialog>,
     pub(super) granular_dialog: Option<granular::GranularDialog>,
+    /// Git's sign-in questions, while a command waits on one.
+    pub(super) credentials: super::credential::Credentials,
     /// First-run setup, shown instead of everything else until the settings say it is done.
     pub(super) onboarding: Option<Entity<crate::onboarding::Onboarding>>,
     /// The toolbar's machine menu, while open, and where the press that last closed it was.
@@ -439,6 +441,7 @@ impl Workspace {
             add_project: None,
             background_dialog: None,
             granular_dialog: None,
+            credentials: super::credential::Credentials::default(),
             onboarding: None,
             title: crate::APP_TITLE.into(),
             machine_menu: None,

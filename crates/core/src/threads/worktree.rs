@@ -20,6 +20,8 @@ use crate::workspace::{self, FileChange, landed};
 use crate::{Core, Error};
 
 use super::worktree_condition::{Condition, repaired_condition};
+use super::worktree_home::{is_home, make_home};
+use super::worktree_include::copy_included;
 
 /// A task's worktree, as stored under its `app_state` key.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,7 +73,7 @@ pub enum WorktreeMark {
     Clean,
 }
 
-/// Why a task can't use a worktree its record names outside this Patchwork's worktrees folder,
+/// Why a task can't use a worktree its record names outside Patchwork's worktrees folders,
 /// such as one a development build read from the installed app's records.
 const NOT_OURS: &str = "This task's worktree isn't in this Patchwork's worktrees folder";
 
@@ -168,38 +170,6 @@ pub(super) fn merge_lock(top: &str, waiting: impl FnOnce()) -> Result<File, Erro
     file.lock()
         .map_err(|e| format!("Cannot lock {}: {e}", path.display()))?;
     Ok(file)
-}
-
-/// Copies into a new worktree at `to` the files git ignores in the repository at `top` that its
-/// `.worktreeinclude` names, in `.gitignore`'s form, such as `.env`: a worktree starts with only
-/// what git tracks. A file that can't be copied is logged and left out.
-fn copy_included(top: &str, to: &str) {
-    let list = Path::new(top).join(".worktreeinclude");
-    if !list.is_file() {
-        return;
-    }
-    let from = format!("--exclude-from={}", list.display());
-    let named = match git(top, &["ls-files", "-z", "--others", "--ignored", &from]) {
-        Ok(named) => named,
-        Err(e) => {
-            log::warn!(error:% = e; "could not read the project's .worktreeinclude: {{error}}");
-            return;
-        }
-    };
-    for rel in named.split('\0').filter(|p| !p.is_empty()) {
-        // Only what git ignores: a file it tracks is in the worktree already.
-        if git(top, &["check-ignore", "-q", "--", rel]).is_err() {
-            continue;
-        }
-        let target = Path::new(to).join(rel);
-        let copied = target
-            .parent()
-            .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|()| std::fs::copy(Path::new(top).join(rel), &target));
-        if let Err(e) = copied {
-            log::warn!(file:% = rel, error:% = e; "could not copy {{file}} into a task's worktree: {{error}}");
-        }
-    }
 }
 
 /// The commit a new worktree of the repository at `top` starts from: its branch's upstream when
@@ -553,30 +523,27 @@ impl Core {
         self.store.state(&failed_key(thread_id))
     }
 
-    /// Whether `worktree` is in Patchwork's worktrees folder and its root inside it, so a value
-    /// changed in the database can't point a removal or a reset somewhere else.
+    /// Whether `worktree` is in a worktrees folder of Patchwork's, a project's or the one in the
+    /// app's data folder, and its root inside it, so a value changed in the database can't point
+    /// a removal or a reset somewhere else.
     fn owns(&self, worktree: &Worktree) -> bool {
-        let (Ok(dir), Ok(top)) = (
-            std::fs::canonicalize(&self.worktrees_dir),
-            std::fs::canonicalize(&worktree.top),
-        ) else {
+        let Ok(top) = std::fs::canonicalize(&worktree.top) else {
             return false;
         };
         let root_inside = std::fs::canonicalize(&worktree.root).is_ok_and(|r| r.starts_with(&top));
-        top.parent() == Some(dir.as_path())
+        top.parent()
+            .is_some_and(|dir| is_home(dir) || self.is_old_home(dir))
             && root_inside
             && worktree.branch.starts_with("patchwork/")
             && !worktree.branch.contains("..")
     }
 
-    /// Whether the project's tasks edit its own folder rather than a worktree each.
+    /// Whether the project's tasks edit its own folder rather than a worktree each: worktrees
+    /// are turned off, everywhere or for this project.
     #[must_use]
     pub fn edits_in_place(&self, project_id: &str) -> bool {
-        self.store
-            .settings()
-            .edit_in_place
-            .iter()
-            .any(|id| id == project_id)
+        let settings = self.store.settings();
+        settings.worktrees.disabled || settings.edit_in_place.iter().any(|id| id == project_id)
     }
 
     /// Sets whether the project's new tasks edit its own folder rather than a worktree each.
@@ -597,13 +564,7 @@ impl Core {
     /// Whether `path` is a worktree Patchwork made as a project of its own, which needs no
     /// second worktree.
     fn is_worktree_project(&self, path: &str) -> bool {
-        let (Ok(dir), Ok(path)) = (
-            std::fs::canonicalize(&self.worktrees_dir),
-            std::fs::canonicalize(path),
-        ) else {
-            return false;
-        };
-        path.starts_with(dir)
+        std::fs::canonicalize(path).is_ok_and(|path| self.worktree_top_of(&path).is_some())
     }
 
     /// The folder task `thread_id` works in: its worktree, its project's folder, or its chat's
@@ -820,9 +781,7 @@ impl Core {
             .collect();
         let name = name.trim_start_matches(['-', '.']);
         let name = if name.is_empty() { "worktree" } else { name };
-        std::fs::create_dir_all(&self.worktrees_dir)
-            .map_err(|e| format!("Cannot create {}: {e}", self.worktrees_dir.display()))?;
-        let dir = self.worktrees_dir.join(format!("{name}-{short}"));
+        let dir = make_home(top)?.join(format!("{name}-{short}"));
         let dir = dir.to_string_lossy().into_owned();
         let branch = format!("patchwork/{short}");
         let worktree = Worktree {
@@ -866,7 +825,9 @@ impl Core {
     /// rule removed its folder. Every task sharing it gets it back.
     fn unpark_worktree(&self, thread_id: &str, parked: &Worktree) -> Result<Worktree, Error> {
         let at = Path::new(&parked.top);
-        if at.parent() != Some(self.worktrees_dir.as_path())
+        if !at
+            .parent()
+            .is_some_and(|dir| is_home(dir) || self.is_old_home(dir))
             || !parked.branch.starts_with("patchwork/")
             || parked.branch.contains("..")
             || at.exists()
@@ -983,19 +944,12 @@ impl Core {
     /// Rust project: a Cargo build folder of the worktree's own, outside it, which goes when the
     /// worktree does. None when the user or the project set their own.
     pub(crate) fn worktree_env(&self, root: &str) -> Vec<(&'static str, String)> {
-        let (Ok(dir), Ok(root)) = (
-            std::fs::canonicalize(&self.worktrees_dir),
-            std::fs::canonicalize(root),
-        ) else {
+        let Some(top) = std::fs::canonicalize(root)
+            .ok()
+            .and_then(|root| self.worktree_top_of(&root))
+        else {
             return Vec::new();
         };
-        let Ok(inside) = root.strip_prefix(&dir) else {
-            return Vec::new();
-        };
-        let Some(folder) = inside.components().next() else {
-            return Vec::new();
-        };
-        let top = dir.join(folder);
         let own = crate::system::login_var("CARGO_TARGET_DIR").is_some()
             || ["config.toml", "config"].iter().any(|name| {
                 std::fs::read_to_string(top.join(".cargo").join(name))
@@ -1669,6 +1623,7 @@ impl Core {
     }
 
     fn clean_worktrees(&self) {
+        self.move_old_worktrees();
         let mut tops = Vec::new();
         for project in self.store.settings().projects {
             if ssh::is_remote(&project.path) || !Path::new(&project.path).is_dir() {
@@ -1781,7 +1736,10 @@ impl Core {
                 Err(e) => log::warn!(error:% = e; "could not forget a missing worktree: {{error}}"),
             }
         }
-        self.sweep_unrecorded(&recorded);
+        self.sweep_unrecorded(&self.worktrees_dir, &recorded);
+        for top in &tops {
+            self.sweep_unrecorded(&super::worktree_home::home(top), &recorded);
+        }
         self.settle_landed_worktrees();
     }
 
@@ -1824,7 +1782,7 @@ impl Core {
             // Its agent may have left it on another branch; what it holds goes to its own.
             self.switch_back(thread_id, &worktree)?;
             let top = self.verify(thread_id, &worktree)?;
-            self.drop_worktree(&worktree, &top)
+            Self::drop_worktree(&worktree, &top)
         })();
         // A worktree left behind keeps its record, so the folder and its branch stay found, and
         // the next start tries again.
@@ -1859,8 +1817,8 @@ impl Core {
 
     /// Removes `worktree` of the repository whose main folder is `top`: what it hadn't committed
     /// is committed to its branch first, and the branch goes too once `top` has all of it.
-    pub(super) fn drop_worktree(&self, worktree: &Worktree, top: &str) -> Result<(), Error> {
-        self.remove_worktree_folder(worktree, top, "Work left by a deleted Patchwork task")?;
+    pub(super) fn drop_worktree(worktree: &Worktree, top: &str) -> Result<(), Error> {
+        Self::remove_worktree_folder(worktree, top, "Work left by a deleted Patchwork task")?;
         if !delete_if_landed(top, &worktree.branch)? {
             log::info!(branch:% = worktree.branch; "kept the unmerged branch {{branch}} of a removed worktree");
         }
@@ -1871,7 +1829,7 @@ impl Core {
     /// cleanup rule chose, and keeps its branch and every sharing task's record of it, so the
     /// task's next turn makes it again. What it hadn't committed is committed to its branch.
     pub(super) fn park_worktree(&self, worktree: &Worktree, top: &str) -> Result<(), Error> {
-        self.remove_worktree_folder(
+        Self::remove_worktree_folder(
             worktree,
             top,
             "Work left by a cleaned-up Patchwork worktree",
@@ -1897,12 +1855,7 @@ impl Core {
 
     /// Commits what `worktree` hadn't committed, as `message`, and removes its folder and its
     /// build folder. A locked worktree stays as it is. `top` is its repository's main folder.
-    fn remove_worktree_folder(
-        &self,
-        worktree: &Worktree,
-        top: &str,
-        message: &str,
-    ) -> Result<(), Error> {
+    fn remove_worktree_folder(worktree: &Worktree, top: &str, message: &str) -> Result<(), Error> {
         if locked(&worktree.top) {
             return Err("it is locked; `git worktree unlock` it to let Patchwork remove it".into());
         }
@@ -1912,7 +1865,12 @@ impl Core {
             &["rev-parse", "--path-format=absolute", "--git-common-dir"],
         )?;
         let git_dir = format!("--git-dir={}", common.trim());
-        let dir = self.worktrees_dir.to_string_lossy().into_owned();
+        // Run from the folder it is in, which stays when it goes.
+        let dir = Path::new(&worktree.top)
+            .parent()
+            .ok_or("the worktree has no folder above it")?
+            .to_string_lossy()
+            .into_owned();
         git(
             &dir,
             &[
@@ -1952,7 +1910,7 @@ impl Core {
             if off_branch(worktree).is_some() {
                 in_worktree(worktree, &["checkout", "-q", &worktree.branch, "--"])?;
             }
-            self.drop_worktree(worktree, &top)
+            Self::drop_worktree(worktree, &top)
         })();
         if let Err(e) = removed {
             log::warn!(branch:% = worktree.branch, error:% = e; "could not remove the worktree on {{branch}} of a deleted task: {{error}}");
@@ -1964,13 +1922,13 @@ impl Core {
         }
     }
 
-    /// Removes the folders in Patchwork's worktrees folder that no task's record names, as a
+    /// Removes the folders in the worktrees folder `dir` that no task's record names, as a
     /// worktree that failed to be made or whose record was lost leaves: only a worktree on a
     /// `patchwork/` branch with nothing uncommitted, not locked, which no project is in, and not
     /// one made in the last hour, which may be a task's being made now. Its branch stays unless
     /// its repository already has all of it. `recorded` holds the canonical folders records name.
-    fn sweep_unrecorded(&self, recorded: &[PathBuf]) {
-        let Ok(entries) = std::fs::read_dir(&self.worktrees_dir) else {
+    fn sweep_unrecorded(&self, dir: &Path, recorded: &[PathBuf]) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
             return;
         };
         let projects: Vec<PathBuf> = self
@@ -2023,7 +1981,7 @@ impl Core {
                 base: None,
                 parked: false,
             };
-            match self.drop_worktree(&worktree, &main) {
+            match Self::drop_worktree(&worktree, &main) {
                 Ok(()) => {
                     log::info!(branch:% = worktree.branch; "removed a worktree on {{branch}} no task had");
                 }

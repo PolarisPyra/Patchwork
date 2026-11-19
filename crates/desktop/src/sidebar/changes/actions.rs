@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use gpui::{ClickEvent, Pixels, Point, PromptLevel, WeakEntity, Window, prelude::*};
-use patchwork_core::workspace::PullRequest;
+use patchwork_core::workspace::{CommitOptions, PullRequest, RepoAction};
 
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
 use crate::ui::base_name;
@@ -13,8 +13,96 @@ use crate::workspace::Workspace;
 use super::state::{ChangesView, GitAction, PANE_MIN};
 
 impl ChangesView {
-    /// Runs one of the Commit button's actions, step by step, off the main thread.
-    pub(super) fn run(&mut self, action: GitAction, cx: &mut Context<Self>) {
+    /// Starts one of the Commit button's actions, after asking what it needs first: which remote
+    /// a branch is published to, or whether to give an operation up.
+    pub(super) fn start(
+        &mut self,
+        action: GitAction,
+        at: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let state = self.sync.as_ref();
+        match action {
+            GitAction::Sync => self.act("Syncing…", RepoAction::Sync, cx),
+            GitAction::Continue => self.act("Continuing…", RepoAction::Continue, cx),
+            GitAction::Abort => {
+                let name = state
+                    .and_then(|s| s.operation)
+                    .map_or("operation", |o| o.name());
+                self.confirm(
+                    "Abort",
+                    &format!("Give up the {name}? The files go back to how they were before it."),
+                    "Abort",
+                    |this, cx| this.act("Aborting…", RepoAction::Abort, cx),
+                    window,
+                    cx,
+                );
+            }
+            GitAction::CommitPush | GitAction::CommitPushPr | GitAction::Push => {
+                // A branch never pushed goes to origin, or to the only remote; among others
+                // there is no telling which.
+                let remotes = state
+                    .filter(|s| !s.has_upstream && s.remotes.len() > 1)
+                    .map(|s| s.remotes.clone())
+                    .filter(|remotes| !remotes.iter().any(|r| r == "origin"))
+                    .unwrap_or_default();
+                if remotes.is_empty() {
+                    return self.run(action, None, CommitOptions::default(), cx);
+                }
+                let entity = cx.entity().downgrade();
+                let items = remotes
+                    .into_iter()
+                    .map(|remote| {
+                        let entity = entity.clone();
+                        MenuItem::new(remote.clone(), move |_, cx| {
+                            let remote = Some(remote.clone());
+                            let _ = entity.update(cx, |this, cx| {
+                                this.run(action, remote, CommitOptions::default(), cx);
+                            });
+                        })
+                    })
+                    .collect();
+                self.open_menu("Publish to", items, at, None, window, cx);
+            }
+            _ => self.run(action, None, CommitOptions::default(), cx),
+        }
+    }
+
+    /// Asks before something that cannot be taken back, then does it.
+    pub(super) fn confirm(
+        &mut self,
+        title: &str,
+        detail: &str,
+        yes: &str,
+        then: impl FnOnce(&mut Self, &mut Context<Self>) + 'static,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let answer = window.prompt(
+            PromptLevel::Warning,
+            title,
+            Some(detail),
+            &[yes, "Cancel"],
+            cx,
+        );
+        cx.spawn(async move |this, cx| {
+            if answer.await == Ok(0) {
+                let _ = this.update(cx, then);
+            }
+        })
+        .detach();
+    }
+
+    /// Runs one of the Commit button's actions, step by step, off the main thread. A push goes
+    /// to `remote` when the branch has none yet, and a commit is made with `options`.
+    pub(super) fn run(
+        &mut self,
+        action: GitAction,
+        remote: Option<String>,
+        options: CommitOptions,
+        cx: &mut Context<Self>,
+    ) {
         self.error = None;
         self.result = None;
         if action == GitAction::ViewPr {
@@ -73,7 +161,7 @@ impl ChangesView {
                 let (core, id, thread) = (Arc::clone(&core), id.clone(), thread.clone());
                 match cx
                     .background_spawn(async move {
-                        core.commit_changes(&id, thread.as_deref(), &message)
+                        core.commit_changes(&id, thread.as_deref(), &message, options)
                     })
                     .await
                 {
@@ -103,7 +191,7 @@ impl ChangesView {
                 match cx
                     .background_spawn(async move {
                         let root = core.source_root(&id, thread.as_deref())?;
-                        patchwork_core::workspace::push(&root)
+                        patchwork_core::workspace::push(&root, remote.as_deref(), false)
                     })
                     .await
                 {
@@ -226,14 +314,70 @@ impl ChangesView {
         .detach();
     }
 
-    pub(super) fn stage(&mut self, files: Vec<String>, cx: &mut Context<Self>) {
-        self.each_file(files, patchwork_core::workspace::accept_file, cx);
+    /// Stages the files. One that was in conflict and still has conflict markers is asked about
+    /// first, since staging it says the conflict is resolved.
+    pub(super) fn stage(
+        &mut self,
+        files: Vec<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let stage = patchwork_core::workspace::accept_file;
+        let conflicted: Vec<String> = self.workspace.upgrade().map_or_else(Vec::new, |w| {
+            let changes = &w.read(cx).changes;
+            let in_conflict = |file: &&String| {
+                changes
+                    .iter()
+                    .any(|c| &c.path == *file && c.status == "conflicted")
+            };
+            files.iter().filter(in_conflict).cloned().collect()
+        });
+        let Some(root) = self.root.clone().filter(|_| !conflicted.is_empty()) else {
+            return self.each_file(files, stage, cx);
+        };
+        let check = cx.background_spawn(async move {
+            conflicted
+                .into_iter()
+                .filter(|file| patchwork_core::workspace::has_conflict_markers(&root, file))
+                .collect::<Vec<_>>()
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let marked = check.await;
+            if !marked.is_empty() {
+                let what = match marked.as_slice() {
+                    [one] => format!("{} still has", base_name(one)),
+                    many => format!("{} files still have", many.len()),
+                };
+                let Ok(answer) = this.update_in(cx, |_, window, cx| {
+                    window.prompt(
+                        PromptLevel::Warning,
+                        "Stage",
+                        Some(&format!("{what} conflict markers. Stage anyway?")),
+                        &["Stage", "Cancel"],
+                        cx,
+                    )
+                }) else {
+                    return;
+                };
+                if answer.await != Ok(0) {
+                    return;
+                }
+            }
+            let _ = this.update(cx, |this, cx| this.each_file(files, stage, cx));
+        })
+        .detach();
     }
 
-    /// Reverts the files after one confirmation.
+    /// Takes the files back out of the index, keeping their changes.
+    pub(super) fn unstage(&mut self, files: Vec<String>, cx: &mut Context<Self>) {
+        self.each_file(files, patchwork_core::workspace::unstage_file, cx);
+    }
+
+    /// Discards the files with `step` after one confirmation.
     pub(super) fn discard(
         &mut self,
         files: Vec<String>,
+        step: fn(&str, &str) -> Result<(), patchwork_core::Error>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -244,22 +388,32 @@ impl ChangesView {
             [one] => base_name(one).to_string(),
             many => format!("{} files", many.len()),
         };
-        let answer = window.prompt(
-            PromptLevel::Warning,
-            "Discard",
-            Some(&format!("Discard changes to {what}?")),
-            &["Discard", "Cancel"],
+        // A new file has no earlier version to go back to: it is moved to the Trash.
+        let all_new = self.workspace.upgrade().is_some_and(|w| {
+            let changes = &w.read(cx).changes;
+            files.iter().all(|file| {
+                changes
+                    .iter()
+                    .any(|c| &c.path == file && c.status == "untracked")
+            })
+        });
+        let (title, detail, yes) = if all_new {
+            (
+                "Move to Trash",
+                format!("Move {what} to the Trash?"),
+                "Move to Trash",
+            )
+        } else {
+            ("Discard", format!("Discard changes to {what}?"), "Discard")
+        };
+        self.confirm(
+            title,
+            &detail,
+            yes,
+            move |this, cx| this.each_file(files, step, cx),
+            window,
             cx,
         );
-        cx.spawn(async move |this, cx| {
-            if answer.await != Ok(0) {
-                return;
-            }
-            let _ = this.update(cx, |this, cx| {
-                this.each_file(files, patchwork_core::workspace::revert_file, cx);
-            });
-        })
-        .detach();
     }
 
     /// Starts a task whose agent resolves the conflicts, given both sides of each.
@@ -395,9 +549,12 @@ impl ChangesView {
         cx: &mut Context<Self>,
     ) {
         let menu = Menu::open(label.to_string(), items, window, cx);
-        cx.subscribe_in(&menu, window, |this, _, e: &Dismissed, _, cx| {
+        cx.subscribe_in(&menu, window, |this, menu, e: &Dismissed, _, cx| {
             this.dismissed = e.0;
-            this.menu = None;
+            // A row of this menu may have opened another in its place by now.
+            if this.menu.as_ref().is_some_and(|(open, ..)| open == menu) {
+                this.menu = None;
+            }
             cx.notify();
         })
         .detach();

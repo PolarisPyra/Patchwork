@@ -28,6 +28,7 @@ pub(in crate::orchestration) fn change(path: &str, status: &str, additions: u32)
         additions,
         deletions: 0,
         staged: false,
+        ..FileChange::default()
     }
 }
 

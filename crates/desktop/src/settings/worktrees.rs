@@ -1,5 +1,5 @@
-//! Settings → Worktrees: whether a fork gets a worktree of its own, what cleaning up keeps, and
-//! the button that deletes stale task worktrees now.
+//! Settings → Worktrees: whether tasks get worktrees at all, whether a fork gets one of its own,
+//! what cleaning up keeps, and the button that deletes stale task worktrees now.
 
 // Rust guideline compliant 2026-10-09
 
@@ -61,6 +61,11 @@ impl SettingsDialog {
 pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
     let t = *theme(cx);
     let worktrees = d.settings.worktrees.clone();
+    let on = !worktrees.disabled;
+    let use_row = token_row("Give tasks their own worktree", None, &t).child(
+        switch("worktrees-on", "Give tasks their own worktree", on, &t)
+            .on_click(cx.listener(move |d, _, _, cx| d.update(|s| s.worktrees.disabled = on, cx))),
+    );
     let fork_new = worktrees.fork_into_new;
     let fork_row = token_row("Fork into a new worktree", None, &t).child(
         switch("worktrees-fork", "Fork into a new worktree", fork_new, &t).on_click(
@@ -84,7 +89,9 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     div()
         .flex()
         .flex_col()
-        .child(section_heading("Forks", true, &t))
+        .child(section_heading("Tasks", true, &t))
+        .child(use_row)
+        .child(section_heading("Forks", false, &t))
         .child(fork_row)
         .child(section_heading("Cleanup", false, &t))
         .child(deleted)

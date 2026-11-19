@@ -101,6 +101,83 @@ pub fn is_inside(root: &Path, path: &str) -> bool {
     real(&resolve(root, path)).starts_with(real(root))
 }
 
+/// `rel` under the folder `root` with the links in its folders followed but not its own, so a
+/// link names the link and not what it leads to: what deleting it should delete.
+///
+/// # Errors
+///
+/// Returns an error when `root` or the folder `rel` is in does not exist, or `rel` is outside
+/// `root` or names `root` itself.
+pub fn entry_inside(root: &Path, rel: &str) -> Result<PathBuf, Error> {
+    let rel = Path::new(rel.trim_start_matches('/'));
+    let Some(name) = rel.file_name() else {
+        return Err(Error::OutsideProject);
+    };
+    let root = canonicalize(root).map_err(|e| format!("{}: {e}", root.display()))?;
+    let folder = root.join(rel.parent().unwrap_or(Path::new("")));
+    let folder = canonicalize(&folder).map_err(|e| format!("{}: {e}", rel.display()))?;
+    if folder.starts_with(&root) {
+        Ok(folder.join(name))
+    } else {
+        Err(Error::OutsideProject)
+    }
+}
+
+/// Moves the file, link or folder at `path` to the system's Trash, where the user can get it back.
+///
+/// # Errors
+///
+/// Returns an error when the system has no Trash for the disk `path` is on, or refuses the move.
+pub fn move_to_trash(path: &Path) -> Result<(), Error> {
+    trash::delete(path).map_err(|e| format!("{}: {e}", path.display()).into())
+}
+
+/// The lines in the file at `path`, as git counts a new file's.
+///
+/// A last line without a newline counts, and a binary file, one with a NUL in its first 8000
+/// bytes, counts 0. A link counts as the one line git keeps for it and is not followed; anything
+/// else that is not a file counts 0. The file is read a piece at a time, so a large one is not
+/// held in memory.
+#[must_use]
+pub fn count_lines(path: &Path) -> u32 {
+    use std::io::Read;
+    let Ok(meta) = std::fs::symlink_metadata(path) else {
+        return 0;
+    };
+    if meta.file_type().is_symlink() {
+        return 1;
+    }
+    if !meta.is_file() {
+        return 0;
+    }
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return 0;
+    };
+    let mut buf = vec![0; 64 * 1024];
+    let (mut lines, mut read, mut last) = (0, 0, b'\n');
+    loop {
+        let n = match file.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(e) if e.kind() == ErrorKind::Interrupted => continue,
+            Err(_) => return 0,
+        };
+        let chunk = &buf[..n];
+        if read < 8000 && chunk[..n.min(8000 - read)].contains(&0) {
+            return 0;
+        }
+        #[expect(
+            clippy::naive_bytecount,
+            reason = "counted once per changed file, not worth a dependency"
+        )]
+        let newlines = chunk.iter().filter(|&&b| b == b'\n').count();
+        lines += newlines;
+        read += n;
+        last = chunk.last().copied().unwrap_or(last);
+    }
+    u32::try_from(lines + usize::from(last != b'\n')).unwrap_or(u32::MAX)
+}
+
 /// Whether `name` can be a file's name as it is: not hidden, and without a path separator or a
 /// character Windows refuses.
 #[must_use]

@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
-use patchwork_core::workspace::FileChange;
+use patchwork_core::workspace::{DiffSide, FileChange, RepoAction};
 
 use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme};
 use crate::ui::{base_name, button, dir_name, icon, tooltip};
@@ -121,29 +121,54 @@ pub(super) fn group_header(
 
 impl ChangesView {
     /// One file (`ChangeRow`): its name and folder, the actions shown on hover, its line counts,
-    /// and its status letter. Opens its diff.
+    /// and its status letter. Opens its diff, or the `side` of it the row is for when the file is
+    /// in both groups.
     pub(super) fn change_row(
         &self,
         c: &FileChange,
+        side: DiffSide,
         full_access: bool,
         t: &Theme,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let (letter, label, color) = status_of(&c.status, t);
         let deleted = c.status == "deleted";
-        let group = SharedString::from(format!("change:{}", c.path));
+        // A file can be both staged and not, so it can be in two groups at once.
+        let shown = side;
+        let side = if c.staged { "staged" } else { "unstaged" };
+        // Where it was renamed from, or how it conflicts, said with its status.
+        let label = match (&c.renamed_from, &c.conflict) {
+            (_, Some(kind)) => format!("Conflict: {kind}"),
+            (Some(from), None) => format!("Renamed from {from}"),
+            (None, None) => label.to_string(),
+        };
+        // A file in both groups counts each group's lines.
+        let (additions, deletions) = match (shown, c.parts) {
+            (DiffSide::Staged, Some((staged, _))) => staged,
+            (DiffSide::Unstaged, Some((_, unstaged))) => unstaged,
+            _ => (c.additions, c.deletions),
+        };
+        let untracked = c.status == "untracked";
+        let group = SharedString::from(format!("change:{side}:{}", c.path));
         let hover = t.bg_hover;
         let path = c.path.clone();
         let open = path.clone();
         let workspace = self.workspace.clone();
+        // A staged file goes back to its last commit; a change not staged goes back to what is
+        // staged, which it keeps.
+        let undo: fn(&str, &str) -> Result<(), patchwork_core::Error> = if c.staged {
+            patchwork_core::workspace::revert_file
+        } else {
+            patchwork_core::workspace::discard_unstaged
+        };
         let actions = (!full_access).then(|| {
-            let (discard, stage) = (path.clone(), path.clone());
+            let (discard, stage, ignore) = (path.clone(), path.clone(), path.clone());
             div()
                 .flex()
                 .flex_none()
                 .child(
                     row_action(
-                        format!("discard:{path}"),
+                        format!("discard:{side}:{path}"),
                         "Discard changes",
                         "arrow-counter-clockwise",
                         group.clone(),
@@ -151,23 +176,49 @@ impl ChangesView {
                     )
                     .on_click(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
-                        this.discard(vec![discard.clone()], window, cx);
+                        this.discard(vec![discard.clone()], undo, window, cx);
                     })),
                 )
-                .when(!c.staged, |d| {
+                .when(untracked, |d| {
                     d.child(
                         row_action(
-                            format!("stage:{path}"),
-                            "Stage changes",
-                            "plus",
+                            format!("ignore:{path}"),
+                            "Add to .gitignore",
+                            "eye-slash",
                             group.clone(),
                             t,
                         )
                         .on_click(cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
-                            this.stage(vec![stage.clone()], cx);
+                            let path = ignore.clone();
+                            this.act("Ignoring…", RepoAction::Ignore { path }, cx);
                         })),
                     )
+                })
+                .child(if c.staged {
+                    row_action(
+                        format!("unstage:{path}"),
+                        "Unstage changes",
+                        "minus",
+                        group.clone(),
+                        t,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.unstage(vec![stage.clone()], cx);
+                    }))
+                } else {
+                    row_action(
+                        format!("stage:{path}"),
+                        "Stage changes",
+                        "plus",
+                        group.clone(),
+                        t,
+                    )
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        cx.stop_propagation();
+                        this.stage(vec![stage.clone()], window, cx);
+                    }))
                 })
         });
         div()
@@ -183,7 +234,7 @@ impl ChangesView {
             .hover(move |s| s.bg(hover))
             .child(
                 button(
-                    SharedString::from(format!("open:{path}")),
+                    SharedString::from(format!("open:{side}:{path}")),
                     format!("{path} • {label}"),
                 )
                 .flex_1()
@@ -211,7 +262,9 @@ impl ChangesView {
                 )
                 .on_click(move |_, window, cx| {
                     let open = open.clone();
-                    let _ = workspace.update(cx, |w, cx| w.open_change(&open, window, cx));
+                    let _ = workspace.update(cx, |w, cx| {
+                        w.open_change_side(&open, shown, window, cx);
+                    });
                 }),
             )
             .children(actions)
@@ -227,7 +280,7 @@ impl ChangesView {
                             .flex()
                             .justify_end()
                             .text_color(t.success)
-                            .child(format!("+{}", c.additions)),
+                            .child(format!("+{additions}")),
                     )
                     .child(
                         div()
@@ -235,14 +288,14 @@ impl ChangesView {
                             .flex()
                             .justify_end()
                             .text_color(t.danger)
-                            .child(format!("−{}", c.deletions)),
+                            .child(format!("−{deletions}")),
                     ),
             )
             .child(
                 div()
                     .id("status")
                     .role(Role::Image)
-                    .aria_label(label)
+                    .aria_label(label.clone())
                     .w(px(12.))
                     .flex_none()
                     .flex()

@@ -28,8 +28,8 @@ pub use controls::{
 };
 pub use scrollbar::{list_scrollbar, scrollbar};
 pub use format::{
-    base_name, compact_elapsed, dir_name, display_title, format_clock, format_relative, resets_in,
-    format_tokens, full_elapsed, now_ms, slug_file_name,
+    base_name, compact_elapsed, dir_name, display_title, format_clock, format_date,
+    format_relative, resets_in, format_tokens, full_elapsed, now_ms, slug_file_name,
 };
 pub use logos::{
     AGENT_KINDS, agent_label, agent_logo, api_model_place, api_provider_name, platform_logo,

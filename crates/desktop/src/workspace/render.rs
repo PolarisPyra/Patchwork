@@ -64,6 +64,7 @@ impl Render for Workspace {
         let panel = self.panel_area(window, cx).filter(|_| beside_chat);
         let background_dialog = self.background_dialog(window, cx);
         let granular_dialog = self.granular_dialog(window, cx);
+        let credential_dialog = self.credential_dialog(cx);
         let error = self.error_toast(&t, cx);
         div()
             .id("workspace")
@@ -284,6 +285,7 @@ impl Render for Workspace {
             )
             .children(background_dialog)
             .children(granular_dialog)
+            .children(credential_dialog)
             .children(
                 self.machine_menu
                     .as_ref()
@@ -301,6 +303,7 @@ impl Workspace {
             || self.settings_dialog.is_some()
             || self.background_dialog.is_some()
             || self.granular_dialog.is_some()
+            || self.credentials.is_open()
             || self.add_project.is_some()
             || self.machine_menu.is_some()
     }

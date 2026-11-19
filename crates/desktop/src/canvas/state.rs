@@ -18,11 +18,15 @@ pub const CANVAS_MIN: f32 = 340.;
 
 pub const CANVAS_MAX_FRACTION: f32 = 0.7;
 
+/// How many characters wide a conflict's first line is with its buttons, about.
+const CONFLICT_ROW_CHARS: usize = 90;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CanvasTab {
     Plan,
     Code,
     Diff,
+    History,
     Image,
     Video,
 }
@@ -30,6 +34,10 @@ pub enum CanvasTab {
 /// A load's result: the value, or the error it hit.
 pub(super) type Loaded<T> = Option<Result<T, String>>;
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate fact about what the panel shows"
+)]
 pub struct Canvas {
     pub(super) workspace: WeakEntity<Workspace>,
     pub project_id: String,
@@ -45,7 +53,20 @@ pub struct Canvas {
     pub(super) widest: Option<usize>,
     pub(super) diff: Loaded<SharedString>,
     pub(super) staged: Vec<bool>,
+    /// Which part of the file's change the diff shows, for a file staged in part.
+    pub side: patchwork_core::workspace::DiffSide,
     pub(super) media: Option<FileMedia>,
+    /// The conflicts git left in the file, and the one last stepped to.
+    pub(super) conflicts: Vec<patchwork_core::workspace::Conflict>,
+    pub(super) conflict_shown: Option<usize>,
+    /// Whether the code shows who last changed each line, and those runs of lines once read.
+    pub(super) blame_on: bool,
+    pub(super) blame: Loaded<std::rc::Rc<Vec<patchwork_core::workspace::BlameRange>>>,
+    /// The commits that changed the file, once its history was opened, and whether more follow.
+    pub(super) history: Loaded<Vec<patchwork_core::workspace::FileRevision>>,
+    pub(super) history_more: bool,
+    /// The commit whose changes the diff shows, in place of the uncommitted ones.
+    pub(super) revision: Option<patchwork_core::workspace::FileRevision>,
     pub(super) load_seq: usize,
     pub(super) busy: bool,
     pub(super) action_error: Option<String>,
@@ -105,7 +126,15 @@ impl Canvas {
             widest: None,
             diff: None,
             staged: Vec::new(),
+            side: patchwork_core::workspace::DiffSide::All,
             media: None,
+            conflicts: Vec::new(),
+            conflict_shown: None,
+            blame_on: false,
+            blame: None,
+            history: None,
+            history_more: false,
+            revision: None,
             load_seq: 0,
             busy: false,
             action_error: None,
@@ -168,17 +197,35 @@ impl Canvas {
         };
         self.load_seq += 1;
         let seq = self.load_seq;
-        let (root, turn) = (self.root.clone(), self.turn(cx));
+        let (root, turn, side) = (self.root.clone(), self.turn(cx), self.side);
+        let revision = self.revision.clone();
         let task = cx.background_spawn(async move {
             use patchwork_core::orchestration::changes::turn_files::turn_file_diff;
             use patchwork_core::workspace as ws;
             let file = ws::read_file(&root, &path).map_err(|e| e.to_string());
-            let diff = match &turn {
-                Some(turn) => turn_file_diff(&root, turn, &path),
-                None => ws::git_file_diff(&root, &path),
+            // One part of a file staged in part, while it still has that part.
+            let part = match (&turn, side) {
+                _ if revision.is_some() => None,
+                (Some(_), _) | (None, ws::DiffSide::All) => None,
+                (None, side) => ws::git_file_diff(&root, &path, side)
+                    .ok()
+                    .filter(|diff| !diff.trim().is_empty()),
+            };
+            let staged = match &part {
+                None if revision.is_some() => Vec::new(),
+                Some(diff) => {
+                    let changes = diff.lines().filter(|l| l.starts_with("@@")).count();
+                    vec![side == ws::DiffSide::Staged; changes]
+                }
+                None => ws::staged_hunks(&root, &path, turn.as_ref()).unwrap_or_default(),
+            };
+            let diff = match (&revision, &turn, part) {
+                (Some(shown), _, _) => ws::commit_file_diff(&root, &shown.hash, &shown.path),
+                (None, _, Some(part)) => Ok(part),
+                (None, Some(turn), None) => turn_file_diff(&root, turn, &path),
+                (None, None, None) => ws::git_file_diff(&root, &path, ws::DiffSide::All),
             }
             .map_err(|e| e.to_string());
-            let staged = ws::staged_hunks(&root, &path, turn.as_ref()).unwrap_or_default();
             let media = ws::file_media(&root, std::slice::from_ref(&path))
                 .ok()
                 .and_then(|m| m.into_iter().find(|m| m.path == path));
@@ -197,16 +244,22 @@ impl Canvas {
             } else {
                 Vec::new()
             };
+            let conflicts = file.as_deref().map(ws::conflicts_in).unwrap_or_default();
             let widest = lines
                 .iter()
                 .enumerate()
                 .max_by_key(|(_, l)| l.chars().count())
-                .map(|(i, _)| i);
+                // A conflict's first line also holds its buttons, which a file of short lines
+                // would otherwise cut off.
+                .map(|(i, l)| match conflicts.first() {
+                    Some(first) if l.chars().count() < CONFLICT_ROW_CHARS => first.opens,
+                    _ => i,
+                });
             let lines: Vec<SharedString> = lines.into_iter().map(SharedString::from).collect();
-            (file, diff, staged, media, lines, runs, widest)
+            (file, diff, staged, media, lines, runs, widest, conflicts)
         });
         cx.spawn(async move |this, cx| {
-            let (file, diff, staged, media, lines, runs, widest) = task.await;
+            let (file, diff, staged, media, lines, runs, widest, conflicts) = task.await;
             this.update(cx, |this, cx| {
                 if this.load_seq != seq {
                     return;
@@ -214,6 +267,8 @@ impl Canvas {
                 this.lines = lines;
                 this.runs = runs;
                 this.widest = widest;
+                this.conflicts = conflicts;
+                this.conflict_shown = None;
                 this.file = Some(file.map(SharedString::from));
                 this.diff_rows = diff
                     .as_ref()
@@ -224,6 +279,14 @@ impl Canvas {
                 this.diff = Some(diff.map(SharedString::from));
                 this.staged = staged;
                 this.media = media;
+                // What was read of the file's past is of the file as it was.
+                this.blame = None;
+                if this.blame_on {
+                    this.load_blame(cx);
+                }
+                if this.history.is_some() {
+                    this.load_history(false, cx);
+                }
                 cx.notify();
             })
         })

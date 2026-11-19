@@ -61,6 +61,7 @@ impl Canvas {
                     )
                     .into_any_element();
             }
+            CanvasTab::History => return self.history_view(&t, cx),
             _ => {}
         }
         let result = if active == CanvasTab::Code {
@@ -92,7 +93,17 @@ impl Canvas {
                 }
                 self.code_view(&t, cx).into_any_element()
             }
-            Some(Ok(_)) => self.diff_view(&path, &t, cx),
+            Some(Ok(_)) => {
+                let bar = self.revision_bar(&t, cx);
+                let diff = self.diff_view(&path, &t, cx);
+                div()
+                    .size_full()
+                    .flex()
+                    .flex_col()
+                    .children(bar)
+                    .child(div().flex_1().min_h_0().child(diff))
+                    .into_any_element()
+            }
         }
     }
 
@@ -102,7 +113,7 @@ impl Canvas {
         uniform_list(
             "canvas-code",
             self.lines.len(),
-            cx.processor(move |this, range: std::ops::Range<usize>, _, _| {
+            cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
                 range
                     .map(|i| {
                         let line = this.lines[i].clone();
@@ -115,7 +126,9 @@ impl Canvas {
                             .id(i)
                             .flex()
                             .line_height(relative(1.65))
+                            .when_some(this.conflict_tint(i, &theme), gpui::Styled::bg)
                             .hover(move |s| s.bg(hover))
+                            .children(this.blame_cell(i, &theme, cx))
                             .child(
                                 div()
                                     .flex_none()
@@ -133,6 +146,7 @@ impl Canvas {
                                     .pr(px(16.))
                                     .child(StyledText::new(line).with_highlights(runs)),
                             )
+                            .children(this.conflict_actions(i, &theme, cx))
                     })
                     .collect()
             }),
@@ -154,9 +168,30 @@ impl Canvas {
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
         self.path.as_ref()?;
+        // A commit's changes are not the file's to stage or reject.
+        if self.revision.is_some() && self.active_tab() == CanvasTab::Diff {
+            return None;
+        }
         let change = self.change(cx)?;
         let busy = self.busy;
-        let state = if change.staged {
+        // Staging a file that was in conflict is what tells git it is resolved.
+        let conflicted = change.status == "conflicted";
+        let unsettled = conflicted && !self.conflicts.is_empty();
+        let accept = if conflicted {
+            "Mark resolved"
+        } else {
+            "Stage file"
+        };
+        let state = if conflicted {
+            div().text_color(t.text_muted).child(if unsettled {
+                change
+                    .conflict
+                    .clone()
+                    .unwrap_or_else(|| "In conflict".into())
+            } else {
+                "Conflicts settled".into()
+            })
+        } else if change.staged {
             div()
                 .flex()
                 .items_center()
@@ -202,10 +237,10 @@ impl Canvas {
                                 }),
                         )
                         .child(
-                            btn("stage-file", "Stage file", BtnKind::Success, busy, t)
-                                .child(icon("plus", 14.))
-                                .child("Stage file")
-                                .when(!busy, |b| {
+                            btn("stage-file", accept, BtnKind::Success, busy || unsettled, t)
+                                .child(icon(if conflicted { "check" } else { "plus" }, 14.))
+                                .child(accept)
+                                .when(!busy && !unsettled, |b| {
                                     b.on_click(cx.listener(|this, _, _, cx| this.stage_file(cx)))
                                 }),
                         ),

@@ -96,7 +96,7 @@ impl Core {
         if self.store.thread(owner).is_some() {
             self.park_worktree(worktree, &top)?;
         } else {
-            self.drop_worktree(worktree, &top)?;
+            Self::drop_worktree(worktree, &top)?;
             for id in self.sharers(&worktree.top) {
                 self.forget_worktree(&id);
             }
