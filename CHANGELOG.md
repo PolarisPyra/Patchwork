@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.123] - 2026-11-19
+
+**v26.11.123** · 3 changes from 1 contributor
+
+- **Costs page in Settings.** Settings now has a Costs page showing estimated spend and token use over time, broken down by provider, model, project, and chat.
+- **No more prompts for rm, sudo, and dd.** Commands containing rm, sudo, or dd now run without a Run command prompt in Auto and Full access modes.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* fix(settings): rm, sudo and dd no longer ask by default by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/259
+* feat(settings): a Costs page breaks down tokens and estimated spend by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/260
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.122...26.11.123
+
+</details>
+
 ## [26.11.122] - 2026-11-19
 
 **v26.11.122** · 3 changes from 1 contributor
