@@ -304,7 +304,7 @@ fn bots_group(w: &Workspace, bots: &[&Bot], cx: &mut Context<Workspace>) -> Div 
             }
             cx.notify();
         }));
-    let (btn_hover, fg) = (t.border_strong, t.text);
+    let (btn_hover, fg, row_hover) = (t.border_strong, t.text, t.tree_hover);
     let rows = bots.iter().map(|bot| {
         let restore = bot.id.clone();
         let target = Target::Bot(bot.id.clone());
@@ -324,6 +324,7 @@ fn bots_group(w: &Workspace, bots: &[&Bot], cx: &mut Context<Workspace>) -> Div 
             .pr(px(8.))
             .rounded(px(radius_sm()))
             .text_color(t.text)
+            .hover(move |s| s.bg(row_hover))
             .child(avatar(&bot.id, &bot.name, Mood::Idle, 16.))
             .child(div().flex_1().min_w_0().truncate().child(bot.name.clone()))
             .child(
