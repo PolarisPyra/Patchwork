@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.119] - 2026-11-19
+
+**v26.11.119** · 2 changes from 1 contributor
+
+- **Conflict resolution in app.** Resolve merge conflicts directly in the app instead of switching to another editor to fix conflicted files.
+- **Blame and file history.** See who last changed each line and which commits changed a file, right inside the app.
+- **Credential prompts for Git.** Git operations that need a password or passphrase now prompt you in the app instead of failing silently.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* feat(source-control): resolve conflicts, blame and file history in the app, and task worktrees in the project folder by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/251
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.118...26.11.119
+
+</details>
+
 ## [26.11.118] - 2026-11-19
 
 **v26.11.118** · 2 changes from 1 contributor
