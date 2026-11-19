@@ -1,0 +1,39 @@
+name: Retry
+
+# Re-runs a failed Release run whose failed jobs never started: GitHub had no runner free for them
+# (most often the arm64 Mac), so they show as cancelled or failed with no steps. A job that started
+# and failed is a real failure, so a run with one is left alone for a person to read. A run is
+# retried at most twice; GitHub then re-runs its failed jobs and the ones that depend on them, so
+# publish runs once the Mac is built. docs/release.md explains it.
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions:
+  actions: write
+
+jobs:
+  retry:
+    if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt < 3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Re-run the jobs that never started
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          failed=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN/attempts/$ATTEMPT/jobs" \
+            --paginate --jq '.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")
+              | "\(.name)\t\(.steps | length)"')
+          echo "$failed"
+          [ -n "$failed" ] || { echo "No failed jobs."; exit 0; }
+          if awk -F'\t' '$2 != 0 { found = 1 } END { exit !found }' <<< "$failed"; then
+            echo "A job failed after it started, so the run is left for a person to read."
+            exit 0
+          fi
+          echo "::notice::No runner picked up the failed jobs; re-running them (attempt $((ATTEMPT + 1)))."
+          gh run rerun "$RUN" --failed --repo "$GITHUB_REPOSITORY"

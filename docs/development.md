@@ -41,7 +41,7 @@ git config core.hooksPath scripts/hooks
 ```
 
 The `pre-push` hook runs `cargo fmt --all -- --check`, clippy with `-D warnings` and
-`node --check` on the website's two scripts before each push, on the files in the working tree. It
+`node --check` on the website's script before each push, on the files in the working tree. It
 takes about 2 seconds when nothing has changed since the last build and about 5 after a change to
 `crates/core`. `git push --no-verify` skips it; CI runs the same checks and the tests either way
 ([CI and deploys](ci.md)).

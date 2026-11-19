@@ -13,6 +13,5 @@ cargo fmt --all -- --check
 echo "pre-push: cargo clippy --workspace --all-targets -- -D warnings"
 cargo clippy --workspace --all-targets -- -D warnings
 
-echo "pre-push: node --check on the website's scripts"
+echo "pre-push: node --check on the website's script"
 node --check site/site.js
-node --check site/refresh-downloads.mjs

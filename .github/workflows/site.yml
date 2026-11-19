@@ -1,8 +1,8 @@
 name: Site
 
 # Checks the website on a PR that changes it, and deploys it to Cloudflare Pages on every push to
-# main that does: a change to a page, or the release commit pointing the download links at a new
-# tag. It builds nothing and shares no job, cache or file with CI or the Release workflow.
+# main that changes it. Its download links point at the latest GitHub release, so a release needs
+# no deploy. It builds nothing and shares no job, cache or file with CI or the Release workflow.
 #
 # The deploy needs the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets.
 #
@@ -31,11 +31,10 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      # The scripts parse, and every page the sitemap names is there.
+      # The script parses, and every page the sitemap names is there.
       - name: Check the pages
         run: |
           node --check site/site.js
-          node --check site/refresh-downloads.mjs
           for page in $(grep -o '<loc>[^<]*' site/sitemap.xml | sed 's|<loc>https://[^/]*/||'); do
             [ -f "site/${page}index.html" ] \
               || { echo "::error::sitemap.xml names /$page, which has no index.html"; exit 1; }
@@ -62,17 +61,11 @@ jobs:
           .github/deploy/node_modules/.bin/wrangler pages deploy site --project-name patchwork-site \
             --branch main --commit-dirty=true | tee "$RUNNER_TEMP/deploy.log"
 
-      # The address wrangler printed for this deployment serves the home page with the download
-      # links that were just pushed.
+      # The address wrangler printed for this deployment serves the home page.
       - name: Check the deployed page
         if: github.event_name != 'pull_request'
         run: |
           url=$(grep -o 'https://[a-z0-9.-]*\.pages\.dev' "$RUNNER_TEMP/deploy.log" | tail -n 1)
           [ -n "$url" ] || { echo "::error::wrangler printed no deployment address"; exit 1; }
-          links=$(grep -o 'releases/download/[0-9.]*/' site/index.html | sort -u)
-          [ -n "$links" ] || { echo "::error::site/index.html has no download links"; exit 1; }
-          curl -fsS --max-time 30 "$url/" > "$RUNNER_TEMP/home.html"
-          for link in $links; do
-            grep -qF "$link" "$RUNNER_TEMP/home.html" \
-              || { echo "::error::$url does not serve the page with $link"; exit 1; }
-          done
+          curl -fsS --max-time 30 "$url/" | grep -qF 'releases/latest/download/Patchwork_amd64.AppImage' \
+            || { echo "::error::$url does not serve the home page"; exit 1; }

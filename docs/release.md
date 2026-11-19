@@ -47,11 +47,16 @@ The Release workflow (`.github/workflows/release.yml`) then:
 
 1. Writes the notes, sets the tag's version in `Cargo.toml` and `Cargo.lock`, and puts the notes
    at the top of `CHANGELOG.md` as `## [YY.M.N] - YYYY-MM-DD`, for the builds only.
-2. Builds the three apps and the helpers at that version, signs them and publishes the release.
-3. Commits the version and the notes to `main` as "Release YY.M.N", points the website's
-   download links at the release, and announces it on Discord. Pull before the next push.
-   The commit changes `site/index.html`, so the Site workflow deploys the website
-   ([CI and deploys](ci.md)).
+2. Builds the three apps and the helpers at that version, side by side.
+3. Once all three are built, signs every file, publishes the release with all of them at once,
+   announces it on Discord, and commits the version and the notes to `main` as "Release YY.M.N".
+   Pull before the next push.
+
+Until step 3, nothing is published: the app's update check and the website's download links
+(`releases/latest/download/…`) keep pointing at the previous release. When GitHub has no Mac
+runner free, the Mac job is cancelled without starting, and the Retry workflow re-runs it. Any
+failed release can be re-run from the Actions page with "Re-run failed jobs"; it never publishes
+twice, announces twice or commits twice ([CI and deploys](ci.md#when-a-job-fails)).
 
 The highlights use only the commit subjects and PR descriptions, so they are right when the PR is
 written. To reword the notes after publishing, edit the release on GitHub and its section in `CHANGELOG.md`;
@@ -71,8 +76,8 @@ installed from a lockfile, `.github/signer` and `.github/deploy`, in a step of t
 the key or the deploy token is in any step's environment. `npm ci` takes only the packages a lockfile records, each checked against its hash.
 To move either to a new version, change it in that folder's `package.json` and run
 `npm install --package-lock-only --ignore-scripts` there. `scripts/build.sh` checks the
-`appimagetool` it downloads against a SHA-256 written in the script, and
-`.github/workflows/audit.yml` checks `Cargo.lock` against the RustSec advisories each week.
+`appimagetool` it downloads against a SHA-256 written in the script, and CI's `audit` job checks
+`Cargo.lock` against the RustSec advisories on every change and each week.
 
 `latest.json` is signed too, as `latest.json.minisig` beside it, and the app reads a release only
 when that signature checks out. Its version and its `withdrawn` list are then the release key's
@@ -82,10 +87,8 @@ replacing `latest.json.minisig` with the new signature.
 
 Only a tag releases, and its run is named "Release YY.M.N". Every other run of the workflow is a
 "Release build check", which builds all three and publishes nothing: one started by hand (Actions →
-Release → Run workflow), by a push to `main` that changes `Cargo.lock`, a `Cargo.toml` or the
-workflow, or by the daily schedule. They save the Rust caches that tag runs restore. The release
-commit changes only the workspace's own version, which the caches do not hold, so it builds nothing
-([CI and deploys](ci.md)).
+Release → Run workflow), or the daily one on `main`. They save the Rust caches that tag runs
+restore ([CI and deploys](ci.md)).
 
 ## Building the AppImage locally
 

@@ -1,7 +1,9 @@
 name: CI
 
-# Checks every PR, every push to main, and a run started by hand: rustfmt, clippy, and the Rust
-# tests. A PR runs it whatever it changes, since the ruleset on main requires this check.
+# Checks every PR, every push to main, a run started by hand and a weekly run on main. Two jobs side
+# by side: check (rustfmt, clippy and the Rust tests) and audit (Cargo.lock against the RustSec
+# advisories, so an advisory on something the app ships is seen without anyone having to look).
+# A PR runs it whatever it changes, since the ruleset on main requires the check job.
 #
 # Actions are pinned to commits; the comment after each names the version it was.
 
@@ -12,6 +14,8 @@ on:
     paths-ignore: ["site/**", "docs/**", "**.md"]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
 
 permissions:
   contents: read
@@ -30,8 +34,6 @@ env:
 
 jobs:
   check:
-    # The "Release YY.M.N" commit changes only the version and the changelog of code a PR checked.
-    if: ${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Release ') }}
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -67,3 +69,15 @@ jobs:
 
       - name: Test
         run: cargo test --workspace
+
+  audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked --version 0.23.0
+
+      - name: Check Cargo.lock for advisories
+        run: cargo audit
