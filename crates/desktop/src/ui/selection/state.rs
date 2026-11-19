@@ -225,13 +225,17 @@ impl Selection {
     }
 
     /// Finds which texts on screen something drawn over them covers, by asking whether a press at
-    /// any corner or the middle of each would reach it.
+    /// any corner or the middle of each would reach it. A text the list has scrolled out of view,
+    /// which no press reaches, isn't covered: a drag marks on through it.
     pub(super) fn survey(&mut self, window: &Window) {
         self.covered = self
             .drawn
             .iter()
             .filter(|drawn| {
                 let v = drawn.visible;
+                if v.is_empty() {
+                    return false;
+                }
                 let (left, right) = (v.left(), (v.right() - px(1.)).max(v.left()));
                 let (top, bottom) = (v.top(), (v.bottom() - px(1.)).max(v.top()));
                 ![
