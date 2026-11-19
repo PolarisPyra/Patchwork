@@ -100,8 +100,8 @@ pub fn render(
         .text_color(t.text)
         .children(backdrop)
         .when(is_new, gpui::Styled::justify_center)
-        .children(header)
         .child(body)
+        .children(header)
         .when_some(parent, gpui::ParentElement::child)
         .when(w.composer_shown(), |c| {
             c.child(

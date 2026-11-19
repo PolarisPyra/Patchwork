@@ -450,6 +450,7 @@ pub fn lineage_card(
         .id("lineage")
         .role(Role::Region)
         .aria_label("Lineage")
+        .block_mouse_except_scroll()
         .w(px(280.))
         .rounded(px(radius_lg()))
         .border_1()
