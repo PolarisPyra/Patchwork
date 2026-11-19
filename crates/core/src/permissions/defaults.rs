@@ -5,7 +5,14 @@
 use super::{Effect, PermissionKind, PermissionRule, PermissionSettings};
 
 /// Starting rules that earlier versions added and this one no longer has.
-const RETIRED: [&str; 3] = ["default:git push", "default:git reset", "default:git clean"];
+const RETIRED: [&str; 6] = [
+    "default:git push",
+    "default:git reset",
+    "default:git clean",
+    "default:sudo",
+    "default:rm",
+    "default:dd",
+];
 
 /// Adds the starting rules once, so deleting one does not bring it back, and drops the retired
 /// ones.
@@ -23,10 +30,9 @@ pub fn seed(settings: &mut PermissionSettings) {
 
 /// The starting permission rules that apply everywhere.
 ///
-/// The starting rules for everywhere: commands that only read run without asking, and commands
-/// that delete or escalate ask, whatever allow rule covers them. Git asks only by the user's own
-/// rules. Settings →
-/// Permissions puts them back with Restore defaults.
+/// The starting rules for everywhere: commands that only read run without asking. Every other
+/// command asks only by the access mode or the user's own rules. Settings → Permissions puts them
+/// back with Restore defaults.
 #[must_use]
 pub fn default_rules() -> Vec<PermissionRule> {
     let rule = |pattern: &str, effect: Effect| PermissionRule {
@@ -57,10 +63,5 @@ pub fn default_rules() -> Vec<PermissionRule> {
         "git log",
         "git show",
     ];
-    let risky = ["sudo", "rm", "dd"];
-    reads
-        .iter()
-        .map(|p| rule(p, Effect::Allow))
-        .chain(risky.iter().map(|p| rule(p, Effect::Ask)))
-        .collect()
+    reads.iter().map(|p| rule(p, Effect::Allow)).collect()
 }

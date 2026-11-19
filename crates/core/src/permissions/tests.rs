@@ -8,7 +8,7 @@ use super::command::split_command;
 use super::matching::host;
 use super::{Effect, PermissionKind, PermissionRule, PermissionSettings, Target, decide, seed};
 
-/// The starting rules: commands that only read are allowed, and `rm`, `sudo` and the like ask.
+/// The starting rules: commands that only read are allowed.
 fn defaults() -> PermissionSettings {
     let mut settings = PermissionSettings::default();
     seed(&mut settings);
