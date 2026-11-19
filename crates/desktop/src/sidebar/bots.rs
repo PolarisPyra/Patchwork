@@ -34,7 +34,7 @@ pub(super) fn bots_section(
     let new_bot = icon_button("new-bot", "New bot", "plus", 18., cx)
         .on_click(cx.listener(|this, _, _, cx| this.new_bot(cx)))
         .into_any_element();
-    let mut out = vec![section_label("Bots", first, Some(new_bot), &t).into_any_element()];
+    let mut out = vec![section_label("Agents", first, Some(new_bot), &t).into_any_element()];
     // An archived bot is listed on the Archived page instead.
     let bots: Vec<&Bot> = w.bots.iter().filter(|b| b.archived_at.is_none()).collect();
     if bots.is_empty() {

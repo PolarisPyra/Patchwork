@@ -287,7 +287,7 @@ fn group(
 fn bots_group(w: &Workspace, bots: &[&Bot], cx: &mut Context<Workspace>) -> Div {
     let t = *theme(cx);
     let open = !w.archived_collapsed.contains("bots");
-    let header = tree_row("archived:bots".into(), "Bots".into(), 1, open, false, &t)
+    let header = tree_row("archived:bots".into(), "Agents".into(), 1, open, false, &t)
         .pl(px(4.))
         .child(twistie(open))
         .child(
@@ -296,7 +296,7 @@ fn bots_group(w: &Workspace, bots: &[&Bot], cx: &mut Context<Workspace>) -> Div 
                 .min_w_0()
                 .truncate()
                 .font_weight(FontWeight::MEDIUM)
-                .child("Bots"),
+                .child("Agents"),
         )
         .on_click(cx.listener(|this, _, _, cx| {
             if !this.archived_collapsed.remove("bots") {
