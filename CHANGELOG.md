@@ -3,6 +3,27 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.120] - 2026-11-19
+
+**v26.11.120** · 4 changes from 1 contributor
+
+- **Task spinners in the sidebar.** Task rows in the sidebar show a spinner while a reply runs, so you can see which tasks are working.
+
+### Plus 1 more bug fix.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* ci(release): release commits no longer rebuild the apps, and runs are named for what they do by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/253
+* feat(sidebar): task rows show a spinner while a reply runs by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/252
+* fix(chat): the composer's worktree status updates as soon as Source Control does by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/254
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.119...26.11.120
+
+</details>
+
 ## [26.11.119] - 2026-11-19
 
 **v26.11.119** · 2 changes from 1 contributor
