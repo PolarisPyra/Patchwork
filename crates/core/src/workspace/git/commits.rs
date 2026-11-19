@@ -3,11 +3,12 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use crate::workspace::{GitCommit, GitRef};
+use crate::workspace::{CommitDetail, CommitOptions, FileChange, GitCommit, GitRef};
 
-use super::run::{git, git_branch, git_raw, git_succeeds, has_head};
+use super::branches::branch_base;
+use super::run::{explained, git, git_branch, git_raw, git_succeeds, has_head};
 
 /// Stages every change under `root`, untracked files included, for a commit of everything there.
 /// The rest of the repository stays as it is when `root` is one of its folders. Refused while a
@@ -22,6 +23,43 @@ pub(crate) fn stage_all(root: &str) -> Result<(), Error> {
         ));
     }
     git(root, &["add", "-A", "--", "."]).map(|_| ())
+}
+
+/// Readies the index for a commit of `root`: what is staged there is committed as it is, and
+/// everything is staged only when nothing is, or when `all` asks for it.
+///
+/// # Errors
+///
+/// Returns an error when a file is still in conflict, when `git` fails, or when `root` is a
+/// folder of a larger repository that has files staged outside it, which the commit would take.
+pub(crate) fn stage_for_commit(root: &str, all: bool) -> Result<(), Error> {
+    if all || git_succeeds(root, &["diff", "--cached", "--quiet", "--", "."]) {
+        stage_all(root)?;
+    }
+    if git(root, &["rev-parse", "--show-prefix"])?
+        .trim()
+        .is_empty()
+    {
+        return Ok(());
+    }
+    let staged = |within: &[&str]| -> Result<usize, Error> {
+        let mut args = vec!["diff", "--cached", "--name-only", "-z"];
+        args.extend_from_slice(within);
+        Ok(git(root, &args)?
+            .split('\0')
+            .filter(|p| !p.is_empty())
+            .count())
+    };
+    let outside = staged(&[])?.saturating_sub(staged(&["--", "."])?);
+    if outside > 0 {
+        return Err(Error::Message(format!(
+            "{outside} staged {} outside this project's folder would go into the commit. Unstage \
+             {} first.",
+            if outside == 1 { "file" } else { "files" },
+            if outside == 1 { "it" } else { "them" },
+        )));
+    }
+    Ok(())
 }
 
 /// The first `max` characters of `text`, marked when cut.
@@ -57,18 +95,41 @@ pub(crate) fn staged_summary(root: &str) -> Result<String, Error> {
     ))
 }
 
-/// Commits what is staged with `message`, running the repository's hooks, and returns the new
-/// commit's hash. A hook that refuses it is quoted, from both of its outputs.
+/// Commits what is staged with `message`, and returns the new commit's hash.
+///
+/// The repository's hooks run unless `options` skips them, and a hook that refuses the commit is
+/// quoted, from both of its outputs. Amending with a blank `message` keeps the last commit's.
 ///
 /// # Errors
 ///
 /// Returns an error when nothing is staged, `git` cannot run, or `git commit` fails, for example
-/// when a hook refuses the commit.
-pub fn commit(root: &str, message: &str) -> Result<String, Error> {
-    if git_succeeds(root, &["diff", "--cached", "--quiet"]) {
+/// when a hook refuses the commit or git has no name and email to sign it with.
+pub fn commit(root: &str, message: &str, options: CommitOptions) -> Result<String, Error> {
+    // A merge whose result is the branch as it was still has a merge commit to write.
+    if !options.amend
+        && !options.allow_empty
+        && git_succeeds(root, &["diff", "--cached", "--quiet"])
+        && !git_succeeds(root, &["rev-parse", "-q", "--verify", "MERGE_HEAD"])
+    {
         return Err(Error::Message("Nothing to commit".into()));
     }
-    let out = git_raw(root, &["commit", "-m", message])?;
+    let mut args = vec!["commit"];
+    for (on, flag) in [
+        (options.amend, "--amend"),
+        (options.signoff, "--signoff"),
+        (options.no_verify, "--no-verify"),
+        (options.allow_empty, "--allow-empty"),
+    ] {
+        if on {
+            args.push(flag);
+        }
+    }
+    if options.amend && message.trim().is_empty() {
+        args.push("--no-edit");
+    } else {
+        args.extend(["-m", message]);
+    }
+    let out = git_raw(root, &args)?;
     if !out.status.success() {
         let said = [&out.stderr, &out.stdout]
             .map(|o| String::from_utf8_lossy(o).trim().to_string())
@@ -76,9 +137,84 @@ pub fn commit(root: &str, message: &str) -> Result<String, Error> {
             .filter(|o| !o.is_empty())
             .collect::<Vec<_>>()
             .join("\n");
-        return Err(Error::Git(format!("git commit: {said}")));
+        return Err(explained(Error::Git(format!("git commit: {said}"))));
     }
     Ok(git(root, &["rev-parse", "HEAD"])?.trim().to_string())
+}
+
+/// A commit's message body, its author's email, and the files it changed against its first
+/// parent.
+///
+/// # Errors
+///
+/// Returns an error when `git show` fails, as for a hash the repository lacks.
+pub fn commit_detail(root: &str, hash: &str) -> Result<CommitDetail, Error> {
+    let said = git(root, &["show", "-s", "--format=%aE%x1f%b", hash, "--"])?;
+    let (email, body) = said.split_once('\x1f').unwrap_or_default();
+    let show = |what: &str| {
+        git(
+            root,
+            &[
+                "show",
+                "--format=",
+                "-z",
+                "-M",
+                "--diff-merges=first-parent",
+                what,
+                hash,
+                "--",
+            ],
+        )
+    };
+    let mut counts = HashMap::new();
+    let numstat = show("--numstat")?;
+    let mut tokens = numstat.split('\0');
+    while let Some(token) = tokens.next() {
+        let mut parts = token.splitn(3, '\t');
+        let (Some(added), Some(deleted), Some(path)) = (parts.next(), parts.next(), parts.next())
+        else {
+            continue;
+        };
+        // A rename's two paths follow its counts, each in a field of its own.
+        let path = if path.is_empty() {
+            tokens.next();
+            tokens.next().unwrap_or_default()
+        } else {
+            path
+        };
+        counts.insert(
+            path.to_string(),
+            (added.parse().unwrap_or(0), deleted.parse().unwrap_or(0)),
+        );
+    }
+    let mut files = Vec::new();
+    let names = show("--name-status")?;
+    let mut fields = names.split('\0');
+    while let Some(code) = fields.next().filter(|c| !c.is_empty()) {
+        let renamed = code.starts_with(['R', 'C']);
+        let from = renamed.then(|| fields.next()).flatten();
+        let Some(path) = fields.next() else { break };
+        let (additions, deletions) = counts.get(path).copied().unwrap_or((0, 0));
+        files.push(FileChange {
+            path: path.to_string(),
+            status: match code.chars().next() {
+                Some('A' | 'C') => "added",
+                Some('D') => "deleted",
+                Some('R') => "renamed",
+                _ => "modified",
+            }
+            .into(),
+            additions,
+            deletions,
+            renamed_from: from.filter(|_| code.starts_with('R')).map(String::from),
+            ..FileChange::default()
+        });
+    }
+    Ok(CommitDetail {
+        body: body.trim().to_string(),
+        email: email.to_string(),
+        files,
+    })
 }
 
 /// Reads `%D` with full ref names, such as `HEAD -> refs/heads/main, tag: refs/tags/v1`.
@@ -106,8 +242,10 @@ fn parse_refs(decoration: &str) -> Vec<GitRef> {
         .collect()
 }
 
-/// Up to `limit` commits after the first `skip`, newest first in graph order: the checked-out
-/// branch and its upstream. A folder without commits has none.
+/// Up to `limit` commits after the first `skip`, newest first in graph order.
+///
+/// They are those of the checked-out branch, its upstream, and the branch it was made from, else
+/// the remote's default one. A folder without commits has none.
 ///
 /// # Errors
 ///
@@ -119,16 +257,24 @@ pub fn git_log(root: &str, skip: usize, limit: usize) -> Result<Vec<GitCommit>, 
     let skip = format!("--skip={skip}");
     let limit = format!("--max-count={limit}");
     let mut args = vec![
+        "-c",
+        "i18n.logOutputEncoding=UTF-8",
         "log",
+        "--no-show-signature",
         "--topo-order",
         "--decorate=full",
-        "--format=%H%x1f%P%x1f%an%x1f%at%x1f%D%x1f%s%x1e",
+        "--format=%H%x1f%P%x1f%aN%x1f%at%x1f%D%x1f%s%x1e",
         &skip,
         &limit,
         "HEAD",
     ];
     if git_succeeds(root, &["rev-parse", "--verify", "-q", "@{u}"]) {
         args.push("@{u}");
+    }
+    // The branch this one goes back into, so what it has that the branch lacks shows too.
+    let base = branch_base(root);
+    if let Some(base) = &base {
+        args.push(base);
     }
     args.push("--");
     let out = git(root, &args)?;
@@ -163,4 +309,39 @@ pub fn git_log(root: &str, skip: usize, limit: usize) -> Result<Vec<GitCommit>, 
             })
         })
         .collect())
+}
+
+/// The files under `root`, named from it, that commits on its branch made since `since` (seconds
+/// since the epoch) changed, by their committer date. A file an agent changed and committed in
+/// one turn is in neither `git status` before nor after it; this finds it.
+pub(crate) fn committed_since(root: &str, since: u64) -> Vec<String> {
+    let since = format!("--since=@{since}");
+    let args = [
+        "log",
+        &since,
+        "--no-merges",
+        "--format=",
+        "--name-only",
+        "-z",
+        "--relative",
+        "--",
+        ".",
+    ];
+    // A folder with no commits yet, or no repository, has none.
+    if !has_head(root) {
+        return Vec::new();
+    }
+    match git(root, &args) {
+        Ok(out) => {
+            let mut seen = HashSet::new();
+            out.split('\0')
+                .filter(|p| !p.is_empty() && seen.insert(*p))
+                .map(String::from)
+                .collect()
+        }
+        Err(e) => {
+            log::warn!(error:% = e; "could not list the files a turn's commits changed: {{error}}");
+            Vec::new()
+        }
+    }
 }

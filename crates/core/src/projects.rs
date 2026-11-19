@@ -76,9 +76,9 @@ const COLLAPSED_KEY: &str = "collapsed_sections";
 impl Core {
     /// Watches the folder Source Control shows for the project, which is the open task
     /// `thread_id`'s worktree when it has one, in place of any folder watched before. After each
-    /// settled burst it runs one `git status` and passes the result to `on_change`. Replies run
-    /// in the project's own folder, so what changes there is added to the replies under way,
-    /// with a second watcher on that folder while a worktree is shown.
+    /// settled burst it runs one `git status` and passes the result to `on_change`. What changes
+    /// there is added to the replies under way in that folder, and while a worktree is shown, a
+    /// second watcher does the same for the replies in the project's own folder.
     ///
     /// `seq` orders the calls: one older than the last is ignored, so a slow read cannot move
     /// the watch back to a task that is no longer open.
@@ -118,8 +118,8 @@ impl Core {
                 return;
             };
             let changes = workspace::git_changes(&folder).ok();
-            if let Some(changes) = changes.as_ref().filter(|_| in_project) {
-                core.note_project_changes(&id, changes, &burst);
+            if let Some(changes) = changes.as_ref() {
+                core.note_project_changes(&id, &folder, changes, &burst);
             }
             on_change(crate::workspace::ProjectChanged {
                 project_id: id.clone(),
@@ -140,7 +140,7 @@ impl Core {
                     return;
                 };
                 if let Ok(changes) = workspace::git_changes(&folder) {
-                    core.note_project_changes(&id, &changes, &burst);
+                    core.note_project_changes(&id, &folder, &changes, &burst);
                 }
             })
             .inspect_err(|e| {
@@ -308,7 +308,7 @@ impl Core {
         let folder = Path::new(ssh::here(&top))
             .file_name()
             .map_or_else(|| "worktree".into(), |n| n.to_string_lossy().into_owned());
-        let dir = self.worktrees_for(&top)?;
+        let dir = Self::worktrees_for(&top)?;
         let root = ssh::join(&dir, &format!("{folder}-{short}"));
         let branch = format!("patchwork/{short}");
         workspace::run_git(
@@ -330,7 +330,7 @@ impl Core {
             if !at.path.contains("/patchwork/worktrees/") {
                 return Ok(None);
             }
-            let Ok(dir) = self.worktrees_for(path) else {
+            let Ok(dir) = Self::worktrees_for(path) else {
                 return Ok(None);
             };
             let Some(first) = path
@@ -346,17 +346,9 @@ impl Core {
             }
             root
         } else {
-            let Ok(dir) = crate::system::fs::canonicalize(&self.worktrees_dir) else {
+            let Some(root) = self.worktree_top_of(Path::new(path)) else {
                 return Ok(None);
             };
-            let Some(first) = Path::new(path)
-                .strip_prefix(&dir)
-                .ok()
-                .and_then(|rel| rel.components().next())
-            else {
-                return Ok(None);
-            };
-            let root = dir.join(first);
             // Gone already: git drops its record of the worktree by itself.
             if !root.exists() {
                 return Ok(None);
@@ -384,8 +376,16 @@ impl Core {
     }
 
     /// Removes the worktree at `root`. Its branch stays with its commits.
-    fn remove_worktree(&self, root: &str) -> Result<(), Error> {
-        let dir = self.worktrees_for(root)?;
+    fn remove_worktree(root: &str) -> Result<(), Error> {
+        // Run from the folder it is in, which stays when it goes.
+        let dir = match ssh::split(root) {
+            Some(_) => Self::worktrees_for(root)?,
+            None => Path::new(root)
+                .parent()
+                .ok_or("the worktree has no folder above it")?
+                .to_string_lossy()
+                .into_owned(),
+        };
         let common = workspace::run_git(
             root,
             &["rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -395,13 +395,13 @@ impl Core {
         Ok(())
     }
 
-    /// The folder `create_worktree` puts worktrees in, on the machine `root` is on, made if it
-    /// isn't there: Patchwork's own here, and the same place under the home folder of an SSH host.
-    fn worktrees_for(&self, root: &str) -> Result<String, Error> {
+    /// The folder `create_worktree` puts worktrees of the repository at `root` in, made if it
+    /// isn't there: the repository's own `.patchwork` folder here, and Patchwork's folder under
+    /// the home folder of an SSH host.
+    fn worktrees_for(root: &str) -> Result<String, Error> {
         let Some(at) = ssh::split(root) else {
-            std::fs::create_dir_all(&self.worktrees_dir)
-                .map_err(|e| format!("Cannot create {}: {e}", self.worktrees_dir.display()))?;
-            return Ok(self.worktrees_dir.to_string_lossy().into_owned());
+            let dir = crate::threads::worktree_home::make_home(root)?;
+            return Ok(dir.to_string_lossy().into_owned());
         };
         let dir = ssh::op::make_dirs(at.host, ".local/share/patchwork/worktrees")?;
         Ok(ssh::root(at.host, &dir))
@@ -429,7 +429,7 @@ impl Core {
             self.forget_thread(chat);
         }
         if let Some(root) = worktree {
-            self.remove_worktree(&root)?;
+            Self::remove_worktree(&root)?;
         }
         // The chats before the project: a failure between the two leaves an empty project, not
         // chats that belong to none.

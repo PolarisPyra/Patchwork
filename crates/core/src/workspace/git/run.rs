@@ -19,25 +19,42 @@ pub(in crate::workspace) fn git_raw(root: &str, args: &[&str]) -> Result<Output,
     git_output(root, args).map_err(git_failed)
 }
 
+/// How many times a command refused by another git command's lock is run before it fails.
+const LOCK_ATTEMPTS: u64 = 6;
+
 /// `git_raw` with the error from starting git as it came, so a caller can tell git is missing.
 /// A command still running at its time limit is killed with what it started, and fails as
-/// timed out.
+/// timed out. One refused because another git command holds the index or a ref is run again a
+/// few times, waiting longer each time.
 pub(in crate::workspace) fn git_output(root: &str, args: &[&str]) -> std::io::Result<Output> {
-    let mut cmd = crate::system::host_command("git");
-    cmd.args(args)
-        .current_dir(root)
-        // Reads such as `git status` would otherwise rewrite the index, which the project
-        // watcher would report as a change.
-        .env("GIT_OPTIONAL_LOCKS", "0")
-        // There is no terminal to type a password in, so a push fails instead of waiting.
-        .env("GIT_TERMINAL_PROMPT", "0")
-        // Git's messages in English, which the checks of its errors read, such as "not a git
-        // repository"; file names keep the user's own character set.
-        .env_remove("LC_ALL")
-        .env("LC_MESSAGES", "C");
-    let cmd = crate::system::ssh::prepare(cmd).map_err(std::io::Error::other)?;
     let what = format!("git {}", subcommand(args).unwrap_or_default());
-    output_within(cmd, limit(args), &what)
+    let mut attempt = 1;
+    loop {
+        let mut cmd = crate::system::host_command("git");
+        cmd.args(args)
+            .current_dir(root)
+            // Reads such as `git status` would otherwise rewrite the index, which the project
+            // watcher would report as a change.
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            // A file named like a pattern, such as `a[1].txt` or `*.rs`, names only itself.
+            .env("GIT_LITERAL_PATHSPECS", "1")
+            // There is no terminal to type a password in, so a push fails instead of waiting.
+            .env("GIT_TERMINAL_PROMPT", "0")
+            // Git's messages in English, which the checks of its errors read, such as "not a git
+            // repository"; file names keep the user's own character set.
+            .env_remove("LC_ALL")
+            .env("LC_MESSAGES", "C");
+        // One the user started asks in the app for what it needs to sign in.
+        super::askpass::offer(&mut cmd, root);
+        let cmd = crate::system::ssh::prepare(cmd).map_err(std::io::Error::other)?;
+        let out = output_within(cmd, limit(args), &what)?;
+        let locked = String::from_utf8_lossy(&out.stderr).contains(".lock': File exists");
+        if out.status.success() || !locked || attempt == LOCK_ATTEMPTS {
+            return Ok(out);
+        }
+        std::thread::sleep(Duration::from_millis(50 * attempt * attempt));
+        attempt += 1;
+    }
 }
 
 /// Runs `cmd` without input and returns its output. A command still running after `limit` is
@@ -124,10 +141,13 @@ fn subcommand<'a>(args: &[&'a str]) -> Option<&'a str> {
     None
 }
 
-/// How long the git command in `args` may run.
+/// How long the git command in `args` may run. A commit runs the repository's hooks, which may
+/// lint or test the project, so it gets as long as a remote.
 fn limit(args: &[&str]) -> Duration {
     match subcommand(args) {
-        Some("push" | "pull" | "fetch" | "clone" | "ls-remote" | "submodule") => NETWORK_LIMIT,
+        Some("push" | "pull" | "fetch" | "clone" | "ls-remote" | "submodule" | "commit") => {
+            NETWORK_LIMIT
+        }
         _ => LOCAL_LIMIT,
     }
 }
@@ -159,18 +179,103 @@ pub(in crate::workspace) fn git_succeeds(root: &str, args: &[&str]) -> bool {
     git_raw(root, args).is_ok_and(|o| o.status.success())
 }
 
-pub(in crate::workspace) fn is_untracked(root: &str, rel: &str) -> bool {
-    !git_succeeds(root, &["ls-files", "--error-unmatch", "--", rel])
+/// Whether git reports `rel` as untracked. A git that fails is an error, never an untracked file,
+/// since an untracked file is deleted to discard it.
+pub(in crate::workspace) fn is_untracked(root: &str, rel: &str) -> Result<bool, Error> {
+    let out = git(
+        root,
+        &[
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--",
+            rel,
+        ],
+    )?;
+    Ok(out.starts_with("?? "))
 }
 
 pub(in crate::workspace) fn has_head(root: &str) -> bool {
     git_succeeds(root, &["rev-parse", "--verify", "-q", "HEAD"])
 }
 
+/// The checked-out branch, also before its first commit, or `HEAD` when none is checked out.
+/// None outside a repository.
 #[must_use]
 pub fn git_branch(root: &str) -> Option<String> {
-    git(root, &["rev-parse", "--abbrev-ref", "HEAD"])
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+    match git(root, &["symbolic-ref", "--short", "-q", "HEAD"]) {
+        Ok(name) => Some(name.trim().to_string()).filter(|s| !s.is_empty()),
+        Err(_) => has_head(root).then(|| "HEAD".to_string()),
+    }
+}
+
+/// What git says when it fails for a reason the user can act on, and what to tell them instead.
+/// The first entry whose text git's output holds wins, so the narrower ones come first.
+const PLAIN: &[(&[&str], &str)] = &[
+    (
+        &[
+            "Please tell me who you are",
+            "empty ident",
+            "auto-detection is disabled",
+        ],
+        "Git has no name and email to sign commits with. Set user.name and user.email in your git \
+         config, then commit again.",
+    ),
+    (
+        &["stale info"],
+        "The remote branch moved since it was last fetched. Fetch, look at what changed, then \
+         force push again.",
+    ),
+    (
+        &["non-fast-forward", "fetch first", "[rejected]"],
+        "The remote has commits this branch lacks. Pull, then push again.",
+    ),
+    (
+        &[
+            "Authentication failed",
+            "Permission denied",
+            "could not read Username",
+            "could not read Password",
+        ],
+        "The remote refused the sign-in. Check your git credentials or SSH key.",
+    ),
+    (
+        &[
+            "Could not resolve host",
+            "Could not read from remote repository",
+            "unable to access",
+        ],
+        "Couldn't reach the remote. Check the connection and the remote's address.",
+    ),
+    (
+        &["would be overwritten by"],
+        "Your uncommitted changes would be overwritten. Commit, stash or discard them first.",
+    ),
+    (
+        &["not fully merged"],
+        "The branch has commits no other branch has. Delete it by force to lose them.",
+    ),
+    (
+        &["is not a valid branch name", "is not a valid tag name"],
+        "That isn't a name git accepts.",
+    ),
+    (&["already exists"], "That name is already taken."),
+    (&["No local changes to save"], "There is nothing to stash."),
+];
+
+/// A failed git command's error in plain words when it is one the user can act on, with what git
+/// said kept as its detail. Any other error comes back as it is.
+pub(in crate::workspace) fn explained(e: Error) -> Error {
+    let Error::Git(said) = &e else { return e };
+    let plain = PLAIN
+        .iter()
+        .find(|(marks, _)| marks.iter().any(|mark| said.contains(mark)));
+    match plain {
+        Some((_, message)) => Error::Tool {
+            message: (*message).to_string(),
+            detail: said.clone(),
+        },
+        None => e,
+    }
 }

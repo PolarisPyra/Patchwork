@@ -22,7 +22,7 @@ use crate::Core;
 use crate::events::AgentEvent;
 use crate::system::now_ms;
 use crate::threads::{MessageStatus, Role, ToolCall};
-use crate::workspace::FileChange;
+use crate::workspace::{self, FileChange};
 use crate::workspace::watch::Change;
 
 /// How long after a tool call returns its writes may still arrive: FSEvents reports late.
@@ -121,6 +121,8 @@ pub(in crate::orchestration) struct Attribution {
     pending: HashMap<String, Vec<Instant>>,
     /// Paths another reply's call named, which this reply leaves to it.
     taken: HashSet<String>,
+    /// When the reply started, in seconds since the epoch, to find the commits it made.
+    since: u64,
 }
 
 impl Attribution {
@@ -135,6 +137,7 @@ impl Attribution {
             ran: Vec::new(),
             pending: HashMap::new(),
             taken: HashSet::new(),
+            since: now_ms() / 1000,
         }
     }
 
@@ -253,17 +256,33 @@ impl Attribution {
         }
     }
 
-    /// At the end of the reply: what it changed since the baseline, without paths only seen
+    /// At the end of the reply: what it changed since the baseline, and what the commits made
+    /// at `root` while it ran changed, which `git status` no longer shows, without paths only seen
     /// changing while none of its calls that could write them ran, or that another reply's call
     /// named. A path the watcher never saw, as in a project that is not the open one, counts.
     /// Starts over from `after` for the next reply.
-    pub(in crate::orchestration) fn settle(&mut self, after: Vec<FileChange>) -> Vec<String> {
-        let paths = changed_paths(&self.baseline, &after)
+    pub(in crate::orchestration) fn settle(
+        &mut self,
+        root: &str,
+        after: Vec<FileChange>,
+    ) -> Vec<String> {
+        let mut paths = changed_paths(&self.baseline, &after);
+        for path in workspace::committed_since(root, self.since) {
+            if !paths.contains(&path) {
+                paths.push(path);
+            }
+        }
+        let paths = paths
             .into_iter()
             .filter(|path| !self.pending.contains_key(path) && !self.taken.contains(path))
             .collect();
-        *self = Self::new(after);
+        self.restart(after);
         paths
+    }
+
+    /// Starts over from `after`, the files as they are now, for the next reply.
+    pub(in crate::orchestration) fn restart(&mut self, after: Vec<FileChange>) {
+        *self = Self::new(after);
     }
 }
 
@@ -339,18 +358,24 @@ fn claims(replies: &[&[Candidate]]) -> Vec<Vec<Outcome>> {
 }
 
 impl Core {
-    /// Adds what a settled burst of changes in the project changed to each reply under way
-    /// there, so a reply lists its files as they change, deletions made through the shell
-    /// included. `changes` is the project's `git status` after the burst. A file two replies
-    /// could claim goes to those whose call named it, and to neither when none did.
+    /// Adds what a settled burst of changes in `folder`, the project's own or a task's worktree,
+    /// changed to each reply under way there, so a reply lists its files as they change,
+    /// deletions made through the shell included. `changes` is the folder's `git status` after
+    /// the burst. A reply working in another folder of the project is left out: its baseline is
+    /// that folder's status, so the two would read as changes it made. A file two replies could
+    /// claim goes to those whose call named it, and to neither when none did.
     pub(crate) fn note_project_changes(
         &self,
         project_id: &str,
+        folder: &str,
         changes: &[FileChange],
         burst: &[Change],
     ) {
         let mut replies = Vec::new();
-        for (thread_id, attribution) in self.runner.attributions() {
+        for (thread_id, root, attribution) in self.runner.attributions() {
+            if root != folder {
+                continue;
+            }
             let Some(thread) = self.store.thread(&thread_id) else {
                 continue;
             };

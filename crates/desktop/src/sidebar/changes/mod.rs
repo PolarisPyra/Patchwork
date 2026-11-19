@@ -7,7 +7,10 @@ mod state;
 mod actions;
 mod rows;
 mod commit;
+mod history;
 mod list;
+mod pickers;
 mod render;
+mod repo;
 
 pub use state::ChangesView;

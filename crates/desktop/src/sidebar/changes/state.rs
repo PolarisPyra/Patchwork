@@ -7,11 +7,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{Entity, Pixels, Point, ScrollHandle, WeakEntity, Window, prelude::*};
-use patchwork_core::workspace::{GitCommit, GitSyncState, PullRequest};
+use patchwork_core::workspace::{
+    CommitDetail, CommitOptions, GitCommit, GitSyncState, Operation, PullRequest,
+};
 
 use crate::ui::text_area::{Changed, Submitted, TextArea};
 use crate::ui::menu::Menu;
 use crate::workspace::Workspace;
+use super::repo::Asking;
 use super::rows::reply_files;
 
 /// The Graph's height while Changes is open too, and the least either pane is dragged to.
@@ -32,6 +35,10 @@ pub(super) enum GitAction {
     Push,
     OpenPr,
     ViewPr,
+    Sync,
+    /// Goes on with the rebase, merge, cherry-pick or revert that stopped, or gives it up.
+    Continue,
+    Abort,
 }
 
 impl GitAction {
@@ -44,7 +51,20 @@ impl GitAction {
             Self::Push => "Push",
             Self::OpenPr => "Open Pull Request",
             Self::ViewPr => "View Pull Request",
+            Self::Sync => "Sync",
+            Self::Continue => "Continue",
+            Self::Abort => "Abort",
         }
+    }
+}
+
+/// A stopped operation's name as a button says it.
+pub(super) fn operation_title(operation: Operation) -> &'static str {
+    match operation {
+        Operation::Rebase => "Rebase",
+        Operation::Merge => "Merge",
+        Operation::CherryPick => "Cherry-Pick",
+        Operation::Revert => "Revert",
     }
 }
 
@@ -54,6 +74,17 @@ pub(super) fn git_actions(
     has_changes: bool,
 ) -> ((Option<GitAction>, String), Vec<GitAction>) {
     let commit = || "Commit".to_string();
+    // A stopped operation is finished or given up before anything else; a rebase has no branch
+    // checked out meanwhile.
+    if let Some(operation) = state.and_then(|s| s.operation) {
+        let mut menu = Vec::new();
+        if has_changes {
+            menu.push(GitAction::Commit);
+        }
+        menu.push(GitAction::Abort);
+        let label = format!("Continue {}", operation_title(operation));
+        return ((Some(GitAction::Continue), label), menu);
+    }
     let Some(state) = state.filter(|s| s.branch.is_some()) else {
         return (
             (has_changes.then_some(GitAction::Commit), commit()),
@@ -74,8 +105,9 @@ pub(super) fn git_actions(
         } else {
             !state.merged
         };
-    // Git refuses to pull onto uncommitted changes.
-    let can_pull = state.has_upstream && state.behind > 0 && !has_changes;
+    // Git pulls onto uncommitted changes unless the pull would overwrite one of them.
+    let can_pull = state.has_upstream && state.behind > 0;
+    let can_sync = can_pull && state.ahead > 0;
     let mut menu = Vec::new();
     if has_changes {
         menu.push(GitAction::Commit);
@@ -92,6 +124,9 @@ pub(super) fn git_actions(
     if can_push {
         menu.push(GitAction::Push);
     }
+    if can_sync {
+        menu.push(GitAction::Sync);
+    }
     if can_pr && state.has_upstream && !has_changes {
         menu.push(GitAction::OpenPr);
     }
@@ -100,6 +135,9 @@ pub(super) fn git_actions(
     }
     let primary = if has_changes {
         (Some(GitAction::Commit), commit())
+    } else if can_sync {
+        let label = format!("Sync ↓{} ↑{}", state.behind, state.ahead);
+        (Some(GitAction::Sync), label)
     } else if can_pull {
         // A push would be refused until the upstream's commits are in.
         (Some(GitAction::Pull), format!("Pull ↓{}", state.behind))
@@ -166,6 +204,12 @@ pub struct ChangesView {
     pub(super) full_access: bool,
     pub(super) has_changes: bool,
     pub(super) graph_scroll: ScrollHandle,
+    /// The name or message a repository action waits for.
+    pub(super) asking: Option<Asking>,
+    /// The message git prepared that was last put in the box, so it is put there once.
+    prefilled: Option<String>,
+    /// The commit whose message and files show under its row, once they are read.
+    pub(super) detail: Option<(String, Option<Result<CommitDetail, String>>)>,
 }
 
 impl ChangesView {
@@ -181,7 +225,7 @@ impl ChangesView {
         });
         cx.subscribe_in(&message, window, |this, _, _: &Submitted, _, cx| {
             if this.has_changes(cx) && this.busy.is_none() {
-                this.run(GitAction::Commit, cx);
+                this.run(GitAction::Commit, None, CommitOptions::default(), cx);
             }
         })
         .detach();
@@ -225,6 +269,9 @@ impl ChangesView {
             full_access: false,
             has_changes: false,
             graph_scroll: ScrollHandle::new(),
+            asking: None,
+            prefilled: None,
+            detail: None,
         }
     }
 
@@ -259,6 +306,9 @@ impl ChangesView {
             self.busy = None;
             self.pr_error = None;
             self.missing.clear();
+            self.asking = None;
+            self.prefilled = None;
+            self.detail = None;
             let draft = root
                 .as_ref()
                 .and_then(|r| self.drafts.get(r).cloned())
@@ -285,35 +335,51 @@ impl ChangesView {
         .detach();
     }
 
-    fn load_sync(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn load_sync(&mut self, cx: &mut Context<Self>) {
+        // A folder just opened shows where its branch stands before the remote is asked.
+        self.read_sync(self.sync.is_some(), cx);
+    }
+
+    /// Reads where the branch stands, after fetching its remote when `fetch` is set.
+    fn read_sync(&mut self, fetch: bool, cx: &mut Context<Self>) {
         let Some(root) = self.root.clone() else {
             return;
         };
         let task = cx.background_spawn(async move {
+            if fetch {
+                patchwork_core::workspace::fetch_remote(&root);
+            }
             let state = patchwork_core::workspace::git_sync_state(&root);
-            Ok::<_, patchwork_core::Error>((root, state))
+            (root, state)
         });
         cx.spawn(async move |this, cx| {
-            let read = task.await;
+            let (root, state) = task.await;
             this.update(cx, |this, cx| {
-                match read {
-                    Ok((root, state)) if Some(&root) == this.root.as_ref() => {
-                        let branch = state.branch.clone();
-                        this.sync = Some(state);
-                        this.message.update(cx, |m, cx| {
-                            m.placeholder = match branch {
-                                Some(b) => format!("Message (Ctrl+Enter to commit on \"{b}\")"),
-                                None => "Message (Ctrl+Enter to commit)".into(),
-                            }
-                            .into();
-                            cx.notify();
-                        });
+                if Some(&root) != this.root.as_ref() {
+                    return;
+                }
+                let branch = state.branch.clone();
+                // A merge or a revert leaves its message ready; it is offered once.
+                let prepared = state.prepared_message.clone();
+                if prepared != this.prefilled {
+                    if let Some(text) = prepared.as_deref()
+                        && this.message.read(cx).content.trim().is_empty()
+                    {
+                        this.message.update(cx, |m, cx| m.set_text(text, cx));
                     }
-                    Ok(_) => {}
-                    Err(e) => {
-                        log::warn!(error:% = e; "could not read the branch state: {{error}}");
-                        this.sync = None;
+                    this.prefilled = prepared;
+                }
+                this.sync = Some(state);
+                this.message.update(cx, |m, cx| {
+                    m.placeholder = match branch {
+                        Some(b) => format!("Message (Ctrl+Enter to commit on \"{b}\")"),
+                        None => "Message (Ctrl+Enter to commit)".into(),
                     }
+                    .into();
+                    cx.notify();
+                });
+                if !fetch {
+                    this.read_sync(true, cx);
                 }
                 cx.notify();
             })
@@ -321,7 +387,7 @@ impl ChangesView {
         .detach();
     }
 
-    fn load_log(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn load_log(&mut self, cx: &mut Context<Self>) {
         let (Some(core), Some(id), Some(root)) =
             (self.core(cx), self.project_id.clone(), self.root.clone())
         else {

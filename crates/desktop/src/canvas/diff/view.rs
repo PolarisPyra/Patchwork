@@ -259,43 +259,46 @@ impl Canvas {
             .pl(px(16.))
             .text_color(t.text_subtle)
             .child(div().flex_1().whitespace_nowrap().child(row.text.clone()))
-            .child(
-                div()
-                    .flex()
-                    .flex_none()
-                    .items_center()
-                    .gap(px(4.))
-                    .pr(px(12.))
-                    .pl(px(8.))
-                    .font_family(crate::ui::theme::font_ui())
-                    .text_size(px(fs_xs()))
-                    .child(
-                        hunk_button(
-                            format!("note-{n}"),
-                            format!("Add a note on change {n}"),
-                            "Note",
+            // A commit's changes are read, not staged, discarded or sent back for review.
+            .when(self.revision.is_none(), |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .gap(px(4.))
+                        .pr(px(12.))
+                        .pl(px(8.))
+                        .font_family(crate::ui::theme::font_ui())
+                        .text_size(px(fs_xs()))
+                        .child(
+                            hunk_button(
+                                format!("note-{n}"),
+                                format!("Add a note on change {n}"),
+                                "Note",
+                            )
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| {
+                                    if let Some(draft) = draft.clone() {
+                                        this.start_draft(draft, window, cx);
+                                    }
+                                },
+                            )),
                         )
-                        .on_click(cx.listener(
-                            move |this, _, window, cx| {
-                                if let Some(draft) = draft.clone() {
-                                    this.start_draft(draft, window, cx);
-                                }
-                            },
-                        )),
-                    )
-                    .child(
-                        hunk_button(
-                            format!("discard-{n}"),
-                            format!("Discard change {n}"),
-                            "Discard",
+                        .child(
+                            hunk_button(
+                                format!("discard-{n}"),
+                                format!("Discard change {n}"),
+                                "Discard",
+                            )
+                            .on_click(act(HunkAction::Discard)),
                         )
-                        .on_click(act(HunkAction::Discard)),
-                    )
-                    .child(
-                        hunk_button(format!("stage-{n}"), stage_label, stage_text)
-                            .on_click(act(stage_action)),
-                    ),
-            )
+                        .child(
+                            hunk_button(format!("stage-{n}"), stage_label, stage_text)
+                                .on_click(act(stage_action)),
+                        ),
+                )
+            })
     }
 
     fn start_draft(&mut self, draft: Draft, window: &mut Window, cx: &mut Context<Self>) {

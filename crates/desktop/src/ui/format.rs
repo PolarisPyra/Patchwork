@@ -35,6 +35,15 @@ pub fn format_relative(ts: u64) -> String {
     }
 }
 
+/// "Nov 8, 2026, 10:21 PM", in local time, from seconds since the epoch.
+pub fn format_date(secs: i64) -> String {
+    use chrono::{Local, TimeZone};
+    match Local.timestamp_opt(secs, 0).single() {
+        Some(d) => d.format("%b %-d, %Y, %-I:%M %p").to_string(),
+        None => String::new(),
+    }
+}
+
 /// "9:05 PM", in local time.
 pub fn format_clock(ts: u64) -> String {
     use chrono::{Local, TimeZone, Timelike};

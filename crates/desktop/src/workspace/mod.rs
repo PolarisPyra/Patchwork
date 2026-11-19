@@ -11,6 +11,7 @@ mod bars;
 mod granular;
 mod interrupted;
 mod canvas_area;
+mod credential;
 mod onboarding;
 mod palette;
 mod panel_area;

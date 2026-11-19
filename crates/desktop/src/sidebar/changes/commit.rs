@@ -3,13 +3,13 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{ClickEvent, Div, Focusable, Role, SharedString, Stateful, Window, div, prelude::*, px};
-use patchwork_core::workspace::PullRequest;
+use patchwork_core::workspace::{CommitOptions, PullRequest, RepoAction};
 
 use crate::ui::menu::MenuItem;
 use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme};
 use crate::ui::{button, icon, spinner, tooltip};
 use super::rows::group_button;
-use super::state::{ChangesView, GitAction, git_actions};
+use super::state::{ChangesView, GitAction, git_actions, operation_title};
 
 impl ChangesView {
     /// The commit message box and the Commit button with its menu (`CommitBox`).
@@ -29,6 +29,7 @@ impl ChangesView {
                 Some(GitAction::Push) => "arrow-up",
                 Some(GitAction::Pull) => "arrow-down",
                 Some(GitAction::OpenPr | GitAction::ViewPr) => "git-pull-request",
+                Some(GitAction::Sync) => "arrows-clockwise",
                 _ => "check",
             }
         };
@@ -36,7 +37,8 @@ impl ChangesView {
         let lines = self.message.read(cx).content.lines().count().clamp(3, 10) as f32;
         let (hover, fg, accent_hover) = (t.bg_hover, t.text, t.accent_hover);
         let primary_enabled = primary.is_some() && !busy;
-        let menu_enabled = !menu.is_empty() && !busy;
+        let menu_enabled = self.sync.is_some() && !busy;
+        let operation = self.sync.as_ref().and_then(|s| s.operation);
         let menu_open = self.menu.as_ref().is_some_and(|(_, _, c)| c.is_none());
         let pr_number = self
             .sync
@@ -51,6 +53,18 @@ impl ChangesView {
             .px(px(8.))
             .pt(px(4.))
             .pb(px(8.))
+            .when_some(operation, |d, operation| {
+                d.child(
+                    div()
+                        .id("operation")
+                        .role(Role::Status)
+                        .px(px(2.))
+                        .text_size(px(fs_sm()))
+                        .text_color(t.warning)
+                        .child(format!("{} in progress", operation_title(operation))),
+                )
+            })
+            .children(self.ask_field(t, cx))
             .child(
                 div()
                     .relative()
@@ -127,11 +141,13 @@ impl ChangesView {
                                 .truncate()
                                 .child(self.busy.clone().unwrap_or(primary_label)),
                         )
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if let Some(action) = primary.filter(|_| primary_enabled) {
-                                this.run(action, cx);
-                            }
-                        })),
+                        .on_click(cx.listener(
+                            move |this, e: &ClickEvent, window, cx| {
+                                if let Some(action) = primary.filter(|_| primary_enabled) {
+                                    this.start(action, e.position(), window, cx);
+                                }
+                            },
+                        )),
                     )
                     .child(
                         button("commit-actions", "More actions")
@@ -153,23 +169,82 @@ impl ChangesView {
                                     return;
                                 }
                                 let entity = cx.entity().downgrade();
-                                let items = menu
+                                let at = e.position() + gpui::point(px(-160.), px(12.));
+                                let mut items: Vec<MenuItem> = menu
                                     .iter()
                                     .map(|&action| {
-                                        let label = match (action, pr_number) {
-                                            (GitAction::ViewPr, Some(n)) => {
+                                        let label = match (action, pr_number, operation) {
+                                            (GitAction::ViewPr, Some(n), _) => {
                                                 format!("{} #{n}", action.label())
+                                            }
+                                            (GitAction::Abort, _, Some(operation)) => {
+                                                format!("Abort {}", operation_title(operation))
                                             }
                                             _ => action.label().to_string(),
                                         };
                                         let entity = entity.clone();
-                                        MenuItem::new(label, move |_, cx| {
-                                            let _ =
-                                                entity.update(cx, |this, cx| this.run(action, cx));
+                                        MenuItem::new(label, move |window, cx| {
+                                            let _ = entity.update(cx, |this, cx| {
+                                                this.start(action, at, window, cx);
+                                            });
                                         })
                                     })
                                     .collect();
-                                let at = e.position() + gpui::point(px(-160.), px(12.));
+                                let with = |label: &str, options: CommitOptions| {
+                                    let entity = entity.clone();
+                                    MenuItem::new(label.to_string(), move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.run(GitAction::Commit, None, options, cx);
+                                        });
+                                    })
+                                };
+                                let none = CommitOptions::default();
+                                let first = with("Commit All", CommitOptions { all: true, ..none });
+                                items.push(if items.is_empty() {
+                                    first
+                                } else {
+                                    first.separated()
+                                });
+                                items.extend([
+                                    with(
+                                        "Amend Last Commit",
+                                        CommitOptions {
+                                            amend: true,
+                                            ..none
+                                        },
+                                    ),
+                                    with(
+                                        "Commit, Signed Off",
+                                        CommitOptions {
+                                            signoff: true,
+                                            ..none
+                                        },
+                                    ),
+                                    with(
+                                        "Commit Without Hooks",
+                                        CommitOptions {
+                                            no_verify: true,
+                                            ..none
+                                        },
+                                    ),
+                                    with(
+                                        "Commit Empty",
+                                        CommitOptions {
+                                            allow_empty: true,
+                                            ..none
+                                        },
+                                    ),
+                                ]);
+                                let entity = entity.clone();
+                                items.push(
+                                    MenuItem::new("Undo Last Commit", move |_, cx| {
+                                        let _ = entity.update(cx, |this, cx| {
+                                            this.act("Undoing…", RepoAction::UndoCommit, cx);
+                                        });
+                                    })
+                                    .icon("arrow-counter-clockwise")
+                                    .separated(),
+                                );
                                 this.open_menu("Commit actions", items, at, None, window, cx);
                             })),
                     ),

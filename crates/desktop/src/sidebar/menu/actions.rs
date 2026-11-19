@@ -102,7 +102,7 @@ impl Workspace {
                     "git-branch",
                     Act::WorktreeTask,
                 ));
-                if !remote {
+                if !remote && !self.settings.worktrees.disabled {
                     let in_place = self.settings.edit_in_place.iter().any(|p| p == id);
                     items.push(if in_place {
                         item(

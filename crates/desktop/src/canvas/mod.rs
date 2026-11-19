@@ -5,8 +5,10 @@
 
 mod actions;
 mod body;
+mod conflicts;
 mod diff;
 mod header;
+mod history;
 mod render;
 mod state;
 

@@ -83,7 +83,8 @@ fn handle(request: Request) -> Result<serde_json::Value, Error> {
             {
                 return json(());
             }
-            let path = inside(&dir, &rel)?;
+            // A link is deleted itself, never what it leads to.
+            let path = patchwork_system::fs::entry_inside(Path::new(&dir), &rel)?;
             match std::fs::remove_file(&path) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
                     Err(format!("Cannot delete {rel}: {e}").into())
@@ -215,19 +216,8 @@ fn sizes(dir: &str, rels: &[String]) -> Vec<Option<u64>> {
 fn line_counts(dir: &str, rels: &[String]) -> Vec<u32> {
     rels.iter()
         .map(|rel| {
-            let Ok(bytes) = inside(dir, rel).and_then(|p| Ok(std::fs::read(p)?)) else {
-                return 0;
-            };
-            if bytes.contains(&0) {
-                return 0;
-            }
-            #[expect(
-                clippy::naive_bytecount,
-                reason = "counted once per changed file, not worth a dependency"
-            )]
-            let lines = bytes.iter().filter(|&&b| b == b'\n').count();
-            let last = usize::from(bytes.last().is_some_and(|&b| b != b'\n'));
-            u32::try_from(lines + last).unwrap_or(u32::MAX)
+            patchwork_system::fs::entry_inside(Path::new(dir), rel)
+                .map_or(0, |path| patchwork_system::fs::count_lines(&path))
         })
         .collect()
 }

@@ -95,13 +95,41 @@ fn apply(top: &str, args: &[&str], patch: &str) -> Result<(), Error> {
     }
 }
 
+/// A change without its `@@` line, whose line numbers differ between the diff against the last
+/// commit and the one against the index.
+fn body(hunk: &str) -> &str {
+    hunk.split_once('\n')
+        .map_or("", |(_, body)| body)
+        .trim_end_matches('\n')
+}
+
+/// The patch of the change `hunk` in the file's diff with `args`: the one with its text, else
+/// the first with its lines.
+fn patch_in(root: &str, rel: &str, args: &[&str], hunk: &str) -> Result<Option<String>, Error> {
+    let mut all = vec!["diff", "--no-color", "--no-ext-diff"];
+    all.extend_from_slice(args);
+    all.extend_from_slice(&["--", rel]);
+    let found = patches(&git(root, &all)?);
+    let wanted = hunk.trim_end_matches('\n');
+    let exact = found
+        .iter()
+        .position(|(own, _)| own.trim_end_matches('\n') == wanted);
+    let at = exact.or_else(|| found.iter().position(|(own, _)| body(own) == body(wanted)));
+    Ok(at
+        .and_then(|at| found.into_iter().nth(at))
+        .map(|(_, patch)| patch))
+}
+
 fn toplevel(root: &str) -> Result<String, Error> {
     let top = git(root, &["rev-parse", "--show-toplevel"])?;
     Ok(crate::system::ssh::same_host(root, top.trim()))
 }
 
-/// Stages, unstages, or discards the change of the file's diff whose text, from its `@@` line
-/// on, is `hunk`. Refused when the file changed so that the change is no longer in its diff.
+/// Stages, unstages, or discards the change of the file's diff whose text is `hunk`.
+///
+/// `hunk` runs from the change's `@@` line on. In a file staged in part, the change is found by
+/// its lines, whose numbers the index counts differently. Refused when the file changed so that
+/// the change is no longer in its diff.
 ///
 /// # Errors
 ///
@@ -115,12 +143,28 @@ pub fn apply_hunk(
     action: HunkAction,
 ) -> Result<(), Error> {
     // A new file's diff is one change, and git has no index entry to apply it against.
-    if turn.is_none() && is_untracked(root, rel) {
+    if turn.is_none() && is_untracked(root, rel)? {
         return match action {
             HunkAction::Stage => accept_file(root, rel),
             HunkAction::Discard => revert_file(root, rel),
             HunkAction::Unstage => Err(Error::Message("This change isn't staged".into())),
         };
+    }
+    let top = toplevel(root)?;
+    let refused = |what: &'static str| move |_| Error::Message(what.to_string());
+    // A file staged in part: the change is looked for where the action works, since against the
+    // last commit it may be joined with a staged neighbor, or sit at other line numbers than the
+    // index has.
+    if turn.is_none() && has_head(root) {
+        let (side, apply_args): (&[&str], &[&str]) = match action {
+            HunkAction::Stage => (&[], &["--cached"]),
+            HunkAction::Unstage => (&["--cached"], &["--cached", "--reverse"]),
+            HunkAction::Discard => (&[], &["--reverse"]),
+        };
+        if let Some(patch) = patch_in(root, rel, side, hunk)? {
+            return apply(&top, apply_args, &patch)
+                .map_err(refused("The file changed since. Look at its diff again."));
+        }
     }
     let wanted = hunk.trim_end_matches('\n');
     let patch = patches(&file_diff(root, rel, turn)?)
@@ -128,8 +172,6 @@ pub fn apply_hunk(
         .find(|(hunk, _)| hunk.trim_end_matches('\n') == wanted)
         .map(|(_, patch)| patch)
         .ok_or_else(|| Error::Message("The file changed since. Look at its diff again.".into()))?;
-    let top = toplevel(root)?;
-    let refused = |what: &'static str| move |_| Error::Message(what.to_string());
     match action {
         HunkAction::Stage => apply(&top, &["--cached"], &patch).map_err(refused(
             "The staged copy of the file no longer fits this change",
@@ -158,7 +200,7 @@ pub fn apply_hunk(
 /// Returns an error when the repository's top-level folder cannot be found or the file's diff
 /// cannot be read.
 pub fn staged_hunks(root: &str, rel: &str, turn: Option<&TurnTrees>) -> Result<Vec<bool>, Error> {
-    if is_untracked(root, rel) || git(root, &["diff", "--cached", "--quiet", "--", rel]).is_ok() {
+    if is_untracked(root, rel)? || git(root, &["diff", "--cached", "--quiet", "--", rel]).is_ok() {
         return Ok(Vec::new());
     }
     let top = toplevel(root)?;

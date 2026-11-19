@@ -120,13 +120,16 @@ impl Runner {
             .collect()
     }
 
-    /// The threads with a reply under way, each with what its files are judged by.
-    pub(in crate::orchestration) fn attributions(&self) -> Vec<(String, SharedAttribution)> {
+    /// The threads with a reply under way, each with the folder it works in and what its files
+    /// are judged by.
+    pub(in crate::orchestration) fn attributions(
+        &self,
+    ) -> Vec<(String, String, SharedAttribution)> {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
         turns
             .iter()
             .filter(|(_, turn)| !turn.idle.load(Ordering::SeqCst))
-            .map(|(id, turn)| (id.clone(), Arc::clone(&turn.attribution)))
+            .map(|(id, turn)| (id.clone(), turn.root.clone(), Arc::clone(&turn.attribution)))
             .collect()
     }
 
@@ -200,7 +203,7 @@ impl Runner {
         let mut record = attribution::lock(&shared);
         // Another message may have resumed it meanwhile, and that reply's record stays.
         if idle.load(Ordering::SeqCst) {
-            record.settle(now);
+            record.restart(now);
         }
     }
 

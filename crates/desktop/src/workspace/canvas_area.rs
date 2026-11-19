@@ -11,7 +11,9 @@ use super::state::Workspace;
 impl Workspace {
     /// Opens a changed file's diff, or the file itself when it has no changes.
     pub fn open_change(&mut self, path: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let tab = if self.changes.iter().any(|c| c.path == path) {
+        // A file in conflict opens on its code, where its conflicts are settled.
+        let change = self.changes.iter().find(|c| c.path == path);
+        let tab = if change.is_some_and(|c| c.status != "conflicted") {
             CanvasTab::Diff
         } else {
             CanvasTab::Code
@@ -25,6 +27,21 @@ impl Workspace {
             .clone()
             .unwrap_or_else(|| project.path.clone());
         self.open_canvas_at(path, root, None, tab, window, cx);
+    }
+
+    /// Opens a changed file's diff showing one part of it: what is staged, or what is not.
+    pub fn open_change_side(
+        &mut self,
+        path: &str,
+        side: patchwork_core::workspace::DiffSide,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_change(path, window, cx);
+        // The canvas reads its diff once this update ends.
+        if let Some(canvas) = &self.canvas {
+            canvas.update(cx, |canvas, _| canvas.side = side);
+        }
     }
 
     /// Opens `path` in the file panel, on `tab`, with the reply it came from.

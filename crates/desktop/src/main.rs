@@ -150,7 +150,11 @@ impl<'kvs> log::kv::VisitSource<'kvs> for Properties {
 /// Runs the helper the first argument names and returns its exit code, or None to open the app.
 /// Without this, every hook or relay an agent starts would open another Patchwork window.
 fn run_helper() -> Option<i32> {
-    use patchwork_core::{harness, permissions, provider};
+    use patchwork_core::{harness, permissions, provider, workspace};
+    // Git and ssh start this binary to ask a sign-in question, with the question alone.
+    if std::env::var_os(workspace::ASKPASS_ENV).is_some() && std::env::args().len() == 2 {
+        return Some(workspace::run_askpass());
+    }
     let arg = std::env::args().nth(1)?;
     let run: fn() -> i32 = match arg.as_str() {
         // An OpenCode turn's bridge to `opencode serve`.
@@ -288,6 +292,12 @@ fn main() {
     patchwork_core::provider::mcp::set_raise_handler(Box::new(move || {
         let _ = raise.unbounded_send(());
     }));
+    // Git asks for a sign-in on the thread that runs it; the question is shown on the app's.
+    let (ask, mut asked) = mpsc::unbounded();
+    patchwork_core::workspace::set_credential_prompter(Box::new(move |request| {
+        // With no window left to ask in, the request drops and the command fails.
+        let _ = ask.unbounded_send(request);
+    }));
     // A change in where updating stands is drawn by the window, like an agent's events.
     let (update_sender, mut update_events) = mpsc::unbounded();
     core.on_update_change(Box::new(move || {
@@ -400,6 +410,17 @@ fn main() {
                     let shown = window.update(cx, |_, window, cx| {
                         cx.activate(true);
                         window.activate_window();
+                    });
+                    if shown.is_err() {
+                        break;
+                    }
+                }
+            })
+            .detach();
+            cx.spawn(async move |cx| {
+                while let Some(request) = asked.next().await {
+                    let shown = window.update(cx, |workspace, window, cx| {
+                        workspace.ask_credential(request, window, cx);
                     });
                     if shown.is_err() {
                         break;

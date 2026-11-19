@@ -45,7 +45,7 @@ pub(super) fn go_idle(
 ) {
     turn.save_text(unsaved);
     let after = workspace::git_changes(&turn.root).unwrap_or_default();
-    let changed = attribution::lock(&turn.attribution).settle(after);
+    let changed = attribution::lock(&turn.attribution).settle(&turn.root, after);
     for path in changed {
         turn.publish(AgentEvent::FileTouched {
             message_id: turn.message_id.clone(),

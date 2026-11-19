@@ -8,7 +8,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
 use gpui::{AnyElement, SharedString, Window, div, prelude::*, px};
-use patchwork_core::workspace::FileChange;
+use patchwork_core::workspace::{DiffSide, FileChange};
 
 use super::rows::{group_button, group_header, row_action};
 use super::state::ChangesView;
@@ -22,7 +22,8 @@ pub(super) enum Group {
     Merge,
     /// The files the open reply changed.
     Reply,
-    Staged,
+    /// The staged changes, by path, which its header takes back out of the index at once.
+    Staged(Vec<String>),
     /// The changes not staged, by path, which its header discards or stages at once.
     Unstaged(Vec<String>),
 }
@@ -37,7 +38,8 @@ pub(super) enum Entry {
         count: usize,
         group: Group,
     },
-    Change(FileChange),
+    /// A changed file, and the side of its diff the row opens when it is in both groups.
+    Change(FileChange, DiffSide),
     /// A file the open reply changed that has no change now.
     ReplyFile(String),
     /// The space under the last row.
@@ -50,7 +52,7 @@ impl Entry {
         match self {
             Entry::Top => 0.hash(state),
             Entry::Header { title, count, .. } => (1, title, count).hash(state),
-            Entry::Change(c) => (2, &c.path, &c.status, c.staged).hash(state),
+            Entry::Change(c, _) => (2, &c.path, &c.status, c.staged).hash(state),
             Entry::ReplyFile(path) => (3, path).hash(state),
             Entry::End => 4.hash(state),
         }
@@ -122,9 +124,9 @@ impl ChangesView {
                 count,
                 group,
             } => group_header(title, count, self.header_actions(&group, cx), &t).into_any_element(),
-            Entry::Change(c) => div()
+            Entry::Change(c, side) => div()
                 .px(px(4.))
-                .child(self.change_row(&c, self.full_access, &t, cx))
+                .child(self.change_row(&c, side, self.full_access, &t, cx))
                 .into_any_element(),
             Entry::ReplyFile(path) => div()
                 .px(px(4.))
@@ -172,8 +174,21 @@ impl ChangesView {
                 }))
                 .into_any_element(),
             ],
-            Group::Staged => Vec::new(),
-            Group::Unstaged(_) if self.full_access => Vec::new(),
+            Group::Staged(_) | Group::Unstaged(_) if self.full_access => Vec::new(),
+            Group::Staged(paths) => {
+                let paths = paths.clone();
+                vec![
+                    row_action(
+                        "unstage-all",
+                        "Unstage all changes",
+                        "minus",
+                        SharedString::from("group:Staged Changes"),
+                        &t,
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| this.unstage(paths.clone(), cx)))
+                    .into_any_element(),
+                ]
+            }
             Group::Unstaged(paths) => {
                 let name = SharedString::from("group:Changes");
                 let (discard, stage) = (paths.clone(), paths.clone());
@@ -186,11 +201,18 @@ impl ChangesView {
                         &t,
                     )
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        this.discard(discard.clone(), window, cx);
+                        this.discard(
+                            discard.clone(),
+                            patchwork_core::workspace::discard_unstaged,
+                            window,
+                            cx,
+                        );
                     }))
                     .into_any_element(),
                     row_action("stage-all", "Stage all changes", "plus", name, &t)
-                        .on_click(cx.listener(move |this, _, _, cx| this.stage(stage.clone(), cx)))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.stage(stage.clone(), window, cx);
+                        }))
                         .into_any_element(),
                 ]
             }

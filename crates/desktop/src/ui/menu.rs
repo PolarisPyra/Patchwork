@@ -1,7 +1,8 @@
 //! A popup list of actions, for right-click menus and dropdowns: a raised box
 //! of rows, each with an icon and a label. Up and Down move the highlight, Enter or Space runs the
-//! row, and Escape or a press outside closes it. Its owner places it with [`Menu::view`] and
-//! drops it on [`Dismissed`].
+//! row, and Escape or a press outside closes it. A long list can take a filter: typing narrows
+//! its rows to those with the text. Its owner places it with [`Menu::view`] and drops it on
+//! [`Dismissed`].
 
 // Rust guideline compliant 2026-10-09
 
@@ -9,11 +10,14 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, App, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent, Pixels, Point,
-    Role, SharedString, Toggled, Window, anchored, deferred, div, prelude::*, px,
+    Role, ScrollHandle, SharedString, Toggled, Window, anchored, deferred, div, prelude::*, px,
 };
 
 use crate::ui::theme::{radius, radius_sm, theme};
 use crate::ui::{icon, popup_shadow};
+
+/// The tallest a menu grows before its rows scroll.
+const MAX_HEIGHT: f32 = 420.;
 
 /// What a row does when it is picked.
 pub type Run = Rc<dyn Fn(&mut Window, &mut App)>;
@@ -74,7 +78,11 @@ pub struct Menu {
     label: SharedString,
     items: Vec<MenuItem>,
     focus: FocusHandle,
+    /// The highlighted row, counted among the rows shown.
     highlight: Option<usize>,
+    scroll: ScrollHandle,
+    /// What was typed to narrow the rows, in a menu that takes a filter.
+    filter: Option<String>,
 }
 
 impl EventEmitter<Dismissed> for Menu {}
@@ -102,6 +110,8 @@ impl Menu {
                 items,
                 focus,
                 highlight: None,
+                scroll: ScrollHandle::new(),
+                filter: None,
             }
         })
     }
@@ -136,8 +146,52 @@ impl Menu {
         .into_any_element()
     }
 
-    fn run(&mut self, i: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(run) = self.items.get(i).map(|item| Rc::clone(&item.run)) else {
+    /// Lets typing narrow the rows to those whose label has the text.
+    pub fn take_filter(&mut self) {
+        self.filter = Some(String::new());
+    }
+
+    /// The rows shown, by their place in the menu: all of them, or those the filter leaves.
+    fn shown(&self) -> Vec<usize> {
+        let wanted = self.filter.as_deref().unwrap_or_default().to_lowercase();
+        (0..self.items.len())
+            .filter(|&i| wanted.is_empty() || self.items[i].label.to_lowercase().contains(&wanted))
+            .collect()
+    }
+
+    /// Takes a key as an edit of the filter, and returns whether it was one.
+    fn edit_filter(&mut self, e: &KeyDownEvent) -> bool {
+        let Some(filter) = &mut self.filter else {
+            return false;
+        };
+        let keys = &e.keystroke;
+        let held = keys.modifiers.control || keys.modifiers.platform;
+        let typed = keys.key_char.as_deref().filter(|text| {
+            // A space picks the highlighted row until something is typed.
+            let picks = filter.is_empty() && text.trim().is_empty();
+            !held && !picks && !text.chars().any(char::is_control)
+        });
+        match (keys.key.as_str(), typed) {
+            ("backspace", _) if !filter.is_empty() => {
+                filter.pop();
+            }
+            ("enter", _) => return false,
+            (_, Some(text)) => filter.push_str(text),
+            _ => return false,
+        }
+        self.highlight = Some(0);
+        self.scroll.scroll_to_item(0);
+        true
+    }
+
+    /// Runs the row at `at` among the rows shown.
+    fn run(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(run) = self
+            .shown()
+            .get(at)
+            .and_then(|&i| self.items.get(i))
+            .map(|item| Rc::clone(&item.run))
+        else {
             return;
         };
         cx.emit(Dismissed(None));
@@ -145,11 +199,19 @@ impl Menu {
     }
 
     fn on_key(&mut self, e: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        let count = self.items.len();
+        if self.edit_filter(e) {
+            cx.stop_propagation();
+            return cx.notify();
+        }
+        let shown = self.shown();
+        let count = shown.len();
         if count == 0 {
+            if e.keystroke.key == "escape" {
+                cx.emit(Dismissed(None));
+            }
             return;
         }
-        let at = self.highlight;
+        let at = self.highlight.filter(|&i| i < count);
         match e.keystroke.key.as_str() {
             "down" => self.highlight = Some(at.map_or(0, |i| (i + 1) % count)),
             "up" => self.highlight = Some(at.map_or(count - 1, |i| (i + count - 1) % count)),
@@ -163,6 +225,16 @@ impl Menu {
             "escape" => cx.emit(Dismissed(None)),
             _ => return,
         }
+        if let Some(at) = self.highlight {
+            // Each line above a row is a child of the box too, and so is the filter.
+            let narrowed = self.filter.as_ref().is_some_and(|text| !text.is_empty());
+            let lines = shown
+                .iter()
+                .take(at + 1)
+                .filter(|&&i| self.items[i].separated && !narrowed);
+            let above = lines.count() + usize::from(self.filter.is_some());
+            self.scroll.scroll_to_item(at + above);
+        }
         cx.stop_propagation();
         cx.notify();
     }
@@ -171,10 +243,39 @@ impl Menu {
 impl Render for Menu {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = *theme(cx);
-        let rows = self.items.iter().enumerate().flat_map(|(i, item)| {
+        let shown = self.shown();
+        let matches = shown.len();
+        // What is typed, above the rows, read out as it changes.
+        let filter = self.filter.as_ref().map(|text| {
+            div()
+                .id("menu-filter")
+                .role(Role::Status)
+                .aria_label(format!("Filter: {text}, {matches} of {}", self.items.len()))
+                .flex()
+                .flex_none()
+                .h(px(crate::ui::theme::roomy(26.)))
+                .items_center()
+                .gap(px(6.))
+                .px(px(8.))
+                .text_color(if text.is_empty() {
+                    t.text_muted
+                } else {
+                    t.text
+                })
+                .child(icon("magnifying-glass", 14.))
+                .child(if text.is_empty() {
+                    SharedString::from("Type to filter")
+                } else {
+                    SharedString::from(text.clone())
+                })
+                .into_any_element()
+        });
+        let narrowed = self.filter.as_ref().is_some_and(|text| !text.is_empty());
+        let rows = shown.into_iter().enumerate().flat_map(|(i, at)| {
+            let item = &self.items[at];
             let highlighted = self.highlight == Some(i);
-            let line = item
-                .separated
+            // The lines set kinds apart, which a narrowed list no longer shows whole.
+            let line = (item.separated && !narrowed)
                 .then(|| div().my(px(4.)).h(px(1.)).bg(t.border).into_any_element());
             let row = div()
                 .id(i)
@@ -220,6 +321,9 @@ impl Render for Menu {
             .flex()
             .flex_col()
             .min_w(px(160.))
+            .max_h(px(MAX_HEIGHT))
+            .overflow_y_scroll()
+            .track_scroll(&self.scroll)
             .p(px(4.))
             .rounded(px(radius()))
             .border_1()
@@ -231,6 +335,7 @@ impl Render for Menu {
                 cx.emit(Dismissed(Some(e.position)));
             }))
             .on_key_down(cx.listener(Self::on_key))
+            .children(filter)
             .children(rows)
     }
 }

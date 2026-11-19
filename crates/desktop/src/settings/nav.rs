@@ -120,6 +120,7 @@ const INDEX: &[(&str, &[&str])] = &[
     (
         "worktrees",
         &[
+            "Give tasks their own worktree",
             "Fork into a new worktree",
             "Delete with deleted tasks",
             "Delete merged",
@@ -490,8 +491,10 @@ impl SettingsDialog {
                         .flex_none()
                         .h(px(SUB_ROW))
                         .items_center()
+                        .gap(px(8.))
                         .pl(px(36.))
                         .text_color(muted)
+                        .child(icon(p.icon, 14.))
                         .child(p.label)
                 });
                 parts.push(
@@ -530,6 +533,7 @@ impl SettingsDialog {
                     .flex_none()
                     .h(px(SUB_ROW))
                     .rounded(px(radius_sm()))
+                    .gap(px(8.))
                     // Under the entry's name, past its icon.
                     .pl(px(36.))
                     .pr(px(8.))
@@ -543,6 +547,7 @@ impl SettingsDialog {
                                 .hover(move |s| s.bg(hover).text_color(t.text))
                         }
                     })
+                    .child(icon(p.icon, 14.))
                     .child(p.label)
                     .on_click(cx.listener(move |d, _, _, cx| d.open_section(id, cx)));
                 subs.push(sub);
