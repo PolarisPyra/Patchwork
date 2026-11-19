@@ -3,6 +3,28 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.117] - 2026-11-19
+
+**v26.11.117** · 4 changes from 1 contributor
+
+- **Agents section.** The sidebar section formerly called Bots is now titled Agents, including its archive group.
+- **Random bot names.** New bots get a random two-word name like Quiet Heron instead of Bot, Bot 2, Bot 3.
+
+### Plus 1 more bug fix.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* fix(sidebar): archived bots highlight on hover by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/247
+* feat(sidebar): the bots section is now called Agents by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/248
+* feat(bots): new bots get a random name by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/249
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.116...26.11.117
+
+</details>
+
 ## [26.11.116] - 2026-11-19
 
 **v26.11.116** · 5 changes from 1 contributor
