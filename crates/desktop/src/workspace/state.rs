@@ -460,6 +460,25 @@ impl Workspace {
         this.watch_rail_focus(window, cx);
         this.watch_themes(window, cx);
         this.await_theme_switch(window, cx);
+        // A branch merged or a worktree changed outside the app shows once the window is back,
+        // and within a minute while it waits.
+        cx.observe_window_activation(window, |this, window, cx| {
+            if window.is_window_active() {
+                this.reload_worktree_marks(cx);
+            }
+        })
+        .detach();
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_secs(60))
+                    .await;
+                if this.update(cx, Self::reload_worktree_marks).is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
         // A focused control that goes away, such as a shell's kill button, hands focus to the
         // nearest place around it still shown, so the app's keys keep working.
         cx.on_focus_lost(window, |this, window, cx| {

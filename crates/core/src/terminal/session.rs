@@ -219,6 +219,17 @@ impl Terminals {
         list
     }
 
+    /// The open terminals' shells: each one's pid, and the folder it started in.
+    pub fn shells(&self) -> Vec<(Option<i32>, String)> {
+        self.terms()
+            .iter()
+            .filter_map(|term| {
+                let state = term.lock();
+                (!state.closing).then(|| (term.pid, state.info.cwd.clone()))
+            })
+            .collect()
+    }
+
     /// Attaches a view to terminal `id`: the screen so far, then its frames go to `sink`. The
     /// view types into the shell from now on.
     ///

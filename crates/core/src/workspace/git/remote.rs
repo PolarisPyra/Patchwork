@@ -170,18 +170,166 @@ fn remember_default_branch(root: &str, remote: &str) {
     }
 }
 
-/// Whether merging `head` into `base` would leave `base`'s files as they are: everything `head`
-/// changed is on `base` already, even under other commits, as a squash-merge leaves it.
+/// Whether everything `head` changed is on `base`, even under other commits, as a squash-merge
+/// leaves it: merging `head` into `base` leaves `base`'s files as they are, or did at one of
+/// `base`'s recent commits, since later commits may have changed the same lines again.
 pub(crate) fn landed(root: &str, base: &str, head: &str) -> bool {
+    merges_to_itself(root, base, head) || landed_earlier(root, base, head)
+}
+
+/// Whether merging `head` into `base` would leave `base`'s files as they are.
+fn merges_to_itself(root: &str, base: &str, head: &str) -> bool {
     let merged = git(
         root,
         &["merge-tree", "--write-tree", "--no-messages", base, head],
     );
     let tree = git(root, &["rev-parse", &format!("{base}^{{tree}}")]);
+    if let Err(e) = &merged
+        && e.to_string().contains("unknown option")
+    {
+        // `merge-tree --write-tree` came in git 2.38; older git can't tell a squash-merge.
+        static TOLD: std::sync::Once = std::sync::Once::new();
+        TOLD.call_once(|| {
+            log::warn!(error:% = e; "this git is too old to tell squash-merged branches (it needs 2.38 or newer): {{error}}");
+        });
+    }
     match (merged, tree) {
         (Ok(merged), Ok(tree)) => merged.lines().next().map(str::trim) == Some(tree.trim()),
         _ => false,
     }
+}
+
+/// How many of `base`'s commits since `head` branched off, among those touching its files,
+/// [`landed_earlier`] tries, newest first.
+const LANDED_SCAN: usize = 30;
+
+/// What [`landed_earlier`] found, by `base` and `head` commit, since the sidebar asks often and
+/// commits never change.
+static LANDED_EARLIER: Mutex<Vec<(String, String, bool)>> = Mutex::new(Vec::new());
+
+/// How many answers [`LANDED_EARLIER`] keeps.
+const LANDED_KEPT: usize = 256;
+
+/// Whether `head` had landed on one of `base`'s commits since it branched off that touch the
+/// files it changed.
+fn landed_earlier(root: &str, base: &str, head: &str) -> bool {
+    let (Ok(base), Ok(head)) = (
+        git(root, &["rev-parse", base]),
+        git(root, &["rev-parse", head]),
+    ) else {
+        return false;
+    };
+    let (base, head) = (base.trim().to_owned(), head.trim().to_owned());
+    let known = LANDED_EARLIER
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .iter()
+        .find(|(b, h, _)| *b == base && *h == head)
+        .map(|(_, _, found)| *found);
+    if let Some(found) = known {
+        return found;
+    }
+    let found = (|| {
+        let fork = git(root, &["merge-base", &base, &head]).ok()?;
+        let files = git(root, &["diff", "--name-only", fork.trim(), &head]).ok()?;
+        let range = format!("{}..{base}", fork.trim());
+        let max = LANDED_SCAN.to_string();
+        let mut args = vec![
+            "rev-list",
+            "--first-parent",
+            "--max-count",
+            &max,
+            &range,
+            "--",
+        ];
+        args.extend(files.lines().filter(|f| !f.is_empty()));
+        let candidates = git(root, &args).ok()?;
+        Some(
+            candidates
+                .lines()
+                .any(|c| merges_to_itself(root, c.trim(), &head)),
+        )
+    })()
+    .unwrap_or(false);
+    let mut cache = LANDED_EARLIER
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    if cache.len() >= LANDED_KEPT {
+        cache.clear();
+    }
+    cache.push((base, head, found));
+    found
+}
+
+/// How long [`pr_merged`] trusts a "no" before asking GitHub again.
+const MERGED_RECHECK: Duration = Duration::from_secs(10 * 60);
+
+/// One answer of [`pr_merged`]: the repository, branch and commit, whether it was merged, and
+/// when it asked.
+type MergedAnswer = (String, String, String, bool, Instant);
+
+/// What [`pr_merged`] found.
+static PR_MERGED: Mutex<Vec<MergedAnswer>> = Mutex::new(Vec::new());
+
+/// Whether a pull request from `branch` was merged into the default branch with its head at
+/// commit `rev` in `root`, as `gh` tells, however it was merged. One merged into another branch,
+/// such as the branch a stacked pull request was based on, doesn't count. A "yes" is kept; a
+/// "no", or `gh` failing, is asked again after a while.
+pub(crate) fn pr_merged(root: &str, branch: &str, rev: &str) -> bool {
+    let Ok(head) = git(root, &["rev-parse", "--verify", "-q", rev]) else {
+        return false;
+    };
+    let head = head.trim().to_owned();
+    let found = |cache: &[MergedAnswer]| {
+        cache
+            .iter()
+            .find(|(r, b, h, _, _)| r == root && b == branch && *h == head)
+            .map(|(_, _, _, merged, at)| (*merged, *at))
+    };
+    let known = found(&PR_MERGED.lock().unwrap_or_else(PoisonError::into_inner));
+    match known {
+        Some((true, _)) => return true,
+        Some((false, at)) if at.elapsed() < MERGED_RECHECK => return false,
+        _ => {}
+    }
+    let Some(base) = default_branch(root, push_remote(root).as_deref()) else {
+        return false;
+    };
+    let merged = gh(
+        root,
+        &[
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "merged",
+            "--json",
+            "headRefOid,baseRefName",
+            "--limit",
+            "20",
+        ],
+    )
+    .ok()
+    .and_then(|out| serde_json::from_str::<Vec<serde_json::Value>>(&out).ok())
+    .is_some_and(|prs| {
+        prs.iter().any(|pr| {
+            pr["headRefOid"].as_str() == Some(&head) && pr["baseRefName"].as_str() == Some(&base)
+        })
+    });
+    let mut cache = PR_MERGED.lock().unwrap_or_else(PoisonError::into_inner);
+    cache.retain(|(r, b, h, _, _)| !(r == root && b == branch && *h == head));
+    if cache.len() >= LANDED_KEPT {
+        cache.clear();
+    }
+    cache.push((
+        root.to_owned(),
+        branch.to_owned(),
+        head,
+        merged,
+        Instant::now(),
+    ));
+    merged
 }
 
 fn rev_count(root: &str, args: &[&str]) -> u32 {

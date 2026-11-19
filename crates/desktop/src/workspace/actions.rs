@@ -60,6 +60,8 @@ impl Workspace {
         }
         let core = Arc::clone(&self.core);
         let dialog = cx.new(|cx| crate::settings::SettingsDialog::new(core, section, window, cx));
+        let open = self.thread.as_ref().map(|t| t.id.clone());
+        dialog.update(cx, |d, _| d.set_open_thread(open));
         cx.subscribe_in(&dialog, window, |this, _, event, window, cx| match event {
             crate::settings::SettingsEvent::Changed => {
                 this.settings = this.core.settings();

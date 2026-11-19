@@ -1,6 +1,7 @@
-//! Cleaning up task worktrees from the settings. Each kind removes the folders of the task
-//! worktrees it picks once, and keeps their branches and tasks, so a task's next turn makes its
-//! worktree again where it was.
+//! Deleting stale task worktrees from the settings: removes the folder of every task worktree
+//! no task or terminal is working in, and keeps its branch and tasks, so a task's next turn makes its
+//! worktree again where it was. A worktree whose tasks were all deleted goes with its record, and
+//! its branch too once the project has all of it.
 
 // Rust guideline compliant 2026-10-09
 
@@ -9,36 +10,17 @@ use std::path::Path;
 
 use crate::Core;
 use crate::settings::KeepWorktrees;
-use crate::system::{now_ms, ssh};
-use crate::threads::Thread;
+use crate::system::{processes, ssh};
 use crate::workspace;
 
-use super::worktree::{Worktree, git, in_progress, main_top, merge_lock, unshipped};
-
-/// A day, in milliseconds.
-const DAY_MS: u64 = 24 * 60 * 60 * 1000;
-
-/// How long a task goes without a message before its worktree counts as inactive.
-const INACTIVE_DAYS: u32 = 14;
-
-/// Which task worktrees a cleanup removes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WorktreeSweep {
-    /// Those whose branch the project or a merged pull request has.
-    Merged,
-    /// Those whose tasks have had no message for two weeks.
-    Inactive,
-    /// Those whose tasks are all archived.
-    Archived,
-    /// Those with no commits or changes of their own.
-    Unchanged,
-}
+use super::worktree::{Worktree, git, in_progress, locked, main_top, merge_lock, off_branch};
+use super::worktree_condition::{Condition, condition};
 
 impl Core {
-    /// Removes the folders of the task worktrees `sweep` picks, once for each worktree, and
-    /// returns how many it removed. A worktree the keep setting keeps, a task is running in, or
-    /// a merge, update or other step holds, stays.
-    pub fn clean_up_worktrees(&self, sweep: WorktreeSweep) -> usize {
+    /// Removes the folder of every stale task worktree, once for each worktree, and returns how
+    /// many it removed. A worktree the keep setting keeps, a task is running in, or a merge,
+    /// update or other step holds, stays.
+    pub fn delete_stale_worktrees(&self, open: Option<&str>) -> usize {
         let keep = self.store.settings().worktrees.cleanup.keep;
         let mut seen = HashSet::new();
         let mut removed = 0;
@@ -52,34 +34,37 @@ impl Core {
             if !seen.insert(worktree.top.clone()) {
                 continue;
             }
-            let threads: Vec<Thread> = self
-                .sharers(&worktree.top)
+            let sharers = self.sharers(&worktree.top);
+            if open.is_some_and(|open| sharers.iter().any(|id| id == open)) {
+                continue;
+            }
+            // A worktree whose tasks were all deleted, kept as the project keeps those, is held
+            // by its record's id, which names the same folder.
+            let owner = sharers
                 .iter()
                 .filter_map(|id| self.store.thread(id))
-                .collect();
-            let Some(first) = threads.iter().min_by_key(|t| t.created_at) else {
-                continue;
-            };
-            match self.clean_by(sweep, keep, &first.id, &worktree, &threads) {
+                .min_by_key(|t| t.created_at)
+                .map_or_else(|| id.to_owned(), |t| t.id);
+            match self.delete_if_stale(keep, &owner, &worktree) {
                 Ok(true) => removed += 1,
                 Ok(false) => {}
                 Err(e) => {
-                    log::warn!(branch:% = worktree.branch, error:% = e; "could not clean up the worktree on {{branch}}: {{error}}");
+                    log::warn!(branch:% = worktree.branch, error:% = e; "could not delete the worktree on {{branch}}: {{error}}");
                 }
             }
         }
         removed
     }
 
-    /// Removes the folder of `worktree`, which `threads` share with `owner` first, when `sweep`
-    /// picks it and `keep` doesn't keep it. Returns whether it did.
-    fn clean_by(
+    /// Removes the folder of `worktree`, which `owner` made, unless its link to its repository
+    /// broke, a task or its agent is in it, a step holds it, it is locked or off its branch, or
+    /// `keep` keeps it. Returns whether it did. When `owner` was deleted, the worktree goes with
+    /// every record of it.
+    fn delete_if_stale(
         &self,
-        sweep: WorktreeSweep,
         keep: KeepWorktrees,
         owner: &str,
         worktree: &Worktree,
-        threads: &[Thread],
     ) -> Result<bool, crate::Error> {
         let Some(top) = main_top(&worktree.top) else {
             return Ok(false);
@@ -91,32 +76,65 @@ impl Core {
         let Ok(_step) = self.hold_worktree(owner) else {
             return Ok(false);
         };
-        if self.busy(owner) || in_progress(&worktree.top) {
+        if condition(worktree, &top) != Condition::Present
+            || self.busy(owner)
+            || self.agent_up(owner)
+            || in_progress(&worktree.top)
+            || locked(&worktree.top)
+            // Committing to another branch, or a detached HEAD the folder takes with it, would
+            // leave the work where its record doesn't find it.
+            || off_branch(worktree).is_some()
+            || self.worked_in(&worktree.top)
+        {
             return Ok(false);
         }
         let _merging = merge_lock(&top, || {})?;
         if kept(worktree, keep)? {
             return Ok(false);
         }
-        let picked = match sweep {
-            WorktreeSweep::Archived => archived(threads),
-            WorktreeSweep::Inactive => inactive_for(threads, INACTIVE_DAYS),
-            WorktreeSweep::Unchanged => self.unchanged(owner)?,
-            WorktreeSweep::Merged => merged(worktree, &top)?,
-        };
-        if !picked {
-            return Ok(false);
+        log::info!(branch:% = worktree.branch; "deleting the stale worktree on {{branch}}");
+        if self.store.thread(owner).is_some() {
+            self.park_worktree(worktree, &top)?;
+        } else {
+            self.drop_worktree(worktree, &top)?;
+            for id in self.sharers(&worktree.top) {
+                self.forget_worktree(&id);
+            }
         }
-        log::info!(branch:% = worktree.branch, sweep:? = sweep; "cleaning up the worktree on {{branch}}: {{sweep}}");
-        self.park_worktree(worktree, &top)?;
         Ok(true)
     }
 
-    /// Whether task `thread_id`'s worktree has neither commits nor changes of its own.
-    fn unchanged(&self, thread_id: &str) -> Result<bool, crate::Error> {
-        Ok(self
-            .worktree_state(thread_id)?
-            .is_some_and(|s| s.commits == 0 && s.changes.is_empty() && s.off_branch.is_none()))
+    /// Whether a process other than Patchwork, its agents, and the git and `gh` commands it is
+    /// running is working in `top`: a terminal's shell, a command an agent left running, an
+    /// editor, or a shell elsewhere. Where the system can't tell, whether a terminal's shell is.
+    pub(super) fn worked_in(&self, top: &str) -> bool {
+        let Some(pids) = processes::working_in(Path::new(top)) else {
+            return self
+                .terminals
+                .shells()
+                .iter()
+                .any(|(_, cwd)| Path::new(cwd).starts_with(top));
+        };
+        let mut ignored: HashSet<i32> = self
+            .runner
+            .agent_pids()
+            .into_iter()
+            .filter_map(|pid| i32::try_from(pid).ok())
+            .collect();
+        ignored.insert(std::process::id() as i32);
+        let commands = workspace::own_commands();
+        if !commands.is_empty()
+            && let Some(table) = processes::Snapshot::read()
+        {
+            ignored.extend(
+                commands
+                    .iter()
+                    .filter_map(|pid| i32::try_from(*pid).ok())
+                    .flat_map(|pid| table.tree(pid))
+                    .map(|p| p.pid),
+            );
+        }
+        pids.iter().any(|pid| !ignored.contains(pid))
     }
 }
 
@@ -129,63 +147,4 @@ fn kept(worktree: &Worktree, keep: KeepWorktrees) -> Result<bool, crate::Error> 
         KeepWorktrees::AnyFiles => &["status", "--porcelain", "--ignored"],
     };
     Ok(!git(&worktree.top, args)?.trim().is_empty())
-}
-
-/// Whether every task in `threads` is archived.
-fn archived(threads: &[Thread]) -> bool {
-    threads.iter().all(|t| t.archived_at.is_some())
-}
-
-/// Whether no task in `threads` has had a message for `days` days.
-fn inactive_for(threads: &[Thread], days: u32) -> bool {
-    let last = threads
-        .iter()
-        .flat_map(|t| {
-            t.messages
-                .last()
-                .map(|m| m.created_at)
-                .into_iter()
-                .chain([t.created_at])
-        })
-        .max()
-        .unwrap_or(0);
-    now_ms().saturating_sub(last) >= u64::from(days) * DAY_MS
-}
-
-/// Whether `worktree`'s work has reached its project, whose main folder is `top`: nothing is
-/// uncommitted, and its branch has commits that the project or the remote's default branch has
-/// all of, or a pull request from it was merged.
-fn merged(worktree: &Worktree, top: &str) -> Result<bool, crate::Error> {
-    if !git(&worktree.top, &["status", "--porcelain"])?
-        .trim()
-        .is_empty()
-    {
-        return Ok(false);
-    }
-    let head = git(top, &["rev-parse", "HEAD"])?;
-    if unshipped(worktree, head.trim())? == 0 && has_own_commits(worktree) {
-        return Ok(true);
-    }
-    Ok(workspace::gh(
-        &worktree.root,
-        &["pr", "view", "--json", "state", "-q", ".state"],
-    )
-    .is_ok_and(|state| state.trim() == "MERGED"))
-}
-
-/// Whether `worktree`'s branch moved since it was made, by its reflog. A branch without one
-/// counts as not moved.
-fn has_own_commits(worktree: &Worktree) -> bool {
-    let full = format!("refs/heads/{}", worktree.branch);
-    let Ok(log) = git(
-        &worktree.top,
-        &["reflog", "show", "--format=%H", &full, "--"],
-    ) else {
-        return false;
-    };
-    let mut hashes = log.lines();
-    let (Some(now), Some(made)) = (hashes.next(), hashes.last()) else {
-        return false;
-    };
-    now != made
 }

@@ -136,6 +136,7 @@ impl Runner {
                     );
                 }
                 core.turn_root(&thread, id, &project.path)
+                    .map_err(|e| e.to_string())?
             } else {
                 let dir = core.chat_dir(&thread_id);
                 std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

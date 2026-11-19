@@ -382,11 +382,14 @@ impl Core {
             thread_id,
             "Stop the task and its subagents before restoring a checkpoint",
         )?;
+        self.store
+            .thread(thread_id)
+            .and_then(|t| t.project_id)
+            .ok_or("Only project tasks have checkpoints")?;
+        // Not the project's own folder for a task whose worktree isn't there now.
+        let root = self.thread_root(thread_id)?;
         // An idle agent still holds the session being undone.
         self.runner.retire_idle(thread_id);
-        let root = self
-            .checkpoint_root(thread_id)
-            .ok_or("Only project tasks have checkpoints")?;
         let thread = self.thread(thread_id)?;
         let start = thread
             .messages
@@ -432,9 +435,12 @@ impl Core {
             thread_id,
             "Stop the task and its subagents before undoing a reply",
         )?;
-        let root = self
-            .checkpoint_root(thread_id)
+        self.store
+            .thread(thread_id)
+            .and_then(|t| t.project_id)
             .ok_or("Only project tasks have replies to undo")?;
+        // Not the project's own folder for a task whose worktree isn't there now.
+        let root = self.thread_root(thread_id)?;
         let thread = self.thread(thread_id)?;
         let reply = thread
             .messages
@@ -450,7 +456,13 @@ impl Core {
 
     /// Drops the thread's checkpoints, once its messages are gone.
     pub(crate) fn remove_checkpoints(&self, thread_id: &str) {
-        if let Some(root) = self.checkpoint_root(thread_id) {
+        // Its snapshots are refs of the repository, which the project's folder reaches too when
+        // the task's worktree isn't there; only deleting them happens there.
+        let root = self.checkpoint_root(thread_id).or_else(|| {
+            let project = self.store.thread(thread_id)?.project_id?;
+            self.project_root(&project).ok()
+        });
+        if let Some(root) = root {
             remove(&root, thread_id, None);
         }
     }
