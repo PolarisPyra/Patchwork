@@ -109,7 +109,7 @@ impl BotPage {
             knowledge: Vec::new(),
             usage: None,
             starting: false,
-            details_open: true,
+            details_open: false,
             layout,
             drill: None,
             brief: None,
