@@ -16,6 +16,20 @@ const NAME_MAX: usize = 40;
 /// The longest a bot's instructions may be, in characters.
 const INSTRUCTIONS_MAX: usize = 20_000;
 
+/// The first word of a new bot's name.
+const NAME_ADJECTIVES: &[&str] = &[
+    "Amber", "Bold", "Brave", "Bright", "Calm", "Clever", "Cosmic", "Swift", "Gentle", "Golden",
+    "Happy", "Jolly", "Lucky", "Mellow", "Misty", "Nimble", "Quiet", "Rapid", "Silver", "Sunny",
+    "Tidy", "Velvet", "Witty", "Zesty",
+];
+
+/// The second word of a new bot's name.
+const NAME_ANIMALS: &[&str] = &[
+    "Badger", "Beaver", "Falcon", "Ferret", "Finch", "Fox", "Gecko", "Heron", "Koala", "Lemur",
+    "Lynx", "Marten", "Moose", "Newt", "Otter", "Owl", "Panda", "Puffin", "Raven", "Robin", "Seal",
+    "Sparrow", "Tapir", "Wombat",
+];
+
 impl Core {
     /// Every bot, oldest first.
     #[must_use]
@@ -40,7 +54,7 @@ impl Core {
         let agent = settings.default_agent();
         let bot = Bot {
             id: new_id(),
-            name: self.free_bot_name("Bot"),
+            name: self.random_bot_name(),
             instructions: String::new(),
             agent,
             model: settings.tokens.default_models.get(&agent).cloned(),
@@ -111,6 +125,23 @@ impl Core {
         };
         self.store.save_bot(&bot)?;
         Ok(bot)
+    }
+
+    /// A random adjective and animal no bot's name has, or a numbered "Bot" once every pair is
+    /// taken.
+    fn random_bot_name(&self) -> String {
+        let taken: Vec<String> = self.bots().into_iter().map(|b| b.name).collect();
+        let pairs = NAME_ADJECTIVES.len() * NAME_ANIMALS.len();
+        // Start at a random pair and walk on from it, so a free one is found when it exists.
+        let start = (uuid::Uuid::new_v4().as_u128() % pairs as u128) as usize;
+        (0..pairs)
+            .map(|i| {
+                let n = (start + i) % pairs;
+                let adjective = NAME_ADJECTIVES[n / NAME_ANIMALS.len()];
+                format!("{adjective} {}", NAME_ANIMALS[n % NAME_ANIMALS.len()])
+            })
+            .find(|name| !taken.iter().any(|t| t.eq_ignore_ascii_case(name)))
+            .unwrap_or_else(|| self.free_bot_name("Bot"))
     }
 
     /// `base`, or `base` with the first number after it that no bot's name has.
