@@ -307,7 +307,7 @@ fn compacted_divider(
         .id(row)
         .role(Role::Status)
         .px(px(24.))
-        .when(top, |d| d.pt(px(24.)))
+        .when(top, |d| d.pt(px(TOP_GAP)))
         .child(
             div().flex().pb(px(20.)).child(
                 div()
@@ -387,6 +387,10 @@ pub fn transcript(
         .children(rail)
 }
 
+/// The gap above a chat's first message, which keeps it clear of the controls floating over the
+/// transcript's top until it scrolls under them.
+const TOP_GAP: f32 = 64.;
+
 /// Row `i` of the open chat's transcript, drawn once the list scrolls it into reach.
 fn transcript_row(
     w: &Workspace,
@@ -431,7 +435,7 @@ fn transcript_row(
         // only carries the goal on.
         return div()
             .id(row)
-            .when(top, |d| d.pt(px(24.)))
+            .when(top, |d| d.pt(px(TOP_GAP)))
             .into_any_element();
     }
     if m.role == MessageRole::User && upkeep(&m.text) == Some(Upkeep::Compact) {
@@ -477,7 +481,7 @@ fn transcript_row(
                 .flex()
                 .flex_col()
                 .when(last, |d| d.pb(px(20.)))
-                .when(top, |d| d.pt(px(24.)))
+                .when(top, |d| d.pt(px(TOP_GAP)))
                 .when(m.role != MessageRole::User, |d| d.max_w(px(820.)))
                 .child(body),
         )

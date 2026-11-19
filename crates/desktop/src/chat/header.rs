@@ -1,5 +1,5 @@
-//! The row above a chat's transcript: search, Android devices, "Open in editor" and a bot's
-//! details, with the subagents card under them.
+//! What floats over the top right of a chat's transcript: search, Android devices, "Open in
+//! editor" and a bot's details, with the subagents card under them.
 
 // Rust guideline compliant 2026-10-09
 
@@ -22,7 +22,8 @@ fn shadow() -> Vec<gpui::BoxShadow> {
 }
 
 /// Search, Android devices and "Open in editor" at the right, with the subagents card under them,
-/// in a row above the transcript so nothing covers it.
+/// floating over the transcript, which scrolls under them. Only the controls and the card take
+/// clicks; the gaps between them pass through to the transcript.
 pub(super) fn header(
     w: &mut Workspace,
     t: &Theme,
@@ -128,6 +129,7 @@ pub(super) fn header(
             .on_click(cx.listener(|w, _, window, cx| w.toggle_android(window, cx)))
     });
     let bar = div()
+        .block_mouse_except_scroll()
         .flex()
         .items_center()
         .gap(px(8.))
@@ -136,7 +138,9 @@ pub(super) fn header(
         .children(open)
         .children(details);
     div()
-        .flex_none()
+        .absolute()
+        .top_0()
+        .right_0()
         .pt(px(12.))
         .px(px(16.))
         .flex()
