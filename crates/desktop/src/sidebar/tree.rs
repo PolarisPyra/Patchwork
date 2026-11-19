@@ -14,7 +14,9 @@ use patchwork_core::gateway::{ChatApps, Platform, Presence};
 use patchwork_core::threads::{ApprovalStatus, MessageStatus, Thread, WorktreeMark};
 use crate::ui::avatar::{Mood, avatar};
 use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
-use crate::ui::{agent_label, agent_logo, button, display_title, format_relative, icon, now_ms};
+use crate::ui::{
+    agent_label, agent_logo, button, display_title, format_relative, icon, now_ms, spinner,
+};
 use crate::workspace::{Workspace, is_busy};
 
 /// The scrollbar's gutter at the tree's right edge, which its thumb sits in.
@@ -212,6 +214,8 @@ pub(super) fn thread_row(
         icon("shield-warning", 15.)
             .text_color(t.warning)
             .into_any_element()
+    } else if busy {
+        spinner(12., t.accent_text).into_any_element()
     } else {
         let at = last.map_or(th.created_at, |m| m.created_at);
         let color: Hsla = if picked { t.text_muted } else { t.text_subtle };
