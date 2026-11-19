@@ -36,27 +36,83 @@ prompt and its rules are in the workflow's "Write the highlights" step.
 
 ## Cutting one
 
-Tag the commit on `main` and push the tag:
+1. Merge the PRs the release should have. A release is whatever is on `origin/main` when it is
+   tagged; a PR still waiting on its checks is not in it.
+2. Find the latest version and pick the next: the next N this month, or 0 in a new month.
 
-```sh
-git tag 26.11.66
-git push origin 26.11.66
-```
+   ```sh
+   git fetch origin --tags
+   git tag -l '26.11.*' --sort=-v:refname | head -1   # the latest, e.g. 26.11.124
+   ```
 
-The Release workflow (`.github/workflows/release.yml`) then:
+3. Tag `origin/main` and push the tag. Tag `origin/main`, not local `main`, which may hold a
+   commit whose PR has not merged.
 
-1. Writes the notes, sets the tag's version in `Cargo.toml` and `Cargo.lock`, and puts the notes
-   at the top of `CHANGELOG.md` as `## [YY.M.N] - YYYY-MM-DD`, for the builds only.
-2. Builds the three apps and the helpers at that version, side by side.
-3. Once all three are built, signs every file, publishes the release with all of them at once,
-   announces it on Discord, and commits the version and the notes to `main` as "Release YY.M.N".
-   Pull before the next push.
+   ```sh
+   git tag 26.11.125 origin/main
+   git push origin 26.11.125
+   ```
+
+4. A "Release 26.11.125" run starts in Actions → Release and takes about 10 to 15 minutes, longer
+   when the Mac waits for a runner. Nothing else needs doing while it runs.
+
+   ```sh
+   gh run list --workflow release.yml --limit 3
+   ```
+
+5. When it has finished, the release is on GitHub with all its files, the website's download
+   links and the app's update check point at it, Discord has the post, and `main` has a
+   "Release 26.11.125" commit. Pull it before the next push:
+
+   ```sh
+   git pull --rebase origin main
+   ```
+
+### What the workflow does
+
+The Release workflow (`.github/workflows/release.yml`) runs these jobs:
+
+1. `notes` writes the notes, sets the tag's version in `Cargo.toml` and `Cargo.lock`, and puts the
+   notes at the top of `CHANGELOG.md` as `## [YY.M.N] - YYYY-MM-DD`, for the builds only.
+2. `linux`, `windows` and `macos` build the three apps and the helpers at that version, side by
+   side.
+3. `publish` starts once all three are built. It signs every file, publishes the release with all
+   of them at once, announces it on Discord, and commits the version and the notes to `main` as
+   "Release YY.M.N".
 
 Until step 3, nothing is published: the app's update check and the website's download links
-(`releases/latest/download/…`) keep pointing at the previous release. When GitHub has no Mac
-runner free, the Mac job is cancelled without starting, and the Retry workflow re-runs it. Any
-failed release can be re-run from the Actions page with "Re-run failed jobs"; it never publishes
-twice, announces twice or commits twice ([CI and deploys](ci.md#when-a-job-fails)).
+(`releases/latest/download/…`) keep pointing at the previous release.
+
+### When it fails
+
+- **The Mac job is cancelled after about 15 minutes with no steps run.** GitHub had no Mac runner
+  free. The Retry workflow re-runs it, twice at most; after that, re-run it yourself.
+- **A build or check failed.** Nothing was published. Read the log, fix the code, merge the fix
+  and tag it as the next version. If the cause was outside the code, such as a download that timed
+  out, re-run the failed jobs.
+- **`publish` failed.** Re-run the failed jobs. A re-run never publishes, announces or commits
+  twice ([CI and deploys](ci.md#when-a-job-fails)).
+
+Re-run from the run's page with "Re-run failed jobs", or from a terminal:
+
+```sh
+gh run list --workflow release.yml --limit 5   # recent runs and their IDs
+gh run view <run-id> --log-failed              # the failed steps' logs
+gh run rerun <run-id> --failed                 # re-run the failed jobs
+```
+
+### Build checks
+
+A "Release build check" run builds the three apps and publishes nothing. One runs on `main` every
+day at 07:23 UTC, which keeps the Rust caches that tag runs restore fresh and shows a broken
+release build before a tag does ([CI and deploys](ci.md#caches)). A release never needs one
+first. To run one now, for example after changing a dependency or the workflow:
+
+```sh
+gh workflow run release.yml --ref main
+```
+
+Pushes to `main` do not start the Release workflow.
 
 The highlights use only the commit subjects and PR descriptions, so they are right when the PR is
 written. To reword the notes after publishing, edit the release on GitHub and its section in `CHANGELOG.md`;
@@ -84,12 +140,6 @@ when that signature checks out. Its version and its `withdrawn` list are then th
 word, so an older signed build cannot be passed off as the newest. Editing `latest.json` on a
 published release, to withdraw a version, means signing it again with the release key and
 replacing `latest.json.minisig` with the new signature.
-
-Only a tag releases, and its run is named "Release YY.M.N". Every other run of the workflow is a
-"Release build check", which builds all three and publishes nothing: one started by hand (Actions →
-Release → Run workflow), or the daily one on `main`. They save the Rust caches that tag runs
-restore ([CI and deploys](ci.md)).
-
 ## Building the AppImage locally
 
 ```sh
