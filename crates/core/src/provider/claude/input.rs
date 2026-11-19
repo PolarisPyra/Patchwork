@@ -39,6 +39,12 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
     // Permission checks arrive as `can_use_tool` control requests on stdout. Full access
     // takes them too, since AskUserQuestion asks the user that way in every mode.
     args.extend(["--permission-prompt-tool".to_string(), "stdio".to_string()]);
+    // Skills load without asking, though the CLI asks for any that declares its own allowed
+    // tools, such as `claude-api`. Loading one also allows those tools while it runs, so only
+    // the modes that already run commands without asking skip it.
+    if matches!(spec.mode, AccessMode::Auto | AccessMode::FullAccess) {
+        args.extend(["--allowedTools".to_string(), "Skill".to_string()]);
+    }
     if let Some(id) = spec.session_id {
         args.extend(["--resume".to_string(), id.to_string()]);
     }
