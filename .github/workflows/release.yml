@@ -1,20 +1,18 @@
 name: Release
 
-# Pushing a tag YY.M.N releases the commit it points at. The notes job writes the release notes
-# from the commits since the previous tag: a line counting the commits and contributors, up to
-# seven highlights Claude Haiku 5.5 picks from the commits and their PRs, and GitHub's generated
-# notes folded under "Full changelog". The build jobs build the Linux AppImage (scripts/build.sh),
-# the Windows exe and the macOS (Apple silicon) disk image at the tag's version, and the publish
-# job signs them and publishes the GitHub release beside the latest.json the app's update check
-# reads. The finalize job then commits the version and the notes to main and points the website
-# at the release, which the Site workflow deploys, and the announce job posts it on Discord. docs/release.md explains it.
+# Pushing a tag YY.M.N releases the commit it points at, in three steps:
 #
-# Only a tag releases. Every other run is a "Release build check": it builds all three and
-# publishes nothing. Run one by hand (Actions → Release → Run workflow); a push to main that
-# changes the dependencies or this workflow starts one, as does a daily schedule. They save the
-# Rust caches the tag builds restore, since a tag's own run can't save one that the next tag could
-# read. The "Release YY.M.N" commit changes only the workspace's own version, which the caches do
-# not hold, so its build jobs are skipped.
+#   notes  →  linux, windows, macos  →  publish
+#
+# notes writes the release notes and the tag's version for the builds. The three builds run side by
+# side. publish waits for all three, signs everything, publishes the GitHub release with the
+# latest.json the app's update check reads, announces it on Discord and commits "Release YY.M.N"
+# to main. Nothing is published until every platform is built, so a release is never missing a
+# download. A Mac runner that never starts is re-run by retry.yml. docs/release.md explains it.
+#
+# Every other run is a "Release build check" (by hand, or daily on main): it builds all three,
+# publishes nothing, and saves the Rust caches the tag builds restore, since a tag's own run can't
+# save one that the next tag could read.
 #
 # Actions are pinned to commits; the comment after each names the version it was.
 
@@ -23,9 +21,6 @@ run-name: ${{ github.ref_type == 'tag' && format('Release {0}', github.ref_name)
 on:
   push:
     tags: ["[0-9]*.[0-9]*.[0-9]*"]
-    branches: [main]
-    # A push to main only builds, to save the caches; these are what change them.
-    paths: ["Cargo.lock", "**/Cargo.toml", ".github/workflows/release.yml"]
   workflow_dispatch:
   schedule:
     - cron: "23 7 * * *"
@@ -227,7 +222,8 @@ jobs:
 
   linux:
     needs: notes
-    if: ${{ !cancelled() && (needs.notes.result == 'success' || (github.ref_type != 'tag' && !startsWith(github.event.head_commit.message, 'Release '))) }}
+    # On a tag, after the notes; otherwise the notes job is skipped and the build runs alone.
+    if: ${{ !failure() && !cancelled() }}
     # The oldest Ubuntu runner, so the AppImage links against an older glibc and runs on newer
     # distributions too.
     runs-on: ubuntu-22.04
@@ -285,7 +281,8 @@ jobs:
 
   windows:
     needs: notes
-    if: ${{ !cancelled() && (needs.notes.result == 'success' || (github.ref_type != 'tag' && !startsWith(github.event.head_commit.message, 'Release '))) }}
+    # On a tag, after the notes; otherwise the notes job is skipped and the build runs alone.
+    if: ${{ !failure() && !cancelled() }}
     runs-on: windows-2022
     timeout-minutes: 45
     steps:
@@ -321,11 +318,13 @@ jobs:
 
   macos:
     needs: notes
-    if: ${{ !cancelled() && (needs.notes.result == 'success' || (github.ref_type != 'tag' && !startsWith(github.event.head_commit.message, 'Release '))) }}
+    # On a tag, after the notes; otherwise the notes job is skipped and the build runs alone.
+    if: ${{ !failure() && !cancelled() }}
     # macos-15 runs on Apple silicon, so the build is native arm64. When GitHub has no arm64 Mac
-    # free, the job waits about 15 minutes, is cancelled with "The job was not acquired by Runner
-    # of type hosted even after multiple attempts", and nothing publishes; re-run the failed jobs.
-    # The wait doesn't count toward the timeout. A cold build takes about 17 minutes.
+    # free, the job waits about 15 minutes and is cancelled with "The job was not acquired by
+    # Runner of type hosted even after multiple attempts". Nothing is published then, and
+    # retry.yml re-runs it. The wait doesn't count toward the timeout.
+    # A cold build takes about 17 minutes.
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -406,12 +405,19 @@ jobs:
             dmg/Patchwork.app/Contents/MacOS/patchwork-remote-*
           if-no-files-found: error
 
+
+  # Publishes the release once all three platforms are built, and only then: the release stays a
+  # draft until every file is on it, so latest.json, the website's links (releases/latest/download)
+  # and the app's update check never name a file that is missing. Every step can run again: a
+  # re-run replaces the files of a draft, leaves a published release as it is, announces only what
+  # it published itself, and commits to main only when main does not have the release yet.
   publish:
     needs: [notes, linux, windows, macos]
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.notes.outputs.version }}
     permissions:
       contents: write
     steps:
@@ -420,12 +426,13 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: notes
+          path: ${{ runner.temp }}/notes
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: release-*
-          path: release
           merge-multiple: true
+          path: release
 
       - name: Install minisign
         run: |
@@ -440,20 +447,15 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       # Each file is signed with the release key (the TAURI_SIGNING_PRIVATE_KEY secret and its
-      # password), and its signature is checked against the key built into the app, as the app's
-      # updater will check it, before anything is published. latest.json then names each file's
-      # address, SHA-256 and signature, which the updater reads, and is signed the same way as
-      # latest.json.minisig.
-      #
-      # The release stays a draft until every file is up, so it never becomes the latest with
-      # latest.json naming a file that is not there yet.
-      - name: Sign and publish the GitHub release
+      # password), and its signature is checked against the key built into the app, as the app
+      # will check it. latest.json names each app's address, SHA-256 and signature, which the
+      # updater reads, and is signed the same way as latest.json.minisig. The SSH host helpers are
+      # signed beside the apps; the app checks them before copying one to a host.
+      - name: Sign the files
         env:
-          GH_TOKEN: ${{ github.token }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          version=$TAG
           signer="$GITHUB_WORKSPACE/.github/signer/node_modules/.bin/tauri"
           [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] \
             || { echo "::error::TAURI_SIGNING_PRIVATE_KEY is not set"; exit 1; }
@@ -461,13 +463,22 @@ jobs:
             crates/core/src/updates/release.rs)
           [ -n "$key" ] \
             || { echo "::error::Could not read SIGNING_KEY from crates/core/src/updates/release.rs"; exit 1; }
+          sign() {
+            "$signer" signer sign --app-version "$VERSION" "$1" > /dev/null
+            base64 -d "$1.sig" > "$1.minisig"
+            rm "$1.sig"
+            minisign -Vq -P "$key" -m "$1" -x "$1.minisig" \
+              || { echo "::error::The signature of $1 does not check out against the app's key"; exit 1; }
+          }
           cd release
+          find . -mindepth 2 -type f -name "patchwork-remote-*" -exec mv {} . \;
+          find . -mindepth 1 -type d -exec rm -rf {} +
+          helpers=$(ls patchwork-remote-*)
+          [ "$(echo "$helpers" | wc -l)" = 5 ] \
+            || { echo "::error::Expected 5 SSH host helpers, found: $helpers"; exit 1; }
           assets='[]'
           for name in Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg; do
-            "$signer" signer sign --app-version "$version" "$name" > /dev/null
-            base64 -d "$name.sig" > "$name.minisig"
-            minisign -Vq -P "$key" -m "$name" -x "$name.minisig" \
-              || { echo "::error::The signature of $name does not check out against the app's key"; exit 1; }
+            sign "$name"
             assets=$(jq -c --arg name "$name" \
               --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG/$name" \
               --arg digest "sha256:$(sha256sum "$name" | cut -d' ' -f1)" \
@@ -475,95 +486,37 @@ jobs:
               '. + [{name: $name, browser_download_url: $url, digest: $digest, signature: $signature}]' \
               <<< "$assets")
           done
-          # The SSH host helpers sit beside the apps, each with its signature, which the app checks
-          # before copying one to a host. The updater never reads them, so latest.json leaves them out.
-          find . -mindepth 2 -type f -name "patchwork-remote-*" -exec mv {} . \;
-          helpers=$(ls patchwork-remote-*)
-          [ "$(echo "$helpers" | wc -l)" = 5 ] \
-            || { echo "::error::Expected 5 SSH host helpers, found: $helpers"; exit 1; }
-          for name in $helpers; do
-            "$signer" signer sign --app-version "$version" "$name" > /dev/null
-            base64 -d "$name.sig" > "$name.minisig"
-            minisign -Vq -P "$key" -m "$name" -x "$name.minisig" \
-              || { echo "::error::The signature of $name does not check out against the app's key"; exit 1; }
-          done
-          jq -n --arg tag "$TAG" --rawfile body ../notes.md --argjson assets "$assets" \
+          for name in $helpers; do sign "$name"; done
+          jq -n --arg tag "$TAG" --rawfile body "$RUNNER_TEMP/notes/notes.md" --argjson assets "$assets" \
             '{tag_name: $tag, body: $body, withdrawn: [], assets: $assets}' > latest.json
-          # latest.json is signed too: the app reads its version and the versions it withdraws
-          # from it, and takes neither from a file the release key did not sign.
-          "$signer" signer sign --app-version "$version" latest.json > /dev/null
-          base64 -d latest.json.sig > latest.json.minisig
-          minisign -Vq -P "$key" -m latest.json -x latest.json.minisig \
-            || { echo "::error::The signature of latest.json does not check out against the app's key"; exit 1; }
-          gh release create "$TAG" --draft --title "Patchwork $TAG" \
-            --notes-file ../notes.md \
-            Patchwork_amd64.AppImage Patchwork_x64.exe Patchwork_aarch64.dmg latest.json \
-            latest.json.minisig \
-            $(for name in $helpers; do echo "$name" "$name.minisig"; done)
-          gh release edit "$TAG" --draft=false --latest
+          sign latest.json
 
-  # Commits the release's version and notes to main, as "Release YY.M.N",
-  # and points the website's download links at it. The commit changes site/index.html, so the Site
-  # workflow deploys it.
-  finalize:
-    needs: [notes, publish]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    env:
-      TAG: ${{ github.ref_name }}
-      VERSION: ${{ needs.notes.outputs.version }}
-    permissions:
-      contents: write
-    steps:
-      # The ruleset on main lets only this deploy key push without a PR.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: main
-          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: notes
-          path: ${{ runner.temp }}/notes
-
-      - name: Set the version and notes on main
+      # A draft left by an earlier attempt gets every file again; a published release is left as it
+      # is. It becomes the latest only when no published release has a higher version, so an older
+      # tag that finishes after a newer one never takes over the update check or the website.
+      - name: Publish the GitHub release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          awk 'FNR == NR { section = section $0 "\n"; next }
-            !done && /^## \[/ { printf "%s", section; done = 1 } { print }' \
-            "$RUNNER_TEMP/notes/section.md" CHANGELOG.md > "$RUNNER_TEMP/changelog"
-          mv "$RUNNER_TEMP/changelog" CHANGELOG.md
-          sed -i "/^\[workspace.package\]/,/^\[/s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
-          sed -i -E "/^name = \"patchwork(-core|-system|-remote)?\"$/{n;s/^version = \".*\"/version = \"$VERSION\"/}" Cargo.lock
+          state=$(gh release view "$TAG" --json isDraft --jq .isDraft 2> /dev/null || echo none)
+          case $state in
+            false) echo "$TAG is already published, so it is left as it is."; exit 0 ;;
+            true) gh release upload "$TAG" --clobber release/* ;;
+            none) gh release create "$TAG" --draft --verify-tag --title "Patchwork $TAG" \
+                    --notes-file "$RUNNER_TEMP/notes/notes.md" release/* ;;
+          esac
+          newest=$( { echo "$TAG"; gh release list --exclude-drafts --limit 100 --json tagName --jq '.[].tagName'; } \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+          gh release edit "$TAG" --draft=false --latest="$([ "$newest" = "$TAG" ] && echo true || echo false)"
+          echo "published=true" >> "$GITHUB_OUTPUT"
 
-      - name: Point the downloads at ${{ github.ref_name }}
-        run: node site/refresh-downloads.mjs
-
-      # main can move while this job runs, so a rejected push rebases and tries again.
-      - name: Commit to main
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -q -m "Release $TAG" \
-            -- CHANGELOG.md Cargo.toml Cargo.lock site/index.html
-          for attempt in 1 2 3 4 5; do
-            git push origin HEAD:main && exit 0
-            echo "The push was turned down (attempt $attempt), so it rebases onto main."
-            git pull -q --rebase origin main
-          done
-          echo "::error::Could not push the release commit to main"
-          exit 1
-
-  # Announces the release in the Discord channel named by the DISCORD_RELEASE_WEBHOOK_URL secret.
-  # A trailing /github is dropped, since that suffix makes Discord expect GitHub's payload.
-  announce:
-    needs: publish
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions: {}
-    env:
-      TAG: ${{ github.ref_name }}
-    steps:
-      - name: Announce ${{ github.ref_name }} on Discord
+      # Posted only by the attempt that published the release, so a re-run never posts it twice. A
+      # trailing /github on the DISCORD_RELEASE_WEBHOOK_URL secret is dropped, since that suffix
+      # makes Discord expect GitHub's payload. A failed post does not fail the release.
+      - name: Announce on Discord
+        if: steps.release.outputs.published == 'true'
+        continue-on-error: true
         env:
           DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
         run: |
@@ -571,7 +524,41 @@ jobs:
             echo "::warning::DISCORD_RELEASE_WEBHOOK_URL is not set, so the release was not announced."
             exit 0
           fi
-          url="https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
+          url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG"
           jq -n --arg text "New release: Patchwork $TAG is out. $url" '{content: $text}' \
-            | curl -fsS -H 'Content-Type: application/json' --data-binary @- \
-              "${DISCORD_RELEASE_WEBHOOK_URL%/github}" >/dev/null
+            | curl -fsS --max-time 30 -H 'Content-Type: application/json' --data-binary @- \
+              "${DISCORD_RELEASE_WEBHOOK_URL%/github}" > /dev/null
+
+      # The ruleset on main lets only this deploy key push without a PR.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          path: main
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+
+      # The one commit a release makes: its version and its notes on main, as "Release YY.M.N".
+      # Skipped when main has the release's changelog section already. main can move while this
+      # runs, so a rejected push rebases and tries again.
+      - name: Commit the release to main
+        working-directory: main
+        run: |
+          if grep -qF "## [$VERSION]" CHANGELOG.md; then
+            echo "main already has $VERSION."
+            exit 0
+          fi
+          awk 'FNR == NR { section = section $0 "\n"; next }
+            !done && /^## \[/ { printf "%s", section; done = 1 } { print }' \
+            "$RUNNER_TEMP/notes/section.md" CHANGELOG.md > "$RUNNER_TEMP/changelog"
+          mv "$RUNNER_TEMP/changelog" CHANGELOG.md
+          sed -i "/^\[workspace.package\]/,/^\[/s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+          sed -i -E "/^name = \"patchwork(-core|-system|-remote)?\"$/{n;s/^version = \".*\"/version = \"$VERSION\"/}" Cargo.lock
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "Release $TAG" -- CHANGELOG.md Cargo.toml Cargo.lock
+          for attempt in 1 2 3 4 5; do
+            git push origin HEAD:main && exit 0
+            echo "The push was turned down (attempt $attempt), so it rebases onto main."
+            git pull -q --rebase origin main
+          done
+          echo "::error::Could not push the release commit to main"
+          exit 1

@@ -1,38 +1,93 @@
 # CI and deploys
 
-The GitHub Actions workflows in `.github/workflows`: what starts each one, what it caches, the
-secrets it reads, and how long it takes.
+The GitHub Actions workflows in `.github/workflows`: what starts each one, what it does when it
+fails, the caches and secrets they use, and how long they take.
 
-## The workflows
+## The pipeline
 
-| Workflow | Starts on | What it does |
+```mermaid
+flowchart LR
+  PR[Pull request] --> CI
+  Main[Push to main] --> CI
+  Main -->|changes site/| Site
+  CI["CI: check + audit"]
+  Site["Site: check, deploy to Cloudflare Pages"]
+
+  Tag[Push tag YY.M.N] --> notes
+  subgraph Release
+    notes --> linux & windows & macos
+    linux & windows & macos --> publish
+  end
+  publish -->|signed files + latest.json| GH[GitHub release, marked latest]
+  publish --> Discord
+  publish -->|"Release YY.M.N" commit| Main
+  GH -.->|releases/latest/download| Web[Website download links]
+  GH -.->|latest.json| App[App update check]
+  Release -->|"failed, no runner"| Retry["Retry: re-run the jobs that never started"]
+  Retry --> Release
+```
+
+| Workflow | Starts on | Jobs |
 | --- | --- | --- |
-| CI (`ci.yml`) | Every PR, and each push to `main` that changes more than `site/`, `docs/` or `*.md` | One job, `check`: rustfmt, clippy with `-D warnings`, `cargo test --workspace` |
+| CI (`ci.yml`) | Every PR, each push to `main` that changes more than `site/`, `docs/` or `*.md`, Mondays, by hand | `check`: rustfmt, clippy with `-D warnings`, `cargo test --workspace`. `audit`: `cargo audit` against the RustSec advisories |
 | Site (`site.yml`) | A PR or a push to `main` that changes `site/`, `.github/deploy/` or the workflow | Checks the pages; on `main`, deploys `site/` to Cloudflare Pages and checks the deployed page |
-| Release (`release.yml`), run "Release YY.M.N" | A pushed tag `YY.M.N` | Writes the notes, builds the three apps, signs and publishes them, commits the version to `main` ([Releasing](release.md)) |
-| Release (`release.yml`), run "Release build check" | By hand, daily, and a push to `main` that changes `Cargo.lock`, a `Cargo.toml` or the workflow | Builds the three apps to save their Rust caches; publishes nothing |
-| Audit (`audit.yml`) | Mondays, and a push to `main` that changes `Cargo.lock` | `cargo audit` |
+| Release (`release.yml`), run "Release YY.M.N" | A pushed tag `YY.M.N` | `notes`, then `linux`, `windows`, `macos` side by side, then `publish` ([Releasing](release.md)) |
+| Release (`release.yml`), run "Release build check" | Daily on `main`, and by hand | The three builds alone, to save their Rust caches and catch a broken release build before a tag; publishes nothing |
+| Retry (`retry.yml`) | A Release run that failed | Re-runs the run's failed jobs when none of them started, at most twice |
 
-The "Release YY.M.N" commit the Release workflow pushes to `main` changes only the version, the
-changelog and the website's download links. Site deploys it; CI, Audit and the Release build check
-skip their jobs on it, as a PR checked the code and the caches hold no version.
+## A pull request
 
-The ruleset on `main` requires a PR, squash merging, and the `check` check.
+CI runs `check` and `audit`. The ruleset on `main` requires a PR, squash merging and the `check`
+check, so `audit` reports an advisory without blocking a merge. A PR that changes the website runs
+Site's checks too. Nothing is deployed or published, and no secret is read: a PR from a fork gets
+none.
+
 GitHub offers merge queues only for repositories an organization owns, and this one belongs to a
 user account, so there is none. A PR's checks run on its merge with `main` as it was at the last
-push to the PR, and CI runs once more on `main` after the merge, though not on a release commit.
+push to the PR, and CI runs once more on `main` after the merge.
 
-## The app and the website
+## main
 
-The app and the website are delivered separately. The Release workflow builds and publishes the
-app and never deploys the website. The Site workflow deploys the website and compiles nothing; it
-shares no job, cache or artifact with the others.
+Each push to `main` runs CI again, the release commit included, since it rewrites `Cargo.lock`. A
+push that changes the website deploys it. Nothing on `main` builds the apps or publishes; only a
+tag does.
 
-The website depends on the app in one place: `site/index.html` links to the files of one release.
-The Release workflow's last job writes the new tag into those links
-(`node site/refresh-downloads.mjs`) and commits the page to `main`. That commit changes `site/`,
-so the Site workflow deploys it like any other change to the website. No Rust type, schema or
-generated file is shared.
+## A release
+
+Pushing a tag `YY.M.N` starts the Release workflow ([Releasing](release.md)):
+
+1. `notes` writes the notes and the tag's version into `Cargo.toml`, `Cargo.lock` and
+   `CHANGELOG.md`, which the builds use.
+2. `linux`, `windows` and `macos` build the apps and the five SSH host helpers.
+3. `publish` starts only when all three succeeded. It signs every file, checks each signature
+   against the key the app carries, writes and signs `latest.json`, uploads them to a draft
+   release, and publishes it, so the release is never visible with a file missing. Then it posts to
+   Discord and commits "Release YY.M.N" to `main`.
+
+The website's download links are `releases/latest/download/<file>`, which GitHub answers with the
+newest published release, and the app reads `releases/latest/download/latest.json`. Both move to a
+release the moment `publish` publishes it, and never before. A release is marked latest only when
+no published release has a higher version.
+
+## When a job fails
+
+- **A runner never came.** GitHub sometimes has no arm64 Mac free: after about 15 minutes the job
+  is cancelled with no steps run, and the run fails before anything was published. Retry sees that
+  every failed job has no steps and re-runs them, which re-runs `publish` after them. It tries twice
+  more; after that, re-run the failed jobs by hand.
+- **A build or check failed.** Retry leaves it alone, since running it again would hide a real
+  failure. Nothing was published. Fix the code and tag the fix as the next version, or re-run the
+  failed jobs if the cause was outside the code.
+- **`publish` failed.** Re-run the failed jobs. Each step is safe to run again: a draft left
+  behind gets every file uploaded again, a release already published is left as it is and not
+  announced again, and the release commit is skipped when `main` already has the release's
+  changelog section.
+- **The Discord post failed.** It does not fail the release. Post it by hand.
+- **The highlights failed.** The notes are GitHub's generated notes alone, and the run shows a
+  warning.
+
+Re-running a release's failed jobs from the Actions page is always safe. Re-running all its jobs is
+safe too, but rebuilds every app.
 
 ## Caches
 
@@ -41,8 +96,8 @@ generated file is shared.
 - Each Release build job (`linux`, `windows`, `macos`) has its own Rust cache of 1.5 to 1.8 GB,
   also saved only by runs on `main`. A tag's run reads the newest one `main` saved. GitHub keeps
   10 GB per repository and lets a tag's run read only caches saved from `main` or from that tag.
-- To refresh the Release caches after a dependency changes, run the Release workflow by hand on
-  `main` (Actions → Release → Run workflow). It builds all three apps and publishes nothing.
+- The daily build check refreshes the Release caches. To refresh them sooner after a
+  dependency changes, run the Release workflow by hand on `main` (Actions → Release → Run workflow).
 
 `gh cache list` shows what is stored. A Release build that takes twice as long as usual has
 usually found no cache: look for "No cache found" in its `Swatinem/rust-cache` step, then refresh
@@ -53,7 +108,7 @@ as above.
 | Secret | Read by | For |
 | --- | --- | --- |
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | Site | Deploying to the `patchwork-site` Pages project. Without the token the workflow fails. |
-| `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Release | Signing the release's files |
+| `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Release (`publish`) | Signing the release's files |
 | `RELEASE_DEPLOY_KEY` | Release | Pushing the release commit to `main` without a PR |
 | `ANTHROPIC_API_KEY` | Release | The highlights in the notes; without it the notes are the full list |
 | `DISCORD_RELEASE_WEBHOOK_URL` | Release | Announcing the release; without it nothing is posted |
