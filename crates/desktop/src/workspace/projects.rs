@@ -120,9 +120,15 @@ impl Workspace {
         let git = changed.branch != self.branch
             || had_changes == files.is_empty()
             || changed.paths.iter().any(|p| p.starts_with(".git/"));
+        let counted = files.len() != self.changes.len();
         self.branch = changed.branch;
         self.changes = files;
         self.changes_generation += 1;
+        // The composer's worktree status counts the same commits and files, and otherwise reads
+        // them only when a message arrives.
+        if git || counted {
+            self.reload_worktree(cx);
+        }
         let (id, root) = (changed.project_id, changed.root);
         self.changes_view
             .update(cx, |v, cx| v.refresh(Some(id), Some(root), git, cx));
