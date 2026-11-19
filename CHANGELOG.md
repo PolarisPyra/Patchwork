@@ -3,6 +3,23 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.124] - 2026-11-19
+
+**v26.11.124** · 2 changes from 1 contributor
+
+- **Reliable Mac downloads.** Every release now ships with the Mac download, since publishing waits until all three platform builds finish.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* ci(release): publish once all three platforms are built, with one release commit by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/261
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.123...26.11.124
+
+</details>
+
 ## [26.11.123] - 2026-11-19
 
 **v26.11.123** · 3 changes from 1 contributor
