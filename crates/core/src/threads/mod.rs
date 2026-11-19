@@ -15,6 +15,8 @@ pub(crate) mod title;
 mod types;
 mod worktree;
 mod worktree_cleanup;
+mod worktree_condition;
+mod worktree_settle;
 
 #[doc(inline)]
 pub use messages::{
@@ -38,4 +40,3 @@ pub use types::{AccessMode, Goal, GoalStatus, LastPlace, ResumePoint, Thread, Th
 pub(crate) use types::NOT_FOUND;
 #[doc(inline)]
 pub use worktree::{Worktree, WorktreeMark, WorktreeState};
-pub use worktree_cleanup::WorktreeSweep;

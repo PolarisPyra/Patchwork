@@ -1,5 +1,5 @@
 //! Settings → Worktrees: whether a fork gets a worktree of its own, what cleaning up keeps, and
-//! the buttons that clean task worktrees up now.
+//! the button that deletes stale task worktrees now.
 
 // Rust guideline compliant 2026-10-09
 
@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use gpui::{AnyElement, ClickEvent, Div, Role, SharedString, Stateful, div, prelude::*, px};
 use patchwork_core::settings::KeepWorktrees;
-use patchwork_core::threads::WorktreeSweep;
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{choice, section_heading, select_box, switch, token_row};
@@ -21,37 +20,36 @@ const KEEPS: [(KeepWorktrees, &str); 3] = [
     (KeepWorktrees::AnyFiles, "Any local files"),
 ];
 
-/// The cleanups the pane runs, and their rows' names.
-const SWEEPS: [(WorktreeSweep, &str); 4] = [
-    (WorktreeSweep::Merged, "Delete merged"),
-    (WorktreeSweep::Inactive, "Delete inactive"),
-    (WorktreeSweep::Archived, "Delete archived"),
-    (WorktreeSweep::Unchanged, "Delete unchanged"),
-];
-
-/// The pane's own state: the cleanup running, and what the last one did.
+/// The pane's own state: the task open behind Settings, whose worktree is never stale, whether
+/// stale worktrees are being deleted, and how many the last run deleted.
 #[derive(Default)]
 pub struct WorktreesState {
-    running: Option<WorktreeSweep>,
-    /// The last cleanup, and how many worktrees it removed.
-    done: Option<(WorktreeSweep, usize)>,
+    open: Option<String>,
+    running: bool,
+    done: Option<usize>,
 }
 
 impl SettingsDialog {
-    /// Removes the task worktrees `sweep` picks, off the main thread.
-    fn clean_up_worktrees(&mut self, sweep: WorktreeSweep, cx: &mut Context<Self>) {
-        if self.worktrees.running.is_some() {
+    /// Keeps the worktree of `thread`, the task open behind Settings, when stale ones are deleted.
+    pub fn set_open_thread(&mut self, thread: Option<String>) {
+        self.worktrees.open = thread;
+    }
+
+    /// Deletes the stale task worktrees, off the main thread.
+    fn delete_stale_worktrees(&mut self, cx: &mut Context<Self>) {
+        if self.worktrees.running {
             return;
         }
-        self.worktrees.running = Some(sweep);
+        self.worktrees.running = true;
         self.worktrees.done = None;
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { core.clean_up_worktrees(sweep) });
+        let open = self.worktrees.open.clone();
+        let task = cx.background_spawn(async move { core.delete_stale_worktrees(open.as_deref()) });
         cx.spawn(async move |this, cx| {
             let removed = task.await;
             let _ = this.update(cx, |d, cx| {
-                d.worktrees.running = None;
-                d.worktrees.done = Some((sweep, removed));
+                d.worktrees.running = false;
+                d.worktrees.done = Some(removed);
                 cx.notify();
             });
         })
@@ -81,10 +79,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             d.update(|s| s.worktrees.cleanup.with_deleted_tasks = !with_tasks, cx);
         })),
     );
-    let sweeps: Vec<_> = SWEEPS
-        .iter()
-        .map(|&(sweep, title)| sweep_row(sweep, title, &t, d, cx))
-        .collect();
+    let stale = stale_row(&t, d, cx);
     let keep = keep_row(worktrees.cleanup.keep, &t, d, cx);
     div()
         .flex()
@@ -94,50 +89,34 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .child(section_heading("Cleanup", false, &t))
         .child(deleted)
         .child(keep)
-        .children(sweeps)
+        .child(stale)
         .into_any_element()
 }
 
-/// A cleanup's row: its button, and how many worktrees it removed last.
-fn sweep_row(
-    sweep: WorktreeSweep,
-    title: &'static str,
-    t: &Theme,
-    d: &SettingsDialog,
-    cx: &mut Context<SettingsDialog>,
-) -> Stateful<Div> {
-    let state = &d.worktrees;
-    let running = state.running == Some(sweep);
-    let busy = state.running.is_some();
-    let done = state
-        .done
-        .filter(|(s, _)| *s == sweep)
-        .map(|(_, removed)| match removed {
-            0 => "None to delete".to_owned(),
-            1 => "Deleted 1".to_owned(),
-            n => format!("Deleted {n}"),
-        });
+/// The row whose button deletes stale worktrees, with how many it deleted last.
+fn stale_row(t: &Theme, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> Stateful<Div> {
+    let title = "Delete stale worktrees";
+    let running = d.worktrees.running;
+    let done = d.worktrees.done.map(|removed| match removed {
+        0 => "None to delete".to_owned(),
+        1 => "Deleted 1".to_owned(),
+        n => format!("Deleted {n}"),
+    });
     token_row(title, None, t)
         .children(done.map(|text| {
             div()
-                .id(SharedString::from(format!("worktrees-done-{title}")))
+                .id("worktrees-stale-done")
                 .role(Role::Status)
                 .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
                 .child(text)
         }))
         .child(
-            btn(
-                SharedString::from(format!("worktrees-sweep-{title}")),
-                title,
-                BtnKind::Plain,
-                busy,
-                t,
-            )
-            .child(if running { "Deleting…" } else { "Delete" })
-            .when(!busy, |b| {
-                b.on_click(cx.listener(move |d, _, _, cx| d.clean_up_worktrees(sweep, cx)))
-            }),
+            btn("worktrees-stale", title, BtnKind::Plain, running, t)
+                .child(if running { "Deleting…" } else { "Delete" })
+                .when(!running, |b| {
+                    b.on_click(cx.listener(|d, _, _, cx| d.delete_stale_worktrees(cx)))
+                }),
         )
 }
 

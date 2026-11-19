@@ -63,6 +63,31 @@ impl Snapshot {
     }
 }
 
+/// The pids of the processes whose working folder is `dir` or inside it, where the system says;
+/// None where it can't be told.
+#[must_use]
+pub fn working_in(dir: &std::path::Path) -> Option<Vec<i32>> {
+    #[cfg(target_os = "linux")]
+    {
+        let entries = std::fs::read_dir("/proc").ok()?;
+        Some(
+            entries
+                .flatten()
+                .filter_map(|e| e.file_name().to_str()?.parse::<i32>().ok())
+                .filter(|pid| {
+                    std::fs::read_link(format!("/proc/{pid}/cwd"))
+                        .is_ok_and(|cwd| cwd.starts_with(dir))
+                })
+                .collect(),
+        )
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = dir;
+        None
+    }
+}
+
 /// Process `pid` as the table has it now.
 #[must_use]
 pub fn find(pid: i32) -> Option<Process> {

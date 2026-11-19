@@ -153,8 +153,18 @@ fn run(
             notify::RecursiveMode::NonRecursive,
         );
         for refs in ["heads", "remotes", "tags"] {
-            let refs = linked.refs.join(refs);
+            let refs = linked.common.join("refs").join(refs);
             watch_or_warn(&mut watcher, &refs, notify::RecursiveMode::Recursive);
+        }
+        // Its `packed-refs`, which a `gc` or `pack-refs` moves branches into.
+        watch_or_warn(
+            &mut watcher,
+            &linked.common,
+            notify::RecursiveMode::NonRecursive,
+        );
+        let reftable = linked.common.join("reftable");
+        if reftable.is_dir() {
+            watch_or_warn(&mut watcher, &reftable, notify::RecursiveMode::NonRecursive);
         }
     }
     drop(shared);
@@ -233,36 +243,45 @@ fn run(
 struct LinkedGit {
     /// The worktree's own git folder, holding its HEAD and index.
     own: PathBuf,
-    /// The main repository's `refs` folder, which every worktree shares.
-    refs: PathBuf,
+    /// The main repository's git folder, whose refs every worktree shares.
+    common: PathBuf,
 }
 
 impl LinkedGit {
-    /// The git folders behind `root` when its `.git` is a file, as in a linked worktree.
+    /// The git folders behind `root` when its `.git` is a file, as in a linked worktree, as git
+    /// itself resolves them.
     fn find(root: &Path) -> Option<Self> {
-        let dot_git = root.join(".git");
-        if !dot_git.is_file() {
+        if !root.join(".git").is_file() {
             return None;
         }
-        let text = std::fs::read_to_string(&dot_git).ok()?;
-        let own = root.join(text.trim().strip_prefix("gitdir:")?.trim());
-        let own = own.canonicalize().ok()?;
-        let common = std::fs::read_to_string(own.join("commondir")).ok()?;
-        let common = own.join(common.trim()).canonicalize().ok()?;
-        Some(Self {
-            own,
-            refs: common.join("refs"),
-        })
+        let shown = super::run_git(
+            &root.to_string_lossy(),
+            &[
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-dir",
+                "--git-common-dir",
+            ],
+        )
+        .ok()?;
+        let mut lines = shown.lines();
+        let own = Path::new(lines.next()?).canonicalize().ok()?;
+        let common = Path::new(lines.next()?).canonicalize().ok()?;
+        Some(Self { own, common })
     }
 
     /// `path` as the same file would sit in an ordinary `.git` folder, so the filter treats it
-    /// alike: the worktree's HEAD becomes `.git/HEAD`, a branch `.git/refs/heads/<name>`.
+    /// alike: the worktree's HEAD becomes `.git/HEAD`, a branch `.git/refs/heads/<name>`, and
+    /// the shared `packed-refs` and `reftable` keep their names under `.git`.
     fn as_git_path(&self, path: &Path) -> Option<PathBuf> {
-        if let Ok(rel) = path.strip_prefix(&self.refs) {
-            return Some(Path::new(".git/refs").join(rel));
+        if let Ok(rel) = path.strip_prefix(&self.own) {
+            return Some(Path::new(".git").join(rel));
         }
-        let rel = path.strip_prefix(&self.own).ok()?;
-        Some(Path::new(".git").join(rel))
+        let rel = path.strip_prefix(&self.common).ok()?;
+        let shared = rel.starts_with("refs")
+            || rel.starts_with("reftable")
+            || rel == Path::new("packed-refs");
+        shared.then(|| Path::new(".git").join(rel))
     }
 }
 
@@ -305,7 +324,8 @@ impl Filter {
 
     /// Whether a change to `path`, which is `rel` under the root, is reported. In `.git` its top
     /// level counts, without git's index lock and watchman's cookie files, and so do its branches
-    /// and tags, which is all a push changes. Patchwork's own refs for reply snapshots don't.
+    /// and tags, which is all a push changes, and its reftable in a repository that keeps refs
+    /// there. Patchwork's own refs for reply snapshots don't.
     fn keeps(&self, path: &Path, rel: &Path) -> bool {
         let mut parts = rel.iter();
         let Some(first) = parts.next() else {
@@ -320,6 +340,9 @@ impl Filter {
                     .next()
                     .is_some_and(|kind| kind == "heads" || kind == "remotes" || kind == "tags");
                 return kept && rel.extension().is_none_or(|ext| ext != "lock");
+            }
+            if name == "reftable" {
+                return rel.extension().is_none_or(|ext| ext != "lock");
             }
             return parts.next().is_none() && name != "index.lock" && !is_cookie(name);
         }
@@ -377,7 +400,7 @@ mod linux {
     use super::{walker, watch_or_warn};
 
     /// Watches every folder of the working tree that git keeps, the top level of `.git`, and its
-    /// branches and tags.
+    /// branches, tags and reftable.
     pub(super) fn watch_project(watcher: &mut RecommendedWatcher, root: &Path) {
         watch_tree(watcher, root);
         // In a linked worktree `.git` is a file; `run` watches its git folders.
@@ -387,6 +410,11 @@ mod linux {
             for refs in ["heads", "remotes", "tags"] {
                 let refs = git_dir.join("refs").join(refs);
                 watch_or_warn(watcher, &refs, RecursiveMode::Recursive);
+            }
+            // A repository in the reftable format keeps every ref there instead.
+            let reftable = git_dir.join("reftable");
+            if reftable.is_dir() {
+                watch_or_warn(watcher, &reftable, RecursiveMode::NonRecursive);
             }
         }
     }

@@ -4,7 +4,7 @@
 
 use crate::Error;
 use std::process::{Output, Stdio};
-use std::sync::mpsc;
+use std::sync::{Mutex, PoisonError, mpsc};
 use std::time::Duration;
 
 /// How long a git command that talks to a remote may run before it is stopped.
@@ -55,6 +55,7 @@ pub(in crate::workspace) fn output_within(
     std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
     let child = cmd.spawn()?;
     let pid = child.id();
+    let _running = Running::start(pid);
     let (send, done) = mpsc::channel();
     std::thread::spawn(move || {
         let _ = send.send(child.wait_with_output());
@@ -72,6 +73,40 @@ pub(in crate::workspace) fn output_within(
             limit.as_secs()
         ),
     ))
+}
+
+/// The pids of the commands [`output_within`] is running now.
+static RUNNING: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+
+/// The pids of the git and `gh` commands Patchwork is running now, each the leader of the
+/// process group its helpers are in.
+pub(crate) fn own_commands() -> Vec<u32> {
+    RUNNING
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
+}
+
+/// A command in [`RUNNING`] until it drops.
+struct Running(u32);
+
+impl Running {
+    fn start(pid: u32) -> Self {
+        RUNNING
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(pid);
+        Self(pid)
+    }
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        RUNNING
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .retain(|pid| *pid != self.0);
+    }
 }
 
 /// The git command in `args`, past the options before it, such as `-c name=value`.

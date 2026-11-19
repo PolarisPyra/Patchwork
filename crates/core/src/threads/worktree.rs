@@ -19,6 +19,8 @@ use crate::threads::{NOT_FOUND, Role, Thread};
 use crate::workspace::{self, FileChange, landed};
 use crate::{Core, Error};
 
+use super::worktree_condition::{Condition, repaired_condition};
+
 /// A task's worktree, as stored under its `app_state` key.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,6 +70,10 @@ pub enum WorktreeMark {
     /// It has nothing the project doesn't have.
     Clean,
 }
+
+/// Why a task can't use a worktree its record names outside this Patchwork's worktrees folder,
+/// such as one a development build read from the installed app's records.
+const NOT_OURS: &str = "This task's worktree isn't in this Patchwork's worktrees folder";
 
 /// Settings that keep repository-controlled programs from running for Patchwork's own commands.
 const SAFE: [&str; 8] = [
@@ -224,23 +230,79 @@ fn undo_add(top: &str, dir: &str, branch: &str) {
 /// The main folder of the repository the worktree at `top` belongs to: the first that
 /// `git worktree list` names. None for a bare repository, or when git can't tell.
 pub(super) fn main_top(top: &str) -> Option<String> {
-    let list = git(top, &["worktree", "list", "--porcelain"]).ok()?;
-    let first = list.split("\n\n").next()?;
-    let path = first.lines().next()?.strip_prefix("worktree ")?;
-    (!first.lines().any(|l| l == "bare") && Path::new(path).is_dir()).then(|| path.to_owned())
+    let first = listed(top).ok()?.into_iter().next()?;
+    (!first.bare && Path::new(&first.path).is_dir()).then_some(first.path)
 }
 
-/// Deletes `branch` from the repository at `top` when it is there and the repository's HEAD or
-/// the remote's default branch already has all of it, even under other commits, as a
-/// squash-merged pull request leaves it. Returns whether it was deleted.
+/// One worktree as `git worktree list` names it.
+pub(super) struct Listed {
+    pub(super) path: String,
+    /// The branch checked out there, without `refs/heads/`; None when HEAD is detached.
+    pub(super) branch: Option<String>,
+    pub(super) bare: bool,
+}
+
+/// The worktrees of the repository `top` belongs to, the main one first. Read in the NUL-separated
+/// form, so a folder whose name holds a newline can't split a record.
+pub(super) fn listed(top: &str) -> Result<Vec<Listed>, Error> {
+    let list = git(top, &["worktree", "list", "--porcelain", "-z"])?;
+    Ok(list
+        .split("\0\0")
+        .filter_map(|record| {
+            let mut fields = record.split('\0');
+            let path = fields.next()?.strip_prefix("worktree ")?.to_owned();
+            let mut listed = Listed {
+                path,
+                branch: None,
+                bare: false,
+            };
+            for field in fields {
+                if field == "bare" {
+                    listed.bare = true;
+                } else if let Some(branch) = field.strip_prefix("branch refs/heads/") {
+                    listed.branch = Some(branch.to_owned());
+                }
+            }
+            Some(listed)
+        })
+        .collect())
+}
+
+/// The folder of the worktree in the repository at `top` that has `branch` checked out, if one
+/// has.
+pub(super) fn checked_out_at(top: &str, branch: &str) -> Result<Option<String>, Error> {
+    Ok(listed(top)?
+        .into_iter()
+        .find(|l| l.branch.as_deref() == Some(branch))
+        .map(|l| l.path))
+}
+
+/// Whether the worktree at `top` is locked (`git worktree lock`), which keeps git from moving or
+/// removing it, so Patchwork leaves it too.
+pub(super) fn locked(top: &str) -> bool {
+    Path::new(top).is_dir()
+        && git(
+            top,
+            &[
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-path",
+                "locked",
+            ],
+        )
+        .is_ok_and(|path| Path::new(path.trim()).exists())
+}
+
+/// Deletes `branch` from the repository at `top` when it is there and the default branch
+/// already has all of it, even under other commits, as a squash-merged pull request leaves it.
+/// Whatever branch the project's folder has checked out doesn't count. Returns whether it was
+/// deleted.
 pub(super) fn delete_if_landed(top: &str, branch: &str) -> Result<bool, Error> {
     let full = format!("refs/heads/{branch}");
     if git(top, &["rev-parse", "--verify", "-q", &full]).is_err() {
         return Ok(false);
     }
-    let landed = git(top, &["merge-base", "--is-ancestor", "--", &full, "HEAD"]).is_ok()
-        || landed(top, "HEAD", &full)
-        || workspace::base_ref(top).is_some_and(|base| landed(top, &base, &full));
+    let landed = workspace::base_ref(top).is_some_and(|base| landed(top, &base, &full));
     if !landed {
         return Ok(false);
     }
@@ -272,19 +334,52 @@ fn failed_key(thread_id: &str) -> String {
 }
 
 /// How many commits on `worktree`'s branch neither the project's branch, at `project_head`, nor
-/// the remote's default branch has. The remote is fetched first, every so often. It is none once
-/// the branch's changes are all on the remote's default branch, even under other commits, as a
-/// squash-merged pull request leaves them.
+/// the default branch has, the remote's or the local one. The remote is fetched first, every so
+/// often. It is none once the branch has landed: its changes are all on the remote's default
+/// branch, even under other commits, as a squash-merged pull request leaves them, or GitHub
+/// merged a pull request of it as it is.
 pub(super) fn unshipped(worktree: &Worktree, project_head: &str) -> Result<usize, Error> {
-    workspace::fetch_remote(&worktree.top);
-    let base = workspace::base_ref(&worktree.top);
-    let mut args = vec!["rev-list", "--count", "HEAD", "--not", project_head];
+    branch_unshipped(&worktree.top, "HEAD", &worktree.branch, project_head)
+}
+
+/// [`unshipped`] for commit `rev` of `branch`, in the repository at `repo`, which may be the
+/// project's own folder when the branch's worktree has none.
+pub(super) fn branch_unshipped(
+    repo: &str,
+    rev: &str,
+    branch: &str,
+    project_head: &str,
+) -> Result<usize, Error> {
+    workspace::fetch_remote(repo);
+    let base = workspace::base_ref(repo);
+    let local = base
+        .as_deref()
+        .and_then(|base| base.split_once('/'))
+        .map(|(_, name)| format!("refs/heads/{name}"))
+        .filter(|name| git(repo, &["rev-parse", "--verify", "-q", name]).is_ok());
+    let mut args = vec!["rev-list", "--count", rev, "--not", project_head];
     args.extend(base.as_deref());
-    let count = git(&worktree.top, &args)?.trim().parse().unwrap_or(0);
-    if count > 0 && base.is_some_and(|base| landed(&worktree.top, &base, "HEAD")) {
+    args.extend(local.as_deref());
+    let count = git(repo, &args)?.trim().parse().unwrap_or(0);
+    if count > 0 && landed_branch(repo, rev, branch, base.as_deref()) {
         return Ok(0);
     }
     Ok(count)
+}
+
+/// Whether commit `rev` of `branch` has landed on `base`, the default branch: its changes are
+/// all there, or GitHub merged a pull request of it as it is.
+pub(super) fn landed_branch(repo: &str, rev: &str, branch: &str, base: Option<&str>) -> bool {
+    base.is_some_and(|base| landed(repo, base, rev)) || workspace::pr_merged(repo, branch, rev)
+}
+
+/// The mark of a worktree whose branch has `unshipped` commits of its own.
+fn mark_for(unshipped: usize) -> WorktreeMark {
+    if unshipped > 0 {
+        WorktreeMark::Unmerged
+    } else {
+        WorktreeMark::Clean
+    }
 }
 
 /// The most changed files the check for changes already landed compares, one git call each.
@@ -400,12 +495,12 @@ impl Core {
     }
 
     /// The task the sidebar marks the worktree at `top` on: of the tasks still there that share
-    /// it, the one made first.
-    fn mark_owner(&self, top: &str) -> Option<String> {
+    /// it, the one made first, among those not archived while there are any.
+    pub(super) fn mark_owner(&self, top: &str) -> Option<String> {
         self.sharers(top)
             .into_iter()
             .filter_map(|id| self.store.thread(&id))
-            .min_by_key(|t| t.created_at)
+            .min_by_key(|t| (t.archived_at.is_some(), t.created_at))
             .map(|t| t.id)
     }
 
@@ -516,15 +611,27 @@ impl Core {
     ///
     /// # Errors
     ///
-    /// Returns an error when the task or its project is unknown.
+    /// Returns an error when the task or its project is unknown, and when the task has a
+    /// worktree that isn't there now: its work is on its branch, so the project's own folder
+    /// doesn't stand in for it, where restoring a checkpoint or discarding a file would change
+    /// the user's checkout.
     pub fn thread_root(&self, thread_id: &str) -> Result<String, Error> {
         let thread = self.store.thread(thread_id).ok_or(NOT_FOUND)?;
         let owner = thread
             .parent
             .as_ref()
             .map_or(thread_id, |p| p.thread_id.as_str());
-        if let Some(worktree) = self.thread_worktree(owner) {
-            return Ok(worktree.root);
+        if let Some(record) = self.worktree_record(owner) {
+            return if record.parked {
+                Err(
+                    "This task's worktree was cleaned up; send it a message to make it again"
+                        .into(),
+                )
+            } else if self.owns(&record) {
+                Ok(record.root)
+            } else {
+                Err(NOT_OURS.into())
+            };
         }
         match &thread.project_id {
             Some(project) => self.project_root(project),
@@ -535,26 +642,33 @@ impl Core {
     /// The folder a turn of `thread`, in the project at `path`, runs in. A subagent works where
     /// the task that started it does. A task's first turn makes its worktree when its project
     /// is a git repository on this computer, unless the project edits in place, the turn only
-    /// plans, or the task is a chat app's own chat. Anything that fails leaves it in `path`.
-    pub(crate) fn turn_root(&self, thread: &Thread, project_id: &str, path: &str) -> String {
+    /// plans, or the task is a chat app's own chat; if making it fails, that turn runs in
+    /// `path` and the task keeps why.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the task has a worktree that can't be used or made again, so the
+    /// turn doesn't start rather than edit the project's own folder.
+    pub(crate) fn turn_root(
+        &self,
+        thread: &Thread,
+        project_id: &str,
+        path: &str,
+    ) -> Result<String, Error> {
         let owner = thread
             .parent
             .as_ref()
             .map_or(thread.id.as_str(), |p| p.thread_id.as_str());
-        if let Some(worktree) = self.thread_worktree(owner) {
-            return worktree.root;
-        }
-        if let Some(parked) = self.worktree_record(owner).filter(|w| w.parked) {
-            return match self.unpark_worktree(owner, &parked) {
-                Ok(worktree) => worktree.root,
-                Err(e) => {
-                    log::warn!(error:% = e; "could not make the task's worktree again, so it works in the project: {{error}}");
-                    if let Err(e) = self.store.set_state(&failed_key(owner), &e.to_string()) {
-                        log::warn!(error:% = e; "could not keep why a task has no worktree: {{error}}");
-                    }
-                    path.to_owned()
-                }
-            };
+        // A task that has a worktree never works in the project's folder instead: its work is on
+        // its branch, and its agent would carry on editing the user's own checkout.
+        if let Some(record) = self.worktree_record(owner) {
+            let root = self.ready_worktree(owner, &record)?;
+            if self.store.state(&failed_key(owner)).is_some()
+                && let Err(e) = self.store.clear_state(&failed_key(owner))
+            {
+                log::warn!(error:% = e; "could not forget why a task had no worktree: {{error}}");
+            }
+            return Ok(root);
         }
         let first_turn = thread.session_id.is_none()
             && !thread.messages.iter().any(|m| m.role == Role::Assistant);
@@ -565,7 +679,7 @@ impl Core {
             || self.is_worktree_project(path)
             || self.is_dispatcher(&thread.id)
         {
-            return path.to_owned();
+            return Ok(path.to_owned());
         }
         match self.add_worktree(&thread.id, path) {
             Ok(Some(worktree)) => {
@@ -575,9 +689,9 @@ impl Core {
                 {
                     log::warn!(error:% = e; "could not forget why a task had no worktree: {{error}}");
                 }
-                worktree.root
+                Ok(worktree.root)
             }
-            Ok(None) => path.to_owned(),
+            Ok(None) => Ok(path.to_owned()),
             Err(e) => {
                 log::warn!(error:% = e; "could not make the task's worktree, so it works in the project: {{error}}");
                 // Kept, so the task shows it edits the project's own folder.
@@ -587,8 +701,33 @@ impl Core {
                 {
                     log::warn!(error:% = e; "could not keep why a task has no worktree: {{error}}");
                 }
-                path.to_owned()
+                Ok(path.to_owned())
             }
+        }
+    }
+
+    /// The folder a turn of task `owner`, whose worktree is `record`, works in. A worktree whose
+    /// folder is gone is made again from its branch, whether a cleanup rule, someone outside
+    /// Patchwork, or git removed it. One whose link to its repository broke, and that `git
+    /// worktree repair` can't link again, fails, and so does one Patchwork didn't make.
+    fn ready_worktree(&self, owner: &str, record: &Worktree) -> Result<String, Error> {
+        let repo = self.project_top(owner)?;
+        let made_again = |why: &str| {
+            log::warn!(branch:% = record.branch, why:%; "{{why}} the worktree on {{branch}}; making it again from its branch");
+            self.unpark_worktree(owner, record).map(|w| w.root)
+        };
+        match repaired_condition(record, &repo) {
+            Condition::Present if self.owns(record) => Ok(record.root.clone()),
+            Condition::Present => Err(NOT_OURS.into()),
+            Condition::Parked => self.unpark_worktree(owner, record).map(|w| w.root),
+            Condition::FolderDeleted => made_again("someone deleted the folder of"),
+            Condition::Unregistered => made_again("git removed"),
+            Condition::Broken => Err(format!(
+                "This task's worktree at {} is no longer linked to its repository. Move what you \
+                 need out of it and delete the folder, and the next turn makes it again",
+                record.top
+            )
+            .into()),
         }
     }
 
@@ -738,6 +877,14 @@ impl Core {
         if let Err(e) = git(&top, &["worktree", "prune"]) {
             log::warn!(error:% = e; "could not prune a project's worktrees: {{error}}");
         }
+        // Git refuses a second checkout of a branch; say where it is rather than pass that on.
+        if let Ok(Some(elsewhere)) = checked_out_at(&top, &parked.branch) {
+            return Err(format!(
+                "{} is checked out in {elsewhere}; switch that worktree to another branch first",
+                parked.branch
+            )
+            .into());
+        }
         let full = format!("refs/heads/{}", parked.branch);
         let made = if git(&top, &["rev-parse", "--verify", "-q", &full]).is_ok() {
             git(
@@ -745,6 +892,7 @@ impl Core {
                 &["worktree", "add", "--", &parked.top, &parked.branch],
             )
         } else {
+            log::warn!(branch:% = parked.branch; "the branch {{branch}} is gone; starting it again from the project's HEAD");
             let start = start_point(&top);
             git(
                 &top,
@@ -918,8 +1066,9 @@ impl Core {
     }
 
     /// What each task worktree has, by task id: work not merged yet, a branch other than its
-    /// own, or nothing at all. A worktree tasks share is marked on the first of them only. It
-    /// runs git in each worktree, so it belongs off the UI thread.
+    /// own, or nothing at all. A worktree whose folder a cleanup removed is marked by its
+    /// branch. A worktree tasks share is marked on the first of them only. It runs git in each
+    /// worktree, so it belongs off the UI thread.
     #[must_use]
     pub fn worktree_marks(&self) -> HashMap<String, WorktreeMark> {
         let mut marks = HashMap::new();
@@ -928,39 +1077,55 @@ impl Core {
             let Some(id) = stored.strip_prefix("worktree:") else {
                 continue;
             };
-            let Some(worktree) = self.thread_worktree(id) else {
+            let Some(record) = self.worktree_record(id) else {
                 continue;
             };
-            if !seen.insert(worktree.top.clone()) || !Path::new(&worktree.top).is_dir() {
+            if !seen.insert(record.top.clone()) {
                 continue;
             }
-            let Some(id) = self.mark_owner(&worktree.top) else {
+            let Some(owner) = self.mark_owner(&record.top) else {
                 continue;
             };
-            let id = id.as_str();
-            if off_branch(&worktree).is_some() {
-                marks.insert(id.to_owned(), WorktreeMark::OffBranch);
-                continue;
-            }
-            let dirty = git(&worktree.top, &["status", "--porcelain"])
-                .is_ok_and(|out| !out.trim().is_empty());
-            let ahead = || {
-                let head = git(&self.project_top(id).ok()?, &["rev-parse", "HEAD"]).ok()?;
-                Some(unshipped(&worktree, head.trim()).ok()? > 0)
+            let mark = if record.parked {
+                self.parked_mark(&owner, &record)
+            } else {
+                self.thread_worktree(id)
+                    .filter(|w| Path::new(&w.top).is_dir())
+                    .and_then(|worktree| self.live_mark(&owner, &worktree))
             };
-            if dirty {
-                marks.insert(id.to_owned(), WorktreeMark::Unmerged);
-            } else if let Some(ahead) = ahead() {
-                let mark = if ahead {
-                    WorktreeMark::Unmerged
-                } else {
-                    WorktreeMark::Clean
-                };
-                marks.insert(id.to_owned(), mark);
+            if let Some(mark) = mark {
+                marks.insert(owner, mark);
             }
         }
         self.mark_unstarted(&mut marks);
         marks
+    }
+
+    /// The mark of `worktree`, whose folder is there, as task `owner`'s.
+    fn live_mark(&self, owner: &str, worktree: &Worktree) -> Option<WorktreeMark> {
+        if off_branch(worktree).is_some() {
+            return Some(WorktreeMark::OffBranch);
+        }
+        let dirty =
+            git(&worktree.top, &["status", "--porcelain"]).is_ok_and(|out| !out.trim().is_empty());
+        if dirty {
+            return Some(WorktreeMark::Unmerged);
+        }
+        let head = git(&self.project_top(owner).ok()?, &["rev-parse", "HEAD"]).ok()?;
+        Some(mark_for(unshipped(worktree, head.trim()).ok()?))
+    }
+
+    /// The mark of `worktree`, whose folder a cleanup removed, from its branch in task `owner`'s
+    /// project. None for a project on another machine.
+    fn parked_mark(&self, owner: &str, worktree: &Worktree) -> Option<WorktreeMark> {
+        let repo = self.project_top(owner).ok()?;
+        if ssh::is_remote(&repo) {
+            return None;
+        }
+        let branch = format!("refs/heads/{}", worktree.branch);
+        let head = git(&repo, &["rev-parse", "HEAD"]).ok()?;
+        let count = branch_unshipped(&repo, &branch, &worktree.branch, head.trim()).ok()?;
+        Some(mark_for(count))
     }
 
     /// Marks clean each task whose first turn hasn't run yet and will make its worktree, so it
@@ -1003,7 +1168,7 @@ impl Core {
     }
 
     /// The top folder of the repository task `thread_id`'s project is in.
-    fn project_top(&self, thread_id: &str) -> Result<String, Error> {
+    pub(super) fn project_top(&self, thread_id: &str) -> Result<String, Error> {
         let thread = self.store.thread(thread_id).ok_or(NOT_FOUND)?;
         let project = self.project_root(thread.project_id.as_deref().ok_or(NOT_FOUND)?)?;
         Ok(git(&project, &["rev-parse", "--show-toplevel"])?
@@ -1086,18 +1251,38 @@ impl Core {
     /// or still has a background command or task it started running.
     /// A fork sharing the worktree counts as the task.
     pub(super) fn busy(&self, thread_id: &str) -> bool {
-        let sharing = self.sharing(thread_id);
-        self.store.threads().iter().any(|t| {
-            let ours = sharing.contains(&t.id)
-                || t.parent
-                    .as_ref()
-                    .is_some_and(|p| sharing.contains(&p.thread_id));
-            ours && (self.runner.is_running(&t.id)
+        self.worktree_threads(thread_id).iter().any(|t| {
+            self.runner.is_running(&t.id)
                 || self.runner.is_starting(&t.id)
                 || t.messages
                     .iter()
-                    .any(|m| m.background.iter().any(|task| task.status.is_live())))
+                    .any(|m| m.background.iter().any(|task| task.status.is_live()))
         })
+    }
+
+    /// Whether an agent is up in task `thread_id`'s worktree, replying or idle: the task's, a
+    /// sharing fork's, or one of their subagents'. A message to an idle agent goes on in the
+    /// folder it started in, so the folder stays while it is up.
+    pub(super) fn agent_up(&self, thread_id: &str) -> bool {
+        self.worktree_threads(thread_id)
+            .iter()
+            .any(|t| self.runner.has_agent(&t.id))
+    }
+
+    /// The tasks working in task `thread_id`'s worktree: it, the forks sharing the worktree, and
+    /// their subagents.
+    fn worktree_threads(&self, thread_id: &str) -> Vec<crate::threads::Thread> {
+        let sharing = self.sharing(thread_id);
+        self.store
+            .threads()
+            .into_iter()
+            .filter(|t| {
+                sharing.contains(&t.id)
+                    || t.parent
+                        .as_ref()
+                        .is_some_and(|p| sharing.contains(&p.thread_id))
+            })
+            .collect()
     }
 
     /// Holds task `thread_id`'s worktree for one step, refused with `while_busy` when the task or
@@ -1492,20 +1677,37 @@ impl Core {
             let Ok(top) = git(&project.path, &["rev-parse", "--show-toplevel"]) else {
                 continue;
             };
-            if let Err(e) = git(&project.path, &["worktree", "prune"]) {
-                log::warn!(error:% = e; "could not prune a project's worktrees: {{error}}");
+            // Once a project's folder moves, its worktrees' links still name the old place;
+            // run before `prune`, which would otherwise take those worktrees for gone.
+            if let Err(e) = git(&project.path, &["worktree", "repair"]) {
+                log::warn!(error:% = e; "could not repair a project's worktree links: {{error}}");
             }
             tops.push(top.trim().to_owned());
         }
+        // Told apart before `prune`, after which a deleted folder looks like a worktree git
+        // removed.
+        let records: Vec<(String, Worktree, Option<Condition>)> = self
+            .store
+            .state_keys("worktree:")
+            .into_iter()
+            .filter_map(|record| {
+                let stored = self.store.state(&record)?;
+                let stored = serde_json::from_str::<Worktree>(&stored).ok()?;
+                let thread_id = record.strip_prefix("worktree:").unwrap_or(&record);
+                let found = (!stored.parked && self.store.thread(thread_id).is_some())
+                    .then(|| self.project_top(thread_id).ok())
+                    .flatten()
+                    .map(|repo| repaired_condition(&stored, &repo));
+                Some((record, stored, found))
+            })
+            .collect();
+        for top in &tops {
+            if let Err(e) = git(top, &["worktree", "prune"]) {
+                log::warn!(error:% = e; "could not prune a project's worktrees: {{error}}");
+            }
+        }
         let mut recorded = Vec::new();
-        for record in self.store.state_keys("worktree:") {
-            let Some(stored) = self
-                .store
-                .state(&record)
-                .and_then(|v| serde_json::from_str::<Worktree>(&v).ok())
-            else {
-                continue;
-            };
+        for (record, stored, found) in records {
             let thread_id = record.strip_prefix("worktree:").unwrap_or(&record);
             // A cleanup rule removed its folder; its task makes it again, so the record stays.
             if stored.parked
@@ -1513,6 +1715,49 @@ impl Core {
                     || self.shared_with_others(&stored.top, thread_id))
             {
                 continue;
+            }
+            match found {
+                Some(Condition::Broken) => {
+                    log::warn!(branch:% = stored.branch; "the worktree on {{branch}} is no longer linked to its repository, and repair couldn't link it; it stays as it is");
+                }
+                // Its task's next turn makes it again from its branch.
+                Some(gone @ (Condition::FolderDeleted | Condition::Unregistered)) => {
+                    let why = if gone == Condition::FolderDeleted {
+                        "someone deleted the folder of"
+                    } else {
+                        "git removed"
+                    };
+                    // Taken before the busy check, as a turn claims its start before it makes
+                    // the worktree again; a record that changed since, or a folder that is back,
+                    // is a turn's that made it.
+                    let Ok(_step) = self.hold_worktree(thread_id) else {
+                        continue;
+                    };
+                    if self.busy(thread_id)
+                        || self.agent_up(thread_id)
+                        || self.worktree_record(thread_id).as_ref() != Some(&stored)
+                        || Path::new(&stored.top).exists()
+                    {
+                        continue;
+                    }
+                    match self.store_parked(&stored) {
+                        Ok(()) => {
+                            log::info!(branch:% = stored.branch, why:%; "{{why}} the worktree on {{branch}}; its task makes it again from its branch");
+                        }
+                        Err(e) => {
+                            log::warn!(error:% = e; "could not keep a missing worktree to make again: {{error}}");
+                        }
+                    }
+                    continue;
+                }
+                // Its project's repository can't be read now, so what became of the worktree
+                // waits for it; forgetting the record would leave the task in the project's folder.
+                None if self.store.thread(thread_id).is_some() => {
+                    if !Path::new(&stored.top).exists() {
+                        continue;
+                    }
+                }
+                Some(Condition::Present | Condition::Parked) | None => {}
             }
             if let Ok(top) = std::fs::canonicalize(&stored.top) {
                 recorded.push(top);
@@ -1537,6 +1782,7 @@ impl Core {
             }
         }
         self.sweep_unrecorded(&recorded);
+        self.settle_landed_worktrees();
     }
 
     /// Removes task `thread_id`'s worktree as the task goes. What it hadn't committed is committed
@@ -1593,7 +1839,7 @@ impl Core {
     }
 
     /// Forgets task `thread_id`'s record of its worktree.
-    fn forget_worktree(&self, thread_id: &str) {
+    pub(super) fn forget_worktree(&self, thread_id: &str) {
         if let Err(e) = self.store.clear_state(&key(thread_id)) {
             log::warn!(error:% = e; "could not forget a task's worktree: {{error}}");
         }
@@ -1613,7 +1859,7 @@ impl Core {
 
     /// Removes `worktree` of the repository whose main folder is `top`: what it hadn't committed
     /// is committed to its branch first, and the branch goes too once `top` has all of it.
-    fn drop_worktree(&self, worktree: &Worktree, top: &str) -> Result<(), Error> {
+    pub(super) fn drop_worktree(&self, worktree: &Worktree, top: &str) -> Result<(), Error> {
         self.remove_worktree_folder(worktree, top, "Work left by a deleted Patchwork task")?;
         if !delete_if_landed(top, &worktree.branch)? {
             log::info!(branch:% = worktree.branch; "kept the unmerged branch {{branch}} of a removed worktree");
@@ -1630,6 +1876,14 @@ impl Core {
             top,
             "Work left by a cleaned-up Patchwork worktree",
         )?;
+        self.store_parked(worktree)?;
+        log::info!(branch:% = worktree.branch; "removed the folder of the worktree on {{branch}}, keeping the branch");
+        Ok(())
+    }
+
+    /// Records `worktree`, whose folder is gone, as parked for every task sharing it, so the
+    /// task's next turn makes it again from its branch.
+    fn store_parked(&self, worktree: &Worktree) -> Result<(), Error> {
         let parked = Worktree {
             parked: true,
             ..worktree.clone()
@@ -1638,18 +1892,20 @@ impl Core {
         for id in self.sharers(&worktree.top) {
             self.store.set_state(&key(&id), &stored)?;
         }
-        log::info!(branch:% = worktree.branch; "removed the folder of the worktree on {{branch}}, keeping the branch");
         Ok(())
     }
 
     /// Commits what `worktree` hadn't committed, as `message`, and removes its folder and its
-    /// build folder. `top` is its repository's main folder.
+    /// build folder. A locked worktree stays as it is. `top` is its repository's main folder.
     fn remove_worktree_folder(
         &self,
         worktree: &Worktree,
         top: &str,
         message: &str,
     ) -> Result<(), Error> {
+        if locked(&worktree.top) {
+            return Err("it is locked; `git worktree unlock` it to let Patchwork remove it".into());
+        }
         Self::commit_worktree(worktree, message)?;
         let common = git(
             top,
@@ -1710,9 +1966,9 @@ impl Core {
 
     /// Removes the folders in Patchwork's worktrees folder that no task's record names, as a
     /// worktree that failed to be made or whose record was lost leaves: only a worktree on a
-    /// `patchwork/` branch with nothing uncommitted, which no project is in, and not one made in
-    /// the last hour, which may be a task's being made now. Its branch stays unless its
-    /// repository already has all of it. `recorded` holds the canonical folders records name.
+    /// `patchwork/` branch with nothing uncommitted, not locked, which no project is in, and not
+    /// one made in the last hour, which may be a task's being made now. Its branch stays unless
+    /// its repository already has all of it. `recorded` holds the canonical folders records name.
     fn sweep_unrecorded(&self, recorded: &[PathBuf]) {
         let Ok(entries) = std::fs::read_dir(&self.worktrees_dir) else {
             return;
@@ -1737,6 +1993,7 @@ impl Core {
             if !path.is_dir()
                 || recent
                 || recorded.contains(&path)
+                || locked(&path.to_string_lossy())
                 || projects.iter().any(|p| p.starts_with(&path))
             {
                 continue;

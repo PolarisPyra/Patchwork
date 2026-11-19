@@ -43,7 +43,11 @@ Everything the sidebar shows comes from one SQLite database, `patchwork.db`, in 
 
 Where a thread runs:
 
-- **Task:** directly in its project's `path`, so tasks in the same project share one working tree. "New task in a worktree" (a project's menu, or the palette) runs `git worktree add -b patchwork/<id>` into `worktrees/<repo>-<id>` under the app's local data directory and adds it as a project of its own, so its tasks work apart. Removing that project removes the worktree, refused while it has changes not committed; the branch stays.
+- **Task:** in its own git worktree, which its first turn makes with `git worktree add -b patchwork/<id>` into `worktrees/<repo>-<id>` under the app's local data directory, unless the project edits in place, isn't a git repository on this computer, or the turn only plans. The task's `app_state` key `worktree:<id>` records it; a fork and the subagents work in their task's worktree unless the settings give a fork its own. If making it fails, that turn runs in the project's `path` and the task shows why. Once a task has a worktree, it never works in the project's `path` instead: a turn whose worktree can't be used or made again doesn't start, and checkpoints and Source Control refuse while it is gone.
+  - **Parked:** cleanup removed the folder and kept the branch, by the settings' rule or because it found the folder deleted or git's record of it gone. The next turn makes it again from its branch at the same path.
+  - **Broken:** the folder is there but isn't linked to its repository, and `git worktree repair` can't link it. Nothing commits in it, removes it, or makes it again until the user moves the folder away.
+  - **Deleted task:** what it hadn't committed is committed to its branch, then the folder goes while no other task shares it, if the settings remove worktrees with deleted tasks. The branch goes only once the project, or the remote's default branch, has all of it.
+  - **Settled:** an idle, clean worktree whose branch landed on the default branch, by its changes or a merged pull request into it, has its branch moved there.
 - **Chat:** in `chats/<thread id>` under the app's local data directory (`app_local_data_dir`). The folder is deleted with the chat.
 
 Sidebar order is the `position` column. A new thread gets `-created_at`, so the newest is first until it is dragged. Dropping rows calls `reorder_threads`, which numbers that list `0..n`.

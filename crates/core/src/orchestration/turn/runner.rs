@@ -110,6 +110,16 @@ impl Runner {
             .contains_key(thread_id)
     }
 
+    /// The pids of the agent processes that are up, replying or idle.
+    pub fn agent_pids(&self) -> Vec<u32> {
+        self.turns
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .values()
+            .map(|turn| turn.pid)
+            .collect()
+    }
+
     /// The threads with a reply under way, each with what its files are judged by.
     pub(in crate::orchestration) fn attributions(&self) -> Vec<(String, SharedAttribution)> {
         let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
