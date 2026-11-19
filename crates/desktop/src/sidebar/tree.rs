@@ -210,12 +210,23 @@ pub(super) fn thread_row(
     } else {
         None
     };
-    let state: AnyElement = if needs_approval {
-        icon("shield-warning", 15.)
-            .text_color(t.warning)
+    // The spinner and shield sit in the archive button's 20px box, so hovering swaps one for the
+    // other in place.
+    let state: AnyElement = if needs_approval || busy {
+        let mark = if needs_approval {
+            icon("shield-warning", 15.)
+                .text_color(t.warning)
+                .into_any_element()
+        } else {
+            spinner(12., t.accent_text).into_any_element()
+        };
+        div()
+            .size(px(20.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(mark)
             .into_any_element()
-    } else if busy {
-        spinner(12., t.accent_text).into_any_element()
     } else {
         let at = last.map_or(th.created_at, |m| m.created_at);
         let color: Hsla = if picked { t.text_muted } else { t.text_subtle };
