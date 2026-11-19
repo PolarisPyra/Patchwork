@@ -371,6 +371,25 @@ pub struct TokenUsage {
     /// The last request's output tokens per second after its first token.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_per_second: Option<u64>,
+    /// What the tokens cost, in millionths of a US dollar: the agent's own figure where it gives
+    /// one, else each request's model priced at API rates. None when no request had a price,
+    /// and for replies saved before costs were kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_micros: Option<u64>,
+    /// The part of the tokens above that subagents and background tasks used, of every kind.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub subagent_tokens: u64,
+    /// The part of `cost_micros` those requests cost.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subagent_cost_micros: Option<u64>,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde's skip_serializing_if passes a reference"
+)]
+fn is_zero(n: &u64) -> bool {
+    *n == 0
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -79,6 +79,12 @@ impl Workspace {
             crate::settings::SettingsEvent::GenerateTheme(prompt, pick) => {
                 this.generate_theme(prompt.clone(), pick.as_ref(), cx);
             }
+            crate::settings::SettingsEvent::OpenChat(id) => {
+                this.settings_dialog = None;
+                this.open_thread(id, cx);
+                window.focus(&this.focus, cx);
+                cx.notify();
+            }
             crate::settings::SettingsEvent::RestartToUpdate => {
                 super::updates::restart_to_update(&this.core, window, cx);
             }

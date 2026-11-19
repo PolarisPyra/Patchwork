@@ -324,5 +324,16 @@ fn add(a: TokenUsage, b: TokenUsage) -> TokenUsage {
         context: a.context.max(b.context),
         first_token_ms: None,
         output_per_second: None,
+        cost_micros: sum(a.cost_micros, b.cost_micros),
+        subagent_tokens: a.subagent_tokens.saturating_add(b.subagent_tokens),
+        subagent_cost_micros: sum(a.subagent_cost_micros, b.subagent_cost_micros),
+    }
+}
+
+/// Two costs that may be missing together; missing only while both are.
+fn sum(a: Option<u64>, b: Option<u64>) -> Option<u64> {
+    match (a, b) {
+        (None, None) => None,
+        (a, b) => Some(a.unwrap_or(0).saturating_add(b.unwrap_or(0))),
     }
 }

@@ -72,6 +72,7 @@ use crate::orchestration::turn::start::Turn;
 use crate::orchestration::output::usage::message_usage;
 use crate::orchestration::output::usage::record_request;
 use crate::orchestration::output::usage::Request;
+use crate::orchestration::output::usage::TURN_OUTPUT;
 use super::approvals;
 use super::idle::{can_idle, go_idle, stays_up};
 
@@ -125,6 +126,8 @@ pub(in crate::orchestration) fn ingest(
     let mut unsaved = Unsaved::default();
     // Every model request the turn has made; each reply's usage is summed from these.
     let mut requests: Vec<Request> = Vec::new();
+    // The model a request runs on when the agent does not name it, looked up at the first one.
+    let mut fallback_model: Option<Option<String>> = None;
     // Where this turn's requests start in `requests`; the agent may answer several turns.
     let mut turn_requests = 0;
     // Claude's task list, shown as the plan of whichever reply changes it.
@@ -410,9 +413,20 @@ pub(in crate::orchestration) fn ingest(
                 Parsed::Usage(windows) => turn.core.usage.record(turn.agent, windows),
                 Parsed::RequestUsage {
                     request_id,
-                    usage,
+                    mut usage,
                     top_level,
+                    model,
                 } => {
+                    if usage.cost_micros.is_none() {
+                        let model = model.or_else(|| {
+                            fallback_model
+                                .get_or_insert_with(|| {
+                                    crate::costs::turn_model(turn.agent, turn.model.as_deref())
+                                })
+                                .clone()
+                        });
+                        usage.cost_micros = crate::costs::priced(model.as_deref(), &usage);
+                    }
                     let message_id = record_request(
                         &mut requests,
                         request_id,
@@ -433,11 +447,17 @@ pub(in crate::orchestration) fn ingest(
                         .map(|r| r.usage.output)
                         .sum();
                     if total > counted {
-                        let usage = TokenUsage {
+                        let mut usage = TokenUsage {
                             output: total - counted,
                             ..TokenUsage::default()
                         };
-                        let id = format!("turn-output-{}", requests.len());
+                        let model = fallback_model
+                            .get_or_insert_with(|| {
+                                crate::costs::turn_model(turn.agent, turn.model.as_deref())
+                            })
+                            .clone();
+                        usage.cost_micros = crate::costs::priced(model.as_deref(), &usage);
+                        let id = format!("{TURN_OUTPUT}{}", requests.len());
                         let message_id =
                             record_request(&mut requests, id, usage, false, &turn.message_id);
                         turn.publish(AgentEvent::Usage {

@@ -427,6 +427,7 @@ impl Core {
         });
         for chat in &chats {
             self.forget_thread(chat);
+            self.keep_reply_costs(chat, 0);
         }
         if let Some(root) = worktree {
             Self::remove_worktree(&root)?;

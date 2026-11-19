@@ -209,6 +209,7 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                         ..Default::default()
                     },
                     top_level: true,
+                    model: None,
                 });
             }
         }

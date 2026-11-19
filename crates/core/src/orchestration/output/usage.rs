@@ -4,6 +4,10 @@
 
 use crate::threads::TokenUsage;
 
+/// How the id of the main agent's output that its requests left uncounted starts. It is kept out
+/// of the context like a subagent's request, but it is the main agent's.
+pub(in crate::orchestration) const TURN_OUTPUT: &str = "turn-output-";
+
 /// A model request the agent made during a turn, and the tokens it used.
 pub(in crate::orchestration) struct Request {
     pub(in crate::orchestration) id: String,
@@ -26,6 +30,16 @@ pub(in crate::orchestration) fn message_usage(
         total.cache_read += r.usage.cache_read;
         total.cache_write += r.usage.cache_write;
         total.output += r.usage.output;
+        if let Some(cost) = r.usage.cost_micros {
+            total.cost_micros = Some(total.cost_micros.unwrap_or(0) + cost);
+        }
+        if !r.top_level && !r.id.starts_with(TURN_OUTPUT) {
+            let u = &r.usage;
+            total.subagent_tokens += u.input + u.cache_read + u.cache_write + u.output;
+            if let Some(cost) = u.cost_micros {
+                total.subagent_cost_micros = Some(total.subagent_cost_micros.unwrap_or(0) + cost);
+            }
+        }
         if r.top_level {
             total.context = r.usage.context;
             total.first_token_ms = r.usage.first_token_ms;

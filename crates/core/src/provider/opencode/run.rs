@@ -209,8 +209,10 @@ fn step_usage(part: &Value) -> Option<Parsed> {
             cache_write,
             output: count(&tokens["output"]) + count(&tokens["reasoning"]),
             context: input + cache_read + cache_write,
+            cost_micros: crate::costs::reported(&part["cost"]),
             ..Default::default()
         },
         top_level: true,
+        model: None,
     })
 }

@@ -285,6 +285,11 @@ impl Core {
         {
             let _ = std::fs::remove_dir_all(self.chat_dir(id));
         }
+        // What its replies cost still counts in Settings → Costs.
+        self.keep_reply_costs(id, 0);
+        for child in &children {
+            self.keep_reply_costs(&child.id, 0);
+        }
         if let Err(e) = self.store.delete_thread(id) {
             log::warn!(error:% = e; "failed to delete thread: {{error}}");
         }
@@ -306,6 +311,7 @@ impl Core {
         self.stop_turn(thread_id, false);
         self.remove_checkpoints(thread_id);
         self.remove_api_session(thread_id);
+        self.keep_reply_costs(thread_id, 0);
         self.store.clear_thread(thread_id)?;
         note(
             thread_id,

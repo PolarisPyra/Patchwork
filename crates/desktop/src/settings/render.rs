@@ -13,6 +13,7 @@ use crate::ui::{icon_button, overflows, scrollbar};
 use super::dialog::{SettingsDialog, SettingsEvent, entry_of};
 use super::chat;
 use super::controls;
+use super::costs;
 use super::extensions;
 use super::gateway;
 use super::general;
@@ -52,6 +53,7 @@ impl SettingsDialog {
             "shortcuts" => shortcuts::render(self, window, cx),
             "providers" => providers::render(self, window, cx),
             "tokens" => tokens::render(self, cx),
+            "costs" => costs::render(self, cx),
             "extensions" => extensions::render(self, window, cx),
             "mcp" => mcp::render(self, window, cx),
             "gateway" => gateway::render(self, window, cx),

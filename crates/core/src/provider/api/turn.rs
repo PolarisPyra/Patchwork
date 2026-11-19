@@ -286,8 +286,11 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
                     context: count("context"),
                     first_token_ms: v["firstTokenMs"].as_u64(),
                     output_per_second: v["outputPerSecond"].as_u64(),
+                    cost_micros: None,
+                    ..TokenUsage::default()
                 },
                 top_level: true,
+                model: None,
             }]
         }
         Some("api.compacting") => vec![Parsed::Compacting],

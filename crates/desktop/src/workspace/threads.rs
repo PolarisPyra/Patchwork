@@ -361,6 +361,12 @@ impl Workspace {
                 window.activate_window();
                 return;
             }
+            // A finished reply adds to what Costs counts.
+            AgentEvent::TurnCompleted { .. } => {
+                if let Some(dialog) = &self.settings_dialog {
+                    dialog.update(cx, crate::settings::SettingsDialog::refresh_costs);
+                }
+            }
             _ => {}
         }
         // A notice lasts until the agent's next output in that thread.
