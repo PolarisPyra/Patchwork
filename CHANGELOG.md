@@ -3,6 +3,24 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.121] - 2026-11-19
+
+**v26.11.121** · 3 changes from 1 contributor
+
+**2 bug fixes.**
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* fix(sidebar): the archive button now sits over a task's spinner by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/255
+* fix(bots): an agent's details panel starts closed by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/256
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.120...26.11.121
+
+</details>
+
 ## [26.11.120] - 2026-11-19
 
 **v26.11.120** · 4 changes from 1 contributor
