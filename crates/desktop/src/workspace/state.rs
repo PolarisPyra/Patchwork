@@ -338,7 +338,7 @@ impl Workspace {
             bots,
             bot_shown: None,
             bot_page: None,
-            bot_details: true,
+            bot_details: false,
             collapsed,
             chat_apps,
             chat_app_status,
