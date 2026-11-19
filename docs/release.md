@@ -36,11 +36,13 @@ prompt and its rules are in the workflow's "Write the highlights" step.
 
 ## Cutting one
 
-Tag the commit on `main` and push the tag:
+Tag `origin/main` with the next version and push the tag:
 
 ```sh
-git tag 26.11.66
-git push origin 26.11.66
+git fetch origin --tags
+git tag -l '26.11.*' --sort=-v:refname | head -1   # the latest, e.g. 26.11.124
+git tag 26.11.125 origin/main                      # the next N, or 26.12.0 in a new month
+git push origin 26.11.125
 ```
 
 The Release workflow (`.github/workflows/release.yml`) then:
@@ -57,6 +59,15 @@ Until step 3, nothing is published: the app's update check and the website's dow
 runner free, the Mac job is cancelled without starting, and the Retry workflow re-runs it. Any
 failed release can be re-run from the Actions page with "Re-run failed jobs"; it never publishes
 twice, announces twice or commits twice ([CI and deploys](ci.md#when-a-job-fails)).
+
+The same from a terminal:
+
+```sh
+gh run list --workflow release.yml --limit 5   # recent runs and their IDs
+gh run view <run-id> --log-failed              # the failed steps' logs
+gh run rerun <run-id> --failed                 # re-run the failed jobs
+gh workflow run release.yml --ref main         # a build check now, publishing nothing
+```
 
 The highlights use only the commit subjects and PR descriptions, so they are right when the PR is
 written. To reword the notes after publishing, edit the release on GitHub and its section in `CHANGELOG.md`;
