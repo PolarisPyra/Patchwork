@@ -3,6 +3,25 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.122] - 2026-11-19
+
+**v26.11.122** · 3 changes from 1 contributor
+
+- **Attached files read without prompts.** Files and folders you attach to a message are now read directly, with no permission prompt, in every access mode.
+- **Skills load in Auto and Full access.** Skills such as claude-api now load without a Use Skill prompt in Auto and Full access, so turns no longer stop.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* fix(chat): files and folders you attach are read without asking by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/257
+* fix(chat): skills load without asking in Auto and Full access by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/258
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.121...26.11.122
+
+</details>
+
 ## [26.11.121] - 2026-11-19
 
 **v26.11.121** · 3 changes from 1 contributor
