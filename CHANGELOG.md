@@ -3,6 +3,29 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.116] - 2026-11-19
+
+**v26.11.116** · 5 changes from 1 contributor
+
+- **Worktree recovery.** Tasks whose worktree was removed are recreated, and they no longer fall back to working in the project's own folder.
+- **Drag selection across chats.** Text selection now keeps extending through long chats when messages have scrolled out of view.
+
+### Plus 2 more bug fixes.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* fix(worktrees): missing worktrees are made again, and a task never works in its project's folder instead by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/243
+* fix(chat): the search and editor controls float over the transcript by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/244
+* fix(chat): a drag selection carries on through messages scrolled out of view by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/245
+* fix(workspace): the status bar no longer has a changes button by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/246
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.115...26.11.116
+
+</details>
+
 ## [26.11.115] - 2026-11-18
 
 **v26.11.115** · 4 changes from 1 contributor
