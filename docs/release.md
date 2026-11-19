@@ -80,7 +80,12 @@ word, so an older signed build cannot be passed off as the newest. Editing `late
 published release, to withdraw a version, means signing it again with the release key and
 replacing `latest.json.minisig` with the new signature.
 
-Run the workflow by hand (Actions → Release → Run workflow) to build all three without publishing. A push to `main` that changes `Cargo.lock`, a `Cargo.toml` or the workflow does the same, as does a scheduled run every day on `main`, so the builds save the Rust caches that tag runs restore. Each release commit changes `Cargo.lock`, so the next tag starts from fresh caches.
+Only a tag releases, and its run is named "Release YY.M.N". Every other run of the workflow is a
+"Release build check", which builds all three and publishes nothing: one started by hand (Actions →
+Release → Run workflow), by a push to `main` that changes `Cargo.lock`, a `Cargo.toml` or the
+workflow, or by the daily schedule. They save the Rust caches that tag runs restore. The release
+commit changes only the workspace's own version, which the caches do not hold, so it builds nothing
+([CI and deploys](ci.md)).
 
 ## Building the AppImage locally
 

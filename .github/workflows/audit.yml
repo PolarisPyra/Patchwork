@@ -19,6 +19,8 @@ permissions:
 
 jobs:
   audit:
+    # The "Release YY.M.N" commit changes only the workspace's own version in the lockfile.
+    if: ${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Release ') }}
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
