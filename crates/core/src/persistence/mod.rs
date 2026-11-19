@@ -3,12 +3,13 @@
 //!
 //! - `store`: the `Store` the rest of the app uses, with its in-memory cache.
 //! - `migrations`: the schema, as numbered SQL files, and the record of which have run.
-//! - `settings`, `threads`: how each table's rows map to the app's types.
+//! - `settings`, `threads`, `costs`: how each table's rows map to the app's types.
 //! - `legacy`: data from before the database, or from before it moved.
 
 // Rust guideline compliant 2026-10-09
 
 mod bots;
+mod costs;
 mod folders;
 mod legacy;
 mod migrations;

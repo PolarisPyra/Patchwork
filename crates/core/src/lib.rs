@@ -11,6 +11,7 @@ pub mod backgrounds;
 pub mod bots;
 pub mod checks;
 pub mod computer;
+pub mod costs;
 pub mod events;
 pub mod extensions;
 pub mod gateway;

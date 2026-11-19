@@ -116,9 +116,11 @@ pub(in crate::provider::opencode) fn parse_serve(
                     cache_write,
                     output: count(&tokens["output"]) + count(&tokens["reasoning"]),
                     context: input + cache_read + cache_write,
+                    cost_micros: crate::costs::reported(&data["cost"]),
                     ..Default::default()
                 },
                 top_level: true,
+                model: None,
             }]
         }
         Some("permission.asked" | "permission.v2.asked") => {

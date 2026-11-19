@@ -68,6 +68,8 @@ pub enum Parsed {
         request_id: String,
         usage: TokenUsage,
         top_level: bool,
+        /// The model the request ran on, when the agent names it.
+        model: Option<String>,
     },
     /// The output tokens the agent's whole turn made, for an agent whose per-request counts are
     /// only estimates until it ends.

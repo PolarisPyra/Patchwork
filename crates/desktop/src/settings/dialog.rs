@@ -25,6 +25,7 @@ use super::security;
 use super::shortcuts;
 use super::ssh;
 use super::themes;
+use super::costs;
 use super::tokens;
 use super::updates;
 use super::worktrees;
@@ -40,6 +41,8 @@ pub enum SettingsEvent {
     /// Start a chat with this message, whose agent writes a theme, on this agent, model and
     /// effort when they were picked.
     GenerateTheme(String, Option<patchwork_core::threads::AgentPick>),
+    /// Close Settings and open this chat.
+    OpenChat(String),
     Closed,
 }
 
@@ -136,6 +139,15 @@ pub(super) const ENTRIES: &[Entry] = &[
                 icon: "chart-bar",
             },
         ],
+    },
+    Entry {
+        label: "Costs",
+        icon: "gauge",
+        panes: &[Pane {
+            id: "costs",
+            label: "Costs",
+            icon: "gauge",
+        }],
     },
     Entry {
         label: "Extensions",
@@ -271,6 +283,7 @@ pub struct SettingsDialog {
     pub(super) scheduled: scheduled::ScheduledState,
     pub(super) security: security::SecurityState,
     pub(super) tokens: tokens::TokensState,
+    pub(super) costs: costs::CostsState,
     pub(super) updates: updates::UpdatesState,
 }
 
@@ -329,6 +342,7 @@ impl SettingsDialog {
             scheduled: scheduled::ScheduledState::default(),
             security: security::SecurityState::default(),
             tokens: tokens::TokensState::default(),
+            costs: costs::CostsState::default(),
             updates: updates::UpdatesState::default(),
         }
     }
@@ -386,6 +400,8 @@ impl SettingsDialog {
         self.menu = None;
         // A theme written since the last look shows up.
         self.themes.loaded = false;
+        // Costs add up again, counting replies since the last look.
+        self.costs.asked = false;
         self.shortcuts.recording = None;
         self.shortcuts.recording_sigil = None;
         self.scroll.set_offset(gpui::point(px(0.), px(0.)));

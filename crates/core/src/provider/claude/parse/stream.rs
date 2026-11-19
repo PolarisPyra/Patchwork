@@ -99,6 +99,10 @@ fn request_usage(message: &Value, top_level: bool) -> Option<Parsed> {
             ..Default::default()
         },
         top_level,
+        model: message["model"]
+            .as_str()
+            .filter(|m| *m != "<synthetic>")
+            .map(String::from),
     })
 }
 

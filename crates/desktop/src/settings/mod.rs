@@ -7,6 +7,7 @@
 
 pub(crate) mod controls;
 mod chat;
+mod costs;
 mod dialog;
 mod extensions;
 mod gateway;

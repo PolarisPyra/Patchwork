@@ -409,6 +409,7 @@ impl Core {
         let point = kept.map(|at| ResumePoint { at, fork: false });
         let resumes = point.is_some();
         self.set_resume_point(thread_id, point.as_ref())?;
+        self.keep_reply_costs(thread_id, start);
         self.store.update_thread(thread_id, |t| {
             t.messages.truncate(start);
             if !resumes {

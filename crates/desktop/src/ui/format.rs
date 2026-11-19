@@ -88,7 +88,7 @@ pub fn full_elapsed(ms: u64) -> String {
     }
 }
 
-/// "812", "66.4k", "612k", "1.2m".
+/// "812", "66.4k", "612k", "1.2M", "2.5B", "1.1T".
 pub fn format_tokens(n: u64) -> String {
     let trim = |s: String| s.strip_suffix(".0").map(str::to_string).unwrap_or(s);
     if n < 1000 {
@@ -97,8 +97,12 @@ pub fn format_tokens(n: u64) -> String {
         trim(format!("{:.1}", n as f64 / 1000.)) + "k"
     } else if n < 1_000_000 {
         format!("{}k", (n as f64 / 1000.).round())
+    } else if n < 999_950_000 {
+        trim(format!("{:.1}", n as f64 / 1e6)) + "M"
+    } else if n < 999_950_000_000 {
+        trim(format!("{:.1}", n as f64 / 1e9)) + "B"
     } else {
-        trim(format!("{:.1}", n as f64 / 1_000_000.)) + "m"
+        trim(format!("{:.1}", n as f64 / 1e12)) + "T"
     }
 }
 
