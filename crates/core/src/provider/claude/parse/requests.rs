@@ -72,12 +72,9 @@ pub(crate) fn claude_target(tool: &str, input: &Value, root: &str) -> Option<Tar
         "Edit" | "Write" | "MultiEdit" | "NotebookEdit" => {
             Some(Target::new(PermissionKind::Edit, path))
         }
-        // Reading outside the folder: the file's folder, or the folder searched.
-        "Read" => {
-            let path = std::path::Path::new(path?);
-            let folder = path.parent().unwrap_or(path).to_string_lossy().into_owned();
-            Some(Target::new(PermissionKind::Folder, [folder]))
-        }
+        // Reading outside the folder: the file read, which a rule for its folder covers, or the
+        // folder searched.
+        "Read" => Some(Target::new(PermissionKind::Folder, [path?])),
         "Glob" | "Grep" | "LS" => Some(Target::new(
             PermissionKind::Folder,
             [input["path"].as_str().unwrap_or(root)],

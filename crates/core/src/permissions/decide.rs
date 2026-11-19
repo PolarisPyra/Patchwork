@@ -347,7 +347,7 @@ pub fn suggest(target: &Target, root: &Path) -> Vec<String> {
                 let path = folder_of(root, resource);
                 if path.starts_with(root) {
                     add(".".into());
-                } else if target.kind == PermissionKind::Folder {
+                } else if target.kind == PermissionKind::Folder && !path.is_file() {
                     add(shown(&path));
                 } else {
                     add(shown(path.parent().unwrap_or(&path)));
