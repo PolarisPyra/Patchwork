@@ -13,7 +13,7 @@ use crate::events::AgentEvent;
 use crate::Core;
 use crate::permissions::{self, Decision, RuleRef, Target};
 use crate::provider;
-use crate::threads::{ApprovalStatus, Question};
+use crate::threads::{ApprovalStatus, Question, Thread};
 
 /// The user's answer to an approval request: whether it was allowed, any answers to questions,
 /// and the rule the user saved with it.
@@ -32,14 +32,14 @@ pub(in crate::orchestration) fn decide(
     root: &str,
     target: &Target,
 ) -> Option<Decision> {
-    let project = core.store.thread(thread_id).and_then(|t| t.project_id);
+    let thread = core.store.thread(thread_id);
     let settings = core.store.settings();
     permissions::decide(
         &settings.permissions,
-        project.as_deref(),
+        thread.as_ref().and_then(|t| t.project_id.as_deref()),
         std::path::Path::new(root),
         target,
-        &readable(core, thread_id, &settings),
+        &readable(core, thread_id, thread.as_ref(), &settings),
     )
 }
 
@@ -52,26 +52,34 @@ pub(in crate::orchestration) fn unasked(
     target: &Target,
     asks: bool,
 ) -> permissions::Unasked {
-    let project = core.store.thread(thread_id).and_then(|t| t.project_id);
+    let thread = core.store.thread(thread_id);
     let settings = core.store.settings();
     permissions::unasked(
         &settings.permissions,
-        project.as_deref(),
+        thread.as_ref().and_then(|t| t.project_id.as_deref()),
         std::path::Path::new(root),
         target,
-        &readable(core, thread_id, &settings),
+        &readable(core, thread_id, thread.as_ref(), &settings),
         asks,
     )
 }
 
-/// The folders thread `thread_id`'s agent reads without asking: the skills, and for a bot's run
-/// the files the bot knows.
+/// The folders thread `thread_id`'s agent reads without asking: the skills, every file and
+/// folder the user attached in the thread, and for a bot's run the files the bot knows.
 fn readable(
     core: &Core,
     thread_id: &str,
+    thread: Option<&Thread>,
     settings: &crate::settings::Settings,
 ) -> Vec<std::path::PathBuf> {
     let mut folders = crate::extensions::skills::folders(settings);
+    folders.extend(
+        thread
+            .iter()
+            .flat_map(|t| &t.messages)
+            .flat_map(|m| &m.attachments)
+            .map(|a| std::path::PathBuf::from(&a.path)),
+    );
     folders.extend(core.run_knowledge_dir(thread_id));
     folders
 }

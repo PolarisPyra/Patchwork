@@ -360,7 +360,7 @@ mod claude_tests {
         let read = json!({"tool_name": "Read", "tool_input": {"file_path": "/etc/hosts"}});
         let (_, _, target) = claude_call(&read, "/w").expect("a read is a request");
         assert_eq!(target.kind, PermissionKind::Folder);
-        assert_eq!(target.resources, ["/etc"]);
+        assert_eq!(target.resources, ["/etc/hosts"]);
 
         let mcp = json!({"tool_name": "mcp__github__search", "tool_input": {"q": "x"}});
         let (title, _, target) = claude_call(&mcp, "/w").expect("an MCP call is a request");
