@@ -193,7 +193,7 @@ impl Workspace {
     }
 
     /// Reads the open task's worktree again, whatever was read before.
-    fn reload_worktree(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn reload_worktree(&mut self, cx: &mut Context<Self>) {
         if let Some(strip) = self.worktree.as_mut() {
             strip.key.1 = usize::MAX;
         }
