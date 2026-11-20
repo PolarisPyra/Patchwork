@@ -3,6 +3,23 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.127] - 2026-11-20
+
+**v26.11.127** · 2 changes from 1 contributor
+
+- **Stable provider colours on Costs.** Each provider keeps one fixed colour across Costs charts, legends and rows, so Claude stays orange, Codex white and API blue.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* feat(settings): Costs shows Claude in orange, Codex in white and API in blue by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/264
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.126...26.11.127
+
+</details>
+
 ## [26.11.126] - 2026-11-20
 
 **v26.11.126** · 2 changes from 1 contributor
