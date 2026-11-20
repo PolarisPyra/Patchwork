@@ -4,8 +4,9 @@
 
 use gpui::{
     AnyElement, Div, ElementId, FontWeight, Hsla, Role, SharedString, Stateful, Toggled, div,
-    prelude::*, px,
+    prelude::*, px, rgb,
 };
+use patchwork_core::provider::AgentKind;
 use patchwork_core::costs::{ChatCost, CostFilter, ProviderCost, Tally};
 
 use crate::settings::SettingsDialog;
@@ -213,17 +214,16 @@ pub(super) fn row(id: usize, name: String, tally: &Tally, whole: &Tally, t: &The
         .into_any_element()
 }
 
-/// The colour of the `ix`th provider of the report, in the chart, its legend and its row.
-pub(super) fn series(ix: usize, t: &Theme) -> Hsla {
-    [
-        t.accent,
-        t.syn_string,
-        t.syn_keyword,
-        t.syn_number,
-        t.syn_type,
-        t.syn_function,
-        t.warning,
-    ][ix % 7]
+/// A provider's colour in the charts, their legends and its row: Claude orange, Codex the text
+/// colour (white on a dark theme), the API providers blue.
+pub(super) fn series(agent: AgentKind, t: &Theme) -> Hsla {
+    match agent {
+        AgentKind::Claude => rgb(0x00d9_7757).into(),
+        AgentKind::Codex => t.text,
+        AgentKind::Api => rgb(0x004c_8df6).into(),
+        AgentKind::Antigravity => t.syn_string,
+        AgentKind::OpenCode => t.syn_keyword,
+    }
 }
 
 /// `$0.12/reply · 45.2k tokens/reply`.
@@ -340,7 +340,7 @@ pub(super) fn provider_row(
                 .child(agent_logo(p.agent, None, 16.))
                 .child(line(name, &p.in_range, t).flex_1().min_w_0()),
         )
-        .child(share_bar(share(&p.in_range, whole), series(ix, t), t))
+        .child(share_bar(share(&p.in_range, whole), series(p.agent, t), t))
         .child(detail(each, t))
         .child(detail(periods, t))
         .into_any_element()

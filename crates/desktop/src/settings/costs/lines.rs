@@ -42,9 +42,8 @@ pub(super) fn lines(report: &CostReport, by_cost: bool, t: &Theme) -> Option<Any
     let series_of: Vec<(Vec<f64>, Hsla)> = report
         .providers
         .iter()
-        .enumerate()
         .rev()
-        .map(|(ix, p)| {
+        .map(|p| {
             let values = report
                 .buckets
                 .iter()
@@ -55,7 +54,7 @@ pub(super) fn lines(report: &CostReport, by_cost: bool, t: &Theme) -> Option<Any
                         .map_or(0., |(_, tally)| value(tally, by_cost))
                 })
                 .collect();
-            (values, series(ix, t))
+            (values, series(p.agent, t))
         })
         .collect();
     let top = scale_top(
