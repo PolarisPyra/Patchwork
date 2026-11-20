@@ -2,12 +2,12 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::sync::Mutex;
-use std::sync::PoisonError;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -15,7 +15,7 @@ use crate::provider;
 use crate::events::AgentEvent;
 use crate::events::AgentEventEnvelope;
 use crate::provider::AgentKind;
-use crate::threads::MessageStatus;
+use crate::threads::{Message, MessageStatus};
 use crate::system::new_id;
 use crate::system::now_ms;
 use crate::threads::Role;
@@ -44,7 +44,7 @@ impl Runner {
         subagents: &[String],
     ) {
         let (stdin, controls) = {
-            let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+            let turns = self.turns.locked();
             let Some(turn) = turns.get(thread_id) else {
                 return;
             };
@@ -58,19 +58,13 @@ impl Runner {
             .filter_map(|tool_id| {
                 let request_id = new_id();
                 let (sent, answer) = mpsc::channel();
-                controls
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .insert(request_id.clone(), sent);
+                controls.locked().insert(request_id.clone(), sent);
                 let line = provider::claude::background_task(tool_id, &request_id);
                 if write_line(&stdin, &line) {
                     return Some(answer);
                 }
                 // Nothing will answer a request that was never written.
-                controls
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .remove(&request_id);
+                controls.locked().remove(&request_id);
                 None
             })
             .collect();
@@ -96,14 +90,16 @@ pub(in crate::orchestration) fn open_child(turn: &Turn, tool: &ToolCall) -> Opti
     let sub = tool.subagent.as_ref()?;
     let parent = turn.core.store.thread(&turn.thread_id)?;
     let created_at = now_ms();
-    let mut asked = assistant_message();
-    asked.role = Role::User;
-    asked.text = sub
-        .prompt
-        .clone()
-        .unwrap_or_else(|| sub.description.clone());
-    asked.status = MessageStatus::Complete;
-    asked.finished_at = Some(created_at);
+    let asked = Message {
+        finished_at: Some(created_at),
+        ..Message::new(
+            Role::User,
+            sub.prompt
+                .clone()
+                .unwrap_or_else(|| sub.description.clone()),
+            MessageStatus::Complete,
+        )
+    };
     let reply = assistant_message();
     let message_id = reply.id.clone();
     let title = [&sub.description, &sub.kind]
@@ -112,34 +108,16 @@ pub(in crate::orchestration) fn open_child(turn: &Turn, tool: &ToolCall) -> Opti
         .cloned()
         .unwrap_or_else(|| "Subagent".into());
     let thread = Thread {
-        id: new_id(),
         project_id: parent.project_id,
-        title,
-        agent: parent.agent,
         model: sub.model.clone().or(parent.model),
-        access_mode: parent.access_mode,
-        effort: None,
-        compact_window: None,
         background: parent.background,
-        session_id: None,
         created_at,
         messages: vec![Arc::new(asked), Arc::new(reply)],
-        goal: None,
-        position: 0,
-        folder_id: None,
-        archived_at: None,
         parent: Some(ThreadParent {
             thread_id: turn.thread_id.clone(),
             tool_id: tool.id.clone(),
         }),
-        slash_commands: vec![],
-        imported_from: None,
-        context_pending: false,
-        role: None,
-        role_pending: false,
-        favorite: false,
-        pinned: false,
-        bot_id: None,
+        ..Thread::new(title, parent.agent, parent.access_mode)
     };
     if let Err(e) = turn.core.store.insert_threads(vec![thread.clone()]) {
         log::warn!(error:% = e; "failed to save a subagent's thread: {{error}}");

@@ -9,7 +9,7 @@
 
 use crate::Error;
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde_json::Value;
 
@@ -21,12 +21,6 @@ use crate::provider::{AgentKind, ClaudeFeature, ClaudeInfo, ClaudeModel};
 #[must_use]
 pub fn binary() -> Option<PathBuf> {
     located_or(AgentKind::Claude, || find_binary("claude"))
-}
-
-/// The CLI's version line, e.g. `2.1.310 (Claude Code)`.
-fn version(binary: &Path) -> Result<String, Error> {
-    let text = cli_info::run(binary, &["--version"])?;
-    Ok(text.lines().next().unwrap_or_default().trim().to_string())
 }
 
 /// Longest a gate's value may be on its line in the pane.
@@ -188,7 +182,7 @@ fn parse_model(model: &Value) -> Option<ClaudeModel> {
 pub fn info() -> Result<ClaudeInfo, Error> {
     let path = binary().ok_or("Claude Code is not installed")?;
     Ok(ClaudeInfo {
-        version: version(&path).unwrap_or_else(|_| "unknown".into()),
+        version: cli_info::version(&path),
         path: path.to_string_lossy().into_owned(),
         features: features().unwrap_or_default(),
         models: models(),

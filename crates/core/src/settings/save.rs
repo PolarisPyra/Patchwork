@@ -2,6 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::sync::Arc;
 
 use super::seal::sealed;
@@ -22,10 +23,7 @@ impl Core {
         self: &Arc<Self>,
         on_change: impl Fn(Vec<skills::Skill>) + Send + 'static,
     ) -> Result<(), Error> {
-        let mut current = self
-            .skills_watch
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut current = self.skills_watch.locked();
         *current = None;
         // The watcher lives in the core, so it holds the core weakly.
         let core = Arc::downgrade(self);
@@ -39,10 +37,7 @@ impl Core {
     }
 
     pub fn unwatch_skills(&self) {
-        *self
-            .skills_watch
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        *self.skills_watch.locked() = None;
     }
 
     /// The settings as they are now.

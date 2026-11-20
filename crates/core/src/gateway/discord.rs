@@ -3,8 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::sync::atomic::Ordering;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
@@ -162,8 +163,7 @@ impl Discord {
         match payload["t"].as_str() {
             Some("READY") => {
                 let user = &data["user"];
-                *self.me.lock().unwrap_or_else(PoisonError::into_inner) =
-                    user["id"].as_str().unwrap_or_default().to_string();
+                *self.me.locked() = user["id"].as_str().unwrap_or_default().to_string();
                 (to.connected)(user["username"].as_str().unwrap_or("bot").to_string());
                 if let Some(app) = data["application"]["id"].as_str() {
                     self.register_commands(app);
@@ -189,11 +189,7 @@ impl Discord {
         if author["bot"].as_bool() == Some(true) {
             return None;
         }
-        let me = self
-            .me
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone();
+        let me = self.me.locked().clone();
         let mut text = data["content"].as_str().unwrap_or_default().to_string();
         // In a server, the bot answers only when it is mentioned.
         if data.get("guild_id").is_some_and(|g| !g.is_null()) {
@@ -391,11 +387,7 @@ impl Connector for Discord {
 
     fn clear(&self, chat: &str) -> Result<bool, Error> {
         let channel = self.call("GET", &format!("/channels/{chat}"), None)?;
-        let me = self
-            .me
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone();
+        let me = self.me.locked().clone();
         // Elsewhere the bot may delete other people's messages only with Manage Messages, which
         // the first refusal shows it lacks.
         let mut own_only = channel["type"].as_u64() == Some(DIRECT);

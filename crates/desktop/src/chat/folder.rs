@@ -74,33 +74,33 @@ impl Workspace {
         let Some(id) = self.project().map(|p| p.id.clone()) else {
             return;
         };
-        let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
-            files: false,
-            directories: true,
-            multiple: false,
-            prompt: None,
-        });
         let core = Arc::clone(&self.core);
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = picked.await else {
-                return;
-            };
-            let Some(path) = paths.first().map(|p| p.to_string_lossy().into_owned()) else {
-                return;
-            };
-            let moved = cx
-                .background_spawn(async move { core.relocate_project(&id, &path) })
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                if let Err(e) = moved {
-                    this.error = Some(e.to_string());
-                }
-                this.settings = this.core.settings();
-                this.folder_check = None;
-                this.reload(cx);
-            });
-        })
-        .detach();
+        crate::ui::pick_paths(
+            cx,
+            gpui::PathPromptOptions {
+                files: false,
+                directories: true,
+                multiple: false,
+                prompt: None,
+            },
+            move |_, paths, cx| {
+                let Some(path) = paths.first().map(|p| p.to_string_lossy().into_owned()) else {
+                    return;
+                };
+                crate::ui::off_thread(
+                    cx,
+                    move || core.relocate_project(&id, &path),
+                    move |this, moved, cx| {
+                        if let Err(e) = moved {
+                            this.error = Some(e.to_string());
+                        }
+                        this.settings = this.core.settings();
+                        this.folder_check = None;
+                        this.reload(cx);
+                    },
+                );
+            },
+        );
     }
 }
 

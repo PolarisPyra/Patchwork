@@ -3,10 +3,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError, Weak};
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::{Duration, Instant};
 
 use super::notify::Notice;
@@ -124,7 +125,7 @@ pub(super) struct Link {
 
 impl Hub {
     pub(super) fn lock(&self) -> MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        self.state.locked()
     }
 
     /// The connection to `platform`, while it runs.
@@ -154,14 +155,11 @@ impl Hub {
 
     /// Whether the thread that sends events out was started.
     pub(super) fn forwarding(&self) -> bool {
-        self.events
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .is_some()
+        self.events.locked().is_some()
     }
 
     pub(super) fn set_forwarder(&self, sender: Sender<Out>) {
-        *self.events.lock().unwrap_or_else(PoisonError::into_inner) = Some(sender);
+        *self.events.locked() = Some(sender);
     }
 
     /// Passes on an event a chat app may need to hear about.
@@ -201,12 +199,7 @@ impl Hub {
     }
 
     fn send(&self, out: Out) {
-        if let Some(sender) = self
-            .events
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .as_ref()
-        {
+        if let Some(sender) = self.events.locked().as_ref() {
             // The forwarding thread only ends with the server, so a failed send has no reader.
             let _ = sender.send(out);
         }

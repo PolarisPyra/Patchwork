@@ -184,10 +184,7 @@ impl Canvas {
         };
         let state = if conflicted {
             div().text_color(t.text_muted).child(if unsettled {
-                change
-                    .conflict
-                    .clone()
-                    .unwrap_or_else(|| "In conflict".into())
+                change.conflict.unwrap_or_else(|| "In conflict".into())
             } else {
                 "Conflicts settled".into()
             })

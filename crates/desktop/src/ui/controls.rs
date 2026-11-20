@@ -7,8 +7,8 @@ use std::sync::OnceLock;
 use std::time::Instant;
 use gpui::{
     Anchor, App, BoxShadow, Div, ElementId, FontWeight, Hsla, IntoElement, PathBuilder, Role,
-    SharedString, Stateful, StyleRefinement, Toggled, Window, anchored, canvas, deferred, div,
-    point, prelude::*, px,
+    SharedString, Stateful, StyleRefinement, Window, anchored, canvas, deferred, div, point,
+    prelude::*, px,
 };
 use crate::ui::theme::{fs_md, fs_sm, radius, radius_sm, Theme, theme};
 
@@ -252,11 +252,7 @@ pub fn menu_item(
         .id(id)
         .role(Role::MenuItemRadio)
         .aria_label(label)
-        .aria_toggled(if checked {
-            Toggled::True
-        } else {
-            Toggled::False
-        })
+        .aria_toggled(checked.into())
         .cursor_pointer()
         .flex()
         .items_center()
@@ -284,11 +280,7 @@ pub fn checkbox(
         .id(id)
         .role(Role::CheckBox)
         .aria_label(label.clone())
-        .aria_toggled(if checked {
-            Toggled::True
-        } else {
-            Toggled::False
-        })
+        .aria_toggled(checked.into())
         .tab_index(0)
         .focus_visible(focus_ring)
         .cursor_pointer()

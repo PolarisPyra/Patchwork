@@ -10,13 +10,14 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::Locked;
 use std::ffi::OsString;
 use std::io::Read;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 /// Set on a process Patchwork starts with the environment already read, such as its own agent,
@@ -200,16 +201,14 @@ fn probe(shell: &str, flags: &[&str]) -> Option<Vec<(String, String)>> {
                 if n == 0 {
                     break;
                 }
-                out.lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .extend_from_slice(&chunk[..n]);
+                out.locked().extend_from_slice(&chunk[..n]);
             }
         })
     };
     // Read once the closing marker is in: what a startup file started in the background can hold
     // the pipe open long after, and a logout file still runs as the shell exits.
     let printed = || {
-        let out = out.lock().unwrap_or_else(PoisonError::into_inner);
+        let out = out.locked();
         out.windows(marker.len())
             .filter(|w| *w == marker.as_bytes())
             .count()
@@ -255,7 +254,7 @@ fn probe(shell: &str, flags: &[&str]) -> Option<Vec<(String, String)>> {
             return None;
         }
     }
-    let out = std::mem::take(&mut *out.lock().unwrap_or_else(PoisonError::into_inner));
+    let out = std::mem::take(&mut *out.locked());
     parse(&String::from_utf8_lossy(&out), &marker)
 }
 

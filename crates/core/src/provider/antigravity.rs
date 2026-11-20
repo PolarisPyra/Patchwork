@@ -69,14 +69,7 @@ pub fn models() -> Vec<ModelOption> {
         .stdout
         .lines()
         .filter_map(|line| line.split_once('\t'))
-        .map(|(id, name)| ModelOption {
-            id: Some(id.trim().into()),
-            label: name.trim().into(),
-            default_model: None,
-            is_legacy: false,
-            efforts: None,
-            context_window: None,
-        })
+        .map(|(id, name)| ModelOption::listed(id.trim(), name.trim()))
         .collect()
 }
 
@@ -94,10 +87,7 @@ const INFO_COMMANDS: &[InfoCommand] = &[
 /// Returns an error when the Antigravity CLI is not installed.
 pub fn info() -> Result<CliInfo, Error> {
     let path = antigravity_bin().ok_or("The Antigravity CLI is not installed")?;
-    let version = cli_info::run(&path, &["--version"]).map_or_else(
-        |_| "unknown".into(),
-        |text| text.lines().next().unwrap_or_default().trim().to_string(),
-    );
+    let version = cli_info::version(&path);
     Ok(CliInfo {
         path: path.to_string_lossy().into_owned(),
         version,
@@ -175,16 +165,7 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
                     (None, Some(command)) => one_line(command),
                     (None, None) => summarize(params, spec.root),
                 };
-                out.push(tool_started(
-                    message_id,
-                    ToolStart {
-                        id: &id,
-                        name,
-                        summary,
-                        subagent: None,
-                        parent: None,
-                    },
-                ));
+                out.push(tool_started(message_id, ToolStart::new(&id, name, summary)));
                 if step["state"] == "DONE" {
                     let failed = tool["error"].as_str().is_some_and(|e| !e.is_empty());
                     let output = tool["output"].as_str().unwrap_or_default();

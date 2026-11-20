@@ -39,42 +39,35 @@ impl DevicesView {
         self.run += 1;
         let run = self.run;
         self.devices = None;
-        let task = cx.background_spawn(async move { browse::machines() });
-        cx.spawn(async move |this, cx| {
-            let machines = task.await;
-            this.update(cx, |this, cx| {
-                if this.run != run {
-                    return;
-                }
-                for (i, machine) in machines.iter().enumerate() {
-                    let machine = machine.clone();
-                    let task = cx.background_spawn(async move {
-                        if fresh {
-                            device::forget(&machine);
+        crate::ui::off_thread(cx, browse::machines, move |this, machines, cx| {
+            if this.run != run {
+                return;
+            }
+            for (i, machine) in machines.iter().enumerate() {
+                let machine = machine.clone();
+                let task = cx.background_spawn(async move {
+                    if fresh {
+                        device::forget(&machine);
+                    }
+                    device::kind(&machine)
+                });
+                cx.spawn(async move |this, cx| {
+                    let kind = task.await;
+                    this.update(cx, |this, cx| {
+                        if this.run != run {
+                            return;
                         }
-                        device::kind(&machine)
-                    });
-                    cx.spawn(async move |this, cx| {
-                        let kind = task.await;
-                        this.update(cx, |this, cx| {
-                            if this.run != run {
-                                return;
-                            }
-                            if let Some((_, slot)) =
-                                this.devices.as_mut().and_then(|d| d.get_mut(i))
-                            {
-                                *slot = Some(kind);
-                                cx.notify();
-                            }
-                        })
+                        if let Some((_, slot)) = this.devices.as_mut().and_then(|d| d.get_mut(i)) {
+                            *slot = Some(kind);
+                            cx.notify();
+                        }
                     })
-                    .detach();
-                }
-                this.devices = Some(machines.into_iter().map(|m| (m, None)).collect());
-                cx.notify();
-            })
-        })
-        .detach();
+                })
+                .detach();
+            }
+            this.devices = Some(machines.into_iter().map(|m| (m, None)).collect());
+            cx.notify();
+        });
         cx.notify();
     }
 

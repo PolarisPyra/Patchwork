@@ -7,11 +7,12 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use super::device::adb;
@@ -76,13 +77,9 @@ struct Shared {
     closed: AtomicBool,
 }
 
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
 impl Shared {
     fn push(&self, line: LogLine) {
-        let mut lines = lock(&self.lines);
+        let mut lines = self.lines.locked();
         if lines.kept.len() == KEPT {
             lines.kept.pop_front();
         }
@@ -96,7 +93,7 @@ impl Shared {
     }
 
     fn end_child(&self) {
-        if let Some(mut child) = lock(&self.child).take() {
+        if let Some(mut child) = self.child.locked().take() {
             let _ = child.kill();
             let _ = child.wait();
         }
@@ -113,7 +110,7 @@ impl Shared {
             .stderr(Stdio::null());
         let mut child = cmd.spawn()?;
         let stdout = child.stdout.take();
-        *lock(&self.child) = Some(child);
+        *self.child.locked() = Some(child);
         // The log may have been closed while adb started.
         if self.closed.load(Ordering::Relaxed) {
             self.end_child();
@@ -150,14 +147,14 @@ impl Logcat {
     /// The lines kept and their revision, when they changed since the revision `seen`.
     #[must_use]
     pub fn lines(&self, seen: Option<u64>) -> Option<(Vec<LogLine>, u64)> {
-        let lines = lock(&self.shared.lines);
+        let lines = self.shared.lines.locked();
         (seen != Some(lines.revision))
             .then(|| (lines.kept.iter().cloned().collect(), lines.revision))
     }
 
     /// Forgets the lines read so far.
     pub fn clear(&self) {
-        let mut lines = lock(&self.shared.lines);
+        let mut lines = self.shared.lines.locked();
         lines.kept.clear();
         lines.revision += 1;
     }

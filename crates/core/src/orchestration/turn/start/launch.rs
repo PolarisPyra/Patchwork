@@ -3,6 +3,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use super::claim::Starting;
 use super::running::{NativeTurn, Pending, RunningTurn, TurnRequest};
@@ -16,7 +17,6 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::Mutex;
-use std::sync::PoisonError;
 
 use crate::orchestration::changes::attribution::Attribution;
 use crate::extensions::hooks::HookEvent;
@@ -533,30 +533,27 @@ impl Runner {
             hooks,
             dispatcher,
         };
-        self.turns
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(
-                thread_id,
-                RunningTurn {
-                    pid: child.id(),
-                    cancelled,
-                    interrupts,
-                    exited,
-                    scope: turn.scope.clone(),
-                    agent,
-                    stdin,
-                    pending,
-                    native: native_turn,
-                    steers,
-                    queue,
-                    controls,
-                    idle,
-                    stale: AtomicBool::new(false),
-                    root: turn.root.clone(),
-                    attribution,
-                },
-            );
+        self.turns.locked().insert(
+            thread_id,
+            RunningTurn {
+                pid: child.id(),
+                cancelled,
+                interrupts,
+                exited,
+                scope: turn.scope.clone(),
+                agent,
+                stdin,
+                pending,
+                native: native_turn,
+                steers,
+                queue,
+                controls,
+                idle,
+                stale: AtomicBool::new(false),
+                root: turn.root.clone(),
+                attribution,
+            },
+        );
         crate::orchestration::turn::recovery::note_agent(
             &core.store,
             &turn.thread_id,
@@ -564,12 +561,7 @@ impl Runner {
             turn.scope.as_deref(),
         );
         // Stopped while it was starting, as by Stop or archiving the chat: it stops now it can.
-        if self
-            .stop_starting
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .remove(&turn.thread_id)
-        {
+        if self.stop_starting.locked().remove(&turn.thread_id) {
             self.cancel(&turn.thread_id);
         }
         turn.publish(AgentEvent::MessageStarted { message });

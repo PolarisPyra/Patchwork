@@ -8,11 +8,12 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::Locked;
 use crate::Error;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
@@ -64,7 +65,7 @@ fn file() -> PathBuf {
 
 /// Runs `f` on the remembered hosts, and writes them to [`file`] when it returns true.
 fn known<T>(f: impl FnOnce(&mut HashMap<String, Known>) -> (T, bool)) -> T {
-    let mut guard = KNOWN.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut guard = KNOWN.locked();
     let hosts = guard.get_or_insert_with(|| {
         std::fs::read(file())
             .ok()

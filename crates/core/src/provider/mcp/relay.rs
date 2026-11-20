@@ -2,13 +2,14 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use serde_json::{Value, json};
 
@@ -297,7 +298,7 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
     let thread = hello["thread"].as_str().map(str::to_string);
     let out = Arc::new(Mutex::new(stream));
     let reply = move |out: &Mutex<std::net::TcpStream>, v: Value| {
-        let mut out = out.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut out = out.locked();
         let _ = writeln!(out, "{v}");
         let _ = out.flush();
     };
@@ -312,27 +313,18 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
     let listener = LISTENERS.fetch_add(1, Ordering::Relaxed);
     if let Some(entry) = &listening {
         let (tx, rx) = mpsc::channel::<Value>();
-        entry
-            .notices
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push((listener, tx));
+        entry.notices.locked().push((listener, tx));
         let (out, tokens) = (Arc::clone(&out), Arc::clone(&tokens));
         std::thread::spawn(move || {
             for mut notice in rx {
                 if notice["method"] == "notifications/progress" {
                     let ours = notice["params"]["progressToken"].to_string();
-                    let Some(theirs) = tokens
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .get(&ours)
-                        .cloned()
-                    else {
+                    let Some(theirs) = tokens.locked().get(&ours).cloned() else {
                         continue;
                     };
                     notice["params"]["progressToken"] = theirs;
                 }
-                let mut out = out.lock().unwrap_or_else(PoisonError::into_inner);
+                let mut out = out.locked();
                 if writeln!(out, "{notice}")
                     .and_then(|()| out.flush())
                     .is_err()
@@ -350,11 +342,7 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
         let Some(id) = message.get("id").cloned() else {
             if method == "notifications/cancelled" {
                 let key = message["params"]["requestId"].to_string();
-                if let Some(flag) = running
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .get(&key)
-                {
+                if let Some(flag) = running.locked().get(&key) {
                     flag.store(true, Ordering::Relaxed);
                 }
             }
@@ -372,17 +360,11 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
         let ours = (!token.is_null()).then(|| {
             let ours = Value::from(format!("patchwork-{}", uuid::Uuid::new_v4().simple()));
             params["_meta"]["progressToken"] = ours.clone();
-            tokens
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .insert(ours.to_string(), token);
+            tokens.locked().insert(ours.to_string(), token);
             ours
         });
         let stop = Arc::new(AtomicBool::new(false));
-        running
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(id.to_string(), Arc::clone(&stop));
+        running.locked().insert(id.to_string(), Arc::clone(&stop));
         std::thread::spawn(move || {
             let stopped = || stop.load(Ordering::Relaxed);
             let result = match &thread {
@@ -401,15 +383,9 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
                         _ => conn.request(&method, params, REQUEST_TIMEOUT, &stopped),
                     }),
             };
-            running
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(&id.to_string());
+            running.locked().remove(&id.to_string());
             if let Some(ours) = ours {
-                tokens
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .remove(&ours.to_string());
+                tokens.locked().remove(&ours.to_string());
             }
             let answer = match result {
                 Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
@@ -423,15 +399,10 @@ fn relay_client(stream: std::net::TcpStream, token: &str) {
     // The CLI has gone: its listener stops with its channel, and nothing reads the answers to
     // what it still had running.
     if let Some(entry) = listening {
-        entry
-            .notices
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .retain(|(id, _)| *id != listener);
+        entry.notices.locked().retain(|(id, _)| *id != listener);
     }
     running
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+        .locked()
         .values()
         .for_each(|stop| stop.store(true, Ordering::Relaxed));
 }

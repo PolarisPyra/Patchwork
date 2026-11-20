@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use gpui::{
     AnyElement, FocusHandle, FontWeight, KeyDownEvent, MouseButton, MouseDownEvent, ObjectFit,
-    Role, SharedString, Toggled, Window, canvas, div, img, prelude::*, px, relative,
+    Role, SharedString, Window, canvas, div, img, prelude::*, px, relative,
 };
 use patchwork_core::backgrounds::ChatBackground;
 
@@ -92,11 +92,7 @@ fn swatch(
         .id(id)
         .role(Role::RadioButton)
         .aria_label(name.clone())
-        .aria_toggled(if checked {
-            Toggled::True
-        } else {
-            Toggled::False
-        })
+        .aria_toggled(checked.into())
         .track_focus(focus)
         .focus_visible(focus_ring)
         .cursor_pointer()

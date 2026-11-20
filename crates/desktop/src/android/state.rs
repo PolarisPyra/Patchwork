@@ -233,15 +233,14 @@ impl AndroidPanel {
             && let Some(sdk) = self.sdk().cloned()
         {
             self.acceleration_checked = true;
-            let task = cx.background_spawn(async move { android::acceleration(&sdk) });
-            cx.spawn(async move |this, cx| {
-                let checked = task.await;
-                this.update(cx, |this, cx| {
+            crate::ui::off_thread(
+                cx,
+                move || android::acceleration(&sdk),
+                move |this, checked, cx| {
                     this.acceleration = checked.err();
                     cx.notify();
-                })
-            })
-            .detach();
+                },
+            );
         }
         cx.notify();
     }
@@ -269,12 +268,11 @@ impl AndroidPanel {
     /// Reads the SDK and devices now, rather than at the next poll, after something changed them.
     pub(super) fn refresh(&mut self, cx: &mut Context<Self>) {
         let (core, root) = (Arc::clone(&self.core), self.project.root.clone());
-        let task = cx.background_spawn(async move { core.android_snapshot(&root) });
-        cx.spawn(async move |this, cx| {
-            let snapshot = task.await;
-            this.update(cx, |this, cx| this.apply(snapshot, cx))
-        })
-        .detach();
+        crate::ui::off_thread(
+            cx,
+            move || core.android_snapshot(&root),
+            AndroidPanel::apply,
+        );
     }
 
     /// Picks the device the app runs on, and remembers it for the project.
@@ -425,18 +423,18 @@ impl AndroidPanel {
         self.running_on = Some(serial.clone());
         let (core, project) = (Arc::clone(&self.core), self.project.clone());
         let variant = self.variant.clone();
-        let task = cx.background_spawn(async move {
-            let target = RunTarget {
-                serial: &serial,
-                avd: avd.as_deref(),
-                variant: &variant,
-                mode: RunMode::Attached,
-            };
-            core.android_run(&project, &target)
-        });
-        cx.spawn(async move |this, cx| {
-            let prepared = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || {
+                let target = RunTarget {
+                    serial: &serial,
+                    avd: avd.as_deref(),
+                    variant: &variant,
+                    mode: RunMode::Attached,
+                };
+                core.android_run(&project, &target)
+            },
+            move |this, prepared, cx| {
                 match (prepared, this.workspace.upgrade()) {
                     (Ok((launch, _)), Some(workspace)) => {
                         this.run = Run::Running;
@@ -449,9 +447,8 @@ impl AndroidPanel {
                     (Ok(_), None) => this.run = Run::Idle,
                 }
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     /// The command a run started in the terminal has ended, with `code`, or did not start.
@@ -511,10 +508,10 @@ impl AndroidPanel {
     pub(super) fn save_sdk(&mut self, cx: &mut Context<Self>) {
         let path = self.sdk_field.read(cx).content.clone();
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { core.set_android_sdk(&path) });
-        cx.spawn(async move |this, cx| {
-            let saved = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.set_android_sdk(&path),
+            move |this, saved, cx| {
                 match saved {
                     Ok(()) => {
                         this.sdk_editing = false;
@@ -525,9 +522,8 @@ impl AndroidPanel {
                     Err(e) => this.failure = Some(e),
                 }
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     pub(super) fn toggle_detail(&mut self, id: &str, cx: &mut Context<Self>) {
@@ -538,9 +534,7 @@ impl AndroidPanel {
     }
 
     pub(super) fn close(&mut self, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.workspace.upgrade() {
-            workspace.update(cx, Workspace::close_android);
-        }
+        let _ = self.workspace.update(cx, Workspace::close_android);
     }
 
     /// The folder name the project's app is in, for the header.

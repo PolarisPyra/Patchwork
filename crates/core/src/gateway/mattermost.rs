@@ -7,7 +7,7 @@ use std::sync::atomic::Ordering;
 
 use serde_json::{Value, json};
 
-use super::net::{client, connect, download, failed, json, multipart, read, write};
+use super::net::{authorized, client, connect, download, failed, json, multipart, read, write};
 use super::platform::Platform;
 use super::types::{Button, Connector, Incoming, Listener};
 use crate::Error;
@@ -35,22 +35,8 @@ impl Mattermost {
     /// Calls the REST API at `path` with `method`.
     fn call(&self, method: &str, path: &str, body: Option<&Value>) -> Result<Value, Error> {
         let url = format!("{}/api/v4{path}", self.server);
-        let auth = self.auth();
-        let response = match (method, body) {
-            ("PUT", Some(body)) => self
-                .http
-                .put(&url)
-                .header("Authorization", &auth)
-                .send_json(body),
-            (_, Some(body)) => self
-                .http
-                .post(&url)
-                .header("Authorization", &auth)
-                .send_json(body),
-            _ => self.http.get(&url).header("Authorization", &auth).call(),
-        };
-        let response =
-            response.map_err(|e| failed("Mattermost could not be reached", e, &self.token))?;
+        let response = authorized(&self.http, method, &url, &self.auth(), body)
+            .map_err(|e| failed("Mattermost could not be reached", e, &self.token))?;
         json("Mattermost", response)
     }
 

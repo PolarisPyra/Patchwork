@@ -10,10 +10,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, OnceLock};
 
 use serde::Serialize;
 use serde_json::Value;
@@ -85,9 +86,7 @@ pub(super) struct Found {
 #[must_use]
 pub fn list(projects: &[Project]) -> Vec<CliGroup> {
     let claude = crate::provider::claude::settings_file();
-    let codex = crate::provider::codex::home()
-        .unwrap_or_default()
-        .join("config.toml");
+    let codex = crate::provider::codex::config_file();
     let shared = mcp::shared_servers();
     [
         (
@@ -153,17 +152,12 @@ pub fn enable(key: &str, projects: &[Project]) -> Result<(), Error> {
 pub fn is_config_file(path: &Path, projects: &[Project]) -> bool {
     (path.parent() == Some(mcp::dir().as_path()) && path.extension().is_some_and(|e| e == "json"))
         || path == crate::provider::claude::settings_file()
-        || path
-            == crate::provider::codex::home()
-                .unwrap_or_default()
-                .join("config.toml")
+        || path == crate::provider::codex::config_file()
         || all(projects).iter().any(|f| f.file == path)
 }
 
 fn all(projects: &[Project]) -> Vec<Found> {
-    let codex = crate::provider::codex::home()
-        .unwrap_or_default()
-        .join("config.toml");
+    let codex = crate::provider::codex::config_file();
     let mut found = claude_servers(&crate::provider::claude::settings_file(), projects);
     found.extend(codex_servers(&codex, projects));
     found
@@ -178,8 +172,7 @@ fn cache() -> std::sync::MutexGuard<'static, Listings> {
                 .unwrap_or_default();
             Mutex::new(saved.into_iter().map(|(k, v)| (k, Some(Ok(v)))).collect())
         })
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+        .locked()
 }
 
 fn cache_file() -> PathBuf {
@@ -270,7 +263,7 @@ fn view(found: Found, shared: &[(String, McpServer)]) -> CliServer {
 /// the settings list the servers again while their tools are being read.
 fn env_var(name: &str) -> Option<String> {
     static VARS: Mutex<BTreeMap<String, Option<String>>> = Mutex::new(BTreeMap::new());
-    let mut vars = VARS.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut vars = VARS.locked();
     vars.entry(name.into())
         .or_insert_with(|| {
             std::env::var(name)

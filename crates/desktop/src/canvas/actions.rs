@@ -19,22 +19,21 @@ impl Canvas {
         self.busy = true;
         self.action_error = None;
         let root = self.root.clone();
-        let task = cx.background_spawn(async move { action(&root) });
-        cx.spawn(async move |this, cx| {
-            let done = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || action(&root),
+            move |this, done, cx| {
                 this.busy = false;
                 if let Err(e) = done {
                     this.action_error = Some(e);
                 }
-                if let Some(w) = this.workspace.upgrade() {
-                    w.update(cx, crate::workspace::Workspace::load_git);
-                }
+                let _ = this
+                    .workspace
+                    .update(cx, crate::workspace::Workspace::load_git);
                 this.load(cx);
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 
@@ -146,19 +145,13 @@ impl Canvas {
         self.copied = true;
         self.copied_seq += 1;
         let seq = self.copied_seq;
-        cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                // How long "Copied" shows before the button goes back to its icon.
-                .timer(Duration::from_millis(1500))
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                if this.copied_seq == seq {
-                    this.copied = false;
-                    cx.notify();
-                }
-            });
-        })
-        .detach();
+        // How long "Copied" shows before the button goes back to its icon.
+        crate::ui::after(cx, Duration::from_millis(1500), move |this, cx| {
+            if this.copied_seq == seq {
+                this.copied = false;
+                cx.notify();
+            }
+        });
         cx.notify();
     }
 
@@ -207,9 +200,9 @@ impl Canvas {
         let text = review_message(&notes);
         cx.default_global::<Review>().clear(&self.project_id);
         let project = self.project_id.clone();
-        if let Some(w) = self.workspace.upgrade() {
-            w.update(cx, |w, cx| w.send_review(&project, text, cx));
-        }
+        let _ = self
+            .workspace
+            .update(cx, |w, cx| w.send_review(&project, text, cx));
         cx.notify();
     }
 }

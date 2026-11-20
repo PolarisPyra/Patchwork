@@ -10,6 +10,7 @@
 
 use std::collections::HashSet;
 
+use crate::provider::clip;
 use crate::threads::CheckFailure;
 
 /// Most failures read out of one run.
@@ -109,7 +110,7 @@ pub fn failures(output: &str) -> Vec<CheckFailure> {
             && let Some((name, _)) = rest.split_once("' panicked at ")
         {
             // Rust's panic line names the test whose thread it was; the line under it says why.
-            let why = lines.get(i + 1).map(|l| cut(l));
+            let why = lines.get(i + 1).map(|l| clip(l, LONGEST));
             push_with(&mut found, &mut seen, name, why.clone());
             if let (Some(why), Some(failure)) = (why, found.iter_mut().find(|f| f.name == name))
                 && failure.detail.is_empty()
@@ -122,7 +123,7 @@ pub fn failures(output: &str) -> Vec<CheckFailure> {
             // as a second failure.
             let recent = named_at.is_some_and(|at| i - at <= REASON_WITHIN);
             if let Some(failure) = found.last_mut().filter(|f| recent && f.detail.is_empty()) {
-                failure.detail = cut(trimmed);
+                failure.detail = clip(trimmed, LONGEST);
                 named_at = None;
             }
         }
@@ -238,13 +239,13 @@ fn push_with(
     name: &str,
     detail: Option<String>,
 ) -> bool {
-    let name = cut(strip_duration(name));
+    let name = clip(strip_duration(name), LONGEST);
     if name.is_empty() || !seen.insert(name.clone()) {
         return false;
     }
     found.push(CheckFailure {
         name,
-        detail: detail.map(|d| cut(&d)).unwrap_or_default(),
+        detail: detail.map(|d| clip(&d, LONGEST)).unwrap_or_default(),
     });
     true
 }
@@ -329,15 +330,6 @@ fn looks_like_error(line: &str) -> bool {
         "panicked at",
     ];
     WORDS.iter().any(|word| line.contains(word))
-}
-
-/// `text` cut to [`LONGEST`] characters, at a character boundary.
-fn cut(text: &str) -> String {
-    let text = text.trim();
-    match text.char_indices().nth(LONGEST) {
-        Some((end, _)) => format!("{}…", &text[..end]),
-        None => text.to_string(),
-    }
 }
 
 #[cfg(test)]

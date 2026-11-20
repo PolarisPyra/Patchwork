@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
+use super::integrations::reconnect;
 use super::chats::text;
 use super::types::Ctx;
 use crate::Error;
@@ -182,11 +183,7 @@ pub(super) fn gateway_status(ctx: &Ctx<'_>, _: &Value) -> Result<String, Error> 
 
 /// Reconnects every chat app, as after a change to their settings.
 pub(super) fn restart_gateway(ctx: &Ctx<'_>, _: &Value) -> Result<String, Error> {
-    let core = Arc::clone(ctx.core);
-    std::thread::Builder::new()
-        .name("gateway-restart".into())
-        .spawn(move || core.restart_gateway())
-        .map_err(|e| format!("Patchwork could not start the reconnect: {e}"))?;
+    reconnect(ctx)?;
     Ok("Reconnecting the chat apps. gateway_status shows where each one stands.".into())
 }
 

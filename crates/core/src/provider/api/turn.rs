@@ -169,13 +169,7 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
             let name = crate::harness::tools::display_name(text("name"));
             vec![tool_started(
                 message_id,
-                ToolStart {
-                    id: text("id"),
-                    name,
-                    summary: text("summary").into(),
-                    subagent: None,
-                    parent: None,
-                },
+                ToolStart::new(text("id"), name, text("summary").into()),
             )]
         }
         Some("api.tool_done") => {

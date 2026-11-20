@@ -28,7 +28,7 @@ fn platform(args: &Value) -> Result<Platform, Error> {
 }
 
 /// Reconnects the chat apps without holding up the caller.
-fn reconnect(ctx: &Ctx<'_>) -> Result<(), Error> {
+pub(super) fn reconnect(ctx: &Ctx<'_>) -> Result<(), Error> {
     let core = Arc::clone(ctx.core);
     std::thread::Builder::new()
         .name("gateway-restart".into())

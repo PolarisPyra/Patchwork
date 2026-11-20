@@ -22,17 +22,16 @@ impl Workspace {
             return;
         };
         let (core, thread) = (Arc::clone(&self.core), thread.id.clone());
-        let task = cx.background_spawn(async move { core.resume_turn(&thread) });
-        cx.spawn(async move |this, cx| {
-            let result = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.resume_turn(&thread),
+            move |this, result, cx| {
                 if let Err(e) = result {
                     this.error = Some(e.to_string());
                 }
                 this.reload(cx);
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     /// Sets the open thread's failed turn to resume once its usage limit resets, or with

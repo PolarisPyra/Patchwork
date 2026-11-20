@@ -2,8 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::sync::mpsc::channel;
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -172,11 +173,7 @@ impl Core {
     fn reopen_connections(self: &Arc<Self>) {
         // One restart at a time, each reading the settings once it has its turn: the last one
         // to run opens what the newest settings ask for, and no platform is opened twice.
-        let _turn = self
-            .gateway
-            .restarting
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let _turn = self.gateway.restarting.locked();
         let settings = self.store.settings().gateway;
         let wanted: Vec<_> = Platform::ALL
             .into_iter()

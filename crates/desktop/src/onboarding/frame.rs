@@ -182,11 +182,7 @@ impl Render for Onboarding {
                             16.,
                             cx,
                         )
-                        .aria_toggled(if light {
-                            gpui::Toggled::False
-                        } else {
-                            gpui::Toggled::True
-                        })
+                        .aria_toggled((!light).into())
                         .tooltip(tooltip(if light {
                             "Light theme (switch to dark)"
                         } else {

@@ -3,8 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 use base64::Engine as _;
@@ -105,11 +106,11 @@ static STATE: Mutex<State> = Mutex::new(State::Closed);
 static STATUS: Mutex<Status> = Mutex::new(Status::Closed);
 
 pub(super) fn state() -> MutexGuard<'static, State> {
-    STATE.lock().unwrap_or_else(PoisonError::into_inner)
+    STATE.locked()
 }
 
 pub(super) fn set_status(status: Status) {
-    *STATUS.lock().unwrap_or_else(PoisonError::into_inner) = status;
+    *STATUS.locked() = status;
 }
 
 fn key_entry() -> keyring::Result<keyring::Entry> {
@@ -261,8 +262,5 @@ pub(crate) fn open(data: &Path, config: &Path, keep: bool) {
 /// Whether this run can use the vault, and what keeps its key.
 #[must_use]
 pub fn status() -> Status {
-    STATUS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .clone()
+    STATUS.locked().clone()
 }

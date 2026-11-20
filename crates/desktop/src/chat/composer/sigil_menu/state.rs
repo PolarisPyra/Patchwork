@@ -43,10 +43,10 @@ impl Composer {
         };
         let core = Arc::clone(&w.core);
         let listed = project.clone();
-        let task = cx.background_spawn(async move { core.list_files(&project) });
-        cx.spawn(async move |this, cx| {
-            let files = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.list_files(&project),
+            move |this, files, cx| {
                 // A listing that arrives after the project changed is another project's files.
                 let current = this
                     .sigil
@@ -63,9 +63,8 @@ impl Composer {
                     }
                 }
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     pub(super) fn load_skills(&mut self, cx: &mut Context<Self>) {

@@ -83,13 +83,7 @@ pub(super) fn codex_item(
             let command = bare_command(item["command"].as_str().unwrap_or_default());
             out.push(tool_started(
                 message_id,
-                ToolStart {
-                    id,
-                    name: "Shell",
-                    summary: one_line(&command),
-                    subagent: None,
-                    parent: None,
-                },
+                ToolStart::new(id, "Shell", one_line(&command)),
             ));
             if completed {
                 let exit_failed = item["exitCode"].as_i64().is_some_and(|c| c != 0);
@@ -103,16 +97,7 @@ pub(super) fn codex_item(
                 item["server"].as_str().unwrap_or_default(),
                 item["tool"].as_str().unwrap_or_default()
             );
-            out.push(tool_started(
-                message_id,
-                ToolStart {
-                    id,
-                    name: "MCP",
-                    summary,
-                    subagent: None,
-                    parent: None,
-                },
-            ));
+            out.push(tool_started(message_id, ToolStart::new(id, "MCP", summary)));
             if completed {
                 out.push(tool_finished(message_id, id, failed, ""));
             }
@@ -121,13 +106,7 @@ pub(super) fn codex_item(
             let query = item["query"].as_str().unwrap_or_default();
             out.push(tool_started(
                 message_id,
-                ToolStart {
-                    id,
-                    name: "WebSearch",
-                    summary: one_line(query),
-                    subagent: None,
-                    parent: None,
-                },
+                ToolStart::new(id, "WebSearch", one_line(query)),
             ));
             if completed {
                 out.push(tool_finished(message_id, id, false, ""));
@@ -143,13 +122,7 @@ pub(super) fn codex_item(
                 .collect();
             out.push(tool_started(
                 message_id,
-                ToolStart {
-                    id,
-                    name: "Edit",
-                    summary: one_line(&paths.join(", ")),
-                    subagent: None,
-                    parent: None,
-                },
+                ToolStart::new(id, "Edit", one_line(&paths.join(", "))),
             ));
             if completed {
                 if !failed {

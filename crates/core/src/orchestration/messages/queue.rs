@@ -2,11 +2,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
-use std::sync::PoisonError;
 
 use crate::provider;
 use crate::threads::Attachment;
@@ -54,7 +54,7 @@ impl Runner {
     /// Holds a message for the next turn of the one running in `thread_id`, even when the agent
     /// could take it now. False when no turn is running there.
     pub(crate) fn enqueue(&self, thread_id: &str, input: FollowUpInput<'_>) -> bool {
-        let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+        let turns = self.turns.locked();
         // An idle agent is not replying, so there is nothing to wait for.
         let Some(turn) = turns
             .get(thread_id)
@@ -62,11 +62,8 @@ impl Runner {
         else {
             return false;
         };
-        let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);
-        self.handed_over
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(input.message_id.into());
+        let mut queue = turn.queue.locked();
+        self.handed_over.locked().insert(input.message_id.into());
         queue.push(FollowUp {
             message_id: input.message_id.into(),
             text: input.text.into(),
@@ -80,11 +77,11 @@ impl Runner {
     /// Replaces the payload of a queued message in the active turn. False if it has already
     /// been promoted, withdrawn, or the turn ended.
     pub fn edit_queued(&self, thread_id: &str, input: FollowUpInput<'_>) -> bool {
-        let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+        let turns = self.turns.locked();
         let Some(turn) = turns.get(thread_id) else {
             return false;
         };
-        let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut queue = turn.queue.locked();
         let Some(follow_up) = queue.iter_mut().find(|f| f.message_id == input.message_id) else {
             return false;
         };
@@ -96,11 +93,10 @@ impl Runner {
 
     /// Whether the message is waiting in the queue of the turn running in `thread_id`.
     pub fn is_queued(&self, thread_id: &str, message_id: &str) -> bool {
-        let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+        let turns = self.turns.locked();
         turns.get(thread_id).is_some_and(|turn| {
             turn.queue
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
+                .locked()
                 .iter()
                 .any(|f| f.message_id == message_id)
         })
@@ -110,32 +106,22 @@ impl Runner {
     /// it. A message this process never handed over was queued before a restart, so nothing
     /// holds it and it counts as taken back.
     pub fn withdraw(&self, thread_id: &str, message_id: &str) -> bool {
-        let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+        let turns = self.turns.locked();
         if let Some(turn) = turns.get(thread_id) {
-            let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);
+            let mut queue = turn.queue.locked();
             if let Some(index) = queue.iter().position(|f| f.message_id == message_id) {
                 queue.remove(index);
-                self.handed_over
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .remove(message_id);
+                self.handed_over.locked().remove(message_id);
                 return true;
             }
         }
-        !self
-            .handed_over
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .contains(message_id)
+        !self.handed_over.locked().contains(message_id)
     }
 
     /// Whether a running turn was given the message and has not handed it back: it waits in the
     /// turn's queue, or the agent has it.
     pub fn is_handed_over(&self, message_id: &str) -> bool {
-        self.handed_over
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .contains(message_id)
+        self.handed_over.locked().contains(message_id)
     }
 
     /// Promotes an existing queued message into the active turn without removing and recreating
@@ -148,11 +134,11 @@ impl Runner {
         subagents: &[String],
     ) -> bool {
         self.background_subagents(thread_id, subagents);
-        let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+        let turns = self.turns.locked();
         let Some(turn) = turns.get(thread_id) else {
             return false;
         };
-        let mut queue = turn.queue.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut queue = turn.queue.locked();
         let Some(index) = queue.iter().position(|f| f.message_id == message_id) else {
             return false;
         };
@@ -160,26 +146,19 @@ impl Runner {
             return false;
         }
         let follow_up = queue.remove(index);
-        let turn_id = turn
-            .native
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone();
+        let turn_id = turn.native.locked().clone();
         let prompt = provider::Prompt {
             text: &follow_up.text,
             attachments: &follow_up.attachments,
             images: &follow_up.images,
         };
         let line = provider::steer_input(turn.agent, prompt, session_id, turn_id.as_deref());
-        let mut stdin = turn.stdin.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut stdin = turn.stdin.locked();
         if line
             .as_deref()
             .is_some_and(|line| write_to(&mut stdin, line))
         {
-            turn.steers
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .push_back(follow_up);
+            turn.steers.locked().push_back(follow_up);
             true
         } else {
             queue.insert(index, follow_up);

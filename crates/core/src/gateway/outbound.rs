@@ -15,6 +15,7 @@ use super::net::chunks;
 use super::platform::Platform;
 use super::types::{Binding, Button};
 use crate::Core;
+use crate::provider::clip;
 use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::threads::{Approval, ApprovalStatus, Message, MessageStatus, Role};
 
@@ -490,14 +491,5 @@ fn latest(text: &str, limit: usize) -> String {
     match text.char_indices().nth(over) {
         Some((at, _)) if over > 0 => format!("\u{2026}{}", &text[at..]),
         _ => text.to_string(),
-    }
-}
-
-/// `text` cut to `limit` characters.
-pub(super) fn clip(text: &str, limit: usize) -> String {
-    let text = text.trim();
-    match text.char_indices().nth(limit) {
-        Some((at, _)) => format!("{}…", &text[..at]),
-        None => text.to_string(),
     }
 }

@@ -3,7 +3,8 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::sync::{Mutex, PoisonError};
+use crate::system::Locked;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
@@ -91,7 +92,7 @@ pub(super) fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, Failure> {
 /// The live plan, asked for at most once per `PLAN_FRESH_FOR`, failures included,
 /// so a rate-limited profile request is not repeated on every usage refresh.
 fn live_plan_for(agent: &ureq::Agent, token: &str) -> Option<String> {
-    let mut cache = LIVE_PLAN.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut cache = LIVE_PLAN.locked();
     if let Some((at, plan)) = cache.as_ref()
         && at.elapsed() < PLAN_FRESH_FOR
     {

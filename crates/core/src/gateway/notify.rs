@@ -6,7 +6,8 @@
 
 use std::sync::Arc;
 
-use super::outbound::{clip, outcome};
+use super::outbound::outcome;
+use crate::provider::clip;
 use super::platform::Platform;
 use super::types::Button;
 use crate::Core;

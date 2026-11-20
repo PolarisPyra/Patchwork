@@ -21,13 +21,11 @@ pub fn models() -> Vec<ModelOption> {
         .into_iter()
         .filter(|p| p.enabled)
         .flat_map(|p| {
-            p.models.into_iter().map(move |m| ModelOption {
-                id: Some(format!("{}/{}", p.id, m.id)),
-                label: m.name.clone().unwrap_or_else(|| m.id.clone()),
-                default_model: None,
-                is_legacy: false,
-                efforts: None,
-                context_window: None,
+            p.models.into_iter().map(move |m| {
+                ModelOption::listed(
+                    format!("{}/{}", p.id, m.id),
+                    m.name.clone().unwrap_or_else(|| m.id.clone()),
+                )
             })
         })
         .collect()

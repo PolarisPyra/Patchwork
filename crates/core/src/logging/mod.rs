@@ -5,7 +5,7 @@
 //!
 //! ```text
 //! 20261026T121729/
-//! ├─ main.log                 Patchwork's own messages (written by the desktop shell)
+//! ├─ main.log                 Patchwork's own messages and panics (see `main_log`)
 //! ├─ system.json              what Patchwork runs on (see `system`)
 //! ├─ imports.log              scans and imports of saved conversations
 //! ├─ themes.log               themes and backgrounds added, written, reset and deleted
@@ -35,6 +35,7 @@
 
 mod debug_log;
 mod files;
+mod main_log;
 mod render;
 mod report;
 mod scrub;
@@ -43,14 +44,14 @@ mod thread_log;
 
 #[doc(inline)]
 pub use debug_log::{
-    AGENT_LOG, Data, DebugLog, IMPORT_LOG, Source, THEME_LOG, WINDOW_LOG, app_logs, follow, start,
+    AGENT_LOG, Data, DebugLog, IMPORT_LOG, Source, THEME_LOG, WINDOW_LOG, follow, start,
 };
 use debug_log::{LaunchLog, Record, may_report_error};
 use files::session;
 #[doc(inline)]
 pub use files::{session_dir, channels, LogChunk, read, export};
 #[doc(inline)]
-pub use render::{now_text};
+pub use main_log::start_main_log;
 #[doc(inline)]
 pub use scrub::{Json, redact};
 pub(crate) use scrub::{hide, set_known};

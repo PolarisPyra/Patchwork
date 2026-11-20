@@ -242,9 +242,9 @@ impl Orchestrator {
             AskKind::InChat => {
                 // The chat's own composer answers it, so the chat opens as usual.
                 let thread_id = waiting.ask.thread_id.clone();
-                if let Some(workspace) = self.workspace.upgrade() {
-                    workspace.update(cx, |w, cx| w.open_thread(&thread_id, cx));
-                }
+                let _ = self
+                    .workspace
+                    .update(cx, |w, cx| w.open_thread(&thread_id, cx));
             }
         }
         cx.notify();
@@ -252,9 +252,9 @@ impl Orchestrator {
 
     /// Opens a card's chat read-only, as a subagent shows: the pill sends it what comes next.
     pub(super) fn open(&self, thread_id: &str, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.workspace.upgrade() {
-            workspace.update(cx, |w, cx| w.peek_thread(thread_id, cx));
-        }
+        let _ = self
+            .workspace
+            .update(cx, |w, cx| w.peek_thread(thread_id, cx));
     }
 
     /// Answers the question shown: allows or denies it, with `words` as the answer to an open

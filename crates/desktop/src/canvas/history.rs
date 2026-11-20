@@ -70,12 +70,10 @@ impl Canvas {
             _ => 0,
         };
         let (root, seq) = (self.root.clone(), self.load_seq);
-        let task = cx.background_spawn(async move {
-            ws::file_log(&root, &path, skip, PAGE).map_err(|e| e.to_string())
-        });
-        cx.spawn(async move |this, cx| {
-            let read = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || ws::file_log(&root, &path, skip, PAGE).map_err(|e| e.to_string()),
+            move |this, read, cx| {
                 if this.load_seq != seq {
                     return;
                 }
@@ -88,9 +86,8 @@ impl Canvas {
                     (_, read) => read,
                 });
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     /// Shows what `revision` changed in the file, in place of its uncommitted changes.

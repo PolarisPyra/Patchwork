@@ -2,8 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -147,7 +148,7 @@ pub fn save(mut provider: ApiProvider, key: KeyChange) -> Result<ProviderView, E
         .models
         .retain(|m| !m.id.trim().is_empty() && seen.insert(m.id.clone()));
 
-    let _guard = WRITE.lock().unwrap_or_else(PoisonError::into_inner);
+    let _guard = WRITE.locked();
     let mut config = read_config();
     let existing = config.providers.iter().position(|p| p.id == provider.id);
     if existing.is_none() {
@@ -194,7 +195,7 @@ pub fn save(mut provider: ApiProvider, key: KeyChange) -> Result<ProviderView, E
 pub fn move_to(id: &str, base_url: &str) -> Result<(), Error> {
     let base_url = base_url.trim().trim_end_matches('/');
     check_url(base_url)?;
-    let _guard = WRITE.lock().unwrap_or_else(PoisonError::into_inner);
+    let _guard = WRITE.locked();
     let mut config = read_config();
     let provider = config
         .providers
@@ -211,7 +212,7 @@ pub fn move_to(id: &str, base_url: &str) -> Result<(), Error> {
 ///
 /// Returns an error when the config file cannot be written.
 pub fn remove(id: &str) -> Result<(), Error> {
-    let _guard = WRITE.lock().unwrap_or_else(PoisonError::into_inner);
+    let _guard = WRITE.locked();
     let mut config = read_config();
     config.providers.retain(|p| p.id != id);
     delete_secret(id);

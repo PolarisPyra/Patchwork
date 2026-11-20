@@ -147,19 +147,16 @@ impl Composer {
     }
 
     pub(super) fn attach(&mut self, folders: bool, cx: &mut Context<Self>) {
-        let paths = cx.prompt_for_paths(PathPromptOptions {
-            files: !folders,
-            directories: folders,
-            multiple: true,
-            prompt: None,
-        });
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = paths.await else {
-                return;
-            };
-            let _ = this.update(cx, |this, cx| this.attach_paths(&paths, cx));
-        })
-        .detach();
+        crate::ui::pick_paths(
+            cx,
+            PathPromptOptions {
+                files: !folders,
+                directories: folders,
+                multiple: true,
+                prompt: None,
+            },
+            move |this, paths, cx| this.attach_paths(&paths, cx),
+        );
     }
 
     /// Attaches the files and folders at `paths`: picked, dropped on the chat, or pasted.

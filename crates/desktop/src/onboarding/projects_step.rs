@@ -6,8 +6,8 @@
 use std::sync::Arc;
 
 use gpui::{
-    AnyElement, Div, Focusable, FontWeight, Role, SharedString, Stateful, Toggled, Window, div,
-    prelude::*, px,
+    AnyElement, Div, Focusable, FontWeight, Role, SharedString, Stateful, Window, div, prelude::*,
+    px,
 };
 use patchwork_core::Core;
 
@@ -28,10 +28,10 @@ impl Onboarding {
         self.busy = true;
         self.project_error = None;
         let core = Arc::clone(&self.core);
-        let work = cx.background_spawn(async move { task(&core) });
-        cx.spawn(async move |this, cx| {
-            let out = work.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || task(&core),
+            move |this, out, cx| {
                 this.busy = false;
                 match out {
                     Ok(()) => {
@@ -42,9 +42,8 @@ impl Onboarding {
                     Err(e) => this.project_error = Some(e.to_string()),
                 }
                 cx.notify();
-            });
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 
@@ -233,11 +232,7 @@ pub fn projects_step(
             SharedString::from(format!("setup-project-{}", p.id)),
             p.name.clone(),
         )
-        .aria_toggled(if is_active {
-            Toggled::True
-        } else {
-            Toggled::False
-        })
+        .aria_toggled(is_active.into())
         .w_full()
         .gap(px(12.))
         .rounded(px(radius_sm()))

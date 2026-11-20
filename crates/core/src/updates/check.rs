@@ -2,7 +2,8 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use crate::system::Locked;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use super::install;
@@ -74,11 +75,11 @@ impl Drop for Running<'_> {
 
 impl Updates {
     fn lock(&self) -> MutexGuard<'_, Inner> {
-        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+        self.inner.locked()
     }
 
     fn changed(&self) {
-        let listener = self.listener.lock().unwrap_or_else(PoisonError::into_inner);
+        let listener = self.listener.locked();
         if let Some(listener) = listener.as_ref() {
             listener();
         }
@@ -218,11 +219,7 @@ impl Core {
 
     /// Calls `listener` whenever `update_status` changes, from the thread that changed it.
     pub fn on_update_change(&self, listener: Box<dyn Fn() + Send + Sync>) {
-        *self
-            .updates
-            .listener
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner) = Some(listener);
+        *self.updates.listener.locked() = Some(listener);
     }
 
     /// Checks for an update because the user asked, on a thread of its own, and installs what it

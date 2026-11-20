@@ -37,22 +37,22 @@ impl Workspace {
         let thread = self.thread.as_ref().map(|t| t.id.clone());
         let (core, events) = (Arc::clone(&self.core), self.project_events.clone());
         let read = id.clone();
-        let task = cx.background_spawn(async move {
-            let root = core.source_root(&read, thread.as_deref())?;
-            let watched = core.watch_project(&read, thread.as_deref(), seq, move |changed| {
-                let _ = events.unbounded_send(changed);
-            });
-            let branch = patchwork_core::workspace::git_branch(&root);
-            let changes = patchwork_core::workspace::git_changes(&root)
-                .inspect_err(|e| {
-                    log::warn!(error:% = e; "could not list the changed files: {{error}}");
-                })
-                .ok();
-            Ok::<_, patchwork_core::Error>((root, watched, branch, changes))
-        });
-        cx.spawn(async move |this, cx| {
-            let read = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || {
+                let root = core.source_root(&read, thread.as_deref())?;
+                let watched = core.watch_project(&read, thread.as_deref(), seq, move |changed| {
+                    let _ = events.unbounded_send(changed);
+                });
+                let branch = patchwork_core::workspace::git_branch(&root);
+                let changes = patchwork_core::workspace::git_changes(&root)
+                    .inspect_err(|e| {
+                        log::warn!(error:% = e; "could not list the changed files: {{error}}");
+                    })
+                    .ok();
+                Ok::<_, patchwork_core::Error>((root, watched, branch, changes))
+            },
+            move |this, read, cx| {
                 // A newer read, for another task or project, has started since.
                 if this.git_seq != seq {
                     return;
@@ -82,9 +82,8 @@ impl Workspace {
                     v.refresh(Some(id), Some(root), sync || moved, cx);
                 });
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     /// Git's state after a settled burst of changes in the watched project.
@@ -281,15 +280,15 @@ impl Workspace {
     pub fn add_dropped_folders(&mut self, paths: &[PathBuf], cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
         let paths = paths.to_vec();
-        let task = cx.background_spawn(async move {
-            paths
-                .iter()
-                .map(|path| core.add_project(&path.to_string_lossy()))
-                .collect::<Vec<_>>()
-        });
-        cx.spawn(async move |this, cx| {
-            let added = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || {
+                paths
+                    .iter()
+                    .map(|path| core.add_project(&path.to_string_lossy()))
+                    .collect::<Vec<_>>()
+            },
+            move |this, added, cx| {
                 for result in added {
                     match result {
                         Ok(project) => this.project_added(&project, cx),
@@ -297,9 +296,8 @@ impl Workspace {
                     }
                 }
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     fn project_added(&mut self, project: &Project, cx: &mut Context<Self>) {

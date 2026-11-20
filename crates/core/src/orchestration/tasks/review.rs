@@ -11,7 +11,7 @@ use crate::Core;
 use crate::events::AgentEvent;
 use crate::orchestration::changes::turn_files::turn_file_diff;
 use crate::orchestration::publish;
-use crate::system::{new_id, now_ms};
+use crate::system::now_ms;
 use crate::threads::{
     AgentPick, MessageStatus, ReviewStatus, Role, Thread, ThreadParent, TurnReview, reviewer_of,
 };
@@ -116,34 +116,15 @@ fn review(core: &Arc<Core>, parent: &Thread, pick: &AgentPick, message_id: &str)
 /// The reviewer's own chat, under the one whose reply it reviews.
 fn reviewer_thread(parent: &Thread, pick: &AgentPick) -> Thread {
     Thread {
-        id: new_id(),
         project_id: parent.project_id.clone(),
-        title: "Review".into(),
-        agent: pick.agent,
         model: pick.model.clone(),
-        access_mode: parent.access_mode,
         effort: pick.effort.clone(),
-        compact_window: None,
         background: parent.background.clone(),
-        session_id: None,
-        created_at: now_ms(),
-        messages: Vec::new(),
-        goal: None,
-        position: 0,
-        folder_id: None,
-        archived_at: None,
         parent: Some(ThreadParent {
             thread_id: parent.id.clone(),
             tool_id: String::new(),
         }),
-        slash_commands: vec![],
-        imported_from: None,
-        context_pending: false,
-        role: None,
-        role_pending: false,
-        favorite: false,
-        pinned: false,
-        bot_id: None,
+        ..Thread::new("Review".into(), pick.agent, parent.access_mode)
     }
 }
 

@@ -192,23 +192,18 @@ impl Onboarding {
             scroll: ScrollHandle::new(),
         };
         this.check(cx);
-        let task = cx.background_spawn(async move { browse::machines() });
-        cx.spawn(async move |this, cx| {
-            let machines = task.await;
-            this.update(cx, |this, cx| {
-                let hosts = machines
-                    .into_iter()
-                    .filter(|m| !m.local)
-                    .map(|m| m.name)
-                    .collect::<Vec<_>>();
-                this.runs_on = (0..=hosts.len().max(1))
-                    .map(|_| cx.focus_handle())
-                    .collect();
-                this.hosts = Some(hosts);
-                cx.notify();
-            })
-        })
-        .detach();
+        crate::ui::off_thread(cx, browse::machines, move |this, machines, cx| {
+            let hosts = machines
+                .into_iter()
+                .filter(|m| !m.local)
+                .map(|m| m.name)
+                .collect::<Vec<_>>();
+            this.runs_on = (0..=hosts.len().max(1))
+                .map(|_| cx.focus_handle())
+                .collect();
+            this.hosts = Some(hosts);
+            cx.notify();
+        });
         this
     }
 

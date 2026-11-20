@@ -4,8 +4,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{
-    AnyElement, Div, Focusable, FontWeight, KeyDownEvent, Role, SharedString, Stateful, Toggled,
-    Window, div, prelude::*, px,
+    AnyElement, Div, Focusable, FontWeight, KeyDownEvent, Role, SharedString, Stateful, Window,
+    div, prelude::*, px,
 };
 use crate::ui::avatar::{Mood, avatar};
 use crate::ui::theme::{Theme, fs_md, fs_sm, fs_xl, radius_sm, theme};
@@ -46,11 +46,7 @@ pub(super) fn radio(
         .id(id)
         .role(Role::RadioButton)
         .aria_label(label.clone())
-        .aria_toggled(if checked {
-            Toggled::True
-        } else {
-            Toggled::False
-        })
+        .aria_toggled(checked.into())
         .tab_index(0)
         .focus_visible(focus_ring)
         .cursor_pointer()

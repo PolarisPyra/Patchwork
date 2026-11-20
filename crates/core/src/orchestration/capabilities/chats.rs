@@ -17,10 +17,7 @@ use crate::threads::{Thread, chat_tools};
 /// The most chats offered when a name fits several.
 const CANDIDATES: usize = 8;
 
-/// A text argument, trimmed, or empty when it is missing.
-pub(super) fn text<'a>(args: &'a Value, key: &str) -> &'a str {
-    args[key].as_str().map(str::trim).unwrap_or_default()
-}
+pub(super) use crate::orchestration::tasks::chats::text;
 
 /// Runs one of the chat tools as the dispatcher's own, which checks and words it.
 fn chat_tool(ctx: &Ctx<'_>, tool: &str, args: &Value) -> Result<String, Error> {
@@ -148,7 +145,11 @@ pub(super) fn set_options(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> 
     for word in ["agent", "model", "access"] {
         let value = text(args, word);
         if !value.is_empty() {
-            let now = ctx.core.store.thread(&thread.id).unwrap_or(thread.clone());
+            let now = ctx
+                .core
+                .store
+                .thread(&thread.id)
+                .unwrap_or_else(|| thread.clone());
             ctx.core.set_chat_option(&now, word, value)?;
             any = true;
         }

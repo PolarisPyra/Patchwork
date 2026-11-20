@@ -272,15 +272,14 @@ impl Composer {
             self.roles = Roles::Loading;
             self.roles_project.clone_from(&project);
         }
-        let task = cx.background_spawn(async move { core.project_agents(project.as_deref()) });
-        cx.spawn(async move |this, cx| {
-            let agents = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.project_agents(project.as_deref()),
+            move |this, agents, cx| {
                 this.roles = Roles::Loaded(agents);
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
     }
 }
 

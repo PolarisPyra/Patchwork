@@ -174,11 +174,7 @@ impl Composer {
                     .rounded(px(6.))
                     .text_color(t.text)
                     .hover(move |s| s.bg(hover))
-                    .aria_toggled(if pressed {
-                        gpui::Toggled::True
-                    } else {
-                        gpui::Toggled::False
-                    })
+                    .aria_toggled(pressed.into())
                     .child(logo)
                     .when(pressed, |b| {
                         b.child(

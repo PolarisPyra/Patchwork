@@ -11,10 +11,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::path::Path;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::orchestration::publish;
@@ -44,12 +45,6 @@ const READ_ONLY: [&str; 9] = [
 const EDITS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
 pub(in crate::orchestration) type SharedAttribution = Arc<Mutex<Attribution>>;
-
-pub(in crate::orchestration) fn lock(
-    attribution: &Mutex<Attribution>,
-) -> MutexGuard<'_, Attribution> {
-    attribution.lock().unwrap_or_else(PoisonError::into_inner)
-}
 
 /// What a call can write.
 #[derive(Debug, Clone)]
@@ -388,7 +383,9 @@ impl Core {
                 .rev()
                 .find(|m| m.role == Role::Assistant && m.status == MessageStatus::Streaming);
             let Some(reply) = reply else { continue };
-            let candidates = lock(&attribution).candidates(changes, burst, &reply.files);
+            let candidates = attribution
+                .locked()
+                .candidates(changes, burst, &reply.files);
             replies.push((thread_id, reply.id.clone(), attribution, candidates));
         }
         let decided = claims(
@@ -401,7 +398,7 @@ impl Core {
             replies.into_iter().zip(decided)
         {
             let mut claimed = Vec::new();
-            let mut attribution = lock(&attribution);
+            let mut attribution = attribution.locked();
             for (candidate, outcome) in candidates.into_iter().zip(outcomes) {
                 if matches!(outcome, Outcome::Claimed) {
                     claimed.push(candidate.path.clone());

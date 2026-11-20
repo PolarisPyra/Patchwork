@@ -3,8 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::sync::atomic::Ordering;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use serde_json::{Value, json};
 
@@ -83,11 +84,7 @@ impl Slack {
 
     /// A direct message, or a mention in a channel.
     fn event(&self, event: &Value) -> Option<Incoming> {
-        let me = self
-            .me
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone();
+        let me = self.me.locked().clone();
         let kind = event["type"].as_str()?;
         let direct = kind == "message"
             && event["channel_type"].as_str() == Some("im")
@@ -160,8 +157,7 @@ impl Slack {
 impl Connector for Slack {
     fn listen(&self, to: &Listener<'_>) -> Result<(), Error> {
         let me = self.call("auth.test", &self.bot, &json!({}))?;
-        *self.me.lock().unwrap_or_else(PoisonError::into_inner) =
-            me["user_id"].as_str().unwrap_or_default().to_string();
+        *self.me.locked() = me["user_id"].as_str().unwrap_or_default().to_string();
         let opened = self.call("apps.connections.open", &self.app, &json!({}))?;
         let url = opened["url"]
             .as_str()

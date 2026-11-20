@@ -108,10 +108,10 @@ impl Workspace {
             return;
         };
         let (id, root) = (project.id.clone(), std::path::PathBuf::from(&project.path));
-        let task = cx.background_spawn(async move { patchwork_core::android::detect(&root) });
-        cx.spawn(async move |this, cx| {
-            let found = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || patchwork_core::android::detect(&root),
+            move |this, found, cx| {
                 if this.mobile_for.as_ref() != Some(&id) {
                     return;
                 }
@@ -127,9 +127,8 @@ impl Workspace {
                 }
                 this.mobile = found;
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     /// Opens the Android panel beside the chat, or closes it.

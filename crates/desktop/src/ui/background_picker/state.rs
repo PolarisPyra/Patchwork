@@ -149,31 +149,29 @@ impl BackgroundPicker {
 
     /// Asks for a picture, copies it into Patchwork's folder, and picks it.
     pub(super) fn choose_picture(&mut self, cx: &mut Context<Self>) {
-        let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-            prompt: None,
-        });
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = picked.await else {
-                return;
-            };
-            let Some(path) = paths
-                .first()
-                .map(|p| p.to_string_lossy().into_owned())
-                .filter(|p| is_picture(p))
-            else {
-                return;
-            };
-            let _ = this.update(cx, |p, cx| {
+        crate::ui::pick_paths(
+            cx,
+            gpui::PathPromptOptions {
+                files: true,
+                directories: false,
+                multiple: false,
+                prompt: None,
+            },
+            move |p, paths, cx| {
+                let Some(path) = paths
+                    .first()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .filter(|p| is_picture(p))
+                else {
+                    return;
+                };
+
                 p.add(
                     move |s| s.import_background_image(&path).map(|f| vec![f]),
                     cx,
                 );
-            });
-        })
-        .detach();
+            },
+        );
     }
 
     /// Ctrl+V: a picture copied in a file manager comes as its path, a copied image as its pixels.
@@ -217,10 +215,10 @@ impl BackgroundPicker {
         self.error = None;
         cx.notify();
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { load(&core) });
-        cx.spawn(async move |this, cx| {
-            let added = task.await;
-            let _ = this.update(cx, |p, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || load(&core),
+            move |p, added, cx| {
                 p.importing = false;
                 match added {
                     Ok(files) => {
@@ -233,9 +231,8 @@ impl BackgroundPicker {
                     Err(e) => p.error = Some(e.to_string()),
                 }
                 cx.notify();
-            });
-        })
-        .detach();
+            },
+        );
     }
 
     /// What each choice picks, in order: the first choice, the presets, the butterfly, the
@@ -319,16 +316,12 @@ impl BackgroundPicker {
                 self.undo = Some((name.clone(), removed));
                 self.load_images(cx);
                 cx.emit(PickerEvent::PicturesChanged);
-                cx.spawn(async move |this, cx| {
-                    cx.background_executor().timer(UNDO).await;
-                    let _ = this.update(cx, |p, cx| {
-                        if p.undo.as_ref().is_some_and(|(n, _)| *n == name) {
-                            p.undo = None;
-                            cx.notify();
-                        }
-                    });
-                })
-                .detach();
+                crate::ui::after(cx, UNDO, move |p, cx| {
+                    if p.undo.as_ref().is_some_and(|(n, _)| *n == name) {
+                        p.undo = None;
+                        cx.notify();
+                    }
+                });
             }
             Err(e) => self.error = Some(e.to_string()),
         }

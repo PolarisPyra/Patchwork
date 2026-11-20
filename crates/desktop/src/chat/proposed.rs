@@ -59,19 +59,13 @@ impl Workspace {
     fn copy_plan(&mut self, key: String, text: String, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         self.proposed.copied = Some(key.clone());
-        cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                // How long "Copied" shows before the button goes back to its icon.
-                .timer(Duration::from_millis(1500))
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                if this.proposed.copied.as_ref() == Some(&key) {
-                    this.proposed.copied = None;
-                    cx.notify();
-                }
-            });
-        })
-        .detach();
+        // How long "Copied" shows before the button goes back to its icon.
+        crate::ui::after(cx, Duration::from_millis(1500), move |this, cx| {
+            if this.proposed.copied.as_ref() == Some(&key) {
+                this.proposed.copied = None;
+                cx.notify();
+            }
+        });
         cx.notify();
     }
 

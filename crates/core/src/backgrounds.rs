@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 
 use crate::logging::THEME_LOG;
 use crate::settings::LogLevel;
-use crate::themes::{SceneFile, Scheme};
+use crate::themes::{SceneFile, Scheme, slug};
 use crate::{Error, Core};
 
 /// What shows behind a chat's messages.
@@ -230,16 +230,8 @@ impl Core {
     /// `scheme`, and the id its drawing will have.
     #[must_use]
     pub fn chat_background_prompt(&self, description: &str, scheme: Scheme) -> (String, String) {
-        let mut slug = String::new();
-        for c in description.trim().chars().take(40) {
-            if c.is_ascii_alphanumeric() {
-                slug.push(c.to_ascii_lowercase());
-            } else if !slug.ends_with('-') && !slug.is_empty() {
-                slug.push('-');
-            }
-        }
-        let slug = slug.trim_end_matches('-');
-        let slug = if slug.is_empty() { "background" } else { slug };
+        let slug = slug(description);
+        let slug = if slug.is_empty() { "background" } else { &slug };
         let dir = self.drawings_dir();
         let id = std::iter::once(slug.to_owned())
             .chain((2..100).map(|n| format!("{slug}-{n}")))

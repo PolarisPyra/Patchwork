@@ -3,8 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::orchestration::publish;
@@ -76,16 +77,13 @@ struct Claim(String);
 
 impl Drop for Claim {
     fn drop(&mut self) {
-        RUNNING
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .retain(|id| *id != self.0);
+        RUNNING.locked().retain(|id| *id != self.0);
     }
 }
 
 /// Claims `message_id` for one run of its checks, or None while another run has it.
 fn claim(message_id: &str) -> Option<Claim> {
-    let mut running = RUNNING.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut running = RUNNING.locked();
     if running.iter().any(|id| id == message_id) {
         return None;
     }

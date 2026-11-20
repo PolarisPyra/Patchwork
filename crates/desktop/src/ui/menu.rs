@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, App, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent, Pixels, Point,
-    Role, ScrollHandle, SharedString, Toggled, Window, anchored, deferred, div, prelude::*, px,
+    Role, ScrollHandle, SharedString, Window, anchored, deferred, div, prelude::*, px,
 };
 
 use crate::ui::theme::{radius, radius_sm, theme};
@@ -280,11 +280,7 @@ impl Render for Menu {
             let row = div()
                 .id(i)
                 .map(|row| match item.checked {
-                    Some(checked) => row.role(Role::MenuItemRadio).aria_toggled(if checked {
-                        Toggled::True
-                    } else {
-                        Toggled::False
-                    }),
+                    Some(checked) => row.role(Role::MenuItemRadio).aria_toggled(checked.into()),
                     None => row.role(Role::MenuItem),
                 })
                 .aria_label(item.label.clone())

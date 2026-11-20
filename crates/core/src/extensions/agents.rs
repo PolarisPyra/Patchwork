@@ -8,6 +8,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -202,6 +203,7 @@ impl std::fmt::Debug for Library {
 impl Library {
     /// Reads `agents` in `config_dir`, creating it first, and watches it for as long as the
     /// library lives. A folder that can't be watched is still read once.
+    #[must_use]
     pub fn open(config_dir: &Path) -> Arc<Self> {
         let dir = config_dir.join("agents");
         if let Err(e) = std::fs::create_dir_all(&dir) {
@@ -221,10 +223,7 @@ impl Library {
             }
         }) {
             Ok(watcher) => {
-                *library
-                    .watcher
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner) = Some(watcher);
+                *library.watcher.locked() = Some(watcher);
             }
             Err(e) => log::warn!(error:% = e; "{{error}}"),
         }
@@ -289,10 +288,7 @@ impl Library {
 
     /// Passes the agents to `on_change` after each change to them, in place of any earlier one.
     pub fn subscribe(&self, on_change: impl Fn(Arc<[Agent]>) + Send + 'static) {
-        *self
-            .on_change
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner) = Some(Box::new(on_change));
+        *self.on_change.locked() = Some(Box::new(on_change));
     }
 
     fn reload(&self) {
@@ -305,12 +301,7 @@ impl Library {
             }
             *current = Arc::clone(&agents);
         };
-        if let Some(on_change) = self
-            .on_change
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .as_ref()
-        {
+        if let Some(on_change) = self.on_change.locked().as_ref() {
             on_change(agents);
         }
     }

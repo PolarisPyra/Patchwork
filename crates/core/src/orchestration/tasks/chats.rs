@@ -5,7 +5,7 @@
 // Rust guideline compliant 2026-10-09
 
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -14,7 +14,7 @@ use super::dispatch;
 use super::wait::Unanswered;
 use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::orchestration::Runner;
-use crate::provider::AgentKind;
+use crate::provider::{AgentKind, clip};
 use crate::system::now_ms;
 use crate::threads::chat_tools::{
     self, ANSWER, LIST, NOTIFY, PROJECTS, READ, SEND, START, STOP, WAIT, fit, named,
@@ -42,7 +42,7 @@ const MESSAGES: usize = 6;
 const STEPS: usize = 12;
 
 /// A text argument, trimmed, or empty when it is missing.
-pub(super) fn text<'a>(args: &'a Value, key: &str) -> &'a str {
+pub(in crate::orchestration) fn text<'a>(args: &'a Value, key: &str) -> &'a str {
     args[key].as_str().map(str::trim).unwrap_or_default()
 }
 
@@ -378,13 +378,7 @@ impl Runner {
         stopped: &dyn Fn() -> bool,
     ) -> Result<String, Error> {
         let target = target(core, caller, args)?;
-        let flags = {
-            let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
-            let turn = turns
-                .get(&caller.id)
-                .ok_or("This turn is no longer running")?;
-            [Arc::clone(&turn.cancelled), Arc::clone(&turn.exited)]
-        };
+        let flags = self.turn_flags(&caller.id)?;
         let gone = || stopped() || flags.iter().any(|f| f.load(Ordering::SeqCst));
         let asked = target
             .messages
@@ -443,15 +437,6 @@ fn step_word(status: StepStatus) -> &'static str {
         StepStatus::Running => "running",
         StepStatus::Done => "done",
         StepStatus::Error => "failed",
-    }
-}
-
-/// `text` trimmed to its first `limit` characters.
-fn clip(text: &str, limit: usize) -> String {
-    let text = text.trim();
-    match text.char_indices().nth(limit) {
-        Some((at, _)) => format!("{}…", &text[..at]),
-        None => text.to_string(),
     }
 }
 

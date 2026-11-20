@@ -13,7 +13,6 @@ use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::logging::{Data, Source, THREAD_LOG};
 use crate::provider::AgentKind;
 use crate::settings::LogLevel;
-use crate::system::{now_ms, new_id};
 use crate::threads::{Role, MessageStatus, StepStatus, Attachment, Message, GoalStatus, BackgroundTask};
 use crate::extensions::skills;
 use crate::{orchestration, provider};
@@ -25,30 +24,8 @@ use crate::gateway::Platform;
 /// A message the user sent, complete from the start.
 fn user_message(text: &str, attachments: Vec<Attachment>) -> Message {
     Message {
-        id: new_id(),
-        role: Role::User,
-        text: text.into(),
-        created_at: now_ms(),
-        status: MessageStatus::Complete,
-        tools: vec![],
-        plan: vec![],
-        files: vec![],
-        error: None,
-        approvals: vec![],
         attachments,
-        steer: false,
-        queued: false,
-        background: Vec::new(),
-        cut_off: false,
-        refusal: None,
-        parts: Vec::new(),
-        finished_at: None,
-        usage: None,
-        turn: None,
-        checks: None,
-        review: None,
-        cursor: None,
-        via: None,
+        ..Message::new(Role::User, text.into(), MessageStatus::Complete)
     }
 }
 

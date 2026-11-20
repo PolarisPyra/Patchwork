@@ -4,9 +4,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
@@ -61,7 +62,7 @@ impl Qq {
 
     /// The `Authorization` header, with a token fetched again before it expires.
     fn auth(&self) -> Result<String, Error> {
-        let mut kept = self.token.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut kept = self.token.locked();
         if let Some((token, until)) = kept.as_ref()
             && Instant::now() < *until
         {
@@ -153,10 +154,7 @@ impl Qq {
             return None;
         }
         if let Some(id) = data["id"].as_str() {
-            self.last
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .insert(chat.clone(), id.to_string());
+            self.last.locked().insert(chat.clone(), id.to_string());
         }
         let content = data["content"].as_str().unwrap_or_default().trim();
         // A message that mentions the bot starts with the mention.
@@ -257,12 +255,7 @@ impl Connector for Qq {
             _ => return Err("This QQ chat is not known".into()),
         };
         let mut body = json!({"content": text, "msg_type": 0});
-        if let Some(quoted) = self
-            .last
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .get(chat)
-        {
+        if let Some(quoted) = self.last.locked().get(chat) {
             body["msg_id"] = json!(quoted);
         }
         if matches!(kind, "c2c" | "group") {

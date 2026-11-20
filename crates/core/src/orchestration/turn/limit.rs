@@ -6,7 +6,8 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::sync::{Arc, PoisonError};
+use crate::system::Locked;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::orchestration::turn::start::{Starting, TurnRequest};
@@ -146,9 +147,9 @@ impl Core {
             return Some(reset);
         }
         // The numbers are gone or have moved, but a wait set on this reply holds its reset.
-        let waits = self.runner.limit_waits.lock();
-        let waits = waits.unwrap_or_else(PoisonError::into_inner);
-        waits
+        self.runner
+            .limit_waits
+            .locked()
             .get(&thread.id)
             .filter(|wait| wait.message_id == reply.id)
             .map(|wait| wait.at.saturating_sub(MARGIN_MS))
@@ -343,9 +344,9 @@ impl Core {
     /// When the thread's turn is set to resume, if it is waiting for a limit to reset.
     #[must_use]
     pub fn limit_resume_at(&self, thread_id: &str) -> Option<u64> {
-        let waits = self.runner.limit_waits.lock();
-        let waits = waits.unwrap_or_else(PoisonError::into_inner);
-        waits
+        self.runner
+            .limit_waits
+            .locked()
             .get(thread_id)
             .filter(|wait| wait.on)
             .map(|wait| wait.at)
@@ -419,11 +420,7 @@ impl Core {
                 Some((id, wait))
             })
             .collect();
-        self.runner
-            .limit_waits
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .extend(saved);
+        self.runner.limit_waits.locked().extend(saved);
         let core = Arc::clone(self);
         let started = std::thread::Builder::new()
             .name("limit-resume".into())

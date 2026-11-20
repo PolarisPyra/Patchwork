@@ -377,16 +377,8 @@ impl<T: DeserializeOwned + Serialize + PartialEq> Shelf<T> {
 
     /// An id made from `description` that no file has yet.
     pub(super) fn free_id(&self, description: &str) -> String {
-        let mut slug = String::new();
-        for c in description.trim().chars().take(40) {
-            if c.is_ascii_alphanumeric() {
-                slug.push(c.to_ascii_lowercase());
-            } else if !slug.ends_with('-') && !slug.is_empty() {
-                slug.push('-');
-            }
-        }
-        let slug = slug.trim_end_matches('-');
-        let slug = if slug.is_empty() { self.folder } else { slug };
+        let slug = slug(description);
+        let slug = if slug.is_empty() { self.folder } else { &slug };
         let taken: Vec<String> = self.list().into_iter().map(|entry| entry.id).collect();
         std::iter::once(slug.to_string())
             .chain((2..=taken.len() + 2).map(|n| format!("{slug}-{n}")))
@@ -568,4 +560,18 @@ pub(super) fn palette(id: &str) -> Option<Palette> {
 pub(super) fn syntax(id: Option<&str>, scheme: Scheme) -> Option<Syntax> {
     let theme = CODE.load(id?)?;
     (theme.file.scheme == scheme).then_some(theme.file.colors)
+}
+
+/// The first 40 characters of `description` as an id: lowercase letters and digits, with a dash
+/// for each run of anything else. Empty when it has no letter or digit.
+pub(crate) fn slug(description: &str) -> String {
+    let mut slug = String::new();
+    for c in description.trim().chars().take(40) {
+        if c.is_ascii_alphanumeric() {
+            slug.push(c.to_ascii_lowercase());
+        } else if !slug.ends_with('-') && !slug.is_empty() {
+            slug.push('-');
+        }
+    }
+    slug.trim_end_matches('-').to_string()
 }

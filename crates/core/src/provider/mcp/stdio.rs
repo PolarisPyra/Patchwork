@@ -2,6 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::collections::BTreeMap;
 use std::io::{BufReader, Write};
@@ -65,7 +66,7 @@ impl StdioServer {
             let stderr = Arc::clone(&stderr);
             std::thread::spawn(move || {
                 for line in crate::system::lossy_lines(BufReader::new(stderr_pipe)) {
-                    let mut tail = stderr.lock().unwrap_or_else(PoisonError::into_inner);
+                    let mut tail = stderr.locked();
                     tail.push_str(&line);
                     tail.push('\n');
                     if tail.len() > STDERR_TAIL {
@@ -97,12 +98,7 @@ impl StdioServer {
                             let _ = stdin.send(reply.to_string());
                         }
                         (Some(id), None) => {
-                            let waiter = id.as_u64().and_then(|id| {
-                                waiters
-                                    .lock()
-                                    .unwrap_or_else(PoisonError::into_inner)
-                                    .remove(&id)
-                            });
+                            let waiter = id.as_u64().and_then(|id| waiters.locked().remove(&id));
                             if let Some(waiter) = waiter {
                                 let _ = waiter.send(Ok(v));
                             }
@@ -113,10 +109,7 @@ impl StdioServer {
                 }
                 // The server exited: wake everyone still waiting, and turn down who asks next.
                 closed.store(true, Ordering::SeqCst);
-                waiters
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .clear();
+                waiters.locked().clear();
             })
         };
         Ok(StdioServer {
@@ -129,13 +122,7 @@ impl StdioServer {
     }
 
     pub(super) fn alive(&self) -> bool {
-        matches!(
-            self.child
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .try_wait(),
-            Ok(None)
-        )
+        matches!(self.child.locked().try_wait(), Ok(None))
     }
 
     pub(super) fn send(&self, message: &Value) -> Result<(), Error> {
@@ -146,10 +133,7 @@ impl StdioServer {
 
     pub(super) fn send_request(&self, id: u64, message: &Value) -> Result<Answer, Error> {
         let (tx, rx) = mpsc::channel();
-        self.waiters
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(id, tx);
+        self.waiters.locked().insert(id, tx);
         // Checked after the waiter is in, so one the reader's last sweep missed is not left
         // waiting for an answer that cannot come.
         let sent = if self.closed.load(Ordering::SeqCst) {
@@ -158,10 +142,7 @@ impl StdioServer {
             self.send(message)
         };
         if let Err(e) = sent {
-            self.waiters
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(&id);
+            self.waiters.locked().remove(&id);
             return Err(e);
         }
         Ok(rx)

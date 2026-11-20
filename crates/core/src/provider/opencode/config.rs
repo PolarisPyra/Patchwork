@@ -2,9 +2,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::path::PathBuf;
 use rusqlite::{Connection, OpenFlags};
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 use serde_json::{Value, json};
 use crate::provider::{AgentKind, AgentStatus, ModelOption};
 use crate::threads::AccessMode;
@@ -87,14 +88,7 @@ pub fn models() -> Vec<ModelOption> {
         .lines()
         .map(str::trim)
         .filter(|line| line.contains('/') && !line.contains(char::is_whitespace))
-        .map(|id| ModelOption {
-            id: Some(id.into()),
-            label: id.into(),
-            default_model: None,
-            is_legacy: false,
-            efforts: None,
-            context_window: None,
-        })
+        .map(|id| ModelOption::listed(id, id))
         .collect()
 }
 
@@ -107,7 +101,7 @@ pub(super) fn major_version() -> u32 {
         let modified = std::fs::metadata(&bin).and_then(|m| m.modified()).ok();
         (bin, modified)
     });
-    let mut cached = MAJOR.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut cached = MAJOR.locked();
     if let Some((_, major)) = cached.as_ref().filter(|(k, _)| *k == key) {
         return *major;
     }

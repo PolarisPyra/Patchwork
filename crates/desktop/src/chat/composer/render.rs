@@ -259,7 +259,7 @@ impl Render for Composer {
                 "compact",
                 format!("{detail}. Compact at: {compact}"),
                 ring,
-                compact.clone(),
+                compact,
                 &t,
             )
             .tooltip(tooltip(detail)),
@@ -405,9 +405,7 @@ impl Render for Composer {
         .on_drop(cx.listener(|this, files: &ExternalPaths, window, cx| {
             // A drop is the start of a message: the usage popover goes, as a press outside
             // it would close it, and the keys go to the chat box.
-            if let Some(workspace) = this.workspace.upgrade() {
-                workspace.update(cx, Workspace::dismiss_usage);
-            }
+            let _ = this.workspace.update(cx, Workspace::dismiss_usage);
             this.attach_paths(files.paths(), cx);
             this.focus(window, cx);
             cx.stop_propagation();

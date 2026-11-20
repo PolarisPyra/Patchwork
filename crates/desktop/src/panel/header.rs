@@ -106,7 +106,7 @@ impl Panel {
                     crate::ui::dropdown_chip(
                         "output-log",
                         format!("Log: {}", name.as_deref().unwrap_or("none")),
-                        name.clone().unwrap_or_else(|| "No logs yet".into()),
+                        name.unwrap_or_else(|| "No logs yet".into()),
                         self.menu_open(&MenuFor::Logs),
                         &t,
                     )

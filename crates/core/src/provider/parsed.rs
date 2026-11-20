@@ -140,6 +140,15 @@ pub(crate) fn one_line(s: &str) -> String {
         .collect()
 }
 
+/// `text` trimmed and cut to `limit` characters, marked with an ellipsis when cut.
+pub(crate) fn clip(text: &str, limit: usize) -> String {
+    let text = text.trim();
+    match text.char_indices().nth(limit) {
+        Some((at, _)) => format!("{}…", &text[..at]),
+        None => text.to_string(),
+    }
+}
+
 /// A plan step's status, however the agent spells it: `in_progress` (Claude, OpenCode),
 /// `inProgress` (Codex), `running` and `done` (Patchwork's own agent).
 pub(crate) fn step_status(status: Option<&str>) -> StepStatus {
@@ -167,6 +176,19 @@ pub(super) struct ToolStart<'a> {
     pub(super) summary: String,
     pub(super) subagent: Option<SubAgent>,
     pub(super) parent: Option<&'a str>,
+}
+
+impl<'a> ToolStart<'a> {
+    /// A top-level call that starts no sub agent.
+    pub(super) fn new(id: &'a str, name: &'a str, summary: String) -> Self {
+        Self {
+            id,
+            name,
+            summary,
+            subagent: None,
+            parent: None,
+        }
+    }
 }
 
 pub(super) fn tool_started(message_id: &str, start: ToolStart<'_>) -> Parsed {

@@ -141,23 +141,18 @@ impl AddProject {
             follow: false,
         };
         dialog.browse(None, cx);
-        let task = cx.background_spawn(async move { browse::machines() });
-        cx.spawn(async move |this, cx| {
-            let machines = task.await;
-            this.update(cx, |this, cx| {
-                // A picked host the SSH config no longer lists gives way to this computer.
-                let listed = this
-                    .host
-                    .as_ref()
-                    .is_none_or(|h| machines.iter().any(|m| !m.local && m.name == *h));
-                this.machines = Some(machines);
-                if !listed {
-                    this.open_machine(None, cx);
-                }
-                cx.notify();
-            })
-        })
-        .detach();
+        crate::ui::off_thread(cx, browse::machines, move |this, machines, cx| {
+            // A picked host the SSH config no longer lists gives way to this computer.
+            let listed = this
+                .host
+                .as_ref()
+                .is_none_or(|h| machines.iter().any(|m| !m.local && m.name == *h));
+            this.machines = Some(machines);
+            if !listed {
+                this.open_machine(None, cx);
+            }
+            cx.notify();
+        });
         dialog
     }
 
@@ -175,15 +170,13 @@ impl AddProject {
             self.show(listing, cx);
         }
         self.loading = !shown;
-        let task = cx.background_spawn(async move {
-            match host {
+        crate::ui::off_thread(
+            cx,
+            move || match host {
                 Some(host) => browse::browse_host(&host, path.as_deref()),
                 None => browse::browse(path.as_deref()),
-            }
-        });
-        cx.spawn(async move |this, cx| {
-            let listing = task.await;
-            this.update(cx, |this, cx| {
+            },
+            move |this, listing, cx| {
                 if this.browse_seq != seq {
                     return;
                 }
@@ -195,9 +188,8 @@ impl AddProject {
                 }
                 this.loading = false;
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 
@@ -224,19 +216,18 @@ impl AddProject {
         self.adding = true;
         self.error = None;
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { core.add_project(&path) });
-        cx.spawn(async move |this, cx| {
-            let added = task.await;
-            this.update(cx, |this, cx| match added {
+        crate::ui::off_thread(
+            cx,
+            move || core.add_project(&path),
+            move |this, added, cx| match added {
                 Ok(project) => cx.emit(Closed(Some(project))),
                 Err(e) => {
                     this.error = Some(e.to_string());
                     this.adding = false;
                     cx.notify();
                 }
-            })
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 

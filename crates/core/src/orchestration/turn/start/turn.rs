@@ -3,13 +3,14 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use super::running::{NativeTurn, Pending};
 use crate::orchestration::turn::end::background_id;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 
-use crate::orchestration::changes::attribution::{self, Reach, SharedAttribution};
+use crate::orchestration::changes::attribution::{Reach, SharedAttribution};
 use crate::provider::TurnSpec;
 use crate::provider;
 use crate::Core;
@@ -19,8 +20,6 @@ use crate::provider::AgentKind;
 use crate::threads::Attachment;
 use crate::threads::Message;
 use crate::threads::MessageStatus;
-use crate::system::new_id;
-use crate::system::now_ms;
 use crate::threads::Role;
 use crate::orchestration::turn::process::Interrupts;
 use crate::orchestration::turn::process::close_stdin_unless_steered;
@@ -96,7 +95,9 @@ impl Turn {
         let covered = match &event {
             AgentEvent::ToolStarted { tool, .. } => {
                 let reach = Reach::of(tool);
-                attribution::lock(&self.attribution).tool_started(&tool.id, tool.started_at, reach);
+                self.attribution
+                    .locked()
+                    .tool_started(&tool.id, tool.started_at, reach);
                 None
             }
             AgentEvent::ToolFinished {
@@ -104,19 +105,19 @@ impl Turn {
                 message_id,
                 ..
             } => {
-                let paths = attribution::lock(&self.attribution).tool_finished(tool_id);
+                let paths = self.attribution.locked().tool_finished(tool_id);
                 Some((message_id.clone(), paths))
             }
             // A background task writes until it ends, after its call has returned.
             AgentEvent::BackgroundTaskStarted { task, .. } => {
                 let reach = Reach::Anything(task.description.clone());
                 let id = background_id(&task.tool_id);
-                attribution::lock(&self.attribution).tool_started(&id, None, reach);
+                self.attribution.locked().tool_started(&id, None, reach);
                 None
             }
             AgentEvent::BackgroundTaskEnded { message_id, task } => {
                 let id = background_id(&task.tool_id);
-                let paths = attribution::lock(&self.attribution).tool_finished(&id);
+                let paths = self.attribution.locked().tool_finished(&id);
                 Some((message_id.clone(), paths))
             }
             _ => None,
@@ -176,30 +177,5 @@ impl Turn {
 
 /// An empty assistant message the agent's output streams into.
 pub(in crate::orchestration) fn assistant_message() -> Message {
-    Message {
-        id: new_id(),
-        role: Role::Assistant,
-        text: String::new(),
-        created_at: now_ms(),
-        status: MessageStatus::Streaming,
-        tools: vec![],
-        plan: vec![],
-        files: vec![],
-        error: None,
-        approvals: vec![],
-        attachments: vec![],
-        steer: false,
-        queued: false,
-        background: Vec::new(),
-        cut_off: false,
-        refusal: None,
-        parts: Vec::new(),
-        finished_at: None,
-        usage: None,
-        turn: None,
-        checks: None,
-        review: None,
-        cursor: None,
-        via: None,
-    }
+    Message::new(Role::Assistant, String::new(), MessageStatus::Streaming)
 }

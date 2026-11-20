@@ -87,19 +87,16 @@ impl Orchestrator {
 
     /// Asks for files, or for folders, and attaches what is picked.
     fn pick_attachments(&mut self, folders: bool, cx: &mut Context<Self>) {
-        let paths = cx.prompt_for_paths(PathPromptOptions {
-            files: !folders,
-            directories: folders,
-            multiple: true,
-            prompt: None,
-        });
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = paths.await else {
-                return;
-            };
-            let _ = this.update(cx, |this, cx| this.attach(&paths, cx));
-        })
-        .detach();
+        crate::ui::pick_paths(
+            cx,
+            PathPromptOptions {
+                files: !folders,
+                directories: folders,
+                multiple: true,
+                prompt: None,
+            },
+            move |this, paths, cx| this.attach(&paths, cx),
+        );
     }
 
     /// Attaches the files and folders at `paths` to the request being written. They are read

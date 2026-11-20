@@ -4,8 +4,6 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
-use std::collections::HashMap;
-use std::sync::{Arc, PoisonError};
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
@@ -16,8 +14,8 @@ use crate::Core;
 use crate::orchestration::{Runner, publish};
 use crate::events::AgentEvent;
 use crate::secrets::{Secret, SecretAsk, SecretStatus};
-use crate::system::new_id;
-use crate::threads::{Approval, ApprovalStatus, Role};
+use crate::threads::Approval;
+use super::hooks::reply_id;
 
 /// How often the wait checks whether its turn is still running.
 const POLL: Duration = Duration::from_millis(500);
@@ -34,38 +32,14 @@ impl Runner {
         stopped: &dyn Fn() -> bool,
     ) -> Result<String, Error> {
         let ask = SecretAsk::parse(args)?;
-        let ended = || "This turn is no longer running".to_string();
-        let message_id = core
-            .store
-            .thread(thread_id)
-            .and_then(|t| {
-                t.messages
-                    .iter()
-                    .rev()
-                    .find(|m| m.role == Role::Assistant)
-                    .map(|m| m.id.clone())
-            })
-            .ok_or_else(ended)?;
-        let flags = {
-            let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
-            let turn = turns.get(thread_id).ok_or_else(ended)?;
-            [Arc::clone(&turn.cancelled), Arc::clone(&turn.exited)]
-        };
+        let message_id = reply_id(core, thread_id).ok_or("This turn is no longer running")?;
+        let flags = self.turn_flags(thread_id)?;
         let approval = Approval {
-            id: new_id(),
-            title: ask.label,
-            detail: ask.reason,
-            status: ApprovalStatus::Pending,
-            questions: Vec::new(),
-            answers: HashMap::new(),
-            kind: None,
-            suggestions: Vec::new(),
-            rule: None,
-            auto: false,
             secret: Some(Secret {
                 placeholder: ask.placeholder,
                 status: SecretStatus::Pending,
             }),
+            ..Approval::pending(ask.label, ask.reason)
         };
         let id = approval.id.clone();
         let answers = core.secrets.add(&id, thread_id);

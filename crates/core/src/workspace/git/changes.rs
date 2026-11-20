@@ -2,10 +2,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex, PoisonError};
+use std::sync::{LazyLock, Mutex};
 use std::time::SystemTime;
 
 use crate::workspace::{DiffSide, FileChange};
@@ -14,7 +15,7 @@ use super::run::{git, git_failed, git_output, git_raw, git_succeeds, has_head, i
 
 /// Parses `git diff --numstat -z` into (path, additions, deletions). Renames
 /// carry an extra NUL-separated origin path before the new path.
-fn parse_numstat(out: &str) -> Vec<(String, u32, u32)> {
+pub(super) fn parse_numstat(out: &str) -> Vec<(String, u32, u32)> {
     let mut entries = Vec::new();
     let mut tokens = out.split('\0');
     while let Some(token) = tokens.next() {
@@ -53,7 +54,7 @@ static LINE_COUNTS: LazyLock<Mutex<HashMap<PathBuf, Counted>>> = LazyLock::new(D
 fn line_count(path: &Path) -> u32 {
     let stamp = std::fs::symlink_metadata(path).and_then(|m| Ok((m.len(), m.modified()?)));
     let Ok((len, modified)) = stamp else { return 0 };
-    let mut cache = LINE_COUNTS.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut cache = LINE_COUNTS.locked();
     if let Some(&(l, m, count)) = cache.get(path)
         && (l, m) == (len, modified)
     {
@@ -68,8 +69,7 @@ fn line_count(path: &Path) -> u32 {
 /// so files committed or deleted since are not kept.
 fn forget_counts(root: &Path, untracked: &HashSet<PathBuf>) {
     LINE_COUNTS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+        .locked()
         .retain(|path, _| !path.starts_with(root) || untracked.contains(path));
 }
 

@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use gpui::{AnyElement, ClickEvent, ExternalPaths, Role, Toggled, Window, div, prelude::*, px};
+use gpui::{AnyElement, ClickEvent, ExternalPaths, Role, Window, div, prelude::*, px};
 use patchwork_core::android::{self, Device, DeviceState, Framework, Reload, Variant};
 use patchwork_core::{Error, Core};
 
@@ -178,10 +178,10 @@ impl AndroidPanel {
         self.failure = None;
         self.notice = None;
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { act(&core) });
-        cx.spawn(async move |this, cx| {
-            let result = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || act(&core),
+            move |this, result, cx| {
                 this.working = None;
                 match result {
                     Ok(()) => this.notice = done,
@@ -190,9 +190,8 @@ impl AndroidPanel {
                 this.load_states(cx);
                 this.refresh(cx);
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 
@@ -234,19 +233,16 @@ impl AndroidPanel {
 
     /// Asks for APK files, then installs them on the device picked.
     pub(super) fn choose_apk(&mut self, cx: &mut Context<Self>) {
-        let paths = cx.prompt_for_paths(gpui::PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: true,
-            prompt: Some("Install".into()),
-        });
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = paths.await else {
-                return;
-            };
-            let _ = this.update(cx, |this, cx| this.install(&paths, cx));
-        })
-        .detach();
+        crate::ui::pick_paths(
+            cx,
+            gpui::PathPromptOptions {
+                files: true,
+                directories: false,
+                multiple: true,
+                prompt: Some("Install".into()),
+            },
+            move |this, paths, cx| this.install(&paths, cx),
+        );
     }
 
     pub(super) fn dropped(&mut self, files: &ExternalPaths, cx: &mut Context<Self>) {
@@ -309,11 +305,7 @@ impl AndroidPanel {
         let log_open = self.log.is_some();
         controls.push(
             icon_button("android-log", "App log", "list-bullets", 14., cx)
-                .aria_toggled(if log_open {
-                    Toggled::True
-                } else {
-                    Toggled::False
-                })
+                .aria_toggled(log_open.into())
                 .when(log_open, |button| button.bg(t.bg_selected_muted))
                 .tooltip(tooltip("Log"))
                 .on_click(cx.listener(|this, _, _, cx| this.toggle_log(cx)))
@@ -345,7 +337,7 @@ impl AndroidPanel {
             div()
                 .id(id)
                 .role(Role::Status)
-                .aria_label(text.clone())
+                .aria_label(text)
                 .flex()
                 .items_center()
                 .gap(px(8.))

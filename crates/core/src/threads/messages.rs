@@ -255,6 +255,26 @@ pub struct Approval {
     pub secret: Option<crate::secrets::Secret>,
 }
 
+impl Approval {
+    /// A request waiting for the user's answer, with nothing but its title and detail.
+    #[must_use]
+    pub(crate) fn pending(title: String, detail: String) -> Self {
+        Approval {
+            id: crate::system::new_id(),
+            title,
+            detail,
+            status: ApprovalStatus::Pending,
+            questions: Vec::new(),
+            answers: HashMap::new(),
+            kind: None,
+            suggestions: Vec::new(),
+            rule: None,
+            auto: false,
+            secret: None,
+        }
+    }
+}
+
 /// A question the agent asks the user, with the answers it offers.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -568,6 +588,37 @@ fn hide(text: &mut String) {
 }
 
 impl Message {
+    /// A message with nothing in it yet but its text, made now with a new id.
+    #[must_use]
+    pub(crate) fn new(role: Role, text: String, status: MessageStatus) -> Self {
+        Message {
+            id: crate::system::new_id(),
+            role,
+            text,
+            created_at: crate::system::now_ms(),
+            status,
+            tools: Vec::new(),
+            plan: Vec::new(),
+            files: Vec::new(),
+            error: None,
+            approvals: Vec::new(),
+            attachments: Vec::new(),
+            steer: false,
+            queued: false,
+            background: Vec::new(),
+            cut_off: false,
+            refusal: None,
+            parts: Vec::new(),
+            finished_at: None,
+            usage: None,
+            turn: None,
+            checks: None,
+            review: None,
+            cursor: None,
+            via: None,
+        }
+    }
+
     /// Replaces every value of a secret Patchwork holds in what the reply says and what its
     /// tools printed, before the finished reply is saved: an agent that printed a key does
     /// not leave it in the database.

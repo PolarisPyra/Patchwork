@@ -128,27 +128,25 @@ impl Workspace {
 
     /// Asks for the folder a moved project is in now, and points the project there.
     pub(super) fn change_project_folder(&mut self, project_id: String, cx: &mut Context<Self>) {
-        let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
-            files: false,
-            directories: true,
-            multiple: false,
-            prompt: None,
-        });
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = picked.await else {
-                return;
-            };
-            let Some(path) = paths.first().map(|p| p.to_string_lossy().into_owned()) else {
-                return;
-            };
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::pick_paths(
+            cx,
+            gpui::PathPromptOptions {
+                files: false,
+                directories: true,
+                multiple: false,
+                prompt: None,
+            },
+            move |this, paths, cx| {
+                let Some(path) = paths.first().map(|p| p.to_string_lossy().into_owned()) else {
+                    return;
+                };
+
                 match this.core.relocate_project(&project_id, &path) {
                     Ok(()) => this.settings = this.core.settings(),
                     Err(e) => this.error = Some(e.to_string()),
                 }
                 this.reload(cx);
-            });
-        })
-        .detach();
+            },
+        );
     }
 }

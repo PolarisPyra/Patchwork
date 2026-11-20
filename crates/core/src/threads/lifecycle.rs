@@ -89,29 +89,12 @@ impl Core {
         let mut thread = Thread {
             id: id.unwrap_or_else(new_id),
             project_id,
-            title: title.into(),
-            agent,
             model,
-            access_mode,
             effort,
             compact_window,
-            background: None,
-            session_id: None,
             created_at,
-            messages: vec![],
-            goal: None,
             position: -(created_at as i64),
-            folder_id: None,
-            archived_at: None,
-            parent: None,
-            slash_commands: vec![],
-            imported_from: None,
-            context_pending: false,
-            role: None,
-            role_pending: false,
-            favorite: false,
-            pinned: false,
-            bot_id: None,
+            ..Thread::new(title.into(), agent, access_mode)
         };
         self.give_project_granular(&mut thread);
         self.store.insert_threads(vec![thread.clone()])?;

@@ -3,8 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{
-    AnyElement, ClickEvent, ElementId, Role, SharedString, Stateful, Toggled, Window, div,
-    prelude::*, px,
+    AnyElement, ClickEvent, ElementId, Role, SharedString, Stateful, Window, div, prelude::*, px,
 };
 use patchwork_core::android::{self, Avd, Boot, Device, DeviceState};
 
@@ -25,11 +24,7 @@ pub(super) fn radio_row(
     let hover = t.bg_hover;
     button(id, label)
         .role(Role::RadioButton)
-        .aria_toggled(if checked {
-            Toggled::True
-        } else {
-            Toggled::False
-        })
+        .aria_toggled(checked.into())
         .flex_none()
         .min_h(px(32.))
         .gap(px(8.))

@@ -200,7 +200,6 @@ impl Panel {
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener({
-                    let metrics = metrics.clone();
                     move |this, e: &MouseDownEvent, window, cx| {
                         use patchwork_core::settings::RightClickBehavior as Behavior;
                         window.focus(&this.term_focus, cx);

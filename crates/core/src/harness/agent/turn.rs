@@ -357,7 +357,6 @@ impl Agent {
 
             // Saved after each result, so a turn that ends midway, even by a crash, keeps
             // what its calls did; `load` gives the calls it never ran a result.
-            let mut proposed = false;
             self.cut_off = reply.cut_off;
             for (i, call) in reply.calls.iter().enumerate() {
                 let result = if self.stopped() {
@@ -366,9 +365,7 @@ impl Agent {
                     if !self.prefetched.contains_key(&call.id) {
                         self.prefetch(&reply.calls[i..]);
                     }
-                    let (result, stop) = self.call(call);
-                    proposed |= stop;
-                    result
+                    self.call(call)
                 };
                 self.messages
                     .push(json!({"role": "tool", "tool_call_id": call.id, "content": result}));
@@ -428,7 +425,7 @@ impl Agent {
                 self.save()?;
                 continue;
             }
-            if proposed || reply.calls.is_empty() {
+            if reply.calls.is_empty() {
                 return Ok(());
             }
             if !self.request.unlimited_steps && steps >= MAX_STEPS {

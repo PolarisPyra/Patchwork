@@ -4,9 +4,9 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::collections::HashMap;
+use crate::system::Locked;
 use std::path::Path;
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::time::Duration;
@@ -18,7 +18,6 @@ use crate::orchestration::{Runner, publish, unasked};
 use crate::{Core, Error};
 use crate::permissions::{self, PermissionKind, Target, Unasked};
 use crate::events::AgentEvent;
-use crate::system::new_id;
 use crate::threads::{AccessMode, Approval, ApprovalStatus, Role};
 
 impl Runner {
@@ -52,27 +51,13 @@ impl Runner {
             Unasked::Refuse(decision) => Some(decision),
             Unasked::Ask => None,
         };
-        let Some(message_id) = core.store.thread(&thread_id).and_then(|t| {
-            t.messages
-                .iter()
-                .rev()
-                .find(|m| m.role == Role::Assistant)
-                .map(|m| m.id.clone())
-        }) else {
+        let Some(message_id) = reply_id(core, &thread_id) else {
             return refused("This turn is no longer running");
         };
         let mut approval = Approval {
-            id: new_id(),
-            title: text("title"),
-            detail: crate::provider::one_line(&text("detail")),
-            status: ApprovalStatus::Pending,
-            questions: Vec::new(),
-            answers: HashMap::new(),
             kind: Some(kind),
             suggestions: permissions::suggest(&target, Path::new(&root)),
-            rule: None,
-            auto: false,
-            secret: None,
+            ..Approval::pending(text("title"), crate::provider::one_line(&text("detail")))
         };
         if let Some(decision) = denied {
             approval.status = ApprovalStatus::Denied;
@@ -106,25 +91,15 @@ impl Runner {
         kind: PermissionKind,
     ) -> Value {
         let reason = crate::bots::BLOCKED_REASON;
-        if let Some(message_id) = core.store.thread(thread_id).and_then(|t| {
-            t.messages
-                .iter()
-                .rev()
-                .find(|m| m.role == Role::Assistant)
-                .map(|m| m.id.clone())
-        }) {
+        if let Some(message_id) = reply_id(core, thread_id) {
             let approval = Approval {
-                id: new_id(),
-                title: title.to_string(),
-                detail: format!("{reason}: {}", crate::provider::one_line(detail)),
                 status: ApprovalStatus::Denied,
-                questions: Vec::new(),
-                answers: HashMap::new(),
                 kind: Some(kind),
-                suggestions: Vec::new(),
-                rule: None,
                 auto: true,
-                secret: None,
+                ..Approval::pending(
+                    title.to_string(),
+                    format!("{reason}: {}", crate::provider::one_line(detail)),
+                )
             };
             publish(
                 core,
@@ -152,30 +127,8 @@ impl Runner {
         title: &str,
         detail: &str,
     ) -> Result<(), Error> {
-        let message_id = core
-            .store
-            .thread(thread_id)
-            .and_then(|t| {
-                t.messages
-                    .iter()
-                    .rev()
-                    .find(|m| m.role == Role::Assistant)
-                    .map(|m| m.id.clone())
-            })
-            .ok_or("This turn is no longer running")?;
-        let approval = Approval {
-            id: new_id(),
-            title: title.to_string(),
-            detail: crate::provider::one_line(detail),
-            status: ApprovalStatus::Pending,
-            questions: Vec::new(),
-            answers: HashMap::new(),
-            kind: None,
-            suggestions: Vec::new(),
-            rule: None,
-            auto: false,
-            secret: None,
-        };
+        let message_id = reply_id(core, thread_id).ok_or("This turn is no longer running")?;
+        let approval = Approval::pending(title.to_string(), crate::provider::one_line(detail));
         self.hold(
             core,
             thread_id.to_string(),
@@ -200,26 +153,20 @@ impl Runner {
     ) -> Result<(), &'static str> {
         let (tx, rx) = mpsc::channel();
         let stopped = {
-            let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+            let turns = self.turns.locked();
             let Some(turn) = turns.get(&thread_id) else {
                 return Err("This turn is no longer running");
             };
-            self.hooks
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .insert(approval.id.clone(), tx);
-            turn.pending
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .insert(
-                    approval.id.clone(),
-                    PendingApproval {
-                        message_id: message_id.clone(),
-                        reply: json!({"hook": approval.id}),
-                        target: target.clone(),
-                        root,
-                    },
-                );
+            self.hooks.locked().insert(approval.id.clone(), tx);
+            turn.pending.locked().insert(
+                approval.id.clone(),
+                PendingApproval {
+                    message_id: message_id.clone(),
+                    reply: json!({"hook": approval.id}),
+                    target: target.clone(),
+                    root,
+                },
+            );
             [Arc::clone(&turn.cancelled), Arc::clone(&turn.exited)]
         };
         let id = approval.id.clone();
@@ -238,8 +185,7 @@ impl Runner {
                     // The agent may still ask about the call itself; it was answered here.
                     if let Some(target) = target {
                         self.grants
-                            .lock()
-                            .unwrap_or_else(PoisonError::into_inner)
+                            .locked()
                             .entry(thread_id)
                             .or_default()
                             .push(target);
@@ -250,10 +196,7 @@ impl Runner {
                 Err(RecvTimeoutError::Timeout)
                     if !stopped.iter().any(|s| s.load(Ordering::SeqCst)) => {}
                 Err(_) => {
-                    self.hooks
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .remove(&id);
+                    self.hooks.locked().remove(&id);
                     return Err("This turn is no longer running");
                 }
             }
@@ -267,7 +210,7 @@ impl Runner {
         target: &Target,
         root: &Path,
     ) -> bool {
-        let mut grants = self.grants.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut grants = self.grants.locked();
         let Some(granted) = grants.get_mut(thread_id) else {
             return false;
         };
@@ -280,4 +223,14 @@ impl Runner {
         granted.remove(i);
         true
     }
+}
+
+/// The id of the newest reply in the thread: the one its running turn writes into.
+pub(super) fn reply_id(core: &Core, thread_id: &str) -> Option<String> {
+    core.store.thread(thread_id).and_then(|t| {
+        t.messages
+            .iter()
+            .rfind(|m| m.role == Role::Assistant)
+            .map(|m| m.id.clone())
+    })
 }

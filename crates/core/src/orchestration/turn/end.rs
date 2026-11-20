@@ -2,9 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::PoisonError;
 use serde_json::Value;
 use crate::extensions::hooks::HookEvent;
 use crate::provider;
@@ -87,8 +87,7 @@ pub(in crate::orchestration) fn hold_unanswered(turn: &Turn, ids: &[String]) {
     turn.core
         .runner
         .handed_over
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+        .locked()
         .retain(|id| !ids.contains(id));
     for id in ids {
         publish(
@@ -124,12 +123,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
     // thread until the user explicitly resumes them; unanswered steers were already
     // delivered to the agent and continue automatically if needed.
     let (mut unanswered, queued) = {
-        let mut turns = turn
-            .core
-            .runner
-            .turns
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let mut turns = turn.core.runner.turns.locked();
         // A retired idle turn may already have been replaced by a new one.
         if turns
             .get(&turn.thread_id)
@@ -137,30 +131,14 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         {
             turns.remove(&turn.thread_id);
             // A call the user allowed through a hook was allowed for this turn only.
-            turn.core
-                .runner
-                .grants
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(&turn.thread_id);
+            turn.core.runner.grants.locked().remove(&turn.thread_id);
         }
         // Queued messages stay in the thread as queued until the turn has finished.
         // Steering messages the agent never answered continue automatically unless
         // the turn was stopped; a stopped turn holds them as queued messages instead.
-        let unanswered = turn
-            .steers
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .drain(..)
-            .collect::<Vec<_>>();
-        let queued =
-            std::mem::take(&mut *turn.queue.lock().unwrap_or_else(PoisonError::into_inner));
-        let mut handed_over = turn
-            .core
-            .runner
-            .handed_over
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let unanswered = turn.steers.locked().drain(..).collect::<Vec<_>>();
+        let queued = std::mem::take(&mut *turn.queue.locked());
+        let mut handed_over = turn.core.runner.handed_over.locked();
         for message in &queued {
             handed_over.remove(&message.message_id);
         }
@@ -399,7 +377,7 @@ pub(in crate::orchestration) fn log_cli_version(agent: AgentKind) {
         return;
     }
     {
-        let mut logged = LOGGED.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut logged = LOGGED.locked();
         if logged.contains(&agent) {
             return;
         }

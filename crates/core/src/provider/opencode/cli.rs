@@ -108,10 +108,7 @@ pub(crate) fn parse_agents(text: &str) -> Result<String, Error> {
 /// Returns an error when OpenCode is not installed.
 pub fn info() -> Result<CliInfo, Error> {
     let path = opencode_bin().ok_or("OpenCode is not installed")?;
-    let version = run(&["--version"]).map_or_else(
-        |_| "unknown".into(),
-        |text| text.lines().next().unwrap_or_default().trim().to_string(),
-    );
+    let version = cli_info::version(&path);
     Ok(CliInfo {
         path: path.to_string_lossy().into_owned(),
         version,

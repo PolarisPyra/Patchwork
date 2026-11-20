@@ -2,9 +2,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::process::{Output, Stdio};
-use std::sync::{Mutex, PoisonError, mpsc};
+use std::sync::{Mutex, mpsc};
 use std::time::Duration;
 
 /// How long a git command that talks to a remote may run before it is stopped.
@@ -98,10 +99,7 @@ static RUNNING: Mutex<Vec<u32>> = Mutex::new(Vec::new());
 /// The pids of the git and `gh` commands Patchwork is running now, each the leader of the
 /// process group its helpers are in.
 pub(crate) fn own_commands() -> Vec<u32> {
-    RUNNING
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .clone()
+    RUNNING.locked().clone()
 }
 
 /// A command in [`RUNNING`] until it drops.
@@ -109,20 +107,14 @@ struct Running(u32);
 
 impl Running {
     fn start(pid: u32) -> Self {
-        RUNNING
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(pid);
+        RUNNING.locked().push(pid);
         Self(pid)
     }
 }
 
 impl Drop for Running {
     fn drop(&mut self) {
-        RUNNING
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .retain(|pid| *pid != self.0);
+        RUNNING.locked().retain(|pid| *pid != self.0);
     }
 }
 

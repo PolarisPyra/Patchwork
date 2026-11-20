@@ -138,7 +138,7 @@ fn add_foreign(themes: Vec<ThemeFile>, name: &str) -> Result<Imported, Error> {
             .check(&theme)
             .map_err(|e| format!("{name} cannot be used: {e}"))?;
         let id = THEMES.add(&theme.name, &theme)?;
-        first.get_or_insert(imported(ImportedKind::Scheme, id, theme.name));
+        first.get_or_insert_with(|| imported(ImportedKind::Scheme, id, theme.name));
     }
     first.ok_or_else(|| format!("{name} has no color scheme in it").into())
 }

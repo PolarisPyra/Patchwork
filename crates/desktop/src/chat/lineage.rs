@@ -94,18 +94,12 @@ impl Workspace {
             return;
         }
         self.lineage.hovering = Some(id.clone());
-        cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                .timer(Duration::from_millis(HOVER_DELAY_MS))
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                if this.lineage.hovering.as_ref() == Some(&id) {
-                    this.lineage.details = Some(id);
-                    cx.notify();
-                }
-            });
-        })
-        .detach();
+        crate::ui::after(cx, Duration::from_millis(HOVER_DELAY_MS), |this, cx| {
+            if this.lineage.hovering.as_ref() == Some(&id) {
+                this.lineage.details = Some(id);
+                cx.notify();
+            }
+        });
     }
 }
 

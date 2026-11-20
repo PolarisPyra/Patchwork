@@ -5,9 +5,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::{OnceLock, PoisonError};
+use std::sync::OnceLock;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
@@ -24,7 +25,7 @@ const POLL: Duration = Duration::from_millis(25);
 /// or its session. Its tree and session count only while its pid is still the shell, since a pid
 /// handed on would bring another program's processes.
 pub(super) fn descendants(term: &Term, table: &Snapshot) -> Vec<Process> {
-    let mut tracked = term.tracked.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut tracked = term.tracked.locked();
     let mut found = std::mem::take(&mut *tracked);
     if let (Some(pid), Some(root)) = (term.pid, &term.root) {
         let tree = table.tree(pid);
@@ -62,11 +63,7 @@ pub(super) fn close(term: &Term) -> Result<(), Error> {
 pub(super) fn kill(term: &Term) {
     let members = |term: &Term| match Snapshot::read() {
         Some(table) => descendants(term, &table),
-        None => term
-            .tracked
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone(),
+        None => term.tracked.locked().clone(),
     };
     signal_all(&members(term), Signal::Kill);
     if !term.exited.load(Ordering::Acquire) {
@@ -105,7 +102,7 @@ pub(super) fn inspect(term: &Term) -> (Activity, u64) {
         _ => Activity::Unknown,
     };
     let key = format!("{revision}:{}", state.name());
-    let mut seen = term.observed.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut seen = term.observed.locked();
     if key != seen.0 {
         seen.0 = key;
         seen.1 += 1;
@@ -116,7 +113,7 @@ pub(super) fn inspect(term: &Term) -> (Activity, u64) {
 /// The shell's own state while it holds the screen; busy while another program does.
 #[cfg(unix)]
 fn foreground(term: &Term, pid: i32, shell: Activity) -> Activity {
-    let master = term.master.lock().unwrap_or_else(PoisonError::into_inner);
+    let master = term.master.locked();
     match master.process_group_leader() {
         None => Activity::Unknown,
         Some(group) if group == pid => shell,
@@ -231,11 +228,7 @@ fn signal_shell(term: &Term, signal: Signal) {
             crate::system::processes::signal(root, signal.number());
         }
         None => {
-            let _ = term
-                .killer
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .kill();
+            let _ = term.killer.locked().kill();
         }
     }
 }
@@ -244,11 +237,7 @@ fn signal_shell(term: &Term, signal: Signal) {
 #[cfg(not(unix))]
 fn signal_shell(term: &Term, signal: Signal) {
     let Some(pid) = term.pid else {
-        let _ = term
-            .killer
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .kill();
+        let _ = term.killer.locked().kill();
         return;
     };
     let mut cmd = crate::system::host_command("taskkill");

@@ -5,7 +5,7 @@
 
 use rusqlite::{OptionalExtension, params};
 
-use super::crypt::{err, seal, unseal};
+use super::crypt::{err, seal, sealed_rows, unseal};
 use super::known;
 use super::password::needs_password;
 use super::state::{State, Status, state, status};
@@ -149,17 +149,10 @@ pub(crate) fn names() -> Vec<String> {
     let State::Open(vault) = &*state else {
         return Vec::new();
     };
-    let rows: Vec<(String, Vec<u8>, Vec<u8>)> = vault
-        .conn
-        .prepare("SELECT name, nonce, value FROM secrets")
-        .and_then(|mut all| {
-            all.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
-                .collect()
-        })
-        .unwrap_or_else(|e| {
-            log::warn!(error:% = e; "could not read the vault: {{error}}");
-            Vec::new()
-        });
+    let rows = sealed_rows(&vault.conn).unwrap_or_else(|e| {
+        log::warn!(error:% = e; "could not read the vault: {{error}}");
+        Vec::new()
+    });
     rows.into_iter()
         .filter(|(name, nonce, sealed)| {
             unseal(&vault.cipher, name, nonce, sealed).is_ok_and(|value| !value.is_empty())
