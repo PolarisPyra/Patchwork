@@ -151,10 +151,10 @@ impl BotPage {
     /// Saves `bot` off the UI thread, and shows it as saved, or the error and the bot as it was.
     fn save(&mut self, bot: Bot, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { core.save_bot(bot) });
-        cx.spawn(async move |this, cx| {
-            let saved = task.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.save_bot(bot),
+            move |this, saved, cx| {
                 match saved {
                     Ok(bot) => this.show_saved(bot, cx),
                     Err(e) => {
@@ -164,9 +164,8 @@ impl BotPage {
                     }
                 }
                 this.refresh_sidebar(cx);
-            });
-        })
-        .detach();
+            },
+        );
     }
 
     /// Shows `bot` as saved: its name in the name field, and a project it no longer works in
@@ -251,29 +250,27 @@ impl BotPage {
     /// Saves the blocked tools off the UI thread, and shows the bot as saved.
     fn save_blocked(&mut self, blocked: BlockedTools, cx: &mut Context<Self>) {
         let (core, id) = (Arc::clone(&self.core), self.bot.id.clone());
-        let task = cx.background_spawn(async move { core.set_bot_blocked(&id, blocked) });
-        cx.spawn(async move |this, cx| {
-            let saved = task.await;
-            let _ = this.update(cx, |this, cx| match saved {
+        crate::ui::off_thread(
+            cx,
+            move || core.set_bot_blocked(&id, blocked),
+            move |this, saved, cx| match saved {
                 Ok(bot) => this.show_saved(bot, cx),
                 Err(e) => this.fail(&e, cx),
-            });
-        })
-        .detach();
+            },
+        );
     }
 
     /// Reads the MCP servers the bot could block, off the UI thread.
     fn load_servers(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { core.mcp_server_names() });
-        cx.spawn(async move |this, cx| {
-            let names = task.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.mcp_server_names(),
+            move |this, names, cx| {
                 this.servers = names;
                 cx.notify();
-            });
-        })
-        .detach();
+            },
+        );
     }
 
     pub(super) fn set_run_in(&mut self, project: Option<String>, cx: &mut Context<Self>) {
@@ -310,38 +307,38 @@ impl BotPage {
 
     /// Asks for files and gives the bot a copy of each.
     pub(super) fn add_files(&mut self, cx: &mut Context<Self>) {
-        let picked = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: true,
-            prompt: None,
-        });
         let core = Arc::clone(&self.core);
         let id = self.bot.id.clone();
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = picked.await else {
-                return;
-            };
-            let added = cx
-                .background_spawn(async move {
-                    let errors: Vec<String> = paths
-                        .iter()
-                        .filter_map(|path: &PathBuf| core.add_knowledge(&id, path).err())
-                        .map(|e| e.to_string())
-                        .collect();
-                    (errors, core.knowledge_files(&id))
-                })
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                let (errors, files) = added;
-                this.knowledge = files;
-                if !errors.is_empty() {
-                    this.fail(&errors.join("\n"), cx);
-                }
-                cx.notify();
-            });
-        })
-        .detach();
+        crate::ui::pick_paths(
+            cx,
+            PathPromptOptions {
+                files: true,
+                directories: false,
+                multiple: true,
+                prompt: None,
+            },
+            move |_, paths, cx| {
+                crate::ui::off_thread(
+                    cx,
+                    move || {
+                        let errors: Vec<String> = paths
+                            .iter()
+                            .filter_map(|path: &PathBuf| core.add_knowledge(&id, path).err())
+                            .map(|e| e.to_string())
+                            .collect();
+                        (errors, core.knowledge_files(&id))
+                    },
+                    move |this, added, cx| {
+                        let (errors, files) = added;
+                        this.knowledge = files;
+                        if !errors.is_empty() {
+                            this.fail(&errors.join("\n"), cx);
+                        }
+                        cx.notify();
+                    },
+                );
+            },
+        );
     }
 
     pub(super) fn remove_file(&mut self, name: &str, cx: &mut Context<Self>) {
@@ -367,29 +364,27 @@ impl BotPage {
     fn load_knowledge(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
         let id = self.bot.id.clone();
-        let task = cx.background_spawn(async move { core.knowledge_files(&id) });
-        cx.spawn(async move |this, cx| {
-            let files = task.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.knowledge_files(&id),
+            move |this, files, cx| {
                 this.knowledge = files;
                 cx.notify();
-            });
-        })
-        .detach();
+            },
+        );
     }
 
     pub fn load_usage(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
         let id = self.bot.id.clone();
-        let task = cx.background_spawn(async move { core.bot_usage(&id) });
-        cx.spawn(async move |this, cx| {
-            let usage = task.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.bot_usage(&id),
+            move |this, usage, cx| {
                 this.usage = Some(usage);
                 cx.notify();
-            });
-        })
-        .detach();
+            },
+        );
     }
 
     pub(super) fn open_run(&self, thread_id: &str, cx: &mut Context<Self>) {
@@ -451,8 +446,6 @@ impl BotPage {
 
     /// Has the sidebar show the bot's name as saved.
     fn refresh_sidebar(&self, cx: &mut Context<Self>) {
-        if let Some(workspace) = self.workspace.upgrade() {
-            workspace.update(cx, Workspace::reload_bots);
-        }
+        let _ = self.workspace.update(cx, Workspace::reload_bots);
     }
 }

@@ -21,16 +21,14 @@ mod sidebar;
 mod ui;
 mod workspace;
 
-use std::fs::{File, OpenOptions};
-use std::io::Write;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures::StreamExt;
 use futures::channel::mpsc;
 use gpui::{
-    App, Bounds, Font, FontStyle, FontWeight, TextRenderingMode, TitlebarOptions, WindowBounds,
-    WindowOptions, actions, font, prelude::*, px, size,
+    App, Bounds, Window, WindowHandle, Font, FontStyle, FontWeight, TextRenderingMode,
+    TitlebarOptions, WindowBounds, WindowOptions, actions, font, prelude::*, px, size,
 };
 use patchwork_core::Core;
 use patchwork_core::system::Dirs;
@@ -76,77 +74,6 @@ pub const APP_TITLE: &str = if cfg!(debug_assertions) {
     "Patchwork"
 };
 
-/// Writes the app's messages to `main.log` in this launch's log folder, as the desktop app does.
-struct FileLog(Mutex<File>);
-
-impl log::Log for FileLog {
-    fn enabled(&self, metadata: &log::Metadata) -> bool {
-        patchwork_core::logging::app_logs(metadata.level())
-    }
-
-    fn log(&self, record: &log::Record) {
-        if !self.enabled(record.metadata()) {
-            return;
-        }
-        let level = match record.level() {
-            log::Level::Warn => "warning".to_string(),
-            level => level.as_str().to_lowercase(),
-        };
-        let time = patchwork_core::logging::now_text();
-        let mut properties = Properties(Vec::new());
-        let _ = record.key_values().visit(&mut properties);
-        let message = patchwork_core::logging::redact(&properties.fill(&record.args().to_string()));
-        if let Ok(mut file) = self.0.lock() {
-            let _ = writeln!(file, "{time} [{level}] {message}");
-        }
-    }
-
-    fn flush(&self) {
-        if let Ok(mut file) = self.0.lock() {
-            let _ = file.flush();
-        }
-    }
-}
-
-/// The named properties of a log record, written in place of their `{key}` in its message.
-struct Properties(Vec<(String, String)>);
-
-impl Properties {
-    /// The message with each `{key}` it names replaced by that property's value.
-    fn fill(&self, message: &str) -> String {
-        let mut filled = String::with_capacity(message.len());
-        let mut rest = message;
-        while let Some(open) = rest.find('{') {
-            filled.push_str(&rest[..open]);
-            let named = rest[open + 1..].find('}').and_then(|close| {
-                let key = &rest[open + 1..open + 1 + close];
-                let value = self.0.iter().find(|(k, _)| k == key)?;
-                Some((close, &value.1))
-            });
-            if let Some((close, value)) = named {
-                filled.push_str(value);
-                rest = &rest[open + close + 2..];
-            } else {
-                filled.push('{');
-                rest = &rest[open + 1..];
-            }
-        }
-        filled.push_str(rest);
-        filled
-    }
-}
-
-impl<'kvs> log::kv::VisitSource<'kvs> for Properties {
-    fn visit_pair(
-        &mut self,
-        key: log::kv::Key<'kvs>,
-        value: log::kv::Value<'kvs>,
-    ) -> Result<(), log::kv::Error> {
-        self.0.push((key.to_string(), value.to_string()));
-        Ok(())
-    }
-}
-
 /// Runs the helper the first argument names and returns its exit code, or None to open the app.
 /// Without this, every hook or relay an agent starts would open another Patchwork window.
 fn run_helper() -> Option<i32> {
@@ -170,26 +97,6 @@ fn run_helper() -> Option<i32> {
         _ => return None,
     };
     Some(run())
-}
-
-fn start_logging(dirs: &Dirs) {
-    let folder = patchwork_core::logging::session_dir(&dirs.logs);
-    let opened = std::fs::create_dir_all(&folder).and_then(|()| {
-        OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(folder.join("main.log"))
-    });
-    if let Ok(file) = opened
-        && log::set_boxed_logger(Box::new(FileLog(Mutex::new(file)))).is_ok()
-    {
-        log::set_max_level(log::LevelFilter::Trace);
-    }
-    let report = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        log::error!(info:%; "panic: {{info}}");
-        report(info);
-    }));
 }
 
 /// Starts the tasks whose time has come, on a timer of its own, for the life of the app.
@@ -241,6 +148,27 @@ fn prewarm_fonts(cx: &App) {
     .detach();
 }
 
+/// Applies each message `received` brings to the window's workspace, in order, until the
+/// channel or the window closes.
+fn forward<T: 'static>(
+    window: WindowHandle<Workspace>,
+    mut received: mpsc::UnboundedReceiver<T>,
+    cx: &App,
+    apply: impl Fn(&mut Workspace, T, &mut Window, &mut Context<Workspace>) + 'static,
+) {
+    cx.spawn(async move |cx| {
+        while let Some(message) = received.next().await {
+            let applied = window.update(cx, |workspace, window, cx| {
+                apply(workspace, message, window, cx);
+            });
+            if applied.is_err() {
+                break;
+            }
+        }
+    })
+    .detach();
+}
+
 fn main() {
     // Before anything holds a key: the app, and the helpers that are handed one.
     let dumps = patchwork_core::system::memory::deny_dumps();
@@ -263,11 +191,11 @@ fn main() {
     if patchwork_core::system::instance::raise_running(&dirs.data) {
         return;
     }
-    start_logging(&dirs);
+    patchwork_core::logging::start_main_log(&dirs.logs);
     if let Err(e) = dumps {
         log::warn!(error:% = e; "a crash could write Patchwork's memory to a core file: {{error}}");
     }
-    let (events, mut received) = mpsc::unbounded();
+    let (events, received) = mpsc::unbounded();
     let core = match Core::open(
         &dirs,
         // A debug build keeps its chat folders apart from the released app's, as it does its data.
@@ -288,18 +216,18 @@ fn main() {
     };
     start_scheduled_tasks(Arc::clone(&core));
     // A second launch asks on the relay's thread; the window is shown on the app's.
-    let (raise, mut raised) = mpsc::unbounded::<()>();
+    let (raise, raised) = mpsc::unbounded::<()>();
     patchwork_core::provider::mcp::set_raise_handler(Box::new(move || {
         let _ = raise.unbounded_send(());
     }));
     // Git asks for a sign-in on the thread that runs it; the question is shown on the app's.
-    let (ask, mut asked) = mpsc::unbounded();
+    let (ask, asked) = mpsc::unbounded();
     patchwork_core::workspace::set_credential_prompter(Box::new(move |request| {
         // With no window left to ask in, the request drops and the command fails.
         let _ = ask.unbounded_send(request);
     }));
     // A change in where updating stands is drawn by the window, like an agent's events.
-    let (update_sender, mut update_events) = mpsc::unbounded();
+    let (update_sender, update_events) = mpsc::unbounded::<()>();
     core.on_update_change(Box::new(move || {
         let _ = update_sender.unbounded_send(());
     }));
@@ -404,52 +332,19 @@ fn main() {
                     workspace.open_thread(&thread_id, cx);
                 });
             });
-            cx.spawn(async move |cx| {
-                while raised.next().await.is_some() {
-                    log::info!("a second launch asked for this window");
-                    let shown = window.update(cx, |_, window, cx| {
-                        cx.activate(true);
-                        window.activate_window();
-                    });
-                    if shown.is_err() {
-                        break;
-                    }
-                }
-            })
-            .detach();
-            cx.spawn(async move |cx| {
-                while let Some(request) = asked.next().await {
-                    let shown = window.update(cx, |workspace, window, cx| {
-                        workspace.ask_credential(request, window, cx);
-                    });
-                    if shown.is_err() {
-                        break;
-                    }
-                }
-            })
-            .detach();
+            forward(window, raised, cx, |_, (), window, cx| {
+                log::info!("a second launch asked for this window");
+                cx.activate(true);
+                window.activate_window();
+            });
+            forward(window, asked, cx, |workspace, request, window, cx| {
+                workspace.ask_credential(request, window, cx);
+            });
             // Agent events arrive on the core's threads and are applied here, in order.
-            cx.spawn(async move |cx| {
-                while let Some(envelope) = received.next().await {
-                    let applied = window.update(cx, |workspace, window, cx| {
-                        workspace.on_event(envelope, window, cx);
-                    });
-                    if applied.is_err() {
-                        break;
-                    }
-                }
-            })
-            .detach();
-            cx.spawn(async move |cx| {
-                while update_events.next().await.is_some() {
-                    let applied =
-                        window.update(cx, |workspace, _, cx| workspace.on_update_change(cx));
-                    if applied.is_err() {
-                        break;
-                    }
-                }
-            })
-            .detach();
+            forward(window, received, cx, Workspace::on_event);
+            forward(window, update_events, cx, |workspace, (), _, cx| {
+                workspace.on_update_change(cx);
+            });
             cx.activate(true);
         });
 }

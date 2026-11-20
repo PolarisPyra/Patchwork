@@ -25,16 +25,6 @@ fn run(args: &[&str]) -> Result<String, Error> {
     cli_info::run(&binary, args)
 }
 
-/// The CLI's version line, e.g. `codex-cli 0.163.0-alpha.11.1`.
-///
-/// # Errors
-///
-/// Returns an error when the Codex CLI is not installed or `codex --version` fails.
-pub fn version() -> Result<String, Error> {
-    let text = run(&["--version"])?;
-    Ok(text.lines().next().unwrap_or_default().trim().to_string())
-}
-
 /// Parses `codex features list`. Each line is a flag name, its stage, and whether it is on;
 /// the stage may be two words, as in `under development`.
 #[must_use]
@@ -155,7 +145,7 @@ pub fn info() -> Result<CodexInfo, Error> {
     let path = binary().ok_or("The Codex CLI is not installed")?;
     Ok(CodexInfo {
         path: path.to_string_lossy().into_owned(),
-        version: version().unwrap_or_else(|_| "unknown".into()),
+        version: cli_info::version(&path),
         features: features().unwrap_or_default(),
         models: models(),
     })

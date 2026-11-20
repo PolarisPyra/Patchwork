@@ -9,6 +9,7 @@ use crate::workspace::{CommitDetail, CommitOptions, FileChange, GitCommit, GitRe
 
 use super::branches::branch_base;
 use super::run::{explained, git, git_branch, git_raw, git_succeeds, has_head};
+use super::changes::parse_numstat;
 
 /// Stages every change under `root`, untracked files included, for a commit of everything there.
 /// The rest of the repository stays as it is when `root` is one of its folders. Refused while a
@@ -166,27 +167,10 @@ pub fn commit_detail(root: &str, hash: &str) -> Result<CommitDetail, Error> {
             ],
         )
     };
-    let mut counts = HashMap::new();
-    let numstat = show("--numstat")?;
-    let mut tokens = numstat.split('\0');
-    while let Some(token) = tokens.next() {
-        let mut parts = token.splitn(3, '\t');
-        let (Some(added), Some(deleted), Some(path)) = (parts.next(), parts.next(), parts.next())
-        else {
-            continue;
-        };
-        // A rename's two paths follow its counts, each in a field of its own.
-        let path = if path.is_empty() {
-            tokens.next();
-            tokens.next().unwrap_or_default()
-        } else {
-            path
-        };
-        counts.insert(
-            path.to_string(),
-            (added.parse().unwrap_or(0), deleted.parse().unwrap_or(0)),
-        );
-    }
+    let counts: HashMap<String, (u32, u32)> = parse_numstat(&show("--numstat")?)
+        .into_iter()
+        .map(|(path, added, deleted)| (path, (added, deleted)))
+        .collect();
     let mut files = Vec::new();
     let names = show("--name-status")?;
     let mut fields = names.split('\0');

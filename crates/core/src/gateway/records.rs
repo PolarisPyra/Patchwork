@@ -3,7 +3,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::sync::PoisonError;
+use crate::system::Locked;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -308,11 +308,7 @@ impl Core {
         key: &str,
         change: impl FnOnce(&mut Vec<T>),
     ) -> Result<(), Error> {
-        let _held = self
-            .gateway
-            .records
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let _held = self.gateway.records.locked();
         let mut list = self.read_list(key);
         change(&mut list);
         let json = serde_json::to_string(&list).map_err(|e| e.to_string())?;

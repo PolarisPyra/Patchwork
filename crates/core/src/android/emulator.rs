@@ -9,11 +9,12 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -90,14 +91,10 @@ pub struct Emulators {
     accelerated: AtomicBool,
 }
 
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
 impl Emulators {
     /// The started emulators still running, read from the app's state the first time.
     fn started(&self, store: &Store) -> Vec<Started> {
-        let mut started = lock(&self.started);
+        let mut started = self.started.locked();
         let known = started.get_or_insert_with(|| {
             store
                 .state(STARTED_KEY)
@@ -118,7 +115,7 @@ impl Emulators {
     }
 
     fn record(&self, store: &Store, entry: Started) {
-        let mut started = lock(&self.started);
+        let mut started = self.started.locked();
         let known = started.get_or_insert_with(Vec::new);
         known.retain(|other| other.port != entry.port);
         known.push(entry);
@@ -128,7 +125,8 @@ impl Emulators {
     /// The virtual device the emulator on `port` runs, when Patchwork started it and it still
     /// runs. Reads only what [`Self::started`] last kept.
     pub(super) fn ours(&self, port: u16) -> Option<String> {
-        lock(&self.started)
+        self.started
+            .locked()
             .as_ref()?
             .iter()
             .find(|entry| entry.port == port)
@@ -141,17 +139,19 @@ impl Emulators {
         serial: &str,
         ask: impl FnOnce() -> Option<String>,
     ) -> Option<String> {
-        if let Some(name) = lock(&self.names).get(serial) {
+        if let Some(name) = self.names.locked().get(serial) {
             return Some(name.clone());
         }
         let name = ask()?;
-        lock(&self.names).insert(serial.to_string(), name.clone());
+        self.names.locked().insert(serial.to_string(), name.clone());
         Some(name)
     }
 
     /// Forgets the names of emulators that are no longer listed, whose serials the next ones reuse.
     pub(super) fn keep_names(&self, serials: &[&str]) {
-        lock(&self.names).retain(|serial, _| serials.contains(&serial.as_str()));
+        self.names
+            .locked()
+            .retain(|serial, _| serials.contains(&serial.as_str()));
     }
 }
 

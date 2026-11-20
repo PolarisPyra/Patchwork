@@ -54,6 +54,16 @@ pub(super) fn held(key: &[u8; KEY_LEN]) -> Box<XChaCha20Poly1305> {
     held
 }
 
+/// A secret as the vault's database stores it: its name, nonce and sealed value.
+pub(super) type SealedRow = (String, Vec<u8>, Vec<u8>);
+
+/// Every secret in the vault's database as it is stored.
+pub(super) fn sealed_rows(conn: &rusqlite::Connection) -> rusqlite::Result<Vec<SealedRow>> {
+    conn.prepare("SELECT name, nonce, value FROM secrets")?
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+        .collect()
+}
+
 /// `value` sealed as `name`: the nonce it was sealed with, and the sealed bytes.
 pub(super) fn seal(
     cipher: &XChaCha20Poly1305,

@@ -8,7 +8,6 @@
 // Rust guideline compliant 2026-10-09
 
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 
@@ -366,10 +365,7 @@ impl Core {
                     .unwrap_or_default();
                 let dir = crate::system::dirs().cache.join("screenshots");
                 std::fs::create_dir_all(&dir)?;
-                let stamp = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .map(|since| since.as_millis())
-                    .unwrap_or_default();
+                let stamp = crate::system::now_ms();
                 let path = dir.join(format!("android-{stamp}.png"));
                 std::fs::write(&path, png)?;
                 Ok(format!(

@@ -7,8 +7,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, Image, ImageFormat, ObjectFit, Pixels, Role, Size, Task, Toggled, Window, canvas,
-    div, img, prelude::*, px,
+    AnyElement, Image, ImageFormat, ObjectFit, Pixels, Role, Size, Task, Window, canvas, div, img,
+    prelude::*, px,
 };
 
 use super::Panel;
@@ -151,7 +151,7 @@ impl Panel {
                     )
                     .child(
                         btn("screen-live", "Live", BtnKind::Plain, false, &t)
-                            .aria_toggled(if live { Toggled::True } else { Toggled::False })
+                            .aria_toggled(live.into())
                             .when(live, |b| b.bg(t.bg_selected_muted).text_color(fg))
                             .child("Live")
                             .on_click(cx.listener(|this, _, _, cx| {

@@ -6,8 +6,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::HashSet;
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
 
@@ -56,7 +57,7 @@ fn turn(caller: &Thread) -> String {
 /// run in this turn.
 fn begin(ctx: &Ctx<'_>, key: &str) -> Standing {
     let runner = &ctx.core.runner;
-    let mut all = runner.ran.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut all = runner.ran.locked();
     let ran = all.entry(ctx.caller.id.clone()).or_default();
     let turn = turn(ctx.caller);
     if ran.turn != turn {
@@ -81,7 +82,7 @@ fn begin(ctx: &Ctx<'_>, key: &str) -> Standing {
 /// answers the same call if it comes next.
 fn end(ctx: &Ctx<'_>, key: &str, kept: Option<&str>) {
     let runner = &ctx.core.runner;
-    let mut all = runner.ran.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut all = runner.ran.locked();
     if let Some(ran) = all.get_mut(&ctx.caller.id) {
         ran.running.remove(key);
         ran.last = kept.map(|result| (key.to_string(), result.to_string()));

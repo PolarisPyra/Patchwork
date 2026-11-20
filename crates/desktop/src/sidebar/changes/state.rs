@@ -437,13 +437,15 @@ impl ChangesView {
             return;
         }
         let focus = w.change_focus.clone();
-        let task = cx.background_spawn(async move {
-            let root = core.thread_root(&thread)?;
-            Ok::<_, patchwork_core::Error>(patchwork_core::workspace::missing_files(&root, &files))
-        });
-        cx.spawn(async move |this, cx| {
-            let missing = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || {
+                let root = core.thread_root(&thread)?;
+                Ok::<_, patchwork_core::Error>(patchwork_core::workspace::missing_files(
+                    &root, &files,
+                ))
+            },
+            move |this, missing, cx| {
                 // Another reply may have been focused since.
                 let current = this
                     .workspace
@@ -460,9 +462,8 @@ impl ChangesView {
                     }
                 }
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     pub fn load_more(&mut self, cx: &mut Context<Self>) {
@@ -472,9 +473,9 @@ impl ChangesView {
 
     /// Reads the changes and the branch again, as the header's Refresh does.
     pub(super) fn refresh_all(&mut self, cx: &mut Context<Self>) {
-        if let Some(w) = self.workspace.upgrade() {
-            w.update(cx, crate::workspace::Workspace::load_git);
-        }
+        let _ = self
+            .workspace
+            .update(cx, crate::workspace::Workspace::load_git);
         self.load_sync(cx);
     }
 
@@ -486,15 +487,11 @@ impl ChangesView {
         self.result = result;
         self.result_seq += 1;
         let seq = self.result_seq;
-        cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(RESULT_FOR).await;
-            this.update(cx, |this, cx| {
-                if this.result_seq == seq {
-                    this.result = None;
-                    cx.notify();
-                }
-            })
-        })
-        .detach();
+        crate::ui::after(cx, RESULT_FOR, move |this, cx| {
+            if this.result_seq == seq {
+                this.result = None;
+                cx.notify();
+            }
+        });
     }
 }

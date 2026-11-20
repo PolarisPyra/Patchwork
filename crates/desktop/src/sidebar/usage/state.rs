@@ -176,18 +176,18 @@ impl Workspace {
                 continue;
             }
             let core = Arc::clone(&self.core);
-            let task = cx.background_spawn(async move {
-                let status = detect_agent(kind);
-                let usage =
-                    (status.installed && status.signed_in).then(|| core.usage.get(kind, refresh));
-                Entry {
-                    status: Some(status),
-                    usage,
-                }
-            });
-            cx.spawn(async move |this, cx| {
-                let entry = task.await;
-                this.update(cx, |this, cx| {
+            crate::ui::off_thread(
+                cx,
+                move || {
+                    let status = detect_agent(kind);
+                    let usage = (status.installed && status.signed_in)
+                        .then(|| core.usage.get(kind, refresh));
+                    Entry {
+                        status: Some(status),
+                        usage,
+                    }
+                },
+                move |this, entry, cx| {
                     // The core returns the last numbers when it skips a refresh, so the same
                     // reading time means nothing new came back.
                     let before = this
@@ -199,23 +199,18 @@ impl Workspace {
                     let limited = limited_until(Some(&entry), now_ms()).is_some();
                     if refresh && !limited && before.is_some() && after == before {
                         this.usage.up_to_date = Some(kind);
-                        cx.spawn(async move |this, cx| {
-                            cx.background_executor().timer(UP_TO_DATE).await;
-                            this.update(cx, |this, cx| {
-                                if this.usage.up_to_date == Some(kind) {
-                                    this.usage.up_to_date = None;
-                                    cx.notify();
-                                }
-                            })
-                        })
-                        .detach();
+                        crate::ui::after(cx, UP_TO_DATE, move |this, cx| {
+                            if this.usage.up_to_date == Some(kind) {
+                                this.usage.up_to_date = None;
+                                cx.notify();
+                            }
+                        });
                     }
                     this.usage.entries.insert(kind, entry);
                     this.usage.pending.remove(&kind);
                     cx.notify();
-                })
-            })
-            .detach();
+                },
+            );
         }
         cx.notify();
     }

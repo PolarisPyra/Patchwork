@@ -7,10 +7,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::Locked;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 const SLICE: &str = "app-patchwork-agents.slice";
@@ -99,10 +100,7 @@ fn systemd_run() -> Option<&'static SystemdRun> {
         limit_slice();
         // Kills from before this run are not this run's agents'.
         if let Some(now) = memory_kills() {
-            MEMORY_KILLS
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .seen = now;
+            MEMORY_KILLS.locked().seen = now;
         }
         Some(run)
     })
@@ -259,7 +257,7 @@ fn note_memory_kills(kills: &mut MemoryKills) {
 /// Asked as an agent ends on a signal: other things send the same signal, and it ran out of
 /// memory only when this says so. Each kill answers for one agent, so two agents killed at once are both told.
 pub fn killed_for_memory() -> bool {
-    let mut kills = MEMORY_KILLS.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut kills = MEMORY_KILLS.locked();
     note_memory_kills(&mut kills);
     if kills.at.is_none_or(|at| at.elapsed() > KILL_STANDS_FOR) {
         kills.unanswered = 0;

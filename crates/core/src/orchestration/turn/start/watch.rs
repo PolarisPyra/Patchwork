@@ -2,11 +2,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use super::running::Pending;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::atomic::Ordering;
-use std::sync::PoisonError;
 use crate::system::{processes, scope};
 use crate::Core;
 use crate::events::{AgentEvent, AgentEventEnvelope};
@@ -74,13 +74,7 @@ pub(super) fn watch(w: &Watched) {
 fn tell_quiet(w: &Watched) {
     let since = w.last_output.load(Ordering::Relaxed);
     let quiet_ms = u64::try_from(QUIET_AFTER.as_millis()).unwrap_or(u64::MAX);
-    if now_ms().saturating_sub(since) < quiet_ms
-        || !w
-            .pending
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .is_empty()
-    {
+    if now_ms().saturating_sub(since) < quiet_ms || !w.pending.locked().is_empty() {
         return;
     }
     let Some(thread) = w.core.store.thread(&w.thread_id) else {

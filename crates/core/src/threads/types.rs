@@ -185,6 +185,38 @@ impl Goal {
 pub(crate) const NOT_FOUND: &str = "Chat not found";
 
 impl Thread {
+    /// A chat with no messages, no project, parent or session, and the agent's own settings.
+    #[must_use]
+    pub(crate) fn new(title: String, agent: AgentKind, access_mode: AccessMode) -> Thread {
+        Thread {
+            id: crate::system::new_id(),
+            project_id: None,
+            title,
+            agent,
+            model: None,
+            access_mode,
+            effort: None,
+            compact_window: None,
+            background: None,
+            session_id: None,
+            created_at: crate::system::now_ms(),
+            messages: Vec::new(),
+            goal: None,
+            position: 0,
+            folder_id: None,
+            archived_at: None,
+            parent: None,
+            slash_commands: Vec::new(),
+            imported_from: None,
+            context_pending: false,
+            role: None,
+            role_pending: false,
+            favorite: false,
+            pinned: false,
+            bot_id: None,
+        }
+    }
+
     /// The thread with `messages` in place of its own, which are not copied on the way: a
     /// thread's history can be megabytes, and the list of every thread is made on each change.
     #[must_use]

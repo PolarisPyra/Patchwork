@@ -57,6 +57,21 @@ pub struct ModelOption {
     pub context_window: Option<u64>,
 }
 
+impl ModelOption {
+    /// A model a catalog lists by id and name alone.
+    #[must_use]
+    pub fn listed(id: impl Into<String>, label: impl Into<String>) -> Self {
+        Self {
+            id: Some(id.into()),
+            label: label.into(),
+            default_model: None,
+            is_legacy: false,
+            efforts: None,
+            context_window: None,
+        }
+    }
+}
+
 /// A slash command advertised by a provider CLI for this thread/workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -19,19 +19,18 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { change(&core) });
-        cx.spawn(async move |this, cx| {
-            let done = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || change(&core),
+            move |this, done, cx| {
                 if let Err(e) = done {
                     log::warn!(what, error:% = e; "could not {{what}}: {{error}}");
                 }
                 // A project's name is in the settings.
                 this.settings = this.core.settings();
                 this.reload(cx);
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     /// What the window shows now, as a place to come back to.
@@ -211,11 +210,7 @@ impl Workspace {
                 .detach();
                 self.transcript_list.set_follow_mode(FollowMode::Tail);
                 self.opened_at = std::time::Instant::now();
-                cx.spawn(async move |this, cx| {
-                    cx.background_executor().timer(crate::chat::OPEN_HOLD).await;
-                    let _ = this.update(cx, |_, cx| cx.notify());
-                })
-                .detach();
+                crate::ui::after(cx, crate::chat::OPEN_HOLD, |_, cx| cx.notify());
                 if changed_project {
                     self.load_git(cx);
                 } else {
@@ -440,17 +435,11 @@ impl Workspace {
             return;
         }
         self.reload_queued = true;
-        cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                // One frame at 60 Hz, so a burst of changes reloads the list once.
-                .timer(Duration::from_millis(16))
-                .await;
-            this.update(cx, |this, cx| {
-                this.reload_queued = false;
-                this.reload(cx);
-            })
-        })
-        .detach();
+        // One frame at 60 Hz, so a burst of changes reloads the list once.
+        crate::ui::after(cx, Duration::from_millis(16), |this, cx| {
+            this.reload_queued = false;
+            this.reload(cx);
+        });
     }
 
     pub fn reload(&mut self, cx: &mut Context<Self>) {

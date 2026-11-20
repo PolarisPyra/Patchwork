@@ -2,10 +2,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -224,7 +225,7 @@ pub fn save(name: &str, previous: Option<String>, server: McpServer) -> Result<(
         _ => return Err("Give a command or a URL".into()),
     }
     {
-        let _guard = WRITE.lock().unwrap_or_else(PoisonError::into_inner);
+        let _guard = WRITE.locked();
         let old = previous.clone().unwrap_or_else(|| name.clone());
         // An empty value keeps the one the server has now, from the store or the file.
         let kept = read_config()
@@ -315,7 +316,7 @@ pub(super) fn resolved(name: &str, server: &McpServer) -> McpServer {
 ///
 /// Returns an error when the server's config file cannot be deleted.
 pub fn remove(name: &str) -> Result<(), Error> {
-    let _guard = WRITE.lock().unwrap_or_else(PoisonError::into_inner);
+    let _guard = WRITE.locked();
     remove_file(name)?;
     pool().remove(name);
     crate::provider::api::config::delete_secret(&secret_name(name));

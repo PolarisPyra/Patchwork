@@ -17,6 +17,12 @@ pub fn home() -> Option<PathBuf> {
         .or_else(|| home_dir().map(|h| h.join(".codex")))
 }
 
+/// Codex's settings file: `config.toml` in its home folder.
+#[must_use]
+pub fn config_file() -> PathBuf {
+    home().unwrap_or_default().join("config.toml")
+}
+
 pub fn auth(status: &mut AgentStatus) {
     let login = probe(AgentKind::Codex, &["login", "status"])
         .filter(|p| p.success)

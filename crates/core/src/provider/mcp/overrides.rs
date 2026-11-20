@@ -158,9 +158,7 @@ fn shared_relays(agent: AgentKind, root: &str) -> BTreeMap<String, Vec<String>> 
             std::slice::from_ref(&project),
         ),
         AgentKind::Codex => codex_servers(
-            &crate::provider::codex::home()
-                .unwrap_or_default()
-                .join("config.toml"),
+            &crate::provider::codex::config_file(),
             std::slice::from_ref(&project),
         ),
         _ => return BTreeMap::new(),

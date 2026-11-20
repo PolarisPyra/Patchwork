@@ -5,7 +5,7 @@
 
 use serde_json::Value;
 
-use super::crypt::unseal;
+use super::crypt::{sealed_rows, unseal};
 use super::state::Vault;
 use crate::logging;
 
@@ -19,14 +19,7 @@ const MIN_PART: usize = 16;
 /// Reads every value in `vault` again, after it opened or a secret changed. Nothing is logged
 /// here: a line logged while the values are swapped would wait on itself.
 pub(super) fn refresh(vault: &Vault) {
-    let rows: Vec<(String, Vec<u8>, Vec<u8>)> = vault
-        .conn
-        .prepare("SELECT name, nonce, value FROM secrets")
-        .and_then(|mut all| {
-            all.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
-                .collect()
-        })
-        .unwrap_or_default();
+    let rows = sealed_rows(&vault.conn).unwrap_or_default();
     let mut values = Vec::new();
     for (name, nonce, sealed) in rows {
         let Ok(bytes) = unseal(&vault.cipher, &name, &nonce, &sealed) else {

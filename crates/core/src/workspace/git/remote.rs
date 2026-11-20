@@ -2,8 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::workspace::{GitSyncState, PullRequest};
@@ -105,7 +106,7 @@ pub fn fetch_remote(root: &str) {
     let key = format!("{}\n{remote}", common.trim());
     let now = Instant::now();
     let failures = {
-        let mut fetches = FETCHES.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut fetches = FETCHES.locked();
         // Held until the fetch ends, so a caller meanwhile doesn't start another.
         let held = now + FETCH_RETRY_MAX;
         if let Some(entry) = fetches.iter_mut().find(|(k, ..)| *k == key) {
@@ -146,7 +147,7 @@ pub fn fetch_remote(root: &str) {
             (wait, failures.saturating_add(1))
         }
     };
-    let mut fetches = FETCHES.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut fetches = FETCHES.locked();
     if let Some(entry) = fetches.iter_mut().find(|(k, ..)| *k == key) {
         entry.1 = Instant::now() + wait;
         entry.2 = failures;
@@ -217,8 +218,7 @@ fn landed_earlier(root: &str, base: &str, head: &str) -> bool {
     };
     let (base, head) = (base.trim().to_owned(), head.trim().to_owned());
     let known = LANDED_EARLIER
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+        .locked()
         .iter()
         .find(|(b, h, _)| *b == base && *h == head)
         .map(|(_, _, found)| *found);
@@ -247,9 +247,7 @@ fn landed_earlier(root: &str, base: &str, head: &str) -> bool {
         )
     })()
     .unwrap_or(false);
-    let mut cache = LANDED_EARLIER
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner);
+    let mut cache = LANDED_EARLIER.locked();
     if cache.len() >= LANDED_KEPT {
         cache.clear();
     }
@@ -282,7 +280,7 @@ pub(crate) fn pr_merged(root: &str, branch: &str, rev: &str) -> bool {
             .find(|(r, b, h, _, _)| r == root && b == branch && *h == head)
             .map(|(_, _, _, merged, at)| (*merged, *at))
     };
-    let known = found(&PR_MERGED.lock().unwrap_or_else(PoisonError::into_inner));
+    let known = found(&PR_MERGED.locked());
     match known {
         Some((true, _)) => return true,
         Some((false, at)) if at.elapsed() < MERGED_RECHECK => return false,
@@ -313,7 +311,7 @@ pub(crate) fn pr_merged(root: &str, branch: &str, rev: &str) -> bool {
             pr["headRefOid"].as_str() == Some(&head) && pr["baseRefName"].as_str() == Some(&base)
         })
     });
-    let mut cache = PR_MERGED.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut cache = PR_MERGED.locked();
     cache.retain(|(r, b, h, _, _)| !(r == root && b == branch && *h == head));
     if cache.len() >= LANDED_KEPT {
         cache.clear();

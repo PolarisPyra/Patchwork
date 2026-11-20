@@ -73,6 +73,22 @@ pub(crate) fn json(
     Err(format!("{what} refused the request: {reason}").into())
 }
 
+/// Sends a request with `auth` as its `Authorization` header: a PUT or a POST of `body` when one
+/// is given, or else a GET.
+pub(crate) fn authorized(
+    http: &ureq::Agent,
+    method: &str,
+    url: &str,
+    auth: &str,
+    body: Option<&Value>,
+) -> Result<ureq::http::Response<ureq::Body>, ureq::Error> {
+    match (method, body) {
+        ("PUT", Some(body)) => http.put(url).header("Authorization", auth).send_json(body),
+        (_, Some(body)) => http.post(url).header("Authorization", auth).send_json(body),
+        _ => http.get(url).header("Authorization", auth).call(),
+    }
+}
+
 /// Downloads a file, with `auth` as its `Authorization` header when it is given.
 ///
 /// # Errors

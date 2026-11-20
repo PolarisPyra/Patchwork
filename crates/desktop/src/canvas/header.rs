@@ -229,11 +229,7 @@ impl Canvas {
                 d.child(div().ml_auto().children(self.conflict_nav(t, cx)))
                     .child(
                         btn("toggle-blame", "Blame", BtnKind::Plain, false, t)
-                            .aria_toggled(if on {
-                                gpui::Toggled::True
-                            } else {
-                                gpui::Toggled::False
-                            })
+                            .aria_toggled(on.into())
                             .when(on, |b| b.bg(selected).text_color(fg))
                             .child(icon("git-commit", 14.))
                             .child("Blame")

@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Toggled, div, prelude::*, px};
+use gpui::{AnyElement, Div, FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_core::provider::AgentKind;
 
 use super::{AGENT_KINDS, Onboarding, Probe};
@@ -24,10 +24,10 @@ impl Onboarding {
     /// Detects one agent.
     fn detect(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
         self.probes.entry(kind).or_default().checking = true;
-        let task = cx.background_spawn(async move { patchwork_core::provider::detect_agent(kind) });
-        cx.spawn(async move |this, cx| {
-            let status = task.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || patchwork_core::provider::detect_agent(kind),
+            move |this, status, cx| {
                 this.probes.insert(
                     kind,
                     Probe {
@@ -37,9 +37,8 @@ impl Onboarding {
                 );
                 this.sync_agents();
                 cx.notify();
-            });
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 
@@ -49,10 +48,10 @@ impl Onboarding {
         self.installing.insert(kind);
         self.install_errors.remove(&kind);
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { core.install_cli(kind) });
-        cx.spawn(async move |this, cx| {
-            let installed = task.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.install_cli(kind),
+            move |this, installed, cx| {
                 this.installing.remove(&kind);
                 match installed {
                     Ok(()) => {
@@ -72,9 +71,8 @@ impl Onboarding {
                     }
                 }
                 cx.notify();
-            });
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 
@@ -326,11 +324,7 @@ fn default_agent(
             .id(key_id("setup-default", kind))
             .role(Role::RadioButton)
             .aria_label(agent_label(kind))
-            .aria_toggled(if checked {
-                Toggled::True
-            } else {
-                Toggled::False
-            })
+            .aria_toggled(checked.into())
             .when_some(
                 this.default_tiles.get(&kind),
                 gpui::InteractiveElement::track_focus,

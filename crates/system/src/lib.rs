@@ -32,7 +32,7 @@ pub use error::Error;
 #[doc(inline)]
 pub use host::{hide_console, host_command, host_env};
 pub(crate) use host::path_var;
-pub use host::{blocked, lossy_lines, unreachable};
+pub use host::{Locked, blocked, lossy_lines, unreachable};
 #[cfg(windows)]
 pub use host::expand_windows_vars;
 #[doc(inline)]

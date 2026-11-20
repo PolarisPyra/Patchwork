@@ -50,22 +50,21 @@ impl Composer {
         let model = model.to_string();
         self.health.checked = Some((model.clone(), None));
         let provider = model.split('/').next().unwrap_or_default().to_string();
-        let task = cx.background_spawn(async move {
-            let found = config::provider(&provider).filter(|p| p.local)?;
-            Some((found.name, config::probe(&provider).ok()?))
-        });
-        cx.spawn(async move |this, cx| {
-            let health = task.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || {
+                let found = config::provider(&provider).filter(|p| p.local)?;
+                Some((found.name, config::probe(&provider).ok()?))
+            },
+            move |this, health, cx| {
                 if let Some((checked, found)) = this.health.checked.as_mut()
                     && *checked == model
                 {
                     *found = health;
                     cx.notify();
                 }
-            });
-        })
-        .detach();
+            },
+        );
     }
 
     /// Checks again at the next draw, as when a reply ends.
@@ -77,19 +76,18 @@ impl Composer {
     fn find_server(&mut self, provider: String, cx: &mut Context<Self>) {
         self.health.finding = true;
         self.health.error = None;
-        let task = cx.background_spawn(async move { servers::relocate(&provider) });
-        cx.spawn(async move |this, cx| {
-            let found = task.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || servers::relocate(&provider),
+            move |this, found, cx| {
                 this.health.finding = false;
                 match found {
                     Ok(_) => this.recheck_model(),
                     Err(e) => this.health.error = Some(e.to_string()),
                 }
                 cx.notify();
-            });
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 

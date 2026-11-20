@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, FontWeight, Role, SharedString, Toggled, div, prelude::*, px};
+use gpui::{AnyElement, FontWeight, Role, SharedString, div, prelude::*, px};
 
 use super::{ImportResult, Onboarding};
 use super::rows::{heading, picked};
@@ -104,11 +104,7 @@ fn runs_on(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) -> impl I
             .id(SharedString::from(format!("setup-runs-on-{i}")))
             .role(Role::RadioButton)
             .aria_label(SharedString::from(label.to_string()))
-            .aria_toggled(if checked {
-                Toggled::True
-            } else {
-                Toggled::False
-            })
+            .aria_toggled(checked.into())
             .when_some(this.runs_on.get(i), gpui::InteractiveElement::track_focus)
             .flex()
             .w_full()

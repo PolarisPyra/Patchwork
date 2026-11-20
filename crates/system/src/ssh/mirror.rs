@@ -6,11 +6,12 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::Locked;
 use crate::Error;
 use std::collections::{HashMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{LazyLock, Mutex, OnceLock};
 
 use super::command::send;
 use super::upload::{Installed, base, helper};
@@ -21,13 +22,11 @@ const MOST: u64 = 256 * 1024 * 1024;
 
 /// A hash of what each file copied to a host held, by host and local path, so unchanged files
 /// are not sent again.
-static SENT: Mutex<Option<HashMap<(String, String), u64>>> = Mutex::new(None);
+static SENT: LazyLock<Mutex<HashMap<(String, String), u64>>> = LazyLock::new(Mutex::default);
 
 /// Forgets the files sent to `host`, so they are sent again.
 pub(super) fn forget(host: &str) {
-    if let Some(sent) = SENT.lock().unwrap_or_else(PoisonError::into_inner).as_mut() {
-        sent.retain(|(sent_to, _), _| sent_to != host);
-    }
+    SENT.locked().retain(|(sent_to, _), _| sent_to != host);
 }
 
 /// Patchwork's folders whose files a command may name, and whether a folder named under each
@@ -224,13 +223,13 @@ impl Mirror {
         let mut stream = Vec::new();
         let mut sent = Vec::new();
         {
-            let guard = SENT.lock().unwrap_or_else(PoisonError::into_inner);
+            let guard = SENT.locked();
             for (path, bytes, kind) in &self.files {
                 let mut hasher = DefaultHasher::new();
                 (bytes, *kind as u8).hash(&mut hasher);
                 let hash = hasher.finish();
                 let key = (self.host.clone(), path.clone());
-                if guard.as_ref().and_then(|m| m.get(&key)) == Some(&hash) {
+                if guard.get(&key) == Some(&hash) {
                     continue;
                 }
                 frame(&mut stream, path, bytes, *kind);
@@ -250,10 +249,7 @@ impl Mirror {
             )
             .into());
         }
-        SENT.lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .get_or_insert_with(HashMap::new)
-            .extend(sent);
+        SENT.locked().extend(sent);
         Ok(())
     }
 }

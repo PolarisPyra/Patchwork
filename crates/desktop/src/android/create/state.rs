@@ -89,17 +89,16 @@ impl AndroidPanel {
         self.failure = None;
 
         let for_profiles = sdk.clone();
-        let profiles = cx.background_spawn(async move { android::profiles(&for_profiles) });
-        cx.spawn(async move |this, cx| {
-            let listed = profiles.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || android::profiles(&for_profiles),
+            move |this, listed, cx| {
                 if let Some(create) = &mut this.create {
                     create.profiles = Some(listed);
                     cx.notify();
                 }
-            })
-        })
-        .detach();
+            },
+        );
 
         let for_installed = sdk.clone();
         let installed = cx.background_spawn(async move {
@@ -124,10 +123,10 @@ impl AndroidPanel {
         })
         .detach();
 
-        let available = cx.background_spawn(async move { android::available_images(&sdk) });
-        cx.spawn(async move |this, cx| {
-            let fetched = available.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || android::available_images(&sdk),
+            move |this, fetched, cx| {
                 if let Some(create) = &mut this.create {
                     create.fetching = false;
                     match fetched {
@@ -143,9 +142,8 @@ impl AndroidPanel {
                     }
                     cx.notify();
                 }
-            })
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 

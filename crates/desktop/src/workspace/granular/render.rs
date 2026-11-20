@@ -4,8 +4,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{
-    AnyElement, FontWeight, KeyDownEvent, MouseButton, Role, SharedString, Stateful, Toggled,
-    Window, deferred, div, prelude::*, px,
+    AnyElement, FontWeight, KeyDownEvent, MouseButton, Role, SharedString, Stateful, Window,
+    deferred, div, prelude::*, px,
 };
 
 use super::menus::below;
@@ -255,11 +255,7 @@ impl Workspace {
                 false,
                 &t,
             )
-            .aria_toggled(if is_default {
-                Toggled::True
-            } else {
-                Toggled::False
-            })
+            .aria_toggled(is_default.into())
             .when(is_default, |b| {
                 b.border_color(t.accent)
                     .bg(t.bg_accent_soft)

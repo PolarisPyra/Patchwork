@@ -7,8 +7,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
@@ -95,7 +96,7 @@ pub(super) fn start(keep: bool) {
 /// This waits on the system keychain.
 pub(crate) fn keep_open(keep: bool) {
     KEEP.store(keep, Ordering::Relaxed);
-    let held = HELD.lock().unwrap_or_else(PoisonError::into_inner).clone();
+    let held = HELD.locked().clone();
     match held {
         Some(wrapping) if keep => save(&wrapping),
         _ => forget(),
@@ -105,7 +106,7 @@ pub(crate) fn keep_open(keep: bool) {
 /// Holds `wrapping`, which opened the vault, and keeps it in the keychain when the vault never
 /// locks. This waits on the system keychain.
 pub(super) fn hold(wrapping: &[u8; KEY_LEN]) {
-    *HELD.lock().unwrap_or_else(PoisonError::into_inner) = Some(Zeroizing::new(*wrapping));
+    *HELD.locked() = Some(Zeroizing::new(*wrapping));
     if KEEP.load(Ordering::Relaxed) {
         save(wrapping);
     }
@@ -113,7 +114,7 @@ pub(super) fn hold(wrapping: &[u8; KEY_LEN]) {
 
 /// Lets go of the key, here and in the keychain, as the vault locks or stops having a password.
 pub(super) fn release() {
-    *HELD.lock().unwrap_or_else(PoisonError::into_inner) = None;
+    *HELD.locked() = None;
     forget();
 }
 

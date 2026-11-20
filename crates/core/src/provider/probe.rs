@@ -2,12 +2,13 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::io::Read;
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use crate::system::processes::{SIGKILL, signal_process_group};
@@ -117,17 +118,7 @@ pub(super) fn stop(child: &mut Child) {
 
 /// Copies a pipe into a shared buffer on its own thread, so a probe can read what has arrived
 /// without waiting for the pipe to close.
-pub(super) fn read_pipe(pipe: impl Read + Send + 'static) -> (Arc<Mutex<Vec<u8>>>, JoinHandle<()>) {
-    read_pipe_upto(pipe, usize::MAX)
-}
-
-/// Reads a pipe to its end, keeping at most about `limit` bytes: past that, the start and the
-/// latest output are kept with a note between them, and the middle is dropped.
-fn read_pipe_upto(
-    mut pipe: impl Read + Send + 'static,
-    limit: usize,
-) -> (Arc<Mutex<Vec<u8>>>, JoinHandle<()>) {
-    const CUT: &[u8] = b"\n[... output cut ...]\n";
+fn read_pipe(mut pipe: impl Read + Send + 'static) -> (Arc<Mutex<Vec<u8>>>, JoinHandle<()>) {
     let buf = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&buf);
     let handle = std::thread::spawn(move || {
@@ -136,20 +127,14 @@ fn read_pipe_upto(
             if n == 0 {
                 break;
             }
-            let mut buf = sink.lock().unwrap_or_else(PoisonError::into_inner);
-            buf.extend_from_slice(&chunk[..n]);
-            // Cut only once the buffer is twice the limit, so the copy happens rarely.
-            if buf.len() > limit.saturating_mul(2) {
-                let end = buf.len() - limit / 2;
-                buf.splice(limit / 2..end, CUT.iter().copied());
-            }
+            sink.locked().extend_from_slice(&chunk[..n]);
         }
     });
     (buf, handle)
 }
 
 fn text(buf: &Mutex<Vec<u8>>) -> String {
-    let bytes = buf.lock().unwrap_or_else(PoisonError::into_inner);
+    let bytes = buf.locked();
     String::from_utf8_lossy(&bytes).into_owned()
 }
 

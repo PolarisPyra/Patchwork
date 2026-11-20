@@ -5,8 +5,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use super::Launch;
 use super::range::write_private;
@@ -47,7 +48,7 @@ struct Seen {
 impl ShellActivity {
     /// What was typed may have started a command, so the last record no longer counts.
     pub(super) fn invalidate(&self) {
-        let mut seen = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut seen = self.seen.locked();
         seen.invalidated = Some(self.read());
         seen.revision += 1;
     }
@@ -55,7 +56,7 @@ impl ShellActivity {
     /// The shell's last recorded state, and a revision that changes with each new record.
     pub(super) fn inspect(&self, pid: i32) -> (Activity, u64) {
         let record = self.read();
-        let mut seen = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut seen = self.seen.locked();
         if record != seen.observed {
             seen.observed.clone_from(&record);
             seen.revision += 1;

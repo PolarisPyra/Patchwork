@@ -297,16 +297,7 @@ impl Workspace {
         let prompt_keys = cx.intercept_keystrokes(move |ev, window, cx| {
             let _ = weak.update(cx, |w, cx| w.on_prompt_key(&ev.keystroke, window, cx));
         });
-        let (project_events, mut received) = mpsc::unbounded::<ProjectChanged>();
-        cx.spawn(async move |this, cx| {
-            while let Some(changed) = received.next().await {
-                let applied = this.update(cx, |this, cx| this.on_project_changed(changed, cx));
-                if applied.is_err() {
-                    break;
-                }
-            }
-        })
-        .detach();
+        let project_events = Self::listen_for_project_changes(cx);
         let entity = cx.entity();
         let sidebar_region = cx.new(|cx| {
             Region::new(
@@ -463,6 +454,41 @@ impl Workspace {
         this.watch_rail_focus(window, cx);
         this.watch_themes(window, cx);
         this.await_theme_switch(window, cx);
+        this.watch_window(window, cx);
+        this.load_git(cx);
+        // The composer starts focused, so typing and the app's keys work before any click.
+        let composer = this.composer.read(cx).editor.focus_handle(cx);
+        window.focus(&composer, cx);
+        // A vault with a password opens nothing saved until it is entered, and one without a
+        // keychain to keep its key needs a password set.
+        if this.settings.onboarded
+            && matches!(
+                patchwork_core::vault::status(),
+                Status::Waiting | Status::Unset | Status::Open(Method::File)
+            )
+        {
+            this.open_settings(Some("security"), window, cx);
+        }
+        this
+    }
+
+    /// The sender of the core's project changes, which this view applies as they arrive.
+    fn listen_for_project_changes(cx: &mut Context<Self>) -> mpsc::UnboundedSender<ProjectChanged> {
+        let (sender, mut received) = mpsc::unbounded::<ProjectChanged>();
+        cx.spawn(async move |this, cx| {
+            while let Some(changed) = received.next().await {
+                let applied = this.update(cx, |this, cx| this.on_project_changed(changed, cx));
+                if applied.is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
+        sender
+    }
+
+    /// Follows the window: its focus, its appearance, and its coming back to the front.
+    fn watch_window(&self, window: &mut Window, cx: &mut Context<Self>) {
         // A branch merged or a worktree changed outside the app shows once the window is back,
         // and within a minute while it waits.
         cx.observe_window_activation(window, |this, window, cx| {
@@ -493,7 +519,7 @@ impl Workspace {
         .detach();
         // A key hides the mouse pointer only while something has the focus to type in. With
         // nothing focused, Space opens and closes the sidebar and the pointer stays.
-        let focus = this.focus.clone();
+        let focus = self.focus.clone();
         // Following the system, the app changes palette when the system does.
         cx.observe_window_appearance(window, |_, window, cx| {
             crate::ui::theme::follow(window.appearance(), cx);
@@ -507,21 +533,6 @@ impl Workspace {
             cx.set_cursor_hide_mode(gpui::CursorHideMode::default());
         })
         .detach();
-        this.load_git(cx);
-        // The composer starts focused, so typing and the app's keys work before any click.
-        let composer = this.composer.read(cx).editor.focus_handle(cx);
-        window.focus(&composer, cx);
-        // A vault with a password opens nothing saved until it is entered, and one without a
-        // keychain to keep its key needs a password set.
-        if this.settings.onboarded
-            && matches!(
-                patchwork_core::vault::status(),
-                Status::Waiting | Status::Unset | Status::Open(Method::File)
-            )
-        {
-            this.open_settings(Some("security"), window, cx);
-        }
-        this
     }
 
     /// What the sidebar shows, if it is open: the chats' view, or beside the orchestrator page
@@ -564,15 +575,11 @@ impl Workspace {
             return;
         }
         self.ticking = true;
-        cx.spawn(async move |this, cx| {
-            // Once a second, the finest step the elapsed times on screen show.
-            cx.background_executor().timer(Duration::from_secs(1)).await;
-            let _ = this.update(cx, |this, cx| {
-                this.ticking = false;
-                cx.notify();
-            });
-        })
-        .detach();
+        // Once a second, the finest step the elapsed times on screen show.
+        crate::ui::after(cx, Duration::from_secs(1), |this, cx| {
+            this.ticking = false;
+            cx.notify();
+        });
     }
 }
 

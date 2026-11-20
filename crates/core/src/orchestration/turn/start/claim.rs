@@ -2,9 +2,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
-
-use std::sync::PoisonError;
 
 use crate::orchestration::Runner;
 
@@ -19,10 +18,7 @@ impl<'a> Starting<'a> {
         runner: &'a Runner,
         thread_id: &str,
     ) -> Result<Self, Error> {
-        let mut starting = runner
-            .starting
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let mut starting = runner.starting.locked();
         if !starting.insert(thread_id.to_string()) {
             return Err(STILL_STARTING.into());
         }
@@ -35,17 +31,9 @@ impl<'a> Starting<'a> {
 
 impl Drop for Starting<'_> {
     fn drop(&mut self) {
-        self.runner
-            .starting
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .remove(&self.thread_id);
+        self.runner.starting.locked().remove(&self.thread_id);
         // A stop asked of a start that failed has nothing left to stop.
-        self.runner
-            .stop_starting
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .remove(&self.thread_id);
+        self.runner.stop_starting.locked().remove(&self.thread_id);
     }
 }
 

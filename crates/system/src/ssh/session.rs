@@ -7,12 +7,13 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::Locked;
 use crate::Error;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Stdio};
 use std::sync::mpsc::{Receiver, channel};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 
 use super::connection::ssh;
@@ -22,7 +23,7 @@ use super::upload::Installed;
 pub const OPS_ARG: &str = "--remote-ops";
 
 /// Each host's session, or nothing where none is running.
-static SESSIONS: Mutex<Option<HashMap<String, Slot>>> = Mutex::new(None);
+static SESSIONS: LazyLock<Mutex<HashMap<String, Slot>>> = LazyLock::new(Mutex::default);
 
 type Slot = Arc<Mutex<State>>;
 
@@ -105,14 +106,7 @@ impl Drop for Session {
 }
 
 fn slot(host: &str) -> Slot {
-    Arc::clone(
-        SESSIONS
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .get_or_insert_with(HashMap::new)
-            .entry(host.to_string())
-            .or_default(),
-    )
+    Arc::clone(SESSIONS.locked().entry(host.to_string()).or_default())
 }
 
 /// The reply to the request `body` from `host`'s session, which is started when none runs.
@@ -141,5 +135,5 @@ pub(super) fn ask(host: &str, installed: &Installed, body: &[u8]) -> Option<Vec<
 
 /// Ends `host`'s session, so the next request starts a new one.
 pub(super) fn close(host: &str) {
-    *slot(host).lock().unwrap_or_else(PoisonError::into_inner) = State::default();
+    *slot(host).locked() = State::default();
 }

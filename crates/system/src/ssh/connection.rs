@@ -16,27 +16,29 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::Locked;
 use crate::Error;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 /// The relay's port on this machine, once it listens; 0 before.
 static RELAY_PORT: AtomicU16 = AtomicU16::new(0);
 
 /// The hosts with a master Patchwork checked lately, and whether it carries the relay tunnel.
-static MASTERS: Mutex<Option<HashMap<String, Master>>> = Mutex::new(None);
+static MASTERS: LazyLock<Mutex<HashMap<String, Master>>> = LazyLock::new(Mutex::default);
 
 /// One lock per host, held while its master starts, so two commands for a new host don't each
 /// log in and a host that is slow to answer holds up only its own commands.
-static STARTING: Mutex<Option<HashMap<String, Arc<Mutex<()>>>>> = Mutex::new(None);
+static STARTING: LazyLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> = LazyLock::new(Mutex::default);
 
 /// The hosts that could not be reached lately, with when and why. Until [`RECHECK`] passes,
 /// commands for one fail with that reason at once instead of each waiting out a login.
-static UNREACHABLE: Mutex<Option<HashMap<String, (Instant, String)>>> = Mutex::new(None);
+static UNREACHABLE: LazyLock<Mutex<HashMap<String, (Instant, String)>>> =
+    LazyLock::new(Mutex::default);
 
 #[derive(Clone, Copy)]
 struct Master {
@@ -234,15 +236,8 @@ fn ensure(host: &str) -> Result<(), Error> {
         return Ok(());
     }
     recent_failure(host)?;
-    let lock = Arc::clone(
-        STARTING
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .get_or_insert_with(HashMap::new)
-            .entry(host.to_string())
-            .or_default(),
-    );
-    let _starting = lock.lock().unwrap_or_else(PoisonError::into_inner);
+    let lock = Arc::clone(STARTING.locked().entry(host.to_string()).or_default());
+    let _starting = lock.locked();
     // Another command may have started this host's master while this one waited.
     if let Some(master) = masters(|m| m.get(host).copied())
         && master.checked.elapsed() < RECHECK
@@ -265,22 +260,15 @@ fn ensure(host: &str) -> Result<(), Error> {
         }
     } else {
         start(host).inspect_err(|e| {
-            let mut guard = UNREACHABLE.lock().unwrap_or_else(PoisonError::into_inner);
-            guard
-                .get_or_insert_with(HashMap::new)
+            UNREACHABLE
+                .locked()
                 .insert(host.to_string(), (Instant::now(), e.to_string()));
         })?;
         started_here = true;
         pid = check(host).1;
         tunnel = relay && forward(host);
     }
-    if let Some(failed) = UNREACHABLE
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .as_mut()
-    {
-        failed.remove(host);
-    }
+    UNREACHABLE.locked().remove(host);
     masters(|m| {
         m.insert(
             host.to_string(),
@@ -298,16 +286,14 @@ fn ensure(host: &str) -> Result<(), Error> {
 
 /// The reason `host` could not be reached, when that was less than [`RECHECK`] ago.
 fn recent_failure(host: &str) -> Result<(), Error> {
-    let guard = UNREACHABLE.lock().unwrap_or_else(PoisonError::into_inner);
-    match guard.as_ref().and_then(|m| m.get(host)) {
+    match UNREACHABLE.locked().get(host) {
         Some((when, reason)) if when.elapsed() < RECHECK => Err(reason.clone().into()),
         _ => Ok(()),
     }
 }
 
 fn masters<T>(f: impl FnOnce(&mut HashMap<String, Master>) -> T) -> T {
-    let mut guard = MASTERS.lock().unwrap_or_else(PoisonError::into_inner);
-    f(guard.get_or_insert_with(HashMap::new))
+    f(&mut MASTERS.locked())
 }
 
 /// Whether `host`'s master answers, and the process it says it is (`Master running (pid=N)`).

@@ -139,22 +139,22 @@ impl Panel {
         let host = self.host.clone();
         let saved = self.picked.clone();
         let (sink, rx) = frames();
-        let task = cx.background_spawn(async move {
-            let path = chosen.or_else(|| {
-                let found = patchwork_core::terminal::shells();
-                saved.filter(|s| found.iter().any(|f| &f.path == s))
-            });
-            let launch = patchwork_core::terminal::launch(
-                &core.settings(),
-                cwd.as_deref().map(std::path::Path::new),
-                host.as_deref(),
-                path.as_deref(),
-            )?;
-            core.terminals.spawn(launch, cols, rows, sink)
-        });
-        cx.spawn(async move |this, cx| {
-            let started = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || {
+                let path = chosen.or_else(|| {
+                    let found = patchwork_core::terminal::shells();
+                    saved.filter(|s| found.iter().any(|f| &f.path == s))
+                });
+                let launch = patchwork_core::terminal::launch(
+                    &core.settings(),
+                    cwd.as_deref().map(std::path::Path::new),
+                    host.as_deref(),
+                    path.as_deref(),
+                )?;
+                core.terminals.spawn(launch, cols, rows, sink)
+            },
+            move |this, started, cx| {
                 this.starting = false;
                 match started {
                     Ok(attached) => {
@@ -169,9 +169,8 @@ impl Panel {
                     this.start(true, next, cx);
                 }
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 

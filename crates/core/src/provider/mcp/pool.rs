@@ -2,11 +2,12 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
@@ -19,9 +20,7 @@ use super::{
 static POOL: OnceLock<Mutex<HashMap<String, Arc<Entry>>>> = OnceLock::new();
 
 pub(super) fn pool() -> std::sync::MutexGuard<'static, HashMap<String, Arc<Entry>>> {
-    POOL.get_or_init(Default::default)
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+    POOL.get_or_init(Default::default).locked()
 }
 
 /// The enabled servers, each started if it is not yet, in parallel. A server that failed
@@ -242,24 +241,20 @@ pub(super) type Notices = Arc<Mutex<Vec<(u64, Sender<Value>)>>>;
 /// Passes a notification to every listener, forgetting those that have gone.
 pub(super) fn announce(notices: &Notices, notice: &Value) {
     notices
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+        .locked()
         .retain(|(_, l)| l.send(notice.clone()).is_ok());
 }
 
 impl Entry {
     pub(super) fn connect(&self) -> Result<Arc<Conn>, Error> {
-        let mut conn = self.conn.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut conn = self.conn.locked();
         if let Some(Ok(c)) = conn.as_ref()
             && !c.alive()
         {
             *conn = None;
         }
         // A start that failed for a passing reason, such as a slow download, is tried again.
-        let mut failed_at = self
-            .failed_at
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let mut failed_at = self.failed_at.locked();
         if matches!(conn.as_ref(), Some(Err(_)))
             && failed_at.is_none_or(|at| at.elapsed() >= RETRY_AFTER)
         {
@@ -277,7 +272,7 @@ impl Entry {
     }
 
     fn drop_conn(&self) {
-        *self.conn.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        *self.conn.locked() = None;
     }
 }
 
@@ -385,7 +380,7 @@ impl Conn {
     fn explain(&self, error: Error) -> Error {
         match &self.transport {
             Transport::Stdio(s) => {
-                let tail = s.stderr.lock().unwrap_or_else(PoisonError::into_inner);
+                let tail = s.stderr.locked();
                 match tail.trim() {
                     "" => error,
                     tail => format!("{error}: {tail}").into(),
@@ -466,10 +461,7 @@ impl Conn {
         let message = json!({"jsonrpc": "2.0", "method": "notifications/cancelled", "params": {"requestId": id, "reason": reason}});
         match &self.transport {
             Transport::Stdio(s) => {
-                s.waiters
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .remove(&id);
+                s.waiters.locked().remove(&id);
                 let _ = s.send(&message);
             }
             Transport::Http(h) => {

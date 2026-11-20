@@ -20,7 +20,6 @@ use std::path::Path;
 use super::{ImportSource, antigravity, claude, codex, opencode, t3};
 
 use crate::provider::AgentKind;
-use crate::system::new_id;
 use crate::threads::{Role, MessageStatus, AccessMode, Message, Thread};
 
 /// The longest transcript sent to an agent as context. The newest messages are kept.
@@ -149,61 +148,23 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
         (Some(session.session_id), None)
     };
     Thread {
-        id: new_id(),
         project_id,
-        title,
-        agent: session.agent,
         model: session.model,
-        access_mode: AccessMode::default(),
         session_id,
         imported_from,
         context_pending: session.imported,
-        role: None,
-        role_pending: false,
-        favorite: false,
-        pinned: false,
-        bot_id: None,
         created_at: session.created_at,
         position: -(session.created_at as i64),
-        folder_id: None,
-        effort: None,
-        compact_window: None,
-        background: None,
-        archived_at: None,
-        parent: None,
-        slash_commands: vec![],
         messages: session
             .messages
             .into_iter()
             .map(|m| Message {
-                id: new_id(),
-                role: m.role,
-                text: m.text,
                 created_at: m.created_at,
-                status: MessageStatus::Complete,
-                tools: vec![],
-                plan: vec![],
-                files: vec![],
-                error: None,
-                approvals: vec![],
-                attachments: vec![],
-                steer: false,
-                queued: false,
-                background: Vec::new(),
-                cut_off: false,
-                refusal: None,
-                parts: Vec::new(),
-                finished_at: None,
-                usage: None,
-                turn: None,
-                checks: None,
-                review: None,
-                cursor: None,
-                via: None,
+                ..Message::new(m.role, m.text, MessageStatus::Complete)
             })
             .map(Arc::new)
             .collect(),
-        goal: None,
+        ..Thread::new(title, session.agent, AccessMode::default())
     }
 }
 

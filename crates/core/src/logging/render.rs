@@ -5,7 +5,6 @@
 use std::fmt::Write as _;
 use chrono::{Local, TimeZone};
 use crate::settings::LogLevel;
-use crate::system::now_ms;
 use super::scrub::{MAX_TEXT_CHARS, cut, redact, scrubbed};
 use super::{Data, Json, Record, Source, may_report_error};
 
@@ -67,12 +66,6 @@ pub(super) fn render(record: Record) -> Option<String> {
     // One record stays on one line.
     line.push_str(&body.replace('\n', "\\n"));
     Some(line)
-}
-
-/// The time now as log lines show it, for the desktop shell's `main.log`.
-#[must_use]
-pub fn now_text() -> String {
-    local_time(now_ms())
 }
 
 /// `2026-10-26 12:17:29.562`, local time.

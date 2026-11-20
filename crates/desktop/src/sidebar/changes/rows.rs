@@ -295,7 +295,7 @@ impl ChangesView {
                 div()
                     .id("status")
                     .role(Role::Image)
-                    .aria_label(label.clone())
+                    .aria_label(label)
                     .w(px(12.))
                     .flex_none()
                     .flex()

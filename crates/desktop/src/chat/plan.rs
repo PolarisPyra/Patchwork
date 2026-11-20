@@ -82,20 +82,14 @@ impl Workspace {
         if over && self.plan_fold_queued.as_deref() != Some(key.as_str()) {
             self.plan_fold_queued = Some(key.clone());
             let id = last.id.clone();
-            cx.spawn(async move |this, cx| {
-                cx.background_executor()
-                    .timer(Duration::from_millis(FOLD_MS))
-                    .await;
-                let _ = this.update(cx, |this, cx| {
-                    if this.plan_fold_queued.as_deref() == Some(key.as_str())
-                        && let Some(shown) = this.shown_plan.as_mut().filter(|s| s.id == id)
-                    {
-                        shown.folded = Some(key);
-                        cx.notify();
-                    }
-                });
-            })
-            .detach();
+            crate::ui::after(cx, Duration::from_millis(FOLD_MS), move |this, cx| {
+                if this.plan_fold_queued.as_deref() == Some(key.as_str())
+                    && let Some(shown) = this.shown_plan.as_mut().filter(|s| s.id == id)
+                {
+                    shown.folded = Some(key);
+                    cx.notify();
+                }
+            });
         }
         steps
     }

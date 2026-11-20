@@ -41,10 +41,10 @@ impl Workspace {
     /// Makes a bot and opens its page.
     pub fn new_bot(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { core.create_bot() });
-        cx.spawn(async move |this, cx| {
-            let made = task.await;
-            let _ = this.update(cx, |this, cx| match made {
+        crate::ui::off_thread(
+            cx,
+            move || core.create_bot(),
+            move |this, made, cx| match made {
                 Ok(bot) => {
                     this.reload_bots(cx);
                     this.open_bot_page(&bot.id, cx);
@@ -53,9 +53,8 @@ impl Workspace {
                     this.error = Some(e.to_string());
                     cx.notify();
                 }
-            });
-        })
-        .detach();
+            },
+        );
     }
 
     /// Opens bot `id`'s chat, or its page before it has one.
@@ -188,10 +187,10 @@ impl Workspace {
     /// Renames bot `id` off the UI thread, and shows the new name in the list and on its page.
     pub fn rename_bot(&mut self, id: String, name: String, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { core.rename_bot(&id, &name) });
-        cx.spawn(async move |this, cx| {
-            let renamed = task.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.rename_bot(&id, &name),
+            move |this, renamed, cx| {
                 match renamed {
                     Ok(bot) => {
                         if let Some(page) = &this.bot_page {
@@ -201,26 +200,24 @@ impl Workspace {
                     Err(e) => this.error = Some(e.to_string()),
                 }
                 this.reload_bots(cx);
-            });
-        })
-        .detach();
+            },
+        );
     }
 
     /// Moves bot `id` out of the sidebar when `archived`, or back into it, off the UI thread.
     pub fn set_bot_archived(&mut self, id: &str, archived: bool, cx: &mut Context<Self>) {
         let (core, id) = (Arc::clone(&self.core), id.to_string());
-        let task = cx.background_spawn(async move { core.set_bot_archived(&id, archived) });
-        cx.spawn(async move |this, cx| {
-            let done = task.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.set_bot_archived(&id, archived),
+            move |this, done, cx| {
                 if let Err(e) = done {
                     log::warn!(error:% = e; "could not archive or restore the bot: {{error}}");
                     this.error = Some(e.to_string());
                 }
                 this.reload_bots(cx);
-            });
-        })
-        .detach();
+            },
+        );
     }
 
     /// Sends `text` and `attachments` to the chat of the bot shown, starting it with the

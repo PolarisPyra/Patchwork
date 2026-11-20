@@ -14,7 +14,7 @@ pub(crate) use locate::{agent_command, remote_turn_command, turn_command};
 use locate::{command_at, located, located_or, find_binary};
 #[doc(inline)]
 pub use parsed::{TaskEvent, Parsed};
-pub(crate) use parsed::{one_line, step_status};
+pub(crate) use parsed::{clip, one_line, step_status};
 use parsed::{
     relative, ToolStart, tool_started, tool_finished, thinking, file_touched, text_delta,
     summarize, edit_lines,

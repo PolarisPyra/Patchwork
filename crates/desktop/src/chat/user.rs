@@ -211,25 +211,25 @@ impl Workspace {
         if paths.is_empty() {
             return;
         }
-        let task = cx.background_spawn(async move {
-            paths
-                .into_iter()
-                .map(|path| {
-                    let size = image::image_dimensions(&path)
-                        .inspect_err(|e| {
-                            log::warn!(
-                                error:% = e;
-                                "could not read the size of a sent image: {{error}}"
-                            );
-                        })
-                        .ok();
-                    (path, size)
-                })
-                .collect::<Vec<_>>()
-        });
-        cx.spawn(async move |this, cx| {
-            let sizes = task.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || {
+                paths
+                    .into_iter()
+                    .map(|path| {
+                        let size = image::image_dimensions(&path)
+                            .inspect_err(|e| {
+                                log::warn!(
+                                    error:% = e;
+                                    "could not read the size of a sent image: {{error}}"
+                                );
+                            })
+                            .ok();
+                        (path, size)
+                    })
+                    .collect::<Vec<_>>()
+            },
+            move |this, sizes, cx| {
                 let Some(thread) = this.thread.as_ref() else {
                     return;
                 };
@@ -250,9 +250,8 @@ impl Workspace {
                 }
                 this.user.image_sizes.extend(sizes);
                 cx.notify();
-            });
-        })
-        .detach();
+            },
+        );
     }
 
     /// Asks off the main thread which messages of the open thread can be restored, again each
@@ -273,17 +272,16 @@ impl Workspace {
         }
         let core = Arc::clone(&self.core);
         let id = key.0.clone();
-        let task = cx.background_spawn(async move { core.checkpoints(&id) });
-        cx.spawn(async move |this, cx| {
-            let ids = task.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.checkpoints(&id),
+            move |this, ids, cx| {
                 if this.user.checked.as_ref() == Some(&key) {
                     this.user.checkpoints = ids.into_iter().collect();
                     cx.notify();
                 }
-            });
-        })
-        .detach();
+            },
+        );
     }
 
     /// Restoring rewrites the project's files, so it asks first. The undone message goes back

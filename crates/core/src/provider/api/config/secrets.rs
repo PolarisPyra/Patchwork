@@ -4,8 +4,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, OnceLock};
 
 use crate::Error;
 use crate::vault;
@@ -21,9 +22,7 @@ const KEYS_FILE: &str = "api-keys.json";
 static KEYS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 
 fn keys() -> std::sync::MutexGuard<'static, HashMap<String, String>> {
-    KEYS.get_or_init(Default::default)
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+    KEYS.get_or_init(Default::default).locked()
 }
 
 /// A secret's entry in the credential store. A provider's key is named by the provider's id,

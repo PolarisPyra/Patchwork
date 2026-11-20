@@ -4,7 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 use super::net::chunks;
-use super::outbound::clip;
+use crate::provider::clip;
 use super::platform::Platform;
 use crate::{Core, Error};
 use crate::orchestration::changes::turn_files::turn_file_diff;

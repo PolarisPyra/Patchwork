@@ -282,7 +282,7 @@ impl Core {
                 "name": SEND,
                 "description": "Send a message to another chat in this project that is not replying. Call wait_for_chat for its reply.",
                 "inputSchema": {"type": "object", "properties": {
-                    "chat_id": id.clone(),
+                    "chat_id": id,
                     "prompt": {"type": "string", "description": "The message."}
                 }, "required": ["chat_id", "prompt"]},
             }),

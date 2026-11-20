@@ -30,10 +30,10 @@ impl Onboarding {
         self.scans.clear();
         for kind in self.sources() {
             let core = Arc::clone(&self.core);
-            let task = cx.background_spawn(async move { core.scan_imports(kind) });
-            cx.spawn(async move |this, cx| {
-                let scan = task.await;
-                let _ = this.update(cx, |this, cx| {
+            crate::ui::off_thread(
+                cx,
+                move || core.scan_imports(kind),
+                move |this, scan, cx| {
                     if this.scan_run != run {
                         return;
                     }
@@ -48,9 +48,8 @@ impl Onboarding {
                         this.import_kinds = Some(kinds);
                     }
                     cx.notify();
-                });
-            })
-            .detach();
+                },
+            );
         }
     }
 

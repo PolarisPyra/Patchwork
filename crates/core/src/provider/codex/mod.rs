@@ -9,7 +9,7 @@ mod parse;
 mod subagents;
 
 #[doc(inline)]
-pub use config::{home, auth, configured_model, models, rollout_files};
+pub use config::{home, config_file, auth, configured_model, models, rollout_files};
 #[doc(inline)]
 pub use input::{
     turn_args, agents_args, compact_args, turn_input, steer_input, interrupt, approval_reply,

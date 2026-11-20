@@ -2,9 +2,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use super::types::Place;
 use crate::Core;
@@ -28,7 +29,7 @@ impl Presence {
     /// Records that `started_at`'s goal of `thread_id` was met, and says whether it is the first
     /// time at `place`.
     pub(crate) fn first_goal(&self, place: Place, thread_id: &str, started_at: u64) -> bool {
-        let mut goals = self.goals.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut goals = self.goals.locked();
         goals.insert((place, thread_id.to_string()), started_at) != Some(started_at)
     }
 }

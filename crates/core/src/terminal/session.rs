@@ -5,11 +5,12 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use portable_pty::{ChildKiller, MasterPty};
@@ -181,10 +182,7 @@ impl Terminals {
                 idle: None,
             }),
         });
-        self.open
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(id, Arc::clone(&term));
+        self.open.locked().insert(id, Arc::clone(&term));
         log::info!(
             id:%,
             shell:% = launch.shell,
@@ -272,7 +270,7 @@ impl Terminals {
         if let Some(activity) = &term.activity {
             activity.invalidate();
         }
-        let mut writer = term.writer.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut writer = term.writer.locked();
         writer
             .write_all(data.as_bytes())
             .and_then(|()| writer.flush())
@@ -294,8 +292,7 @@ impl Terminals {
             state.model.screen_mut().set_size(size.rows, size.cols);
         };
         term.master
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .locked()
             .resize(size)
             .map_err(|e| (e.to_string()).into())
     }
@@ -322,8 +319,7 @@ impl Terminals {
 
     fn get(&self, id: u32) -> Result<Arc<Term>, Error> {
         self.open
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .locked()
             .get(&id)
             .cloned()
             .ok_or_else(|| "The terminal has closed".into())
@@ -336,7 +332,7 @@ impl Terminals {
 
 impl Term {
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        self.state.locked()
     }
 
     /// Keeps `data` for windows that attach later and sends it to those attached.
@@ -437,28 +433,15 @@ impl State {
 }
 
 fn terms(open: &Mutex<HashMap<u32, Arc<Term>>>) -> Vec<Arc<Term>> {
-    open.lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .values()
-        .cloned()
-        .collect()
+    open.locked().values().cloned().collect()
 }
 
 fn close(open: &Mutex<HashMap<u32, Arc<Term>>>, id: u32) -> Result<(), Error> {
-    let Some(term) = open
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .get(&id)
-        .cloned()
-    else {
+    let Some(term) = open.locked().get(&id).cloned() else {
         return Ok(());
     };
-    let _closing = term.closing.lock().unwrap_or_else(PoisonError::into_inner);
-    if !open
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .contains_key(&id)
-    {
+    let _closing = term.closing.locked();
+    if !open.locked().contains_key(&id) {
         return Ok(());
     }
     {
@@ -471,9 +454,7 @@ fn close(open: &Mutex<HashMap<u32, Arc<Term>>>, id: u32) -> Result<(), Error> {
     };
     match range::close(&term) {
         Ok(()) => {
-            open.lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(&id);
+            open.locked().remove(&id);
             remove(term.dir.as_deref());
             log::info!(id:%; "terminal {{id}}: closed");
             Ok(())
@@ -492,8 +473,7 @@ fn reclaim(open: &Arc<Mutex<HashMap<u32, Arc<Term>>>>) {
     loop {
         std::thread::sleep(OBSERVE_EVERY);
         let ids: Vec<(u32, Arc<Term>)> = open
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .locked()
             .iter()
             .map(|(id, term)| (*id, Arc::clone(term)))
             .collect();

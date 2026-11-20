@@ -6,6 +6,7 @@ use crate::Error;
 use std::collections::HashMap;
 use std::path::Path;
 use serde_json::Value;
+use crate::permissions::PermissionKind;
 use crate::threads::{AccessMode, AttachmentKind, Attachment, image_media_type};
 use super::{antigravity, api, claude, codex, opencode, AgentKind};
 use super::Parsed;
@@ -384,18 +385,11 @@ fn unasked(agent: AgentKind, spec: &TurnSpec, parsed: Parsed) -> Parsed {
 fn mode_asks(agent: AgentKind, spec: &TurnSpec, target: &crate::permissions::Target) -> bool {
     match (agent, spec.mode) {
         (_, AccessMode::FullAccess) => false,
-        // Accept edits takes edits inside the folder without asking.
-        (AgentKind::Claude, AccessMode::AutoAcceptEdits)
-            if target.kind == crate::permissions::PermissionKind::Edit =>
+        // Claude reads in its own folder without asking, and Accept edits takes edits inside it.
+        (AgentKind::Claude, mode)
+            if target.kind == PermissionKind::Folder
+                || (mode == AccessMode::AutoAcceptEdits && target.kind == PermissionKind::Edit) =>
         {
-            let root = Path::new(spec.root);
-            !target
-                .resources
-                .iter()
-                .all(|r| crate::system::fs::is_inside(root, r))
-        }
-        // Claude reads in its own folder without asking.
-        (AgentKind::Claude, _) if target.kind == crate::permissions::PermissionKind::Folder => {
             let root = Path::new(spec.root);
             !target
                 .resources

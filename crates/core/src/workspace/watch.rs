@@ -11,11 +11,12 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
-use std::sync::{Arc, Mutex, PoisonError, Weak};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 #[cfg(target_os = "linux")]
@@ -32,6 +33,49 @@ use tree as backend;
 const SETTLE: Duration = Duration::from_millis(250);
 /// Longest a steady stream of events holds back a report.
 const MAX_WAIT: Duration = Duration::from_secs(1);
+
+/// Quiet time that ends a burst of changes in a folder `settled` watches: an editor's save is
+/// several.
+const BURST: Duration = Duration::from_millis(200);
+
+/// Watches `dirs`, each as `mode` says, and runs `on_change` on a thread named `name` once each
+/// burst of changes settles. The thread ends once the watcher is dropped.
+///
+/// # Errors
+///
+/// Returns an error when the watcher cannot be created, cannot watch a folder, or its thread
+/// cannot be started.
+pub(crate) fn settled(
+    name: &str,
+    dirs: &[PathBuf],
+    mode: notify::RecursiveMode,
+    on_change: impl Fn() + Send + 'static,
+) -> Result<RecommendedWatcher, Error> {
+    use notify::Watcher as _;
+    let (tx, rx) = channel();
+    let mut watcher = notify::recommended_watcher(move |res: notify::Result<Event>| {
+        if !res.is_ok_and(|e| matches!(e.kind, EventKind::Access(_))) {
+            let _ = tx.send(());
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    for dir in dirs {
+        watcher
+            .watch(dir, mode)
+            .map_err(|e| format!("Could not watch {}: {e}", dir.display()))?;
+    }
+    // Ends once the watcher is dropped, which closes the channel.
+    std::thread::Builder::new()
+        .name(name.into())
+        .spawn(move || {
+            while rx.recv().is_ok() {
+                while rx.recv_timeout(BURST).is_ok() {}
+                on_change();
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(watcher)
+}
 
 /// A project-relative path, with `/` between its parts as git writes them, and when it last
 /// changed in the burst.
@@ -141,12 +185,12 @@ fn run(
     let Some(shared) = watcher.upgrade() else {
         return;
     };
-    backend::watch_project(&mut lock(&shared), root);
+    backend::watch_project(&mut shared.locked(), root);
     // A linked worktree keeps its HEAD and index in its own folder under the main repository's
     // `.git`, and its branches in that repository's refs: both sit outside `root`.
     let linked = LinkedGit::find(root);
     if let Some(linked) = &linked {
-        let mut watcher = lock(&shared);
+        let mut watcher = shared.locked();
         watch_or_warn(
             &mut watcher,
             &linked.own,
@@ -207,7 +251,7 @@ fn run(
                     let created_dir = matches!(event.kind, EventKind::Create(_)) && path.is_dir();
                     if created_dir && let Some(shared) = watcher.upgrade() {
                         // Files written into a new folder before its watch was in place.
-                        for inside in backend::dir_created(&mut lock(&shared), path) {
+                        for inside in backend::dir_created(&mut shared.locked(), path) {
                             if let Ok(rel) = inside.strip_prefix(root) {
                                 changed.insert(git_path(rel), at);
                             }
@@ -283,10 +327,6 @@ impl LinkedGit {
             || rel == Path::new("packed-refs");
         shared.then(|| Path::new(".git").join(rel))
     }
-}
-
-fn lock(watcher: &Mutex<RecommendedWatcher>) -> std::sync::MutexGuard<'_, RecommendedWatcher> {
-    watcher.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// `rel` as git writes paths, with `/` between parts on every platform.

@@ -7,11 +7,12 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
@@ -146,7 +147,7 @@ impl Waiters {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Waiter>> {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+        self.0.locked()
     }
 }
 

@@ -71,17 +71,9 @@ impl EntityInputHandler for TextArea {
         let range = range
             .as_ref()
             .map(|r| self.range_from_utf16(r))
-            .or(self.marked.clone())
-            .unwrap_or(self.selected.clone());
-        self.record(&range, text);
-        self.content.replace_range(range.clone(), text);
-        cx.emit(Changed);
-        let end = range.start + text.len();
-        self.selected = end..end;
-        self.reversed = false;
-        self.marked = None;
-        window.notify_text_input_changed(&self.focus);
-        cx.notify();
+            .or_else(|| self.marked.clone())
+            .unwrap_or_else(|| self.selected.clone());
+        self.replace(range, text, window, cx);
     }
 
     fn replace_and_mark_text_in_range(
@@ -95,8 +87,8 @@ impl EntityInputHandler for TextArea {
         let range = range
             .as_ref()
             .map(|r| self.range_from_utf16(r))
-            .or(self.marked.clone())
-            .unwrap_or(self.selected.clone());
+            .or_else(|| self.marked.clone())
+            .unwrap_or_else(|| self.selected.clone());
         self.record(&range, new_text);
         self.content.replace_range(range.clone(), new_text);
         cx.emit(Changed);

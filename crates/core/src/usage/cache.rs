@@ -2,8 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::provider::AgentKind;
@@ -102,7 +103,7 @@ impl UsageCache {
     /// The usage last known for `kind`, without asking the provider. None before any is known.
     #[must_use]
     pub fn known(&self, kind: AgentKind) -> Option<ProviderUsage> {
-        let entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
+        let entries = self.entries.locked();
         entries.get(&kind).map(|e| e.usage.clone())
     }
 
@@ -118,12 +119,8 @@ impl UsageCache {
         now: Instant,
         fetch: impl FnOnce() -> Result<ProviderUsage, Failure>,
     ) -> ProviderUsage {
-        let lock = || self.entries.lock().unwrap_or_else(PoisonError::into_inner);
-        let flying = || {
-            self.in_flight
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-        };
+        let lock = || self.entries.locked();
+        let flying = || self.in_flight.locked();
         let entries = lock();
         if let Some(e) = entries.get(&kind) {
             let age = now.saturating_duration_since(e.fetched);
@@ -213,7 +210,7 @@ impl UsageCache {
     /// Records the windows the agent reported during a turn, so the popup shows them
     /// without asking the rate-limited endpoint. Windows it did not report are kept.
     pub fn record(&self, kind: AgentKind, windows: Vec<UsageWindow>) {
-        let mut entries = self.entries.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut entries = self.entries.locked();
         let previous = entries.remove(&kind);
         let mut usage = previous.as_ref().map_or_else(
             || ProviderUsage {

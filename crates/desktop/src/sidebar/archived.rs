@@ -21,12 +21,11 @@ use crate::workspace::Workspace;
 
 pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl IntoElement {
     let t = *theme(cx);
-    let archived: Vec<Arc<Thread>> = w
+    let archived = w
         .threads
         .iter()
         .filter(|th| th.archived_at.is_some() && th.parent.is_none())
-        .cloned()
-        .collect();
+        .cloned();
     let selected = w.thread.as_ref().map(|th| th.id.clone());
     let selected = selected.as_deref();
     // A bot's runs are listed under the bot, not with the chats and projects.
@@ -37,7 +36,7 @@ pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl Int
             .cloned()
     };
     let (runs, archived): (Vec<Arc<Thread>>, Vec<Arc<Thread>>) =
-        archived.into_iter().partition(|th| bot_of(th).is_some());
+        archived.partition(|th| bot_of(th).is_some());
     let run_bots: Vec<Bot> = w
         .bots
         .iter()

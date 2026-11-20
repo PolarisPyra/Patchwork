@@ -2,12 +2,13 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::Value;
@@ -52,12 +53,7 @@ impl HttpServer {
             .header("Content-Type", "application/json")
             .header("Accept", "application/json, text/event-stream")
             .header("MCP-Protocol-Version", PROTOCOL);
-        if let Some(session) = self
-            .session
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .as_deref()
-        {
+        if let Some(session) = self.session.locked().as_deref() {
             request = request.header("Mcp-Session-Id", session);
         }
         for (name, value) in self.headers.iter() {
@@ -72,7 +68,7 @@ impl HttpServer {
             .get("mcp-session-id")
             .and_then(|v| v.to_str().ok())
         {
-            *self.session.lock().unwrap_or_else(PoisonError::into_inner) = Some(session.into());
+            *self.session.locked() = Some(session.into());
         }
         Ok(response)
     }
@@ -92,13 +88,7 @@ impl HttpServer {
         let mut response = self.post(message)?;
         let status = response.status().as_u16();
         // A server answers 404 to a session it has ended; a new one starts on the next call.
-        if status == 404
-            && self
-                .session
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .is_some()
-        {
+        if status == 404 && self.session.locked().is_some() {
             self.alive.store(false, Ordering::Relaxed);
             return Err("The MCP server ended its session".into());
         }

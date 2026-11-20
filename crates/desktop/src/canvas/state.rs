@@ -322,8 +322,8 @@ impl Canvas {
     }
 
     pub(super) fn close(&mut self, cx: &mut Context<Self>) {
-        if let Some(w) = self.workspace.upgrade() {
-            w.update(cx, crate::workspace::Workspace::close_canvas);
-        }
+        let _ = self
+            .workspace
+            .update(cx, crate::workspace::Workspace::close_canvas);
     }
 }

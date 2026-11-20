@@ -49,7 +49,7 @@ pub(super) fn set_app_level(level: LogLevel) {
 }
 
 /// Whether `main.log` records a message at `level`.
-pub fn app_logs(level: log::Level) -> bool {
+pub(super) fn app_logs(level: log::Level) -> bool {
     let level = match level {
         log::Level::Error => LogLevel::Error,
         log::Level::Warn => LogLevel::Warning,

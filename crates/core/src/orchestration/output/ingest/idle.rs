@@ -2,8 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 
 use crate::extensions::hooks::HookEvent;
 use crate::events::AgentEvent;
@@ -13,7 +14,6 @@ use crate::threads::GoalStatus;
 use crate::threads::MessageStatus;
 use crate::workspace;
 
-use crate::orchestration::changes::attribution;
 use crate::orchestration::output::stream::Unsaved;
 use crate::orchestration::messages::queue::FollowUp;
 use crate::orchestration::turn::end::{hold_unanswered, turn_hooks, record_turn};
@@ -45,7 +45,7 @@ pub(super) fn go_idle(
 ) {
     turn.save_text(unsaved);
     let after = workspace::git_changes(&turn.root).unwrap_or_default();
-    let changed = attribution::lock(&turn.attribution).settle(&turn.root, after);
+    let changed = turn.attribution.locked().settle(&turn.root, after);
     for path in changed {
         turn.publish(AgentEvent::FileTouched {
             message_id: turn.message_id.clone(),
@@ -76,19 +76,8 @@ pub(super) fn go_idle(
     if stopped {
         // The interrupt ended the requests the agent was waiting on, and the steering messages
         // it had not taken. A permission hook still holding a call hears it was refused.
-        let lapsed: Vec<String> = turn
-            .pending
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .drain()
-            .map(|(id, _)| id)
-            .collect();
-        let mut hooks = turn
-            .core
-            .runner
-            .hooks
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let lapsed: Vec<String> = turn.pending.locked().drain().map(|(id, _)| id).collect();
+        let mut hooks = turn.core.runner.hooks.locked();
         lapsed
             .iter()
             .filter_map(|id| hooks.remove(id))
@@ -99,8 +88,7 @@ pub(super) fn go_idle(
         // Steers the agent never took are held as queued messages, as the turn's end holds them.
         let unanswered: Vec<String> = turn
             .steers
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .locked()
             .drain(..)
             .flat_map(|f| f.ids().collect::<Vec<_>>())
             .collect();
@@ -125,30 +113,15 @@ pub(super) fn go_idle(
     }
     // Under the turns lock, where `steer` reads these flags: a message sent while the reply was
     // wrapping up is in the queue taken here, not left in one nobody drains.
-    let turns = turn
-        .core
-        .runner
-        .turns
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner);
-    let queued = std::mem::take(&mut *turn.queue.lock().unwrap_or_else(PoisonError::into_inner));
-    let mut handed_over = turn
-        .core
-        .runner
-        .handed_over
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner);
+    let turns = turn.core.runner.turns.locked();
+    let queued = std::mem::take(&mut *turn.queue.locked());
+    let mut handed_over = turn.core.runner.handed_over.locked();
     for message in &queued {
         handed_over.remove(&message.message_id);
     }
     drop(handed_over);
     // A call the user allowed through a hook was allowed for this reply only.
-    turn.core
-        .runner
-        .grants
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .remove(&turn.thread_id);
+    turn.core.runner.grants.locked().remove(&turn.thread_id);
     if stopped {
         // The agent takes the next message again.
         turn.cancelled.store(false, Ordering::SeqCst);

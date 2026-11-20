@@ -175,17 +175,16 @@ impl Workspace {
             return;
         };
         let (core, thread, id) = (Arc::clone(&self.core), thread.id.clone(), id.to_string());
-        let task = cx.background_spawn(async move { core.steer_queued(&thread, &id) });
-        cx.spawn(async move |this, cx| {
-            let result = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.steer_queued(&thread, &id),
+            move |this, result, cx| {
                 if let Err(e) = result {
                     this.error = Some(e.to_string());
                 }
                 this.reload(cx);
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     /// Ctrl+Enter in the composer steers with the first queued message, showing the Steer button
@@ -195,17 +194,11 @@ impl Workspace {
             return;
         };
         self.steer_pressed = true;
-        cx.spawn(async move |this, cx| {
-            cx.background_executor()
-                // Long enough for the pressed look to be seen.
-                .timer(Duration::from_millis(150))
-                .await;
-            let _ = this.update(cx, |this, cx| {
-                this.steer_pressed = false;
-                cx.notify();
-            });
-        })
-        .detach();
+        // Long enough for the pressed look to be seen.
+        crate::ui::after(cx, Duration::from_millis(150), |this, cx| {
+            this.steer_pressed = false;
+            cx.notify();
+        });
         self.steer_queued(&id, cx);
     }
 
@@ -215,17 +208,16 @@ impl Workspace {
             return;
         };
         let (core, thread) = (Arc::clone(&self.core), thread.id.clone());
-        let task = cx.background_spawn(async move { core.resume_queued(&thread) });
-        cx.spawn(async move |this, cx| {
-            let result = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.resume_queued(&thread),
+            move |this, result, cx| {
                 if let Err(e) = result {
                     this.error = Some(e.to_string());
                 }
                 this.reload(cx);
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     /// A queued message can be sent while it is being edited: the agent took it, or it was

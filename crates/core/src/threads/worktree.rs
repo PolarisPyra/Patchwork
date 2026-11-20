@@ -7,10 +7,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::path::{Path, PathBuf};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
@@ -410,11 +411,7 @@ pub(crate) struct Step<'a> {
 
 impl Drop for Step<'_> {
     fn drop(&mut self) {
-        self.core
-            .worktree_steps
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .remove(&self.held);
+        self.core.worktree_steps.locked().remove(&self.held);
     }
 }
 
@@ -1273,11 +1270,7 @@ impl Core {
     /// Holds task `thread_id`'s worktree, refused while another step holds it.
     pub(super) fn hold_worktree(&self, thread_id: &str) -> Result<Step<'_>, Error> {
         let held = self.hold_key(thread_id);
-        let fresh = self
-            .worktree_steps
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(held.clone());
+        let fresh = self.worktree_steps.locked().insert(held.clone());
         if !fresh {
             return Err("Patchwork is already working on this task's worktree".into());
         }
@@ -1292,10 +1285,7 @@ impl Core {
             .as_ref()
             .map_or(thread.id.as_str(), |p| p.thread_id.as_str());
         let held = self.hold_key(owner);
-        self.worktree_steps
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .contains(&held)
+        self.worktree_steps.locked().contains(&held)
     }
 
     /// Holds the worktree thread `thread_id` works in, its own or its parent task's, for a step

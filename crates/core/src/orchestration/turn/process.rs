@@ -2,6 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
@@ -15,7 +16,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
-use std::sync::PoisonError;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -82,10 +82,7 @@ impl AgentStdin {
 
 /// Writes one line to the agent's stdin, if it is still open.
 pub(in crate::orchestration) fn write_line(stdin: &Mutex<Option<AgentStdin>>, line: &str) -> bool {
-    write_to(
-        &mut stdin.lock().unwrap_or_else(PoisonError::into_inner),
-        line,
-    )
+    write_to(&mut stdin.locked(), line)
 }
 
 /// Hands one line to the agent's stdin. False once stdin is closed or a write to it has failed.
@@ -209,12 +206,8 @@ pub(in crate::orchestration) fn with_remedy(agent: AgentKind, error: String) -> 
 
 /// Closes stdin, which lets the agent exit, unless it still owes an answer to a steering message.
 pub(in crate::orchestration) fn close_stdin_unless_steered(stdin: &Stdin, steers: &Steers) {
-    let mut stdin = stdin.lock().unwrap_or_else(PoisonError::into_inner);
-    if steers
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .is_empty()
-    {
+    let mut stdin = stdin.locked();
+    if steers.locked().is_empty() {
         stdin.take();
     }
 }

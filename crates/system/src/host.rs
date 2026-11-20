@@ -36,6 +36,22 @@ pub fn lossy_lines(reader: impl std::io::BufRead) -> impl Iterator<Item = String
     })
 }
 
+/// Locking a mutex that a panicked thread may have left poisoned.
+pub trait Locked<T: ?Sized> {
+    /// Locks the mutex and keeps the data a panicked holder left behind.
+    ///
+    /// Everything Patchwork keeps behind a mutex stays usable after a panic, so the poison is
+    /// ignored rather than spread to every later caller.
+    fn locked(&self) -> std::sync::MutexGuard<'_, T>;
+}
+
+impl<T: ?Sized> Locked<T> for std::sync::Mutex<T> {
+    fn locked(&self) -> std::sync::MutexGuard<'_, T> {
+        self.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
 /// A command for a program on the user's system.
 ///
 /// The AppImage's launcher points the library, Python, GTK and data paths into the AppImage for
@@ -71,9 +87,7 @@ pub fn path_var() -> Option<std::ffi::OsString> {
         use std::sync::Mutex;
         use std::time::{Duration, Instant};
         static CACHE: Mutex<Option<(Instant, Option<std::ffi::OsString>)>> = Mutex::new(None);
-        let mut cache = CACHE
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut cache = CACHE.locked();
         if let Some((at, path)) = cache.as_ref()
             // Long enough to serve a burst of calls, short enough to see a newly installed program.
             && at.elapsed() < Duration::from_secs(3)

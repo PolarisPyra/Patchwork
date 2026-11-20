@@ -34,18 +34,17 @@ impl Workspace {
         self.checks.open.insert(message_id.clone());
         let core = Arc::clone(&self.core);
         let id = message_id.clone();
-        let task = cx.background_spawn(async move { core.run_checks(&thread_id, &id) });
-        cx.spawn(async move |this, cx| {
-            let started = task.await;
-            let _ = this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.run_checks(&thread_id, &id),
+            move |this, started, cx| {
                 this.checks.rerunning.remove(&message_id);
                 if let Err(e) = started {
                     this.checks.errors.insert(message_id, e.to_string());
                 }
                 cx.notify();
-            });
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 

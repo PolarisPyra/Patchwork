@@ -17,8 +17,8 @@ const NO_RESULT: &str = "The turn ended before the tool finished";
 const PLAN_SHOWN: &str = "The plan is shown to the user. Call update_plan again with the whole list each time a step starts or finishes.";
 
 impl Agent {
-    /// Runs one tool call and returns its result for the model, and whether the turn ends here.
-    pub(super) fn call(&mut self, call: &Call) -> (String, bool) {
+    /// Runs one tool call and returns its result for the model.
+    pub(super) fn call(&mut self, call: &Call) -> String {
         let args: Value = match serde_json::from_str(if call.arguments.trim().is_empty() {
             "{}"
         } else {
@@ -37,7 +37,7 @@ impl Agent {
                 emit(
                     &json!({"type": "api.tool_done", "id": call.id, "error": true, "output": message}),
                 );
-                return (message, false);
+                return message;
             }
         };
         let summary = crate::harness::tools::summary(&call.name, &args, &self.root);
@@ -47,49 +47,38 @@ impl Agent {
         if !self.offers(&call.name) {
             let reason = format!("{} is not available in this turn", call.name);
             emit(&json!({"type": "api.tool_done", "id": call.id, "error": true, "output": reason}));
-            return (reason, false);
+            return reason;
         }
         if let Some(reason) = self.run_hooks(&call.name, &args) {
             emit(&json!({"type": "api.tool_done", "id": call.id, "error": true, "output": reason}));
-            return (reason, false);
+            return reason;
         }
         let mcp = self
             .request
             .mcp_tools
             .iter()
             .position(|t| t.name == call.name);
-        let (result, error, stop) = if let Some(index) = mcp {
+        let result = if let Some(index) = mcp {
             let tool = &self.request.mcp_tools[index];
             // Patchwork's own tools, such as a sub agent, are what the user set the chat to
             // have, so they run without asking.
-            let result = if tool.server == crate::provider::mcp::OWN_SERVER {
+            if tool.server == crate::provider::mcp::OWN_SERVER {
                 let name = tool.tool.clone();
                 self.call_own(&call.id, &name, &args, NO_RESULT)
             } else {
                 self.call_mcp(index, &call.id, &args)
-            };
-            let error = result.is_err();
-            (result, error, false)
+            }
         } else {
             match call.name.as_str() {
                 "update_plan" => {
                     emit(&json!({"type": "api.todos", "steps": args["steps"]}));
-                    (Ok(PLAN_SHOWN.to_string()), false, false)
+                    Ok(PLAN_SHOWN.to_string())
                 }
-                "ask_user" => match self.ask(&call.id, &args) {
-                    Ok(answer) => (Ok(answer), false, false),
-                    Err(e) => (Err(e), true, false),
-                },
-                crate::secrets::TOOL => {
-                    let result = self.request_secret(&call.id, &args);
-                    let error = result.is_err();
-                    (result, error, false)
-                }
+                "ask_user" => self.ask(&call.id, &args),
+                crate::secrets::TOOL => self.request_secret(&call.id, &args),
                 // The commands Patchwork holds for this agent, which reading or stopping asks no one.
                 "job_output" | "job_kill" | "job_list" => {
-                    let result = self.call_own(&call.id, &call.name, &args, NO_RESULT);
-                    let error = result.is_err();
-                    (result, error, false)
+                    self.call_own(&call.id, &call.name, &args, NO_RESULT)
                 }
                 name => {
                     // A write that would be refused anyway is not put to the user first.
@@ -104,18 +93,15 @@ impl Agent {
                         None => true,
                     };
                     if let Some(stale) = stale {
-                        (Err(stale.into()), true, false)
+                        Err(stale.into())
                     } else if allowed
                         && name == "read_file"
                         && let Some(image) = self.read_image(&args)
                     {
-                        let error = image.is_err();
-                        (image, error, false)
+                        image
                     } else if allowed && name == "bash" {
                         // Patchwork runs it, so it can carry on as a job past its time limit.
-                        let result = self.call_own(&call.id, name, &args, NO_RESULT);
-                        let error = result.is_err();
-                        (result, error, false)
+                        self.call_own(&call.id, name, &args, NO_RESULT)
                     } else if allowed {
                         let result = self
                             .prefetched
@@ -124,14 +110,14 @@ impl Agent {
                         if result.is_ok() {
                             self.saw(name, &args);
                         }
-                        let error = result.is_err();
-                        (result, error, false)
+                        result
                     } else {
-                        (Err(DENIED.into()), true, false)
+                        Err(DENIED.into())
                     }
                 }
             }
         };
+        let error = result.is_err();
         let mut text = match result {
             Ok(text) => self.fit(&call.id, text),
             Err(e) => self.fit(&call.id, e.to_string()),
@@ -151,7 +137,7 @@ impl Agent {
             ));
         }
         emit(&done);
-        (text, stop)
+        text
     }
 
     /// Runs the hooks before a tool call that match the tool, with the call as Claude Code gives

@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, Toggled, div, prelude::*, px};
+use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
 use crate::ui::theme::{fs_lg, fs_md, fs_sm, radius, radius_sm, Theme};
 use crate::ui::{icon, mix};
 
@@ -37,11 +37,7 @@ pub(super) fn choice_row(
         .id(id)
         .role(Role::CheckBox)
         .aria_label(SharedString::from(name.to_string()))
-        .aria_toggled(if checked {
-            Toggled::True
-        } else {
-            Toggled::False
-        })
+        .aria_toggled(checked.into())
         .flex()
         .w_full()
         .items_center()

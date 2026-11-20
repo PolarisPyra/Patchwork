@@ -117,13 +117,7 @@ pub(super) fn tool(part: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
     };
     let mut started = tool_started(
         message_id,
-        ToolStart {
-            id,
-            name: tool_name(name),
-            summary: one_line(&summary),
-            subagent: None,
-            parent: None,
-        },
+        ToolStart::new(id, tool_name(name), one_line(&summary)),
     );
     // Reported only once done, the call keeps when it really started.
     if let (Parsed::Event(AgentEvent::ToolStarted { tool, .. }), Some(start)) =

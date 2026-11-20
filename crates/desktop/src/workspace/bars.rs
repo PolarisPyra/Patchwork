@@ -247,11 +247,7 @@ impl Workspace {
                     label.to_string()
                 };
                 activity_button(label, aria, &t, active)
-                    .aria_toggled(if active {
-                        gpui::Toggled::True
-                    } else {
-                        gpui::Toggled::False
-                    })
+                    .aria_toggled(active.into())
                     .child(icon(name, 20.))
                     .children(badge)
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -286,11 +282,7 @@ impl Workspace {
             .py(px(6.))
             .child(
                 activity_button("Orchestrator", "Orchestrator".into(), &t, on_page)
-                    .aria_toggled(if orchestrating {
-                        gpui::Toggled::True
-                    } else {
-                        gpui::Toggled::False
-                    })
+                    .aria_toggled(orchestrating.into())
                     .child(icon("butterfly", 20.))
                     .on_click(cx.listener(|this, e, window, cx| {
                         // A click leaves the focus on nothing, so typing goes to the pill and

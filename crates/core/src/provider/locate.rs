@@ -3,11 +3,12 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 use crate::system::fs::home_dir;
 use super::{antigravity, opencode, AgentKind};
 
@@ -16,7 +17,7 @@ static AGENT_PATHS: Mutex<Vec<(AgentKind, PathBuf)>> = Mutex::new(Vec::new());
 
 /// Called whenever the settings are loaded or saved.
 pub fn set_agent_paths(paths: &HashMap<AgentKind, String>) {
-    *AGENT_PATHS.lock().unwrap_or_else(PoisonError::into_inner) = paths
+    *AGENT_PATHS.locked() = paths
         .iter()
         .map(|(kind, path)| (*kind, PathBuf::from(path.trim())))
         .filter(|(_, path)| !path.as_os_str().is_empty())
@@ -25,8 +26,7 @@ pub fn set_agent_paths(paths: &HashMap<AgentKind, String>) {
 
 pub(super) fn located(kind: AgentKind) -> Option<PathBuf> {
     AGENT_PATHS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+        .locked()
         .iter()
         .find(|(k, _)| *k == kind)
         .map(|(_, path)| path.clone())

@@ -3,9 +3,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use serde_json::Value;
@@ -19,7 +20,6 @@ use crate::orchestration::turn::start::{PendingApproval, Turn};
 use crate::orchestration::unasked;
 use crate::permissions;
 use crate::provider::{self, AgentKind, Parsed};
-use crate::system::new_id;
 use crate::threads::{Approval, ApprovalStatus, Question};
 
 /// A call the access mode runs without asking runs unless a rule refuses it or asks. Returns the
@@ -130,20 +130,13 @@ pub(super) fn request_approval(
     target: Option<permissions::Target>,
 ) {
     let mut approval = Approval {
-        id: new_id(),
-        title,
-        detail,
-        status: ApprovalStatus::Pending,
         questions,
-        answers: HashMap::new(),
         kind: target.as_ref().map(|t| t.kind),
         suggestions: target
             .as_ref()
             .map(|t| permissions::suggest(t, Path::new(&turn.root)))
             .unwrap_or_default(),
-        rule: None,
-        auto: false,
-        secret: None,
+        ..Approval::pending(title, detail)
     };
     // The bot blocks it, or a hook refuses it, whatever the rules and the user would say.
     let refused = target.as_ref().and_then(|t| {
@@ -208,18 +201,15 @@ pub(super) fn request_approval(
         });
         return;
     }
-    turn.pending
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .insert(
-            approval.id.clone(),
-            PendingApproval {
-                message_id: turn.message_id.clone(),
-                reply,
-                target,
-                root: turn.root.clone(),
-            },
-        );
+    turn.pending.locked().insert(
+        approval.id.clone(),
+        PendingApproval {
+            message_id: turn.message_id.clone(),
+            reply,
+            target,
+            root: turn.root.clone(),
+        },
+    );
     turn.save_text(unsaved);
     turn.publish(AgentEvent::ApprovalRequested {
         message_id: turn.message_id.clone(),

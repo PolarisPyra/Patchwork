@@ -2,13 +2,13 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::{HashMap, HashSet};
 use std::io::BufReader;
 use std::process::Child;
 use std::process::ChildStdout;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use std::sync::PoisonError;
 use std::thread::JoinHandle;
 
 use serde_json::Value;
@@ -51,7 +51,6 @@ use crate::settings::LogLevel;
 use crate::workspace;
 use crate::system::now_ms;
 
-use crate::orchestration::changes::attribution;
 use crate::orchestration::tasks::background::Background;
 use crate::orchestration::goal;
 use crate::orchestration::turn::process::exit_error;
@@ -166,16 +165,9 @@ pub(in crate::orchestration) fn ingest(
         if ended
             && turn.agent == AgentKind::Claude
             && ((starts_reply && turn.idle.swap(false, Ordering::SeqCst))
-                || !turn
-                    .steers
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .is_empty())
+                || !turn.steers.locked().is_empty())
         {
-            turn.steers
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .clear();
+            turn.steers.locked().clear();
             turn.next_segment(&mut unsaved);
             segments.push(turn.message_id.clone());
             (has_text, last_was_text) = (false, false);
@@ -265,27 +257,17 @@ pub(in crate::orchestration) fn ingest(
                             stream_error = None;
                             go_idle(&turn, &segments, &mut completed, &mut unsaved, true, None);
                         } else if turn.agent == AgentKind::Codex {
-                            turn.stdin
-                                .lock()
-                                .unwrap_or_else(PoisonError::into_inner)
-                                .take();
+                            turn.stdin.locked().take();
                         } else {
                             // What it left running toward a goal or in the background stops too.
                             terminate(pid, Arc::clone(&turn.exited));
                         }
                         continue;
                     }
-                    let steered = !turn
-                        .steers
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .is_empty();
+                    let steered = !turn.steers.locked().is_empty();
                     // Claude ends its reply to take the steering messages, then answers them.
                     if steered && turn.agent == AgentKind::Claude {
-                        turn.steers
-                            .lock()
-                            .unwrap_or_else(PoisonError::into_inner)
-                            .clear();
+                        turn.steers.locked().clear();
                         close_steered_segment(&turn, &segments, &mut completed);
                         turn.next_segment(&mut unsaved);
                         segments.push(turn.message_id.clone());
@@ -296,7 +278,7 @@ pub(in crate::orchestration) fn ingest(
                     }
                     // The finished turn can no longer be steered; until Codex starts the
                     // next one, messages wait for the run to end.
-                    *turn.native.lock().unwrap_or_else(PoisonError::into_inner) = None;
+                    *turn.native.locked() = None;
                     // Codex's calls still open are what its turn left running, so they are listed
                     // under the background now.
                     if turn.agent == AgentKind::Codex {
@@ -327,20 +309,13 @@ pub(in crate::orchestration) fn ingest(
                     }
                 }
                 Parsed::ControlResponse(id) => {
-                    let waiting = turn
-                        .controls
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .remove(&id);
+                    let waiting = turn.controls.locked().remove(&id);
                     if let Some(waiting) = waiting {
                         let _ = waiting.send(());
                     }
                 }
                 Parsed::Steered => {
-                    turn.steers
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .pop_front();
+                    turn.steers.locked().pop_front();
                     if !steer_reply_empty {
                         // The reply the steer arrived during is over; the turn goes on below it.
                         close_steered_segment(&turn, &segments, &mut completed);
@@ -358,21 +333,14 @@ pub(in crate::orchestration) fn ingest(
                         message:%;
                         "the agent did not take the steering message: {{message}}"
                     );
-                    let refused = turn
-                        .steers
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .pop_front();
+                    let refused = turn.steers.locked().pop_front();
                     if let Some(refused) = refused {
                         // Waits as a queued message, so the turn's end sends it on.
                         turn.publish(AgentEvent::MessageQueued {
                             message_id: refused.message_id.clone(),
                             queued: true,
                         });
-                        turn.queue
-                            .lock()
-                            .unwrap_or_else(PoisonError::into_inner)
-                            .push(refused);
+                        turn.queue.locked().push(refused);
                     }
                     if ended {
                         turn.close_unless_steered();
@@ -469,7 +437,7 @@ pub(in crate::orchestration) fn ingest(
                 }
                 Parsed::TurnStarted(id) => {
                     ended = false;
-                    *turn.native.lock().unwrap_or_else(PoisonError::into_inner) = Some(id);
+                    *turn.native.locked() = Some(id);
                 }
                 Parsed::Compacting => {
                     turn.save_text(&mut unsaved);
@@ -650,7 +618,7 @@ pub(in crate::orchestration) fn ingest(
 
     if !idle_untouched {
         let after = workspace::git_changes(&turn.root).unwrap_or_default();
-        let changed = attribution::lock(&turn.attribution).settle(&turn.root, after);
+        let changed = turn.attribution.locked().settle(&turn.root, after);
         for path in changed {
             turn.publish(AgentEvent::FileTouched {
                 message_id: turn.message_id.clone(),

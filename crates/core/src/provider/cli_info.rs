@@ -155,6 +155,16 @@ fn drain<R: std::io::Read + Send + 'static>(mut pipe: R) -> std::thread::JoinHan
     })
 }
 
+/// The version line the CLI at `binary` prints, e.g. `2.1.310 (Claude Code)`, or `unknown` when it
+/// prints none.
+#[must_use]
+pub fn version(binary: &Path) -> String {
+    run(binary, &["--version"]).map_or_else(
+        |_| "unknown".into(),
+        |text| text.lines().next().unwrap_or_default().trim().to_string(),
+    )
+}
+
 /// Runs one of the read-only diagnostics commands on the CLI at `binary` and returns its output,
 /// trimmed to what a reader wants to see.
 ///

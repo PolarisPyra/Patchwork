@@ -181,10 +181,10 @@ impl AndroidPanel {
         };
         let (core, root) = (Arc::clone(&self.core), self.project.root.clone());
         let serial = serial.clone();
-        let task = cx.background_spawn(async move { core.android_saved_states(&root, &serial) });
-        cx.spawn(async move |this, cx| {
-            let read = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.android_saved_states(&root, &serial),
+            move |this, read, cx| {
                 let Some(Sheet::States { names, .. }) = &mut this.sheet else {
                     return;
                 };
@@ -196,9 +196,8 @@ impl AndroidPanel {
                     }
                 }
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     fn saved_state(&mut self, action: StateAction, name: String, cx: &mut Context<Self>) {
@@ -324,10 +323,10 @@ impl AndroidPanel {
         self.failure = None;
         self.notice = None;
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { act(&core) });
-        cx.spawn(async move |this, cx| {
-            let paired = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || act(&core),
+            move |this, paired, cx| {
                 this.working = None;
                 match paired {
                     Ok(()) => {
@@ -338,9 +337,8 @@ impl AndroidPanel {
                 }
                 this.refresh(cx);
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 

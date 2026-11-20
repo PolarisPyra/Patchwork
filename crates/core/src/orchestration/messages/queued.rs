@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::orchestration::{Delivery, FollowUpInput, TurnRequest};
 
 use crate::events::AgentEvent;
-use crate::threads::{StepStatus, Attachment};
+use crate::threads::{Attachment, Message, StepStatus};
 use crate::{orchestration, provider};
 use crate::Core;
 
@@ -144,22 +144,7 @@ impl Core {
         let text = self.chat_app_context(thread_id, text);
         let attachments: Vec<_> = queued.iter().flat_map(|m| m.attachments.clone()).collect();
         let images = provider::load_images(&attachments)?;
-        self.store.update_thread(thread_id, |t| {
-            t.messages
-                .iter_mut()
-                .filter(|m| queued.iter().any(|q| q.id == m.id))
-                .for_each(|m| Arc::make_mut(m).queued = false);
-        })?;
-        for m in &queued {
-            orchestration::publish(
-                self,
-                thread_id,
-                AgentEvent::MessageQueued {
-                    message_id: m.id.clone(),
-                    queued: false,
-                },
-            );
-        }
+        self.set_queued(thread_id, &queued, false)?;
         let first = &queued[0].id;
         // Held with the first if the agent never answers, so none of them is left as sent.
         let merged: Vec<String> = queued[1..].iter().map(|m| m.id.clone()).collect();
@@ -192,22 +177,7 @@ impl Core {
                 resumes: false,
             },
         ) {
-            self.store.update_thread(thread_id, |t| {
-                t.messages
-                    .iter_mut()
-                    .filter(|m| queued.iter().any(|q| q.id == m.id))
-                    .for_each(|m| Arc::make_mut(m).queued = true);
-            })?;
-            for m in &queued {
-                orchestration::publish(
-                    self,
-                    thread_id,
-                    AgentEvent::MessageQueued {
-                        message_id: m.id.clone(),
-                        queued: true,
-                    },
-                );
-            }
+            self.set_queued(thread_id, &queued, true)?;
             return Err(error);
         }
         Ok(())
@@ -268,6 +238,32 @@ impl Core {
                 message_id: message_id.into(),
             },
         );
+        Ok(())
+    }
+
+    /// Marks the messages `queued` as waiting in the queue or not, and tells the window.
+    fn set_queued(
+        &self,
+        thread_id: &str,
+        queued: &[Arc<Message>],
+        value: bool,
+    ) -> Result<(), Error> {
+        self.store.update_thread(thread_id, |t| {
+            t.messages
+                .iter_mut()
+                .filter(|m| queued.iter().any(|q| q.id == m.id))
+                .for_each(|m| Arc::make_mut(m).queued = value);
+        })?;
+        for m in queued {
+            orchestration::publish(
+                self,
+                thread_id,
+                AgentEvent::MessageQueued {
+                    message_id: m.id.clone(),
+                    queued: value,
+                },
+            );
+        }
         Ok(())
     }
 }

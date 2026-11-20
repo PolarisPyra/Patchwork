@@ -3,10 +3,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::sdk::Os;
@@ -220,7 +221,7 @@ pub(super) fn output_bytes(
         // Short, so output already read is returned at once.
         std::thread::sleep(Duration::from_millis(5));
     }
-    let stdout = std::mem::take(&mut *stdout.lock().unwrap_or_else(PoisonError::into_inner));
+    let stdout = std::mem::take(&mut *stdout.locked());
     Ok(Bytes {
         ok: status.success(),
         stdout,
@@ -242,9 +243,7 @@ fn collect<R: Read + Send + 'static>(pipe: Option<R>) -> Collected {
                 if n == 0 {
                     break;
                 }
-                into.lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .extend_from_slice(&chunk[..n]);
+                into.locked().extend_from_slice(&chunk[..n]);
             }
         });
     }
@@ -252,7 +251,7 @@ fn collect<R: Read + Send + 'static>(pipe: Option<R>) -> Collected {
 }
 
 fn text(collected: &Collected) -> String {
-    String::from_utf8_lossy(&collected.lock().unwrap_or_else(PoisonError::into_inner)).into_owned()
+    String::from_utf8_lossy(&collected.locked()).into_owned()
 }
 
 /// The end of a tool's output, which is where it says what went wrong.

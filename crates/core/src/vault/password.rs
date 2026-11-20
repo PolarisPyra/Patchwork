@@ -3,8 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use chacha20poly1305::aead::OsRng;
@@ -13,7 +14,8 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use zeroize::Zeroizing;
 
 use super::crypt::{
-    DATA_KEY, KEY_LEN, SALT_LEN, cipher, data_key, derive, err, held, new_key, seal, unseal,
+    DATA_KEY, KEY_LEN, SALT_LEN, cipher, data_key, derive, err, held, new_key, seal, sealed_rows,
+    unseal,
 };
 use super::known;
 use super::recovery::new_recovery;
@@ -32,7 +34,7 @@ const CONFIRM_FOR: Duration = Duration::from_secs(5 * 60);
 static CONFIRMED: Mutex<Option<Instant>> = Mutex::new(None);
 
 fn set_confirmed(at: Option<Instant>) {
-    *CONFIRMED.lock().unwrap_or_else(PoisonError::into_inner) = at;
+    *CONFIRMED.locked() = at;
 }
 
 /// Whether showing a saved secret takes the password first: the vault has one, and it was
@@ -41,7 +43,7 @@ pub(super) fn needs_password() -> bool {
     if status() != Status::Open(Method::Password) {
         return false;
     }
-    let confirmed = *CONFIRMED.lock().unwrap_or_else(PoisonError::into_inner);
+    let confirmed = *CONFIRMED.locked();
     confirmed.is_none_or(|at| at.elapsed() >= CONFIRM_FOR)
 }
 
@@ -239,13 +241,7 @@ fn rekey(
         .conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(err)?;
-    let rows: Vec<(String, Vec<u8>, Vec<u8>)> = tx
-        .prepare("SELECT name, nonce, value FROM secrets")
-        .and_then(|mut all| {
-            all.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
-                .collect()
-        })
-        .map_err(err)?;
+    let rows = sealed_rows(&tx).map_err(err)?;
     for (name, nonce, sealed) in rows {
         let value = unseal(&vault.cipher, &name, &nonce, &sealed)?;
         let (nonce, sealed) = seal(&next, &name, &value)?;

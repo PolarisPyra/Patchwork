@@ -105,17 +105,16 @@ impl Workspace {
         }
         self.worktree_marks_key = Some(key);
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { core.worktree_marks() });
-        cx.spawn(async move |this, cx| {
-            let marks = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.worktree_marks(),
+            move |this, marks, cx| {
                 if this.worktree_marks != marks {
                     this.worktree_marks = marks;
                     cx.notify();
                 }
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     /// Reads the worktree marks again, whatever was read before.

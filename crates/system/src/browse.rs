@@ -5,16 +5,18 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::Locked;
 use crate::Error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{LazyLock, Mutex};
 
 use super::fs::{home_dir, resolve};
 
 /// The folders seen on SSH hosts this session, by host and path, so one seen before shows at
 /// once while it is read again.
-static LISTINGS: Mutex<Option<HashMap<(String, String), DirListing>>> = Mutex::new(None);
+static LISTINGS: LazyLock<Mutex<HashMap<(String, String), DirListing>>> =
+    LazyLock::new(Mutex::default);
 
 /// The most listings kept before they are all dropped.
 const MOST_LISTINGS: usize = 512;
@@ -132,8 +134,7 @@ pub fn browse(path: Option<&str>) -> Result<DirListing, Error> {
 /// Returns an error when the host cannot be reached, or the path there cannot be opened.
 pub fn browse_host(host: &str, path: Option<&str>) -> Result<DirListing, Error> {
     let listing = crate::ssh::op::browse(host, path)?;
-    let mut guard = LISTINGS.lock().unwrap_or_else(PoisonError::into_inner);
-    let seen = guard.get_or_insert_with(HashMap::new);
+    let mut seen = LISTINGS.locked();
     if seen.len() >= MOST_LISTINGS {
         seen.clear();
     }
@@ -148,9 +149,7 @@ pub fn browse_host(host: &str, path: Option<&str>) -> Result<DirListing, Error> 
 #[must_use]
 pub fn remembered(host: &str, path: Option<&str>) -> Option<DirListing> {
     LISTINGS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .as_ref()?
+        .locked()
         .get(&(host.to_string(), listing_key(path)))
         .cloned()
 }

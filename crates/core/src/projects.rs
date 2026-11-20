@@ -2,6 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use crate::provider::AgentKind;
 use std::path::{Path, PathBuf};
@@ -95,10 +96,7 @@ impl Core {
     ) -> Result<(), Error> {
         let root = self.source_root(project_id, thread_id)?;
         let project_root = self.project_root(project_id)?;
-        let mut current = self
-            .project_watch
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut current = self.project_watch.locked();
         if let Some(watching) = current.as_mut() {
             if watching.seq > seq {
                 return Ok(());
@@ -260,10 +258,7 @@ impl Core {
         })??;
         if moved {
             // A watch on the old folder ends, so the next `watch_project` starts one on the new.
-            let mut watch = self
-                .project_watch
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut watch = self.project_watch.locked();
             if watch.as_ref().is_some_and(|w| w.project_id == id) {
                 *watch = None;
             }

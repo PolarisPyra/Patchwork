@@ -56,13 +56,11 @@ pub(in crate::provider::opencode) fn parse_serve(
             };
             vec![tool_started(
                 message_id,
-                ToolStart {
+                ToolStart::new(
                     id,
-                    name: tool_name(name),
-                    summary: one_line(&tool_summary(&data["input"], spec.root)),
-                    subagent: None,
-                    parent: None,
-                },
+                    tool_name(name),
+                    one_line(&tool_summary(&data["input"], spec.root)),
+                ),
             )]
         }
         Some(kind @ ("session.tool.success" | "session.tool.failed")) => {

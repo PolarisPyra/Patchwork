@@ -83,18 +83,17 @@ impl Workspace {
         let key = goal_key(&id, &goal);
         self.goal_clear = None;
         let core = Arc::clone(&self.core);
-        let task = cx.background_spawn(async move { core.stop_goal(&id) });
-        cx.spawn(async move |this, cx| {
-            let result = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.stop_goal(&id),
+            move |this, result, cx| {
                 if let Err(e) = result {
                     log::warn!(error:% = e; "failed to clear a goal: {{error}}");
                     this.goal_clear = Some(GoalClear { key });
                 }
                 this.reload(cx);
-            })
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 

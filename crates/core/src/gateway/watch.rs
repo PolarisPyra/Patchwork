@@ -8,7 +8,8 @@ use std::sync::Arc;
 
 use super::inbound::{DENY, answers};
 use super::notify::Notice;
-use super::outbound::{clip, request};
+use super::outbound::request;
+use crate::provider::clip;
 use super::platform::Platform;
 use super::types::Button;
 use crate::events::AgentEvent;

@@ -5,12 +5,13 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::Locked;
 use crate::Error;
 use std::collections::HashMap;
 use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::{Output, Stdio};
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{LazyLock, Mutex, OnceLock};
 
 use sha2::{Digest, Sha256};
 
@@ -22,7 +23,7 @@ use super::location::quote;
 const HELPER: &str = "patchwork-remote";
 
 /// The helper on each host it was copied to.
-static HELPERS: Mutex<Option<HashMap<String, Installed>>> = Mutex::new(None);
+static HELPERS: LazyLock<Mutex<HashMap<String, Installed>>> = LazyLock::new(Mutex::default);
 
 /// Where a helper this copy of Patchwork does not ship comes from, by its file name.
 type HelperSource = fn(&str) -> Result<Vec<u8>, Error>;
@@ -173,12 +174,7 @@ fn short_hash(bytes: &[u8]) -> String {
 /// Returns an error when the host runs a system Patchwork has no helper for, or the helper
 /// cannot be copied.
 pub(super) fn helper(host: &str) -> Result<Installed, Error> {
-    if let Some(known) = HELPERS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .get_or_insert_with(HashMap::new)
-        .get(host)
-    {
+    if let Some(known) = HELPERS.locked().get(host) {
         return Ok(known.clone());
     }
     let about = probe(host)?;
@@ -204,11 +200,7 @@ pub(super) fn helper(host: &str) -> Result<Installed, Error> {
         }
         super::host::set_helper(host, &installed.name);
     }
-    HELPERS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .get_or_insert_with(HashMap::new)
-        .insert(host.to_string(), installed.clone());
+    HELPERS.locked().insert(host.to_string(), installed.clone());
     // Off the caller's way: the helper marks itself used and deletes old versions' copies.
     let host = host.to_string();
     std::thread::spawn(move || {
@@ -222,13 +214,7 @@ pub(super) fn helper(host: &str) -> Result<Installed, Error> {
 /// Forgets `host`'s helper, the files sent to it, and what the host said about itself, so all
 /// are looked at again: for a host that was reinstalled, or whose helper was deleted.
 pub fn forget(host: &str) {
-    if let Some(helpers) = HELPERS
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .as_mut()
-    {
-        helpers.remove(host);
-    }
+    HELPERS.locked().remove(host);
     super::mirror::forget(host);
     super::session::close(host);
     super::host::forget(host);

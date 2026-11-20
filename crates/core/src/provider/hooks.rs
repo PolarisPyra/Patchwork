@@ -6,9 +6,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::collections::HashMap;
 use std::io::{BufReader, Write};
-use std::sync::{Mutex, OnceLock, PoisonError, mpsc};
+use std::sync::{Mutex, OnceLock, mpsc};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -151,8 +152,7 @@ pub fn answer(agent: AgentKind, refusal: Option<String>) -> String {
 /// another way.
 #[must_use]
 pub fn unguarded(agent: AgentKind, args: &[String]) -> Option<&'static str> {
-    let relay = crate::provider::mcp::relay_file().is_some()
-        && crate::provider::mcp::relay_endpoint().is_some();
+    let relay = relay_running();
     match agent {
         AgentKind::Codex | AgentKind::Antigravity if !relay => Some(
             "Patchwork's permission relay is not running, so this turn would run without your \
@@ -256,11 +256,7 @@ fn codex_trust(overrides: &[String], root: &str, host: Option<&str>) -> Option<S
     static TRUSTED: OnceLock<Mutex<Trusted>> = OnceLock::new();
     let key = (host.map(str::to_string), overrides.to_vec());
     let cache = TRUSTED.get_or_init(Mutex::default);
-    if let Some(trust) = cache
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .get(&key)
-    {
+    if let Some(trust) = cache.locked().get(&key) {
         return Some(trust.clone());
     }
     let listed = list_codex_hooks(overrides, root, host)?;
@@ -272,10 +268,7 @@ fn codex_trust(overrides: &[String], root: &str, host: Option<&str>) -> Option<S
         .map(|(key, hash)| format!("{}={{trusted_hash={}}}", json!(key), json!(hash)))
         .collect();
     let trust = format!("hooks.state={{{}}}", entries.join(","));
-    cache
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .insert(key, trust.clone());
+    cache.locked().insert(key, trust.clone());
     Some(trust)
 }
 
@@ -414,27 +407,15 @@ fn antigravity_hooks(spec: &TurnSpec) -> Option<String> {
         let prompt = json!({
             "hooks": [{"type": "command", "command": patchwork_command(AgentKind::Antigravity, &[PROMPT_ARG])?}],
         });
-        let groups = hooks["hooks"]["SessionStart"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
-        hooks["hooks"]["SessionStart"] =
-            Value::Array(std::iter::once(prompt).chain(groups).collect());
+        prepend(&mut hooks, "SessionStart", prompt);
     }
     // Installed for every turn, so a rule saved while the turn runs decides its next call.
-    if crate::provider::mcp::relay_file().is_some()
-        && crate::provider::mcp::relay_endpoint().is_some()
-    {
+    if relay_running() {
         let permission = json!({
             "matcher": "*",
             "hooks": [{"type": "command", "command": patchwork_command(AgentKind::Antigravity, &[HOOK_ARG, "antigravity"])?, "timeout": 86400}],
         });
-        let groups = hooks["hooks"]["PreToolUse"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
-        hooks["hooks"]["PreToolUse"] =
-            Value::Array(std::iter::once(permission).chain(groups).collect());
+        prepend(&mut hooks, "PreToolUse", permission);
     }
     if hooks["hooks"]
         .as_object()
@@ -443,6 +424,20 @@ fn antigravity_hooks(spec: &TurnSpec) -> Option<String> {
         return None;
     }
     serde_json::to_string_pretty(&named(&hooks)).ok()
+}
+
+/// Whether Patchwork's permission relay is running, which the permission hooks report to.
+fn relay_running() -> bool {
+    crate::provider::mcp::relay_file().is_some() && crate::provider::mcp::relay_endpoint().is_some()
+}
+
+/// Puts `group` first among the hook groups for `event`.
+fn prepend(hooks: &mut Value, event: &str, group: Value) {
+    let groups = hooks["hooks"][event]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    hooks["hooks"][event] = Value::Array(std::iter::once(group).chain(groups).collect());
 }
 
 /// `hooks` in the shape Antigravity reads, which keys each hook by a name of its own: a tool

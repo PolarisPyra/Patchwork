@@ -4,8 +4,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
@@ -14,7 +15,7 @@ use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::orchestration::Runner;
 use super::wait::Unanswered;
 use crate::orchestration::turn::start::Turn;
-use crate::system::{new_id, now_ms};
+use crate::system::new_id;
 use crate::provider::AgentKind;
 use crate::threads::delegate::{self, Ask, RESULT};
 use crate::threads::{
@@ -65,8 +66,7 @@ pub(in crate::orchestration) fn mark_call(turn: &Turn, tool: &mut ToolCall) {
     turn.core
         .runner
         .delegated
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+        .locked()
         .entry(turn.thread_id.clone())
         .or_default()
         .push(Called {
@@ -90,32 +90,14 @@ fn child_thread(parent: Thread, pick: AgentPick, ask: &Ask, call: Option<Called>
     Thread {
         id,
         project_id: parent.project_id,
-        title,
-        agent: pick.agent,
         model: pick.model,
-        access_mode: parent.access_mode,
         effort: pick.effort,
-        compact_window: None,
         background: parent.background,
-        session_id: None,
-        created_at: now_ms(),
-        messages: Vec::new(),
-        goal: None,
-        position: 0,
-        folder_id: None,
-        archived_at: None,
         parent: Some(ThreadParent {
             thread_id: parent.id,
             tool_id,
         }),
-        slash_commands: vec![],
-        imported_from: None,
-        context_pending: false,
-        role: None,
-        role_pending: false,
-        favorite: false,
-        pinned: false,
-        bot_id: None,
+        ..Thread::new(title, pick.agent, parent.access_mode)
     }
 }
 
@@ -147,10 +129,7 @@ impl Runner {
         let deadline = Instant::now() + LINK_WAIT;
         loop {
             {
-                let mut waiting = self
-                    .delegated
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner);
+                let mut waiting = self.delegated.locked();
                 if let Some(calls) = waiting.get_mut(thread_id).filter(|c| !c.is_empty()) {
                     let at = calls
                         .iter()
@@ -263,8 +242,11 @@ impl Runner {
     }
 
     /// The flags of the turn running in the thread: stopped by the user, and its agent exited.
-    fn turn_flags(&self, thread_id: &str) -> Result<[Arc<AtomicBool>; 2], Error> {
-        let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+    pub(in crate::orchestration) fn turn_flags(
+        &self,
+        thread_id: &str,
+    ) -> Result<[Arc<AtomicBool>; 2], Error> {
+        let turns = self.turns.locked();
         let turn = turns
             .get(thread_id)
             .ok_or("This turn is no longer running")?;

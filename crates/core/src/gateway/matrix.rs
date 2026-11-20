@@ -3,12 +3,13 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use serde_json::{Value, json};
 
-use super::net::{client, download, encode, failed, json, mime};
+use super::net::{authorized, client, download, encode, failed, json, mime};
 use super::platform::Platform;
 use super::types::{Button, Connector, Incoming, Listener};
 use crate::Error;
@@ -52,22 +53,8 @@ impl Matrix {
     /// Calls the client-server API at `path` with `method`.
     fn call(&self, method: &str, path: &str, body: Option<&Value>) -> Result<Value, Error> {
         let url = format!("{}{path}", self.server);
-        let auth = self.auth();
-        let response = match (method, body) {
-            ("PUT", Some(body)) => self
-                .http
-                .put(&url)
-                .header("Authorization", &auth)
-                .send_json(body),
-            (_, Some(body)) => self
-                .http
-                .post(&url)
-                .header("Authorization", &auth)
-                .send_json(body),
-            _ => self.http.get(&url).header("Authorization", &auth).call(),
-        };
-        let response =
-            response.map_err(|e| failed("The homeserver could not be reached", e, &self.token))?;
+        let response = authorized(&self.http, method, &url, &self.auth(), body)
+            .map_err(|e| failed("The homeserver could not be reached", e, &self.token))?;
         json("The homeserver", response)
     }
 
@@ -102,11 +89,7 @@ impl Matrix {
 
     /// The messages others sent in the rooms the bot is in.
     fn messages(&self, sync: &Value) -> Vec<Incoming> {
-        let me = self
-            .me
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone();
+        let me = self.me.locked().clone();
         let mut out = Vec::new();
         for (room, data) in sync["rooms"]["join"].as_object().into_iter().flatten() {
             for event in data["timeline"]["events"].as_array().into_iter().flatten() {
@@ -175,7 +158,7 @@ impl Connector for Matrix {
             .as_str()
             .ok_or("The homeserver did not say who the token belongs to")?
             .to_string();
-        me.clone_into(&mut self.me.lock().unwrap_or_else(PoisonError::into_inner));
+        me.clone_into(&mut self.me.locked());
         // The first sync only marks where Patchwork starts: older messages are not answered.
         let first = self.sync(None)?;
         self.join_invites(&first);
@@ -246,11 +229,7 @@ impl Connector for Matrix {
     }
 
     fn typing(&self, chat: &str) {
-        let me = self
-            .me
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone();
+        let me = self.me.locked().clone();
         let path = format!(
             "/_matrix/client/v3/rooms/{}/typing/{}",
             encode(chat),

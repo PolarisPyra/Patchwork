@@ -6,6 +6,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::collections::HashMap;
 use std::io::Read;
@@ -128,7 +129,7 @@ impl State {
 
 impl Job {
     fn lock(&self) -> MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        self.state.locked()
     }
 
     /// Copies a pipe into the job's output on its own thread.
@@ -311,7 +312,7 @@ impl crate::orchestration::Runner {
 
 impl Jobs {
     fn lock(&self) -> MutexGuard<'_, HashMap<String, Arc<Job>>> {
-        self.jobs.lock().unwrap_or_else(PoisonError::into_inner)
+        self.jobs.locked()
     }
 
     /// The thread's job `id`.

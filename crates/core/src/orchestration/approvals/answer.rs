@@ -3,9 +3,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use crate::system::Locked;
 use crate::Error;
 use std::collections::HashMap;
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 
 use crate::orchestration::turn::process::write_line;
 use crate::orchestration::{Runner, publish};
@@ -99,11 +100,11 @@ impl Runner {
     /// the user changed the rules.
     pub fn apply_rules(&self, core: &Arc<Core>) {
         let waiting: Vec<(String, String, Target, String)> = {
-            let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+            let turns = self.turns.locked();
             turns
                 .iter()
                 .flat_map(|(thread_id, turn)| {
-                    let pending = turn.pending.lock().unwrap_or_else(PoisonError::into_inner);
+                    let pending = turn.pending.locked();
                     pending
                         .iter()
                         .filter_map(|(id, p)| {
@@ -144,11 +145,10 @@ impl Runner {
             rule,
         } = decision;
         let waited = {
-            let turns = self.turns.lock().unwrap_or_else(PoisonError::into_inner);
+            let turns = self.turns.locked();
             turns.get(thread_id).and_then(|turn| {
                 turn.pending
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
+                    .locked()
                     .remove(approval_id)
                     .map(|pending| (turn.agent, Arc::clone(&turn.stdin), pending))
             })
@@ -161,12 +161,7 @@ impl Runner {
         };
         // A permission hook holds the call until it hears the answer.
         if pending.reply.get("hook").is_some() {
-            if let Some(waiter) = self
-                .hooks
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(approval_id)
-            {
+            if let Some(waiter) = self.hooks.locked().remove(approval_id) {
                 let _ = waiter.send(allow);
             }
         } else {

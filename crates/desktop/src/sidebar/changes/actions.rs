@@ -292,26 +292,25 @@ impl ChangesView {
         let thread = self.thread_id(cx);
         self.error = None;
         let shown = self.root.clone();
-        let task = cx.background_spawn(async move {
-            let root = core.source_root(&id, thread.as_deref())?;
-            for file in &files {
-                step(&root, file)?;
-            }
-            Ok::<_, patchwork_core::Error>(())
-        });
-        cx.spawn(async move |this, cx| {
-            let done = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || {
+                let root = core.source_root(&id, thread.as_deref())?;
+                for file in &files {
+                    step(&root, file)?;
+                }
+                Ok::<_, patchwork_core::Error>(())
+            },
+            move |this, done, cx| {
                 if this.root == shown {
                     this.error = done.err().map(|e| e.to_string());
                 }
-                if let Some(w) = this.workspace.upgrade() {
-                    w.update(cx, crate::workspace::Workspace::load_git);
-                }
+                let _ = this
+                    .workspace
+                    .update(cx, crate::workspace::Workspace::load_git);
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     /// Stages the files. One that was in conflict and still has conflict markers is asked about
@@ -426,10 +425,10 @@ impl ChangesView {
         cx.notify();
         let shown = self.root.clone();
         let thread = self.thread_id(cx);
-        let task = cx.background_spawn(async move { core.conflict_prompt(&id, thread.as_deref()) });
-        cx.spawn(async move |this, cx| {
-            let prompt = task.await;
-            this.update(cx, |this, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.conflict_prompt(&id, thread.as_deref()),
+            move |this, prompt, cx| {
                 this.resolving = false;
                 match prompt {
                     // The task would start in the folder showing now, with another's conflicts.
@@ -444,9 +443,8 @@ impl ChangesView {
                     Err(e) => this.error = Some(e.to_string()),
                 }
                 cx.notify();
-            })
-        })
-        .detach();
+            },
+        );
     }
 
     /// Sends the pull request's failures and comments to the thread that made the branch's newest
