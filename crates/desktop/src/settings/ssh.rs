@@ -10,7 +10,7 @@ use gpui::{AnyElement, Focusable, FontWeight, SharedString, Window, div, prelude
 use patchwork_core::system::ssh::config::{self as ssh, Host, Test};
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{FieldKind, alert};
+use crate::settings::controls::{FieldKind, alert, labeled};
 use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius_sm, theme};
 use crate::ui::{BtnKind, btn, icon, spinner};
 
@@ -119,22 +119,6 @@ impl SettingsDialog {
             cx,
         );
     }
-}
-
-/// A field with its label above it.
-fn labeled(label: &'static str, field: gpui::Div, muted: gpui::Hsla) -> gpui::Div {
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(4.))
-        .child(
-            div()
-                .text_size(px(fs_sm()))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(muted)
-                .child(label),
-        )
-        .child(field)
 }
 
 /// The add form, or the button that opens it.

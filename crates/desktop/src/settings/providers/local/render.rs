@@ -8,7 +8,7 @@ use super::state::health_line;
 use super::state::trim_slash;
 use gpui::{AnyElement, SharedString, Window, div, prelude::*, px};
 use patchwork_core::provider::api::config::{DiscoveredServer, ProviderView};
-use crate::settings::controls::{tile, tile_grid};
+use crate::settings::controls::{self, tile, tile_grid};
 use crate::settings::SettingsDialog;
 use crate::ui::theme::theme;
 use crate::ui::provider_logo;
@@ -126,14 +126,7 @@ pub fn render(
         })
         .children(rows)
         .when(empty, |c| {
-            c.child(
-                div()
-                    .py(px(24.))
-                    .flex()
-                    .justify_center()
-                    .text_color(t.text_muted)
-                    .child("No local providers available"),
-            )
+            c.child(controls::empty("No local providers available", &t))
         })
         .into_any_element()
 }

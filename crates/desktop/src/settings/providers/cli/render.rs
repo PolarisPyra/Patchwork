@@ -10,9 +10,9 @@ use gpui::{AnyElement, FontWeight, Role, SharedString, Window, div, prelude::*, 
 use patchwork_core::provider::cli_info::InfoCommand;
 use crate::settings::controls::tildify;
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{FieldKind, alert};
-use crate::ui::theme::{font_mono, fs_lg, fs_sm, fs_xs, radius, radius_sm, theme};
-use crate::ui::{BtnKind, agent_label, agent_logo, btn, icon, icon_button};
+use crate::settings::controls::{FieldKind, alert, detail_header};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, theme};
+use crate::ui::{BtnKind, agent_label, agent_logo, btn, icon};
 
 pub fn render(
     d: &mut SettingsDialog,
@@ -64,25 +64,9 @@ pub fn render(
         return div().into_any_element();
     };
     let busy = details.busy;
-    let header = div()
-        .flex()
-        .items_center()
-        .gap(px(12.))
-        .pb(px(16.))
-        .child(
-            icon_button("details-back", "Back", "caret-left", 16., cx)
-                .tooltip(crate::ui::tooltip("Back"))
-                .on_click(cx.listener(|d, _, _, cx| d.close_details(cx))),
-        )
-        .child(agent_logo(kind, None, 24.))
-        .child(
-            div()
-                .id("details-title")
-                .role(Role::Heading)
-                .text_size(px(fs_lg()))
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(agent_label(kind)),
-        );
+    let back = |d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>| d.close_details(cx);
+    let logo = agent_logo(kind, None, 24.);
+    let header = detail_header("details", logo, agent_label(kind), back, cx).pb(px(16.));
     let read_again = |id: &'static str| {
         btn(id, "Read again", BtnKind::Plain, busy, &t)
             .child("Read again")
@@ -185,11 +169,7 @@ pub fn render(
         .pb(px(8.))
         .children(spec.filter.map(|label| {
             crate::ui::button("details-filter", label)
-                .aria_toggled(if filtered {
-                    gpui::Toggled::True
-                } else {
-                    gpui::Toggled::False
-                })
+                .aria_toggled(filtered.into())
                 .h(px(28.))
                 .px(px(10.))
                 .rounded(px(radius_sm()))

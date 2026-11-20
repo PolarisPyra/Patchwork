@@ -187,21 +187,20 @@ impl SettingsDialog {
     }
 
     pub(super) fn locate(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
-        let picked = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-            prompt: None,
-        });
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = picked.await else {
-                return;
-            };
-            let Some(path) = paths.first().map(|p| p.to_string_lossy().into_owned()) else {
-                return;
-            };
-            let _ = this.update(cx, |d, cx| d.set_agent_path(kind, Some(path), cx));
-        })
-        .detach();
+        crate::ui::pick_paths(
+            cx,
+            PathPromptOptions {
+                files: true,
+                directories: false,
+                multiple: false,
+                prompt: None,
+            },
+            move |d, paths, cx| {
+                let Some(path) = paths.first().map(|p| p.to_string_lossy().into_owned()) else {
+                    return;
+                };
+                d.set_agent_path(kind, Some(path), cx);
+            },
+        );
     }
 }

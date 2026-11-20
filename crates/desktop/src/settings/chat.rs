@@ -7,7 +7,7 @@ use gpui::{AnyElement, div, prelude::*};
 use patchwork_core::settings::{ResumeAtLaunch, Settings};
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{segmented, switch, token_row};
+use crate::settings::controls::{segmented, switch_row, token_row};
 use crate::ui::theme::theme;
 
 const RESUMES: [(ResumeAtLaunch, &str); 3] = [
@@ -75,10 +75,13 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     let t = *theme(cx);
     let s = &d.settings;
     let flags = FLAGS.iter().map(|&(id, title, get, set)| {
-        let on = get(s);
-        token_row(title, None, &t).child(
-            switch(id, title, on, &t)
-                .on_click(cx.listener(move |d, _, _, cx| d.update(|s| set(s, !on), cx))),
+        switch_row(
+            id,
+            title,
+            None,
+            get(s),
+            move |d, on, cx| d.update(|s| set(s, on), cx),
+            cx,
         )
     });
     let flags: Vec<_> = flags.collect();

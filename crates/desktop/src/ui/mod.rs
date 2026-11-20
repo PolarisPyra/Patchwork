@@ -17,6 +17,7 @@ pub mod menu;
 pub mod pill;
 pub mod prompt;
 mod scrollbar;
+mod tasks;
 pub mod selection;
 pub mod sigils;
 pub mod text_area;
@@ -27,6 +28,7 @@ pub use controls::{
     kind_icon, input_box, menu_item, mix, overflows, popup, popup_shadow, spinner, tooltip,
 };
 pub use scrollbar::{list_scrollbar, scrollbar};
+pub use tasks::{after, off_thread, pick_paths};
 pub use format::{
     base_name, compact_elapsed, dir_name, display_title, format_clock, format_date,
     format_relative, resets_in, format_tokens, full_elapsed, now_ms, slug_file_name,

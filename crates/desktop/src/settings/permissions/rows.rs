@@ -6,10 +6,10 @@ use super::state::ADD_FIELD;
 use super::state::PERMISSION_KINDS;
 use super::state::EFFECTS;
 use super::state::kind_label;
-use gpui::{ClickEvent, Div, SharedString, Window, div, prelude::*, px};
+use gpui::{Div, SharedString, Window, div, prelude::*, px};
 use patchwork_core::permissions::{PermissionRule, PermissionScope};
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{FieldKind, choice, segmented, select_box};
+use crate::settings::controls::{FieldKind, choices, segmented, select_box};
 use crate::ui::theme::{font_mono, radius_sm, theme};
 use crate::ui::{BtnKind, btn, icon_button, tooltip};
 
@@ -71,35 +71,24 @@ pub(super) fn rule_row(
     .aria_expanded(open)
     .text_color(t.text_muted)
     .tooltip(tooltip("Move to…"))
-    .on_click(cx.listener({
-        let (scope, id) = (scope.clone(), id.clone());
-        move |d, e: &ClickEvent, window, cx| {
-            let weak = cx.entity().downgrade();
-            let items = targets
-                .iter()
-                .map(|(to, name)| {
-                    let (from, to, id) = (scope.clone(), to.clone(), id.clone());
-                    choice(
-                        weak.clone(),
-                        format!("Move to {name}"),
-                        false,
-                        move |d, cx| {
-                            d.menu = None;
-                            d.move_rule(&from, &to, &id, cx);
-                        },
-                    )
-                })
-                .collect();
-            d.toggle_menu(
-                menu_key.clone(),
-                "Move rule",
-                items,
-                e.position(),
-                window,
-                cx,
-            );
-        }
-    }));
+    .on_click(choices(
+        menu_key,
+        "Move rule",
+        targets
+            .iter()
+            .map(|(to, name)| (Some(to.clone()), format!("Move to {name}").into()))
+            .collect(),
+        None,
+        {
+            let (scope, id) = (scope.clone(), id.clone());
+            move |d, to, cx| {
+                if let Some(to) = to {
+                    d.move_rule(&scope, &to, &id, cx);
+                }
+            }
+        },
+        cx,
+    ));
     let delete = icon_button(
         SharedString::from(format!("perm-delete-{id}")),
         format!("Delete {}", rule.pattern),
@@ -158,26 +147,21 @@ pub(super) fn add_rule_row(
     d.on_submit(ADD_FIELD, |d, _, cx| d.add_rule(cx));
     let key = "perm-kind";
     let open = d.menu_open(key);
-    let select = select_box(key, "Kind of rule", kind_label(kind), open, &t).on_click(cx.listener(
-        move |d, e: &ClickEvent, window, cx| {
-            let weak = cx.entity().downgrade();
-            let items = PERMISSION_KINDS
-                .iter()
-                .map(|&(k, label, _)| {
-                    choice(
-                        weak.clone(),
-                        label,
-                        k == d.permissions.kind,
-                        move |d, cx| {
-                            d.menu = None;
-                            d.permissions.kind = k;
-                            cx.notify();
-                        },
-                    )
-                })
-                .collect();
-            d.toggle_menu(key, "Kind of rule", items, e.position(), window, cx);
-        },
+    let options = PERMISSION_KINDS
+        .iter()
+        .map(|&(k, label, _)| (k, label.into()))
+        .collect();
+    let set = |d: &mut SettingsDialog, k, cx: &mut Context<SettingsDialog>| {
+        d.permissions.kind = k;
+        cx.notify();
+    };
+    let select = select_box(key, "Kind of rule", kind_label(kind), open, &t).on_click(choices(
+        key,
+        "Kind of rule",
+        options,
+        kind,
+        set,
+        cx,
     ));
     let empty = pattern.trim().is_empty();
     div()

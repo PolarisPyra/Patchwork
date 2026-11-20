@@ -4,14 +4,14 @@
 
 use super::state::health_line;
 use super::state::ADDRESS_FIELD;
-use gpui::{AnyElement, Div, Focusable, FontWeight, SharedString, Window, div, prelude::*, px};
+use gpui::{AnyElement, Div, Focusable, SharedString, Window, div, prelude::*, px};
 use patchwork_core::provider::api::config::{self, ApiProvider, KeyChange, ProviderView};
 use patchwork_core::provider::api::servers;
 use crate::settings::providers::PromptOf;
-use crate::settings::providers::rows::status_badge;
+use crate::settings::providers::rows::{provider_actions, provider_title, status_badge};
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{FieldKind, alert, switch};
-use crate::ui::theme::{font_mono, fs_sm, radius_sm, theme};
+use crate::settings::controls::{FieldKind, alert};
+use crate::ui::theme::{font_mono, radius_sm, theme};
 use crate::ui::{BtnKind, btn, icon, provider_logo, spinner};
 
 impl SettingsDialog {
@@ -170,14 +170,7 @@ impl SettingsDialog {
             .as_ref()
             .is_some_and(|x| x.of == PromptOf::Api(id.clone()));
         let (hover, fg) = (t.bg_hover, t.text);
-        let (edit_a, edit_b, recheck, prompt_id, toggle) = (
-            view.clone(),
-            view.clone(),
-            id.clone(),
-            id.clone(),
-            p.clone(),
-        );
-        let saved_prompt = p.system_prompt.clone();
+        let recheck = id.clone();
         let row = div()
             .flex()
             .items_center()
@@ -186,32 +179,7 @@ impl SettingsDialog {
             .border_color(t.border)
             .py(px(10.))
             .child(provider_logo(&p.preset, p.logo.as_deref(), 20.))
-            .child(
-                crate::ui::button(
-                    SharedString::from(format!("open-local-{id}")),
-                    p.name.clone(),
-                )
-                .min_w_0()
-                .flex_1()
-                .flex_col()
-                .items_start()
-                .child(
-                    div()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(p.name.clone()),
-                )
-                .child(
-                    div()
-                        .w_full()
-                        .truncate()
-                        .text_size(px(fs_sm()))
-                        .text_color(t.text_muted)
-                        .child(line),
-                )
-                .on_click(cx.listener(move |d, _, window, cx| {
-                    d.open_form(edit_a.provider.clone(), edit_a.has_key, window, cx);
-                })),
-            )
+            .child(provider_title(view, "local-", line, &t, cx))
             .child(status_badge(
                 if checking {
                     "Checking…"
@@ -246,56 +214,7 @@ impl SettingsDialog {
                     cx.notify();
                 })),
             )
-            .child(
-                btn(
-                    SharedString::from(format!("edit-local-{id}")),
-                    format!("Edit {}", p.name),
-                    BtnKind::Plain,
-                    false,
-                    &t,
-                )
-                .child("Edit")
-                .on_click(cx.listener(move |d, _, window, cx| {
-                    d.open_form(edit_b.provider.clone(), edit_b.has_key, window, cx);
-                })),
-            )
-            .child(
-                btn(
-                    SharedString::from(format!("prompt-local-{id}")),
-                    format!("{} system prompt", p.name),
-                    BtnKind::Plain,
-                    false,
-                    &t,
-                )
-                .aria_expanded(prompting)
-                .when(!p.system_prompt.is_empty(), |b| b.text_color(t.accent))
-                .child("System Prompt")
-                .on_click(cx.listener(move |d, _, window, cx| {
-                    d.toggle_prompt(
-                        PromptOf::Api(prompt_id.clone()),
-                        saved_prompt.clone(),
-                        window,
-                        cx,
-                    );
-                })),
-            )
-            .child(
-                switch(
-                    format!("use-local-{id}"),
-                    format!("Use {}", p.name),
-                    p.enabled,
-                    &t,
-                )
-                .on_click(cx.listener(move |d, _, _, cx| {
-                    d.save_provider(
-                        ApiProvider {
-                            enabled: !toggle.enabled,
-                            ..toggle.clone()
-                        },
-                        cx,
-                    );
-                })),
-            );
+            .children(provider_actions(view, "local-", prompting, &t, cx));
         let mut rows = vec![row.into_any_element()];
         if !checking && !reachable {
             rows.push(self.repair_row(view, window, cx).into_any_element());

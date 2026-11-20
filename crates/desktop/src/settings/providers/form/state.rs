@@ -384,20 +384,19 @@ impl SettingsDialog {
     }
 
     pub(super) fn choose_logo(&mut self, cx: &mut Context<Self>) {
-        let picked = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-            prompt: None,
-        });
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = picked.await else {
-                return;
-            };
-            let Some(path) = paths.into_iter().next() else {
-                return;
-            };
-            let _ = this.update(cx, |d, cx| {
+        crate::ui::pick_paths(
+            cx,
+            PathPromptOptions {
+                files: true,
+                directories: false,
+                multiple: false,
+                prompt: None,
+            },
+            move |d, paths, cx| {
+                let Some(path) = paths.into_iter().next() else {
+                    return;
+                };
+
                 d.run(
                     move || logo_data_url(&path),
                     |d, logo, _| {
@@ -410,8 +409,7 @@ impl SettingsDialog {
                     },
                     cx,
                 );
-            });
-        })
-        .detach();
+            },
+        );
     }
 }

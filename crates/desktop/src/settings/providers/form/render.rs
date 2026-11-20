@@ -2,11 +2,11 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, Div, FontWeight, Role, Toggled, Window, div, prelude::*, px};
+use gpui::{AnyElement, Div, FontWeight, Role, Window, div, prelude::*, px};
 use patchwork_core::provider::api::config::KeyStore;
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{FieldKind, alert, vault_notice};
+use crate::settings::controls::{FieldKind, alert, form_footer, remove_button, vault_notice};
 use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
 use crate::ui::{BtnKind, btn, button, icon, icon_button, provider_logo};
 
@@ -299,11 +299,7 @@ pub fn render(
                                     15.,
                                     cx,
                                 )
-                                .aria_toggled(if show_key {
-                                    Toggled::True
-                                } else {
-                                    Toggled::False
-                                })
+                                .aria_toggled(show_key.into())
                                 .tooltip(crate::ui::tooltip(if show_key {
                                     "Hide key"
                                 } else {
@@ -316,11 +312,7 @@ pub fn render(
                                 |r| {
                                     r.child(
                                         icon_button("clear-key", "Remove saved key", "x", 15., cx)
-                                            .aria_toggled(if clear_key {
-                                                Toggled::True
-                                            } else {
-                                                Toggled::False
-                                            })
+                                            .aria_toggled(clear_key.into())
                                             .when(clear_key, |b| b.bg(hover).text_color(t.danger))
                                             .tooltip(crate::ui::tooltip("Remove saved key"))
                                             .on_click(cx.listener(|d, _, _, cx| {
@@ -363,13 +355,7 @@ pub fn render(
         .children(vault_notice("form-vault", &t))
         .children(error.map(|e| alert("form-error", e, t.danger)))
         .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .border_t_1()
-                .border_color(t.border)
-                .pt(px(12.))
+            form_footer(&t)
                 .child(
                     btn("form-save", "Save", BtnKind::Primary, !can_save, &t)
                         .child(if busy { "Saving…" } else { "Save" })
@@ -385,35 +371,25 @@ pub fn render(
                         }),
                 )
                 .when(saved, |r| {
-                    r.child(div().flex_1()).child(
-                        btn(
-                            "form-remove",
+                    let click =
+                        |d: &mut SettingsDialog, confirm, cx: &mut Context<SettingsDialog>| {
                             if confirm {
-                                "Remove provider and key"
-                            } else {
-                                "Remove"
-                            },
-                            BtnKind::Plain,
-                            busy,
-                            &t,
-                        )
-                        .when(confirm, |b| b.text_color(t.danger))
-                        .child(if confirm {
-                            "Remove provider and key"
-                        } else {
-                            "Remove"
-                        })
-                        .when(!busy, |b| {
-                            b.on_click(cx.listener(move |d, _, _, cx| {
-                                if confirm {
-                                    d.remove_provider(cx);
-                                } else if let Some(f) = d.form_mut() {
-                                    f.confirm_remove = true;
-                                }
-                                cx.notify();
-                            }))
-                        }),
-                    )
+                                d.remove_provider(cx);
+                            } else if let Some(f) = d.form_mut() {
+                                f.confirm_remove = true;
+                            }
+                            cx.notify();
+                        };
+                    let sure = "Remove provider and key";
+                    r.child(div().flex_1()).child(remove_button(
+                        "form-remove",
+                        sure,
+                        confirm,
+                        busy,
+                        &t,
+                        click,
+                        cx,
+                    ))
                 }),
         )
         .into_any_element()

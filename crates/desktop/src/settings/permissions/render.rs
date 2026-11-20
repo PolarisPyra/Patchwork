@@ -12,10 +12,10 @@ use super::state::with_default_rules;
 use super::state::scope_name;
 use super::state::defaults_changed;
 use super::state::scope_rules;
-use gpui::{AnyElement, ClickEvent, FontWeight, Window, div, prelude::*, px};
+use gpui::{AnyElement, FontWeight, Window, div, prelude::*, px};
 use patchwork_core::permissions::{Effect, PermissionKind, PermissionScope, default_rules};
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{choice, segmented, switch, token_row};
+use crate::settings::controls::{choices, segmented, switch, token_row};
 use crate::ui::theme::theme;
 use crate::ui::{BtnKind, btn, dropdown_chip, icon, tooltip};
 
@@ -50,37 +50,29 @@ pub fn render(
         d.menu_open(scope_menu),
         &t,
     )
-    .on_click(cx.listener({
-        let (scopes, permissions, projects) =
-            (scopes.clone(), permissions.clone(), projects.clone());
-        move |d, e: &ClickEvent, window, cx| {
-            let weak = cx.entity().downgrade();
-            let items = scopes
-                .iter()
-                .map(|s| {
-                    let count = scope_rules(&permissions, s).rules.len();
-                    let name = scope_name(s, &projects);
-                    let label = if count > 0 {
-                        format!("{name} · {count}")
-                    } else {
-                        name
-                    };
-                    let pick = s.clone();
-                    choice(
-                        weak.clone(),
-                        label,
-                        *s == d.permissions.scope,
-                        move |d, cx| {
-                            d.menu = None;
-                            d.permissions.scope = pick.clone();
-                            cx.notify();
-                        },
-                    )
-                })
-                .collect();
-            d.toggle_menu(scope_menu, "Rule scope", items, e.position(), window, cx);
-        }
-    }));
+    .on_click(choices(
+        scope_menu,
+        "Rule scope",
+        scopes
+            .iter()
+            .map(|s| {
+                let count = scope_rules(&permissions, s).rules.len();
+                let name = scope_name(s, &projects);
+                let label = if count > 0 {
+                    format!("{name} · {count}")
+                } else {
+                    name
+                };
+                (s.clone(), label.into())
+            })
+            .collect(),
+        d.permissions.scope.clone(),
+        |d, pick, cx| {
+            d.permissions.scope = pick;
+            cx.notify();
+        },
+        cx,
+    ));
     let header = div()
         .flex()
         .items_center()

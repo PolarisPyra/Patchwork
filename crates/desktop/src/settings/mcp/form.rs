@@ -5,12 +5,12 @@
 
 use std::collections::BTreeMap;
 
-use gpui::{AnyElement, Focusable, FontWeight, Window, div, prelude::*, px};
+use gpui::{AnyElement, Focusable, Window, div, prelude::*, px};
 use patchwork_core::provider::mcp::{self, McpServer};
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{FieldKind, alert};
-use crate::ui::theme::{fs_sm, theme};
+use crate::settings::controls::{FieldKind, alert, form_footer, labeled, remove_button};
+use crate::ui::theme::theme;
 use crate::ui::{BtnKind, btn};
 
 use super::{pairs_text, target};
@@ -280,22 +280,6 @@ impl SettingsDialog {
     }
 }
 
-/// A field with its label above it.
-fn labeled(label: &'static str, field: gpui::Div, muted: gpui::Hsla) -> gpui::Div {
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(4.))
-        .child(
-            div()
-                .text_size(px(fs_sm()))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(muted)
-                .child(label),
-        )
-        .child(field)
-}
-
 pub fn render(
     d: &mut SettingsDialog,
     window: &mut Window,
@@ -421,13 +405,7 @@ pub fn render(
         }))
         .children(error.map(|e| alert("mcp-form-error", e, t.danger).pt_0()))
         .child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .border_t_1()
-                .border_color(t.border)
-                .pt(px(12.))
+            form_footer(&t)
                 .child(
                     btn("mcp-form-save", "Save", BtnKind::Primary, !can_save, &t)
                         .child(if busy {
@@ -449,28 +427,25 @@ pub fn render(
                         }),
                 )
                 .when(editing, |row| {
-                    row.child(
-                        btn(
-                            "mcp-form-remove",
-                            if confirm { "Remove server" } else { "Remove" },
-                            BtnKind::Plain,
-                            busy,
-                            &t,
-                        )
-                        .ml_auto()
-                        .when(confirm, |b| b.text_color(t.danger))
-                        .child(if confirm { "Remove server" } else { "Remove" })
-                        .when(!busy, |b| {
-                            b.on_click(cx.listener(move |d, _, _, cx| {
-                                if confirm {
-                                    d.remove_mcp_server(cx);
-                                } else if let Some(draft) = &mut d.mcp.editing {
-                                    draft.confirm_remove = true;
-                                    cx.notify();
-                                }
-                            }))
-                        }),
-                    )
+                    let click =
+                        |d: &mut SettingsDialog, confirm, cx: &mut Context<SettingsDialog>| {
+                            if confirm {
+                                d.remove_mcp_server(cx);
+                            } else if let Some(draft) = &mut d.mcp.editing {
+                                draft.confirm_remove = true;
+                                cx.notify();
+                            }
+                        };
+                    let remove = remove_button(
+                        "mcp-form-remove",
+                        "Remove server",
+                        confirm,
+                        busy,
+                        &t,
+                        click,
+                        cx,
+                    );
+                    row.child(remove.ml_auto())
                 }),
         )
         .into_any_element()

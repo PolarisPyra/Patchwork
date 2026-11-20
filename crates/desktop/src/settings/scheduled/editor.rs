@@ -5,7 +5,7 @@
 use gpui::{ClickEvent, Div, SharedString, Window, div, prelude::*, px};
 use patchwork_core::scheduled::{Schedule, Weekday};
 
-use crate::settings::controls::{FieldKind, chip, select_box, switch};
+use crate::settings::controls::{FieldKind, chip, form_footer, select_box, switch};
 use crate::settings::SettingsDialog;
 use crate::ui::theme::{fs_sm, fs_xs, theme};
 use crate::ui::{AGENT_KINDS, BtnKind, agent_label, btn, icon, tooltip};
@@ -394,13 +394,7 @@ pub(super) fn editor(
                     .child(path)
             }))
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .border_t_1()
-                    .border_color(t.border)
-                    .pt(px(12.))
+                form_footer(&t)
                     .child(
                         div()
                             .flex()

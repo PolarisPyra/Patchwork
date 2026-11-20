@@ -262,13 +262,7 @@ pub(super) fn format_key(key: &str) -> Vec<String> {
             "left" => "Left".to_string(),
             "right" => "Right".to_string(),
             "plus" => "+".to_string(),
-            p if p.chars().count() == 1 => p.to_uppercase(),
-            p => {
-                let mut c = p.chars();
-                c.next()
-                    .map(|f| f.to_uppercase().chain(c).collect())
-                    .unwrap_or_default()
-            }
+            p => crate::ui::display_title(p),
         })
         .collect()
 }

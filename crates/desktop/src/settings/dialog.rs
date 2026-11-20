@@ -369,15 +369,10 @@ impl SettingsDialog {
         done: impl FnOnce(&mut Self, T, &mut Context<Self>) + 'static,
         cx: &mut Context<Self>,
     ) {
-        let task = cx.background_spawn(async move { work() });
-        cx.spawn(async move |this, cx| {
-            let out = task.await;
-            let _ = this.update(cx, |d, cx| {
-                done(d, out, cx);
-                cx.notify();
-            });
-        })
-        .detach();
+        crate::ui::off_thread(cx, work, move |d, out, cx| {
+            done(d, out, cx);
+            cx.notify();
+        });
     }
 
     /// Opens the entry at `at` of the list, on the pane it last showed.

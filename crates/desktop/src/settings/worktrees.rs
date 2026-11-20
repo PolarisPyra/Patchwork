@@ -5,11 +5,11 @@
 
 use std::sync::Arc;
 
-use gpui::{AnyElement, ClickEvent, Div, Role, SharedString, Stateful, div, prelude::*, px};
+use gpui::{AnyElement, Div, Role, SharedString, Stateful, div, prelude::*, px};
 use patchwork_core::settings::KeepWorktrees;
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{choice, section_heading, select_box, switch, token_row};
+use crate::settings::controls::{choices, section_heading, select_box, switch_row, token_row};
 use crate::ui::theme::{Theme, fs_sm, theme};
 use crate::ui::{BtnKind, btn};
 
@@ -44,16 +44,15 @@ impl SettingsDialog {
         self.worktrees.done = None;
         let core = Arc::clone(&self.core);
         let open = self.worktrees.open.clone();
-        let task = cx.background_spawn(async move { core.delete_stale_worktrees(open.as_deref()) });
-        cx.spawn(async move |this, cx| {
-            let removed = task.await;
-            let _ = this.update(cx, |d, cx| {
+        crate::ui::off_thread(
+            cx,
+            move || core.delete_stale_worktrees(open.as_deref()),
+            move |d, removed, cx| {
                 d.worktrees.running = false;
                 d.worktrees.done = Some(removed);
                 cx.notify();
-            });
-        })
-        .detach();
+            },
+        );
         cx.notify();
     }
 }
@@ -62,27 +61,29 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     let t = *theme(cx);
     let worktrees = d.settings.worktrees.clone();
     let on = !worktrees.disabled;
-    let use_row = token_row("Give tasks their own worktree", None, &t).child(
-        switch("worktrees-on", "Give tasks their own worktree", on, &t)
-            .on_click(cx.listener(move |d, _, _, cx| d.update(|s| s.worktrees.disabled = on, cx))),
+    let use_row = switch_row(
+        "worktrees-on",
+        "Give tasks their own worktree",
+        None,
+        on,
+        |d, on, cx| d.update(|s| s.worktrees.disabled = !on, cx),
+        cx,
     );
-    let fork_new = worktrees.fork_into_new;
-    let fork_row = token_row("Fork into a new worktree", None, &t).child(
-        switch("worktrees-fork", "Fork into a new worktree", fork_new, &t).on_click(
-            cx.listener(move |d, _, _, cx| d.update(|s| s.worktrees.fork_into_new = !fork_new, cx)),
-        ),
+    let fork_row = switch_row(
+        "worktrees-fork",
+        "Fork into a new worktree",
+        None,
+        worktrees.fork_into_new,
+        |d, on, cx| d.update(|s| s.worktrees.fork_into_new = on, cx),
+        cx,
     );
-    let with_tasks = worktrees.cleanup.with_deleted_tasks;
-    let deleted = token_row("Delete with deleted tasks", None, &t).child(
-        switch(
-            "worktrees-deleted",
-            "Delete with deleted tasks",
-            with_tasks,
-            &t,
-        )
-        .on_click(cx.listener(move |d, _, _, cx| {
-            d.update(|s| s.worktrees.cleanup.with_deleted_tasks = !with_tasks, cx);
-        })),
+    let deleted = switch_row(
+        "worktrees-deleted",
+        "Delete with deleted tasks",
+        None,
+        worktrees.cleanup.with_deleted_tasks,
+        |d, on, cx| d.update(|s| s.worktrees.cleanup.with_deleted_tasks = on, cx),
+        cx,
     );
     let stale = stale_row(&t, d, cx);
     let keep = keep_row(worktrees.cleanup.keep, &t, d, cx);
@@ -141,27 +142,12 @@ fn keep_row(
         .find(|(k, _)| *k == keep)
         .map_or("", |(_, label)| label);
     let open = d.menu_open(&key);
-    let (menu_key, menu_name) = (key.clone(), name.clone());
-    token_row(name.clone(), None, t).child(select_box(key, name, current, open, t).on_click(
-        cx.listener(move |d, e: &ClickEvent, window, cx| {
-            let weak = cx.entity().downgrade();
-            let items = KEEPS
-                .iter()
-                .map(|&(k, label)| {
-                    choice(weak.clone(), label, k == keep, move |d, cx| {
-                        d.menu = None;
-                        d.update(|s| s.worktrees.cleanup.keep = k, cx);
-                    })
-                })
-                .collect();
-            d.toggle_menu(
-                menu_key.clone(),
-                menu_name.clone(),
-                items,
-                e.position(),
-                window,
-                cx,
-            );
-        }),
-    ))
+    let options = KEEPS.iter().map(|&(k, label)| (k, label.into())).collect();
+    let set = |d: &mut SettingsDialog, k, cx: &mut Context<SettingsDialog>| {
+        d.update(|s| s.worktrees.cleanup.keep = k, cx);
+    };
+    token_row(name.clone(), None, t).child(
+        select_box(key.clone(), name.clone(), current, open, t)
+            .on_click(choices(key, name, options, keep, set, cx)),
+    )
 }
