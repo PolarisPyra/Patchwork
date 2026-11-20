@@ -3,6 +3,21 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.129] - 2026-11-20
+
+**v26.11.129** · 2 changes from 1 contributor
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* refactor(app): a poisoned lock no longer panics, and repeated and dead code is gone across the app by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/266
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.128...26.11.129
+
+</details>
+
 ## [26.11.128] - 2026-11-20
 
 **v26.11.128** · 2 changes from 1 contributor
