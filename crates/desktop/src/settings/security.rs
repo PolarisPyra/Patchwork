@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use gpui::{AnyElement, Div, Focusable, Role, SharedString, Toggled, Window, div, prelude::*, px};
+use gpui::{AnyElement, Div, Focusable, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_core::gateway::ChatAppCall;
 use patchwork_core::vault::{Method, Saved, Status, status};
 use zeroize::{Zeroize, Zeroizing};
@@ -357,19 +357,34 @@ fn password_field(
     .flex_none()
     .pr(px(3.))
     .child(
-        icon_button(
-            SharedString::from(format!("{key}-show")),
+        reveal_button(
+            format!("{key}-show"),
             format!("Show {}", title.to_lowercase()),
-            if shown { "eye-slash" } else { "eye" },
-            14.,
+            shown,
             cx,
         )
-        .size(px(22.))
-        .flex_none()
-        .aria_toggled(if shown { Toggled::True } else { Toggled::False })
-        .tooltip(crate::ui::tooltip(if shown { "Hide" } else { "Show" }))
         .on_click(cx.listener(move |d, _, _, cx| d.toggle_password(key, cx))),
     )
+}
+
+/// The eye at the end of a secret's field that shows or hides what is typed.
+fn reveal_button(
+    id: String,
+    label: String,
+    shown: bool,
+    cx: &mut Context<SettingsDialog>,
+) -> gpui::Stateful<Div> {
+    icon_button(
+        SharedString::from(id),
+        label,
+        if shown { "eye-slash" } else { "eye" },
+        14.,
+        cx,
+    )
+    .size(px(22.))
+    .flex_none()
+    .aria_toggled(shown.into())
+    .tooltip(crate::ui::tooltip(if shown { "Hide" } else { "Show" }))
 }
 
 /// One password field in its row. Enter in it does `submit`.

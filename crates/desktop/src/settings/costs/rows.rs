@@ -3,8 +3,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{
-    AnyElement, Div, ElementId, FontWeight, Hsla, Role, SharedString, Stateful, Toggled, div,
-    prelude::*, px, rgb,
+    AnyElement, Div, ElementId, FontWeight, Hsla, Role, SharedString, Stateful, div, prelude::*,
+    px, rgb,
 };
 use patchwork_core::provider::AgentKind;
 use patchwork_core::costs::{ChatCost, CostFilter, ProviderCost, Tally};
@@ -275,7 +275,7 @@ fn filter_row(
     let on = on == Some(&filter);
     let hover = t.bg_hover;
     button(ElementId::Integer(ix as u64), label)
-        .aria_toggled(if on { Toggled::True } else { Toggled::False })
+        .aria_toggled(on.into())
         .items_stretch()
         .flex_col()
         .gap(px(6.))

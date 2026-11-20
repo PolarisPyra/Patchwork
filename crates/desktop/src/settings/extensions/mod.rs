@@ -9,6 +9,6 @@ mod skills;
 mod view;
 
 pub(super) use crate::settings::controls::list_box;
-use view::{empty, filter_chip};
-use crate::settings::controls::example;
+use view::filter_chip;
+use crate::settings::controls::{empty, example};
 pub use view::{ExtensionsState, render};

@@ -7,7 +7,7 @@ use gpui::{AnyElement, FontWeight, SharedString, Window, div, prelude::*, px};
 use patchwork_core::settings::{CursorStyle, DetectLocale, RightClickBehavior, TerminalSettings};
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{section_heading, segmented, switch, token_row};
+use crate::settings::controls::{section_heading, segmented, switch_row, token_row};
 use crate::ui::theme::{fs_sm, theme};
 use crate::ui::{BtnKind, btn, icon_button, tooltip};
 
@@ -107,11 +107,7 @@ fn env_editor(
                         false,
                         &t,
                     )
-                    .aria_toggled(if removed {
-                        gpui::Toggled::True
-                    } else {
-                        gpui::Toggled::False
-                    })
+                    .aria_toggled(removed.into())
                     .when(removed, |b| b.bg(t.bg_selected_muted))
                     .tooltip(tooltip("Take this variable out of the shell's environment"))
                     .child("Remove from shell")
@@ -201,14 +197,19 @@ pub fn render(
     let t = *theme(cx);
     let term = d.settings.terminal.clone();
 
-    let switch_row = |title: &'static str,
-                      desc: Option<&str>,
-                      on: bool,
-                      set: fn(&mut TerminalSettings, bool),
-                      cx: &mut Context<SettingsDialog>| {
-        token_row(title, desc, &t).child(
-            switch(SharedString::from(format!("term-{title}")), title, on, &t)
-                .on_click(cx.listener(move |d, _, _, cx| d.set_terminal(|s| set(s, !on), cx))),
+    let term_switch = |title: &'static str,
+                       desc: Option<&str>,
+                       on: bool,
+                       set: fn(&mut TerminalSettings, bool),
+                       cx: &mut Context<SettingsDialog>| {
+        let id = format!("term-{title}");
+        switch_row(
+            id,
+            title,
+            desc,
+            on,
+            move |d, on, cx| d.set_terminal(|s| set(s, on), cx),
+            cx,
         )
     };
     macro_rules! number_row {
@@ -425,7 +426,7 @@ pub fn render(
         .flex_col()
         .child(section_heading("Shell", true, &t))
         .child(cwd)
-        .child(switch_row(
+        .child(term_switch(
             "Inherit environment",
             Some("Start from Patchwork's environment"),
             term.inherit_env,
@@ -443,7 +444,7 @@ pub fn render(
         .child(weight_bold)
         .child(cursor)
         .children(cursor_width)
-        .child(switch_row(
+        .child(term_switch(
             "Cursor blinking",
             None,
             term.cursor_blinking,
@@ -451,7 +452,7 @@ pub fn render(
             cx,
         ))
         .child(contrast)
-        .child(switch_row(
+        .child(term_switch(
             "Bold text in bright colors",
             None,
             term.draw_bold_text_in_bright_colors,
@@ -460,7 +461,7 @@ pub fn render(
         ))
         .child(section_heading("Behavior", false, &t))
         .child(scrollback)
-        .child(switch_row(
+        .child(term_switch(
             "Copy on selection",
             None,
             term.copy_on_selection,
@@ -468,7 +469,7 @@ pub fn render(
             cx,
         ))
         .child(right_click)
-        .child(switch_row(
+        .child(term_switch(
             "Alt-click moves the cursor",
             None,
             term.alt_click_moves_cursor,
@@ -476,7 +477,7 @@ pub fn render(
             cx,
         ))
         .when(cfg!(target_os = "macos"), |col| {
-            col.child(switch_row(
+            col.child(term_switch(
                 "Option is Meta",
                 None,
                 term.mac_option_is_meta,
@@ -484,7 +485,7 @@ pub fn render(
                 cx,
             ))
         })
-        .child(switch_row(
+        .child(term_switch(
             "Smooth scrolling",
             None,
             term.smooth_scrolling,

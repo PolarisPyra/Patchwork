@@ -8,9 +8,8 @@ use gpui::{AnyElement, Div, SharedString, Stateful, Window, div, prelude::*, px}
 use patchwork_core::extensions::hooks::Bundle;
 use patchwork_core::extensions::skills::Skill;
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{FieldKind, alert, chip, segmented};
+use crate::settings::controls::{FieldKind, alert, chip, search_box, segmented};
 use crate::ui::theme::{Theme, theme};
-use crate::ui::icon;
 use super::agents;
 use super::skills;
 use super::hooks;
@@ -102,7 +101,7 @@ impl SettingsDialog {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
-        let muted = theme(cx).text_muted;
+        let t = *theme(cx);
         let field = self.field(
             key,
             label,
@@ -119,21 +118,7 @@ impl SettingsDialog {
             window,
             cx,
         );
-        div()
-            .relative()
-            .flex()
-            .items_center()
-            .ml_auto()
-            .w(px(208.))
-            .flex_none()
-            .child(field.w_full().pl(px(26.)))
-            .child(
-                div()
-                    .absolute()
-                    .left(px(8.))
-                    .text_color(muted)
-                    .child(icon("magnifying-glass", 13.)),
-            )
+        search_box(field, &t).w(px(208.)).flex_none()
     }
 }
 
@@ -153,16 +138,6 @@ pub(super) fn filter_chip(
     )
     .child(label.to_string())
     .child(div().text_color(t.text_muted).child(count.to_string()))
-}
-
-/// What a list shows when nothing is in it.
-pub(super) fn empty(text: impl Into<SharedString>, t: &Theme) -> Div {
-    div()
-        .py(px(24.))
-        .flex()
-        .justify_center()
-        .text_color(t.text_muted)
-        .child(text.into())
 }
 
 pub fn render(

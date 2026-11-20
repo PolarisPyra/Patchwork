@@ -8,16 +8,14 @@
 
 use std::sync::Arc;
 
-use gpui::{
-    AnyElement, Hsla, Rgba, Role, SharedString, Toggled, Window, div, hsla, prelude::*, px, rgb,
-};
+use gpui::{AnyElement, Hsla, Rgba, Role, SharedString, Window, div, hsla, prelude::*, px, rgb};
 use patchwork_core::themes::{Color, ThemeFile};
 
 use super::slider::{Range, slider};
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{alert, token_row};
+use crate::settings::controls::{alert, token_row, radio};
 use crate::ui::theme::{fs_sm, Theme as Colors, radius, radius_sm, theme};
-use crate::ui::{BtnKind, btn, focus_ring};
+use crate::ui::{BtnKind, btn};
 
 /// A color of a color scheme that the editor changes.
 struct Token {
@@ -215,51 +213,44 @@ fn chips(
         let checked = n == token;
         // A color the file leaves to be mixed is drawn fainter than one it names.
         let mixed = (entry.get)(file).is_none();
-        div()
-            .id(SharedString::from(format!("edit-token-{n}")))
-            .role(Role::RadioButton)
-            .aria_label(entry.name)
-            .aria_toggled(if checked {
-                Toggled::True
+        radio(
+            SharedString::from(format!("edit-token-{n}")),
+            entry.name,
+            checked,
+        )
+        .flex_none()
+        .h(px(26.))
+        .px(px(8.))
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .rounded(px(radius_sm()))
+        .border_1()
+        .text_size(px(fs_sm()))
+        .map(|chip| {
+            if checked {
+                chip.border_color(t.accent).bg(t.bg_accent_soft)
             } else {
-                Toggled::False
-            })
-            .tab_index(0)
-            .focus_visible(focus_ring)
-            .cursor_pointer()
-            .flex_none()
-            .h(px(26.))
-            .px(px(8.))
-            .flex()
-            .items_center()
-            .gap(px(6.))
-            .rounded(px(radius_sm()))
-            .border_1()
-            .text_size(px(fs_sm()))
-            .map(|chip| {
-                if checked {
-                    chip.border_color(t.accent).bg(t.bg_accent_soft)
-                } else {
-                    chip.border_color(t.border).hover(move |s| s.bg(t.bg_hover))
-                }
-            })
-            .when(mixed && !checked, |chip| chip.text_color(t.text_muted))
-            .child(
-                div()
-                    .size(px(12.))
-                    .rounded_full()
-                    .border_1()
-                    .border_color(t.border_strong)
-                    .bg((entry.shown)(palette)),
-            )
-            .child(entry.name)
-            .on_click(cx.listener(move |d, _, _, cx| {
-                if let Some(editing) = &mut d.themes.editing {
-                    editing.token = n;
-                    editing.read_slides();
-                }
-                cx.notify();
-            }))
+                chip.border_color(t.border).hover(move |s| s.bg(t.bg_hover))
+            }
+        })
+        .when(mixed && !checked, |chip| chip.text_color(t.text_muted))
+        .child(
+            div()
+                .size(px(12.))
+                .rounded_full()
+                .border_1()
+                .border_color(t.border_strong)
+                .bg((entry.shown)(palette)),
+        )
+        .child(entry.name)
+        .on_click(cx.listener(move |d, _, _, cx| {
+            if let Some(editing) = &mut d.themes.editing {
+                editing.token = n;
+                editing.read_slides();
+            }
+            cx.notify();
+        }))
     });
     div()
         .id("edit-tokens")

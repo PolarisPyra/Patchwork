@@ -96,22 +96,21 @@ impl SettingsDialog {
     }
 
     fn pick_skills_dir(&mut self, cx: &mut Context<Self>) {
-        let picked = cx.prompt_for_paths(PathPromptOptions {
-            files: false,
-            directories: true,
-            multiple: false,
-            prompt: None,
-        });
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = picked.await else {
-                return;
-            };
-            let Some(dir) = paths.first().map(|p| p.to_string_lossy().into_owned()) else {
-                return;
-            };
-            let _ = this.update(cx, |d, cx| d.choose_skills_dir(Some(dir), cx));
-        })
-        .detach();
+        crate::ui::pick_paths(
+            cx,
+            PathPromptOptions {
+                files: false,
+                directories: true,
+                multiple: false,
+                prompt: None,
+            },
+            move |d, paths, cx| {
+                let Some(dir) = paths.first().map(|p| p.to_string_lossy().into_owned()) else {
+                    return;
+                };
+                d.choose_skills_dir(Some(dir), cx);
+            },
+        );
     }
 
     fn toggle_skill(&mut self, name: String, on: bool, cx: &mut Context<Self>) {

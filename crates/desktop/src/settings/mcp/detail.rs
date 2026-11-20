@@ -3,7 +3,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, FontWeight, SharedString, Toggled, Window, div, prelude::*, px};
+use gpui::{AnyElement, FontWeight, SharedString, Window, div, prelude::*, px};
 use patchwork_core::provider::mcp::{self, McpServer, clis};
 
 use crate::settings::SettingsDialog;
@@ -429,7 +429,7 @@ pub fn render(
                     body(div().id(id))
                         .role(gpui::Role::Switch)
                         .aria_label(SharedString::from(tool.name.clone()))
-                        .aria_toggled(if is_on { Toggled::True } else { Toggled::False })
+                        .aria_toggled(is_on.into())
                         .tab_index(0)
                         .focus_visible(crate::ui::focus_ring)
                         .cursor_pointer()

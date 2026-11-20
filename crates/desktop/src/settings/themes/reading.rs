@@ -10,7 +10,7 @@ use patchwork_core::themes::Scheme;
 use super::cards::{Extras, add_card, card, grid};
 use super::files::{Filed, file_tools};
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{switch, token_row};
+use crate::settings::controls::{switch_row};
 use crate::ui::theme::{fs_xs, Theme as Colors, font_mono, theme};
 
 const SIZES: [(TextSize, &str); 3] = [
@@ -173,12 +173,13 @@ pub(super) fn text_size_cards(d: &SettingsDialog, cx: &mut Context<SettingsDialo
 
 /// Whether animations and the Orchestrator's backdrop hold still.
 pub(super) fn motion_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
-    let t = *theme(cx);
-    let on = d.settings.reduce_motion;
-    token_row("Reduce motion", None, &t)
-        .child(
-            switch("reduce-motion", "Reduce motion", on, &t)
-                .on_click(cx.listener(move |d, _, _, cx| d.update(|s| s.reduce_motion = !on, cx))),
-        )
-        .into_any_element()
+    switch_row(
+        "reduce-motion",
+        "Reduce motion",
+        None,
+        d.settings.reduce_motion,
+        |d, on, cx| d.update(|s| s.reduce_motion = on, cx),
+        cx,
+    )
+    .into_any_element()
 }

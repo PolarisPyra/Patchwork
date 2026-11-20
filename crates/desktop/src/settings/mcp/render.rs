@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use gpui::{AnyElement, Window, div, prelude::*, px};
 use patchwork_core::provider::mcp::ToolInfo;
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{FieldKind, alert, chip, list_box};
+use crate::settings::controls::{FieldKind, alert, chip, empty, list_box, search_box};
 use crate::ui::theme::{fs_sm, radius, theme};
 use crate::ui::{BtnKind, btn, icon};
 use super::form::Draft;
@@ -88,25 +88,22 @@ pub fn render(
         })
         .collect();
 
-    let search = d
-        .field(
-            "mcp-search",
-            "Search MCP servers",
-            &typed,
-            "Search",
-            FieldKind {
-                live: true,
-                ..Default::default()
-            },
-            |d, text, cx| {
-                d.mcp.query = text;
-                cx.notify();
-            },
-            window,
-            cx,
-        )
-        .w_full()
-        .pl(px(26.));
+    let search = d.field(
+        "mcp-search",
+        "Search MCP servers",
+        &typed,
+        "Search",
+        FieldKind {
+            live: true,
+            ..Default::default()
+        },
+        |d, text, cx| {
+            d.mcp.query = text;
+            cx.notify();
+        },
+        window,
+        cx,
+    );
     let mut tools = div().flex().items_center().gap(px(6.)).pb(px(12.)).child(
         chip(
             "mcp-all",
@@ -150,26 +147,8 @@ pub fn render(
             })),
         );
     }
-    let muted = t.text_muted;
     tools = tools
-        .child(
-            div()
-                .relative()
-                .flex()
-                .items_center()
-                .ml_auto()
-                .min_w_0()
-                .max_w(px(208.))
-                .flex_1()
-                .child(search)
-                .child(
-                    div()
-                        .absolute()
-                        .left(px(8.))
-                        .text_color(muted)
-                        .child(icon("magnifying-glass", 13.)),
-                ),
-        )
+        .child(search_box(search, &t).min_w_0().max_w(px(208.)).flex_1())
         .child(
             btn("mcp-add", "Add server", BtnKind::Plain, false, &t)
                 .px(px(10.))
@@ -200,16 +179,14 @@ pub fn render(
         .map(|(c, m)| server_row(c, &m.iter().collect::<Vec<_>>(), over, &app_icon, &t, cx))
         .collect();
     let list = if rows.is_empty() {
-        div()
-            .py(px(24.))
-            .flex()
-            .justify_center()
-            .text_color(muted)
-            .child(if query.is_empty() {
+        empty(
+            if query.is_empty() {
                 "No servers".to_string()
             } else {
                 format!("Nothing matches “{}”", typed.trim())
-            })
+            },
+            &t,
+        )
     } else {
         list_box(rows, &t)
     };

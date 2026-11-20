@@ -25,15 +25,11 @@ impl SettingsDialog {
                 d.mcp.budget = Some(budget);
                 if busy && !d.mcp.polling {
                     d.mcp.polling = true;
-                    cx.spawn(async move |this, cx| {
-                        // Once a second, while a server starts or a CLI lists its tools.
-                        cx.background_executor().timer(Duration::from_secs(1)).await;
-                        let _ = this.update(cx, |d, cx| {
-                            d.mcp.polling = false;
-                            d.reload_mcp(cx);
-                        });
-                    })
-                    .detach();
+                    // Once a second, while a server starts or a CLI lists its tools.
+                    crate::ui::after(cx, Duration::from_secs(1), |d, cx| {
+                        d.mcp.polling = false;
+                        d.reload_mcp(cx);
+                    });
                 }
             },
             cx,

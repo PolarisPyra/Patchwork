@@ -6,7 +6,7 @@ use gpui::{AnyElement, Div, Stateful, div, prelude::*, px};
 use patchwork_core::provider::AgentKind;
 use patchwork_core::settings::VisionModel;
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{choice, select_box, tile, tile_grid};
+use crate::settings::controls::{choices, select_box, tile, tile_grid};
 use crate::ui::theme::theme;
 use crate::ui::{AGENT_KINDS, agent_label, icon, provider_logo};
 use super::state::VISION_AGENTS;
@@ -56,26 +56,21 @@ impl SettingsDialog {
                 || "The chat's own model".to_string(),
                 |(_, name)| name.clone(),
             );
-        let open = self.menu_open("vision");
+        let open = self.menu_open("vision-model");
+        let options = options
+            .into_iter()
+            .map(|(v, name)| (v, name.into()))
+            .collect();
         select_box("vision-model", "Vision model", current, open, &t)
             .w(px(200.))
-            .on_click(cx.listener(move |d, e: &gpui::ClickEvent, window, cx| {
-                let weak = cx.entity().downgrade();
-                let items = options
-                    .iter()
-                    .map(|(v, name)| {
-                        let pick = v.clone();
-                        let checked = v.as_ref().map(|v| (v.agent, &v.model))
-                            == d.settings.vision.as_ref().map(|v| (v.agent, &v.model));
-                        choice(weak.clone(), name.clone(), checked, move |d, cx| {
-                            let pick = pick.clone();
-                            d.menu = None;
-                            d.update(|s| s.vision = pick, cx);
-                        })
-                    })
-                    .collect();
-                d.toggle_menu("vision", "Vision model", items, e.position(), window, cx);
-            }))
+            .on_click(choices(
+                "vision-model",
+                "Vision model",
+                options,
+                vision,
+                |d, pick, cx| d.update(|s| s.vision = pick, cx),
+                cx,
+            ))
             .into_any_element()
     }
 
@@ -85,41 +80,31 @@ impl SettingsDialog {
         let connected = self.settings.agents.clone();
         let current = connected.first().map_or("", |k| agent_label(*k));
         let open = self.menu_open("default-agent");
+        let options = AGENT_KINDS
+            .into_iter()
+            .filter(|k| connected.contains(k))
+            .map(|kind| (Some(kind), agent_label(kind).into()))
+            .collect();
+        let set = |d: &mut Self, kind: Option<AgentKind>, cx: &mut Context<Self>| {
+            let Some(kind) = kind else { return };
+            d.update(
+                |s| {
+                    s.agents.retain(|k| *k != kind);
+                    s.agents.insert(0, kind);
+                },
+                cx,
+            );
+        };
         select_box("default-agent", "Default for new tasks", current, open, &t)
             .w(px(200.))
-            .on_click(cx.listener(move |d, e: &gpui::ClickEvent, window, cx| {
-                let weak = cx.entity().downgrade();
-                let first = d.settings.agents.first().copied();
-                let items = AGENT_KINDS
-                    .into_iter()
-                    .filter(|k| connected.contains(k))
-                    .map(|kind| {
-                        choice(
-                            weak.clone(),
-                            agent_label(kind),
-                            first == Some(kind),
-                            move |d, cx| {
-                                d.menu = None;
-                                d.update(
-                                    |s| {
-                                        s.agents.retain(|k| *k != kind);
-                                        s.agents.insert(0, kind);
-                                    },
-                                    cx,
-                                );
-                            },
-                        )
-                    })
-                    .collect();
-                d.toggle_menu(
-                    "default-agent",
-                    "Default for new tasks",
-                    items,
-                    e.position(),
-                    window,
-                    cx,
-                );
-            }))
+            .on_click(choices(
+                "default-agent",
+                "Default for new tasks",
+                options,
+                connected.first().copied(),
+                set,
+                cx,
+            ))
             .into_any_element()
     }
 

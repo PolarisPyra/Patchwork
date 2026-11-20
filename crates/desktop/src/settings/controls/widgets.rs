@@ -5,13 +5,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use gpui::{
-    AnyElement, Div, FontWeight, Hsla, Role, ScrollAnchor, SharedString, Stateful, Toggled, div,
-    hsla, prelude::*, px,
+    AnyElement, Div, FontWeight, Hsla, Role, ScrollAnchor, SharedString, Stateful, div, hsla,
+    prelude::*, px,
 };
 use crate::ui::menu::MenuItem;
 use crate::settings::SettingsDialog;
-use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
-use crate::ui::{button, icon};
+use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, theme, Theme};
+use crate::ui::{BtnKind, btn, button, icon};
 use patchwork_core::threads::AccessMode;
 
 /// The access modes a chat can start with, and their names.
@@ -118,7 +118,7 @@ pub fn switch(
         .id(id.into())
         .role(Role::Switch)
         .aria_label(label.into())
-        .aria_toggled(if on { Toggled::True } else { Toggled::False })
+        .aria_toggled(on.into())
         .tab_index(0)
         .focus_visible(crate::ui::focus_ring)
         .cursor_pointer()
@@ -146,6 +146,123 @@ pub fn switch(
                     inset: false,
                 }]),
         )
+}
+
+/// A detail page's heading: Back, then the item's `logo` and `title`. Back runs `back`.
+pub fn detail_header(
+    id: &str,
+    logo: impl IntoElement,
+    title: impl Into<SharedString>,
+    back: impl Fn(&mut SettingsDialog, &mut Context<SettingsDialog>) + 'static,
+    cx: &mut Context<SettingsDialog>,
+) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(12.))
+        .child(
+            crate::ui::icon_button(format!("{id}-back"), "Back", "caret-left", 16., cx)
+                .tooltip(crate::ui::tooltip("Back"))
+                .on_click(cx.listener(move |d, _, _, cx| back(d, cx))),
+        )
+        .child(logo)
+        .child(
+            div()
+                .id(SharedString::from(format!("{id}-title")))
+                .role(Role::Heading)
+                .text_size(px(crate::ui::theme::fs_lg()))
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(title.into()),
+        )
+}
+
+/// A search `field` at the right of a toolbar, with the glass at its left.
+pub fn search_box(field: Div, t: &Theme) -> Div {
+    div()
+        .relative()
+        .flex()
+        .items_center()
+        .ml_auto()
+        .child(field.w_full().pl(px(26.)))
+        .child(
+            div()
+                .absolute()
+                .left(px(8.))
+                .text_color(t.text_muted)
+                .child(icon("magnifying-glass", 13.)),
+        )
+}
+
+/// What a list shows when nothing is in it.
+pub fn empty(text: impl Into<SharedString>, t: &Theme) -> Div {
+    div()
+        .py(px(24.))
+        .flex()
+        .justify_center()
+        .text_color(t.text_muted)
+        .child(text.into())
+}
+
+/// The row of buttons under a form, set off by a rule.
+pub fn form_footer(t: &Theme) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(8.))
+        .border_t_1()
+        .border_color(t.border)
+        .pt(px(12.))
+}
+
+/// A form's Remove button: once `confirm` is set it reads `sure`, in the danger color.
+///
+/// A click runs `click` with `confirm`, so the first click can ask and the second remove.
+pub fn remove_button(
+    id: &'static str,
+    sure: &'static str,
+    confirm: bool,
+    busy: bool,
+    t: &Theme,
+    click: impl Fn(&mut SettingsDialog, bool, &mut Context<SettingsDialog>) + 'static,
+    cx: &mut Context<SettingsDialog>,
+) -> Stateful<Div> {
+    let label = if confirm { sure } else { "Remove" };
+    btn(id, label, BtnKind::Plain, busy, t)
+        .when(confirm, |b| b.text_color(t.danger))
+        .child(label)
+        .when(!busy, |b| {
+            b.on_click(cx.listener(move |d, _, _, cx| click(d, confirm, cx)))
+        })
+}
+
+/// A radio button named `label`, reachable by keyboard, marked when `checked`.
+pub fn radio(
+    id: impl Into<SharedString>,
+    label: impl Into<SharedString>,
+    checked: bool,
+) -> Stateful<Div> {
+    div()
+        .id(id.into())
+        .role(Role::RadioButton)
+        .aria_label(label.into())
+        .aria_toggled(checked.into())
+        .tab_index(0)
+        .focus_visible(crate::ui::focus_ring)
+        .cursor_pointer()
+}
+
+/// A row titled `title` with a switch named after it; a click runs `flip` with the new state.
+pub fn switch_row(
+    id: impl Into<SharedString>,
+    title: &'static str,
+    desc: Option<&str>,
+    on: bool,
+    flip: impl Fn(&mut SettingsDialog, bool, &mut Context<SettingsDialog>) + 'static,
+    cx: &mut Context<SettingsDialog>,
+) -> Stateful<Div> {
+    let t = *theme(cx);
+    token_row(title, desc, &t)
+        .child(switch(id, title, on, &t).on_click(cx.listener(move |d, _, _, cx| flip(d, !on, cx))))
 }
 
 /// Two to five choices side by side, as the theme picker. Each choice is `(label, checked)`;
@@ -177,35 +294,28 @@ pub fn segmented<T: Copy + PartialEq + 'static>(
             let (option, text): (T, SharedString) = (*option, text.clone().into());
             let checked = option == value;
             let pick = Rc::clone(&pick);
-            div()
-                .id(SharedString::from(format!("{id}-{i}")))
-                .role(Role::RadioButton)
-                .aria_label(text.clone())
-                .aria_toggled(if checked {
-                    Toggled::True
+            radio(
+                SharedString::from(format!("{id}-{i}")),
+                text.clone(),
+                checked,
+            )
+            .flex()
+            .h(px(24.))
+            .items_center()
+            .justify_center()
+            .px(px(16.))
+            .whitespace_nowrap()
+            .text_size(px(fs_sm()))
+            .map(|d| {
+                if checked {
+                    d.bg(t.bg_selected).text_color(fg)
                 } else {
-                    Toggled::False
-                })
-                .tab_index(0)
-                .focus_visible(crate::ui::focus_ring)
-                .cursor_pointer()
-                .flex()
-                .h(px(24.))
-                .items_center()
-                .justify_center()
-                .px(px(16.))
-                .whitespace_nowrap()
-                .text_size(px(fs_sm()))
-                .map(|d| {
-                    if checked {
-                        d.bg(t.bg_selected).text_color(fg)
-                    } else {
-                        d.text_color(muted)
-                            .hover(move |s| s.bg(hover).text_color(fg))
-                    }
-                })
-                .child(text)
-                .on_click(cx.listener(move |d, _, _, cx| pick(d, option, cx)))
+                    d.text_color(muted)
+                        .hover(move |s| s.bg(hover).text_color(fg))
+                }
+            })
+            .child(text)
+            .on_click(cx.listener(move |d, _, _, cx| pick(d, option, cx)))
         }))
 }
 
@@ -282,6 +392,34 @@ pub fn choice(
         let _ = dialog.update(cx, |d, cx| pick(d, cx));
     });
     if checked { item.icon("check") } else { item }
+}
+
+/// A click handler that opens the dropdown `key`'s menu of `options`, or closes it when open.
+///
+/// The option equal to `chosen` is marked, and picking one runs `set` with its value; the menu
+/// closes itself on a pick.
+pub fn choices<T: Clone + PartialEq + 'static>(
+    key: impl Into<SharedString>,
+    label: impl Into<SharedString>,
+    options: Vec<(T, SharedString)>,
+    chosen: T,
+    set: impl Fn(&mut SettingsDialog, T, &mut Context<SettingsDialog>) + 'static,
+    cx: &mut Context<SettingsDialog>,
+) -> impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static {
+    let (key, label, set) = (key.into(), label.into(), Rc::new(set));
+    cx.listener(move |d, e: &gpui::ClickEvent, window, cx| {
+        let weak = cx.entity().downgrade();
+        let items = options
+            .iter()
+            .map(|(value, name)| {
+                let (value, set) = (value.clone(), Rc::clone(&set));
+                choice(weak.clone(), name.clone(), value == chosen, move |d, cx| {
+                    set(d, value.clone(), cx);
+                })
+            })
+            .collect();
+        d.toggle_menu(key.clone(), label.clone(), items, e.position(), window, cx);
+    })
 }
 
 /// The minutes between update checks that the stepper offers.
@@ -361,6 +499,22 @@ pub fn alert(
         .child(text.into())
 }
 
+/// A field with its label above it.
+pub fn labeled(label: &'static str, field: Div, muted: Hsla) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(4.))
+        .child(
+            div()
+                .text_size(px(fs_sm()))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(muted)
+                .child(label),
+        )
+        .child(field)
+}
+
 /// What a pane that saves secrets says when neither the system keychain nor a password locks
 /// them: they need a password set, wait for the password, or cannot be unlocked this run.
 pub fn vault_notice(id: impl Into<SharedString>, t: &Theme) -> Option<Stateful<Div>> {
@@ -399,7 +553,7 @@ pub fn chip(
 ) -> Stateful<Div> {
     let hover = t.bg_hover;
     button(id.into(), label)
-        .aria_toggled(if on { Toggled::True } else { Toggled::False })
+        .aria_toggled(on.into())
         .flex_none()
         .h(px(28.))
         .gap(px(6.))

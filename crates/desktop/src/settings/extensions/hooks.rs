@@ -377,7 +377,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     };
     let dir = hooks::dir(&d.settings);
     let folder = tildify(&dir.to_string_lossy());
-    let (open_top, open_row) = (dir.clone(), dir.clone());
+    let (open_top, open_row) = (dir.clone(), dir);
     let tools = div()
         .flex()
         .items_center()

@@ -449,7 +449,7 @@ impl SettingsDialog {
             .flex()
             .flex_col()
             .gap(px(2.))
-            .children(rows.collect::<Vec<_>>())
+            .children(rows)
             .into_any_element()
     }
 
@@ -527,7 +527,7 @@ impl SettingsDialog {
                         .pt(px(2.))
                         .gap(px(2.))
                         .overflow_hidden()
-                        .children(names.collect::<Vec<_>>())
+                        .children(names)
                         .with_animation(
                             SharedString::from(format!("panes-closing-{at}")),
                             slide(),

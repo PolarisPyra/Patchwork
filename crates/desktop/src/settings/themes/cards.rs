@@ -6,16 +6,17 @@ use std::rc::Rc;
 
 use gpui::{
     AnyElement, Div, FontWeight, Hsla, MouseButton, MouseDownEvent, Role, SharedString, Stateful,
-    Toggled, WeakEntity, div, prelude::*, px, rgb,
+    WeakEntity, div, prelude::*, px, rgb,
 };
 use patchwork_core::settings::{Settings, Theme as ThemeSetting};
 use patchwork_core::themes::{Palette, Scheme};
 
 use super::files::{Filed, file_tools};
 use crate::settings::SettingsDialog;
+use crate::settings::controls::radio;
 use crate::ui::theme::{fs_lg, fs_sm, Theme as Colors, radius, radius_sm, theme};
 use crate::ui::menu::MenuItem;
-use crate::ui::{button, focus_ring, icon, icon_button, tooltip};
+use crate::ui::{button, icon, icon_button, tooltip};
 
 /// The color schemes that are not files, in the order their cards come: the id each has in
 /// the settings, its name, the kind of window it is for, and its colors.
@@ -252,18 +253,7 @@ pub(super) fn card(
         .chain(notes.iter().cloned())
         .collect::<Vec<_>>()
         .join(". ");
-    div()
-        .id(SharedString::from(key))
-        .role(Role::RadioButton)
-        .aria_label(label)
-        .aria_toggled(if checked {
-            Toggled::True
-        } else {
-            Toggled::False
-        })
-        .tab_index(0)
-        .focus_visible(focus_ring)
-        .cursor_pointer()
+    radio(SharedString::from(key), label, checked)
         .w(px(150.))
         .flex_none()
         .flex()

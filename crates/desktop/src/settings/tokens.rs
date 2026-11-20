@@ -5,14 +5,14 @@
 
 use std::collections::{HashMap, HashSet};
 
-use gpui::{AnyElement, ClickEvent, SharedString, div, prelude::*, px};
+use gpui::{AnyElement, SharedString, div, prelude::*, px};
 use patchwork_core::provider::{AgentKind, ModelOption};
 use patchwork_core::settings::{Settings, TokenSettings};
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{choice, segmented, switch, token_row};
-use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
-use crate::ui::{AGENT_KINDS, agent_label, format_tokens, icon};
+use crate::settings::controls::{choices, segmented, select_box, switch_row, token_row};
+use crate::ui::theme::{Theme, theme};
+use crate::ui::{AGENT_KINDS, agent_label, format_tokens};
 
 /// Context sizes offered by the token settings.
 const TOKEN_LEVELS: [u64; 4] = [100_000, 150_000, 200_000, 300_000];
@@ -118,57 +118,20 @@ impl SettingsDialog {
         };
         let key = format!("model-{label}");
         let open = self.menu_open(&key);
-        let menu_label = label.to_string();
-        let (hover, fg) = (t.bg_hover, t.text);
-        crate::ui::button(SharedString::from(key.clone()), label.to_string())
-            .aria_expanded(open)
-            .flex_none()
+        let options = std::iter::once((None, SharedString::new_static(empty)))
+            .chain(models.into_iter().map(|(id, name)| (Some(id), name.into())))
+            .collect();
+        select_box(key.clone(), label.to_string(), current, open, t)
             .w(px(200.))
-            .h(px(28.))
-            .justify_between()
             .gap(px(4.))
-            .rounded(px(radius_sm()))
-            .border_1()
-            .border_color(t.border_strong)
-            .bg(t.bg_editor)
-            .pl(px(8.))
-            .pr(px(6.))
-            .text_size(px(fs_sm()))
-            .text_color(t.text)
-            .hover(move |s| s.bg(hover).text_color(fg))
-            .child(div().min_w_0().truncate().child(current))
-            .child(icon("caret-down", 12.))
-            .on_click(cx.listener(move |d, e: &ClickEvent, window, cx| {
-                let weak = cx.entity().downgrade();
-                let mut items = vec![{
-                    let set = set.clone();
-                    choice(weak.clone(), empty, value.is_none(), move |d, cx| {
-                        d.menu = None;
-                        d.update(|s| set(s, None), cx);
-                    })
-                }];
-                for (id, name) in &models {
-                    let (set, pick) = (set.clone(), id.clone());
-                    items.push(choice(
-                        weak.clone(),
-                        name.clone(),
-                        value.as_ref() == Some(id),
-                        move |d, cx| {
-                            d.menu = None;
-                            let pick = pick.clone();
-                            d.update(|s| set(s, Some(pick)), cx);
-                        },
-                    ));
-                }
-                d.toggle_menu(
-                    key.clone(),
-                    menu_label.clone(),
-                    items,
-                    e.position(),
-                    window,
-                    cx,
-                );
-            }))
+            .on_click(choices(
+                key,
+                label.to_string(),
+                options,
+                value,
+                move |d, pick, cx| d.update(|s| set(s, pick), cx),
+                cx,
+            ))
             .into_any_element()
     }
 }
@@ -181,20 +144,24 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .filter(|k| d.settings.agents.contains(k))
         .collect();
 
-    let switch_row =
-        |id: &'static str,
-         title: &'static str,
-         desc: Option<&'static str>,
-         on: bool,
-         flip: fn(&mut TokenSettings, bool),
-         cx: &mut Context<SettingsDialog>| {
-            token_row(title, desc, &t).child(switch(id, title, on, &t).on_click(
-                cx.listener(move |d, _, _, cx| d.update(|s| flip(&mut s.tokens, !on), cx)),
-            ))
-        };
+    let token_switch = |id: &'static str,
+                        title: &'static str,
+                        desc: Option<&'static str>,
+                        on: bool,
+                        flip: fn(&mut TokenSettings, bool),
+                        cx: &mut Context<SettingsDialog>| {
+        switch_row(
+            id,
+            title,
+            desc,
+            on,
+            move |d, on, cx| d.update(|s| flip(&mut s.tokens, on), cx),
+            cx,
+        )
+    };
 
     let mut rows: Vec<AnyElement> = vec![
-        switch_row(
+        token_switch(
             "show-usage",
             "Show token counts",
             Some("Context, cache reads and writes, input and output under each finished reply"),
@@ -218,7 +185,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             cx,
         ))
         .into_any_element(),
-        switch_row(
+        token_switch(
             "generate-titles",
             "Generate chat and task titles",
             None,
@@ -244,7 +211,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 .into_any_element(),
         );
         rows.push(
-            switch_row(
+            token_switch(
                 "titles-local",
                 "Only local models write titles",
                 Some(

@@ -5,14 +5,13 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, ClickEvent, Role, SharedString, Toggled, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Role, SharedString, div, prelude::*, px, rgb};
 use patchwork_core::themes::{Color, Density, Follow, ProjectLook, clock_minutes, clock_text};
 
 use super::cards::{Extras, card, grid};
 use super::reading::titled;
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{choice, segmented, select_box, token_row};
-use crate::ui::focus_ring;
+use crate::settings::controls::{choices, segmented, select_box, token_row, radio};
 use crate::ui::theme::theme;
 
 /// The accents offered in place of a color scheme's own.
@@ -61,18 +60,7 @@ pub(super) fn accent_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -
         .map(|(name, code)| (*name, Some(Color(*code))));
     let swatches = own.chain(named).map(|(name, accent)| {
         let checked = current == accent;
-        div()
-            .id(SharedString::from(format!("accent-{name}")))
-            .role(Role::RadioButton)
-            .aria_label(name)
-            .aria_toggled(if checked {
-                Toggled::True
-            } else {
-                Toggled::False
-            })
-            .tab_index(0)
-            .focus_visible(focus_ring)
-            .cursor_pointer()
+        radio(SharedString::from(format!("accent-{name}")), name, checked)
             .flex_none()
             .size(px(32.))
             .rounded_full()
@@ -270,34 +258,28 @@ fn look_select(
     key: String,
     label: String,
     project: &str,
-    options: Vec<(SharedString, bool, ProjectLook)>,
+    options: Vec<(ProjectLook, SharedString)>,
+    chosen: ProjectLook,
     cx: &mut Context<SettingsDialog>,
 ) -> AnyElement {
     let t = *theme(cx);
     let shown = options
         .iter()
-        .find(|(_, checked, _)| *checked)
-        .map(|(name, _, _)| name.clone())
+        .find(|(look, _)| *look == chosen)
+        .map(|(_, name)| name.clone())
         .unwrap_or_default();
     let project = project.to_string();
     let (menu, title) = (SharedString::from(key), SharedString::from(label));
     select_box(menu.clone(), title.clone(), shown, d.menu_open(&menu), &t)
         .w(px(130.))
-        .on_click(cx.listener(move |d, e: &ClickEvent, window, cx| {
-            let weak = cx.entity().downgrade();
-            let items = options
-                .iter()
-                .map(|(name, checked, look)| {
-                    let (look, project) = (look.clone(), project.clone());
-                    choice(weak.clone(), name.clone(), *checked, move |d, cx| {
-                        let look = look.clone();
-                        d.menu = None;
-                        d.update(|s| s.set_project_look(&project, |was| *was = look), cx);
-                    })
-                })
-                .collect();
-            d.toggle_menu(menu.clone(), title.clone(), items, e.position(), window, cx);
-        }))
+        .on_click(choices(
+            menu,
+            title,
+            options,
+            chosen,
+            move |d, look, cx| d.update(|s| s.set_project_look(&project, |was| *was = look), cx),
+            cx,
+        ))
         .into_any_element()
 }
 
@@ -329,9 +311,8 @@ pub(in crate::settings) fn project_look(
     let schemes = std::iter::once((None, SharedString::new_static("Default colors")))
         .chain(built_in.chain(files).map(|(id, name)| (Some(id), name)))
         .map(|(theme, name)| {
-            let checked = look.theme == theme;
             let accent = look.accent;
-            (name, checked, ProjectLook { theme, accent })
+            (ProjectLook { theme, accent }, name)
         })
         .collect();
     let named = ACCENTS
@@ -341,14 +322,14 @@ pub(in crate::settings) fn project_look(
         .chain(named)
         .map(|(accent, name)| {
             let theme = look.theme.clone();
-            (name, look.accent == accent, ProjectLook { theme, accent })
+            (ProjectLook { theme, accent }, name)
         })
         .collect();
     // An accent written into the settings by hand is none of the swatches.
     if let Some(Color(code)) = look.accent
-        && !accents.iter().any(|(_, checked, _)| *checked)
+        && !accents.iter().any(|(option, _)| *option == look)
     {
-        accents.push((format!("#{code:06x}").into(), true, look.clone()));
+        accents.push((look.clone(), format!("#{code:06x}").into()));
     }
     [
         look_select(
@@ -357,6 +338,7 @@ pub(in crate::settings) fn project_look(
             format!("Color scheme of {name}"),
             id,
             schemes,
+            look.clone(),
             cx,
         ),
         look_select(
@@ -365,6 +347,7 @@ pub(in crate::settings) fn project_look(
             format!("Accent of {name}"),
             id,
             accents,
+            look,
             cx,
         ),
     ]

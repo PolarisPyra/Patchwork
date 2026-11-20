@@ -102,7 +102,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .role(Role::Group)
         .aria_label("Notifications")
         .child(header)
-        .children(rows.collect::<Vec<_>>());
+        .children(rows);
 
     let when = token_row("Send to chat apps", None, &t).child(segmented(
         "notify-when",

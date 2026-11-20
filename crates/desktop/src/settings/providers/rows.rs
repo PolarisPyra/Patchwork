@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Window, div, prelude::*, px};
+use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, Window, div, prelude::*, px};
 use patchwork_core::provider::api::config::{ApiProvider, ProviderView};
 use patchwork_core::provider::AgentStatus;
 use crate::settings::SettingsDialog;
@@ -242,15 +242,11 @@ impl SettingsDialog {
     ) -> Vec<AnyElement> {
         let t = *theme(cx);
         let p = &view.provider;
-        let id = p.id.clone();
         let prompting = self
             .providers
             .prompt
             .as_ref()
-            .is_some_and(|x| x.of == PromptOf::Api(id.clone()));
-        let (edit_a, edit_b, prompt_id, toggle) =
-            (view.clone(), view.clone(), id.clone(), p.clone());
-        let saved_prompt = p.system_prompt.clone();
+            .is_some_and(|x| x.of == PromptOf::Api(p.id.clone()));
         let row = div()
             .flex()
             .items_center()
@@ -259,83 +255,112 @@ impl SettingsDialog {
             .border_color(t.border)
             .py(px(10.))
             .child(provider_logo(&p.preset, p.logo.as_deref(), 20.))
-            .child(
-                crate::ui::button(SharedString::from(format!("open-{id}")), p.name.clone())
-                    .min_w_0()
-                    .flex_1()
-                    .flex_col()
-                    .items_start()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(p.name.clone()),
-                    )
-                    .child(
-                        div()
-                            .w_full()
-                            .truncate()
-                            .text_size(px(fs_sm()))
-                            .text_color(t.text_muted)
-                            .child(form::describe(view)),
-                    )
-                    .on_click(cx.listener(move |d, _, window, cx| {
-                        d.open_form(edit_a.provider.clone(), edit_a.has_key, window, cx);
-                    })),
-            )
-            .child(
-                btn(
-                    SharedString::from(format!("edit-{id}")),
-                    format!("Edit {}", p.name),
-                    BtnKind::Plain,
-                    false,
-                    &t,
-                )
-                .child("Edit")
-                .on_click(cx.listener(move |d, _, window, cx| {
-                    d.open_form(edit_b.provider.clone(), edit_b.has_key, window, cx);
-                })),
-            )
-            .child(
-                btn(
-                    SharedString::from(format!("prompt-{id}")),
-                    format!("{} system prompt", p.name),
-                    BtnKind::Plain,
-                    false,
-                    &t,
-                )
-                .aria_expanded(prompting)
-                .when(!p.system_prompt.is_empty(), |b| b.text_color(t.accent))
-                .child("System Prompt")
-                .on_click(cx.listener(move |d, _, window, cx| {
-                    d.toggle_prompt(
-                        PromptOf::Api(prompt_id.clone()),
-                        saved_prompt.clone(),
-                        window,
-                        cx,
-                    );
-                })),
-            )
-            .child(
-                switch(
-                    format!("use-{id}"),
-                    format!("Use {}", p.name),
-                    p.enabled,
-                    &t,
-                )
-                .on_click(cx.listener(move |d, _, _, cx| {
-                    d.save_provider(
-                        ApiProvider {
-                            enabled: !toggle.enabled,
-                            ..toggle.clone()
-                        },
-                        cx,
-                    );
-                })),
-            );
+            .child(provider_title(view, "", form::describe(view), &t, cx))
+            .children(provider_actions(view, "", prompting, &t, cx));
         let mut rows = vec![row.into_any_element()];
         if prompting {
             rows.push(self.prompt_editor(window, cx).into_any_element());
         }
         rows
     }
+}
+
+/// A saved provider's name over `line`; a click opens its form. `ids` sets a local server's ids
+/// apart from a cloud provider's.
+pub(super) fn provider_title(
+    view: &ProviderView,
+    ids: &str,
+    line: impl Into<SharedString>,
+    t: &Theme,
+    cx: &mut Context<SettingsDialog>,
+) -> Stateful<Div> {
+    let p = &view.provider;
+    let edit = view.clone();
+    crate::ui::button(
+        SharedString::from(format!("open-{ids}{}", p.id)),
+        p.name.clone(),
+    )
+    .min_w_0()
+    .flex_1()
+    .flex_col()
+    .items_start()
+    .child(
+        div()
+            .font_weight(FontWeight::SEMIBOLD)
+            .child(p.name.clone()),
+    )
+    .child(
+        div()
+            .w_full()
+            .truncate()
+            .text_size(px(fs_sm()))
+            .text_color(t.text_muted)
+            .child(line.into()),
+    )
+    .on_click(cx.listener(move |d, _, window, cx| {
+        d.open_form(edit.provider.clone(), edit.has_key, window, cx);
+    }))
+}
+
+/// A saved provider's Edit, System Prompt, and the switch to use it.
+pub(super) fn provider_actions(
+    view: &ProviderView,
+    ids: &str,
+    prompting: bool,
+    t: &Theme,
+    cx: &mut Context<SettingsDialog>,
+) -> [AnyElement; 3] {
+    let p = &view.provider;
+    let id = &p.id;
+    let (edit, prompt_id, toggle) = (view.clone(), id.clone(), p.clone());
+    let saved_prompt = p.system_prompt.clone();
+    [
+        btn(
+            SharedString::from(format!("edit-{ids}{id}")),
+            format!("Edit {}", p.name),
+            BtnKind::Plain,
+            false,
+            t,
+        )
+        .child("Edit")
+        .on_click(cx.listener(move |d, _, window, cx| {
+            d.open_form(edit.provider.clone(), edit.has_key, window, cx);
+        }))
+        .into_any_element(),
+        btn(
+            SharedString::from(format!("prompt-{ids}{id}")),
+            format!("{} system prompt", p.name),
+            BtnKind::Plain,
+            false,
+            t,
+        )
+        .aria_expanded(prompting)
+        .when(!p.system_prompt.is_empty(), |b| b.text_color(t.accent))
+        .child("System Prompt")
+        .on_click(cx.listener(move |d, _, window, cx| {
+            d.toggle_prompt(
+                PromptOf::Api(prompt_id.clone()),
+                saved_prompt.clone(),
+                window,
+                cx,
+            );
+        }))
+        .into_any_element(),
+        switch(
+            format!("use-{ids}{id}"),
+            format!("Use {}", p.name),
+            p.enabled,
+            t,
+        )
+        .on_click(cx.listener(move |d, _, _, cx| {
+            d.save_provider(
+                ApiProvider {
+                    enabled: !toggle.enabled,
+                    ..toggle.clone()
+                },
+                cx,
+            );
+        }))
+        .into_any_element(),
+    ]
 }

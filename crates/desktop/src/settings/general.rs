@@ -5,11 +5,13 @@
 
 use std::sync::{Arc, OnceLock};
 
-use gpui::{AnyElement, FocusHandle, FontWeight, Role, SharedString, Toggled, div, img, prelude::*, px};
+use gpui::{AnyElement, FocusHandle, FontWeight, Role, SharedString, div, img, prelude::*, px};
 use patchwork_core::settings::{LogLevel, LoggingSettings};
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{alert, anchored, choice, section_heading, switch, token_row};
+use crate::settings::controls::{
+    alert, anchored, choices, section_heading, switch_row, token_row, radio,
+};
 use crate::ui::theme::{radius_sm, theme};
 use crate::ui::{BtnKind, btn, dropdown_chip, tooltip};
 
@@ -156,9 +158,13 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                       on: bool,
                       flip: fn(&mut patchwork_core::settings::Settings, bool),
                       cx: &mut Context<SettingsDialog>| {
-        token_row(title, desc, &t).child(
-            switch(id, title, on, &t)
-                .on_click(cx.listener(move |d, _, _, cx| d.update(|s| flip(s, !on), cx))),
+        switch_row(
+            id,
+            title,
+            desc,
+            on,
+            move |d, on, cx| d.update(|s| flip(s, on), cx),
+            cx,
         )
     };
 
@@ -176,46 +182,39 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                     .map(|l| {
                         let checked = l.id == logo;
                         let id = l.id.clone();
-                        div()
-                            .id(SharedString::from(format!("logo-{}", l.id)))
-                            .role(Role::RadioButton)
-                            .aria_label(l.name.clone())
-                            .aria_toggled(if checked {
-                                Toggled::True
+                        radio(
+                            SharedString::from(format!("logo-{}", l.id)),
+                            l.name.clone(),
+                            checked,
+                        )
+                        // Eight to a row share its width, so the row ends where the pane does.
+                        .flex_1()
+                        .min_w_0()
+                        .aspect_square()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(radius_sm()))
+                        .border_1()
+                        .map(|b| {
+                            if checked {
+                                b.border_color(t.accent).bg(t.bg_accent_soft)
                             } else {
-                                Toggled::False
-                            })
-                            .tab_index(0)
-                            .focus_visible(crate::ui::focus_ring)
-                            .cursor_pointer()
-                            // Eight to a row share its width, so the row ends where the pane does.
-                            .flex_1()
-                            .min_w_0()
-                            .aspect_square()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded(px(radius_sm()))
-                            .border_1()
-                            .map(|b| {
-                                if checked {
-                                    b.border_color(t.accent).bg(t.bg_accent_soft)
-                                } else {
-                                    b.border_color(gpui::transparent_black())
-                                        .hover(move |s| s.bg(t.bg_hover))
-                                }
-                            })
-                            .tooltip(tooltip(l.name.clone()))
-                            .child(
-                                img(SharedString::from(format!("app-icons/{}.svg", l.id)))
-                                    .size(px(64.)),
-                            )
-                            .on_click(cx.listener(move |d, _, _, cx| {
-                                let id = id.clone();
-                                d.update(|s| s.logo = Some(id), cx);
-                                show_app_icon(&d.core.settings(), cx);
-                            }))
-                            .into_any_element()
+                                b.border_color(gpui::transparent_black())
+                                    .hover(move |s| s.bg(t.bg_hover))
+                            }
+                        })
+                        .tooltip(tooltip(l.name.clone()))
+                        .child(
+                            img(SharedString::from(format!("app-icons/{}.svg", l.id)))
+                                .size(px(64.)),
+                        )
+                        .on_click(cx.listener(move |d, _, _, cx| {
+                            let id = id.clone();
+                            d.update(|s| s.logo = Some(id), cx);
+                            show_app_icon(&d.core.settings(), cx);
+                        }))
+                        .into_any_element()
                     })
                     .chain(
                         // A short last row keeps its icons the size of the others.
@@ -241,26 +240,17 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 open,
                 &t,
             )
-            .on_click(cx.listener(move |d, e: &gpui::ClickEvent, window, cx| {
-                let this = cx.entity().downgrade();
-                let items = LOG_LEVELS
+            .on_click(choices(
+                key,
+                format!("{title} log level"),
+                LOG_LEVELS
                     .iter()
-                    .map(|&(l, label)| {
-                        choice(this.clone(), label, l == level, move |d, cx| {
-                            d.update(|s| *field(&mut s.logging) = l, cx);
-                        })
-                    })
-                    .collect();
-                let at = e.position();
-                d.toggle_menu(
-                    key.clone(),
-                    format!("{title} log level"),
-                    items,
-                    at,
-                    window,
-                    cx,
-                );
-            })),
+                    .map(|&(l, label)| (l, label.into()))
+                    .collect(),
+                level,
+                move |d, l, cx| d.update(|s| *field(&mut s.logging) = l, cx),
+                cx,
+            )),
         )
     });
     let log_rows: Vec<_> = log_rows.collect();

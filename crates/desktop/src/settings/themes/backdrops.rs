@@ -44,43 +44,43 @@ impl SettingsDialog {
     /// Asks for a picture, copies it into Patchwork's folder, and puts it behind the
     /// Orchestrator page.
     fn add_backdrop_picture(&mut self, cx: &mut Context<Self>) {
-        let picked = cx.prompt_for_paths(gpui::PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-            prompt: Some("Add background".into()),
-        });
         let core = Arc::clone(&self.core);
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(paths))) = picked.await else {
-                return;
-            };
-            let Some(path) = paths.first().map(|p| p.to_string_lossy().into_owned()) else {
-                return;
-            };
-            let imported = cx
-                .background_spawn(async move {
-                    core.import_background_image(&path)
-                        .map_err(|e| e.to_string())
-                })
-                .await;
-            let _ = this.update(cx, |d, cx| {
-                match imported {
-                    Ok(file) => {
-                        d.themes.error = None;
-                        let slot = d.backdrop_slot(cx);
-                        d.update(
-                            |s| *s.backdrop_mut(slot) = BackdropChoice::Image { file },
-                            cx,
-                        );
-                        d.load_themes(cx);
-                    }
-                    Err(e) => d.themes.error = Some(e),
-                }
-                cx.notify();
-            });
-        })
-        .detach();
+        crate::ui::pick_paths(
+            cx,
+            gpui::PathPromptOptions {
+                files: true,
+                directories: false,
+                multiple: false,
+                prompt: Some("Add background".into()),
+            },
+            move |_, paths, cx| {
+                let Some(path) = paths.first().map(|p| p.to_string_lossy().into_owned()) else {
+                    return;
+                };
+                crate::ui::off_thread(
+                    cx,
+                    move || {
+                        core.import_background_image(&path)
+                            .map_err(|e| e.to_string())
+                    },
+                    move |d, imported, cx| {
+                        match imported {
+                            Ok(file) => {
+                                d.themes.error = None;
+                                let slot = d.backdrop_slot(cx);
+                                d.update(
+                                    |s| *s.backdrop_mut(slot) = BackdropChoice::Image { file },
+                                    cx,
+                                );
+                                d.load_themes(cx);
+                            }
+                            Err(e) => d.themes.error = Some(e),
+                        }
+                        cx.notify();
+                    },
+                );
+            },
+        );
     }
 }
 

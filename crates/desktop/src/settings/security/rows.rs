@@ -3,14 +3,12 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{
-    AnyElement, ClipboardItem, Focusable, Role, SharedString, Toggled, Window, div, prelude::*, px,
-};
+use gpui::{AnyElement, ClipboardItem, Focusable, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_core::gateway::ChatAppCall;
 use patchwork_core::vault::{Method, VaultTimeout};
 
-use super::{ASK, Change, FIELD_WIDTH, password_field};
-use crate::settings::controls::{choice, list_box, section_heading, select_box, token_row};
+use super::{ASK, Change, FIELD_WIDTH, password_field, reveal_button};
+use crate::settings::controls::{choices, list_box, section_heading, select_box, token_row};
 use crate::settings::dialog::SettingsDialog;
 use crate::ui::theme::{Theme, font_mono, fs_sm, radius_sm, theme};
 use crate::ui::{BtnKind, btn, format_relative, icon_button, input_box, platform_logo, tooltip};
@@ -94,24 +92,14 @@ pub(super) fn timeout_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
         .child(
             select_box("security-timeout", TITLE, label, open, &t)
                 .w(px(FIELD_WIDTH))
-                .on_click(cx.listener(move |d, e: &gpui::ClickEvent, window, cx| {
-                    let weak = cx.entity().downgrade();
-                    let items = options
-                        .iter()
-                        .map(|&(timeout, ref label)| {
-                            choice(
-                                weak.clone(),
-                                label.clone(),
-                                timeout == current,
-                                move |d, cx| {
-                                    d.menu = None;
-                                    d.update(|s| s.vault.timeout = timeout, cx);
-                                },
-                            )
-                        })
-                        .collect();
-                    d.toggle_menu("security-timeout", TITLE, items, e.position(), window, cx);
-                })),
+                .on_click(choices(
+                    "security-timeout",
+                    TITLE,
+                    options,
+                    current,
+                    |d, timeout, cx| d.update(|s| s.vault.timeout = timeout, cx),
+                    cx,
+                )),
         )
         .into_any_element()
 }
@@ -319,17 +307,12 @@ fn secret_field(
             )
         })
         .child(
-            icon_button(
-                SharedString::from(format!("security-show-{name}")),
+            reveal_button(
+                format!("security-show-{name}"),
                 format!("Show {label}"),
-                if shown { "eye-slash" } else { "eye" },
-                14.,
+                shown,
                 cx,
             )
-            .size(px(22.))
-            .flex_none()
-            .aria_toggled(if shown { Toggled::True } else { Toggled::False })
-            .tooltip(tooltip(if shown { "Hide" } else { "Show" }))
             .on_click(cx.listener(move |d, _, _, cx| d.toggle_secret(name.clone(), cx))),
         )
         .into_any_element()

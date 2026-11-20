@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{Div, Role, SharedString, Toggled, Window, div, prelude::*, px};
+use gpui::{Div, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_core::provider::api::config::Header;
 
 use crate::settings::SettingsDialog;
@@ -172,7 +172,7 @@ impl SettingsDialog {
                         .id(SharedString::from(format!("model-{id}")))
                         .role(Role::CheckBox)
                         .aria_label(id.clone())
-                        .aria_toggled(if on { Toggled::True } else { Toggled::False })
+                        .aria_toggled(on.into())
                         .tab_index(0)
                         .focus_visible(crate::ui::focus_ring)
                         .cursor_pointer()
@@ -205,7 +205,7 @@ impl SettingsDialog {
                                     }
                                 }),
                         )
-                        .child(div().min_w_0().truncate().child(m.id.clone()))
+                        .child(div().min_w_0().truncate().child(m.id))
                         .on_click(cx.listener(move |d, _, _, cx| {
                             if let Some(f) = d.form_mut() {
                                 if f.draft.models.iter().any(|m| m.id == id) {

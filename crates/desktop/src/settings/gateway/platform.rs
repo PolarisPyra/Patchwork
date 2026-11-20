@@ -2,15 +2,15 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, FontWeight, Role, SharedString, Window, div, prelude::*, px};
+use gpui::{AnyElement, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_core::gateway::{Platform, Status};
 
 use super::paired::pairing_row;
 use super::setup::setup;
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{FieldKind, alert, switch, token_row, vault_notice};
-use crate::ui::theme::{fs_lg, fs_sm, theme};
-use crate::ui::{BtnKind, btn, icon, icon_button, platform_logo};
+use crate::settings::controls::{FieldKind, alert, detail_header, switch, token_row, vault_notice};
+use crate::ui::theme::{fs_sm, theme};
+use crate::ui::{BtnKind, btn, icon, platform_logo};
 
 /// The width of a token or address field.
 const FIELD_WIDTH: f32 = 260.;
@@ -224,27 +224,10 @@ pub(super) fn page(
 ) -> AnyElement {
     let t = *theme(cx);
     let label = each.label();
-    let header = div()
-        .flex()
-        .items_center()
-        .gap(px(12.))
-        .pb(px(8.))
-        .child(
-            icon_button("gw-back", "Back", "caret-left", 16., cx)
-                .tooltip(crate::ui::tooltip("Back"))
-                .on_click(cx.listener(|d, _, _, cx| {
-                    d.close_gateway(cx);
-                })),
-        )
-        .child(platform_logo(each, 24.))
-        .child(
-            div()
-                .id("gw-title")
-                .role(Role::Heading)
-                .text_size(px(fs_lg()))
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(label),
-        );
+    let back = |d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>| {
+        d.close_gateway(cx);
+    };
+    let header = detail_header("gw", platform_logo(each, 24.), label, back, cx).pb(px(8.));
     let steps = setup(each, cx);
     let rows = platform(d, each, window, cx);
     let pairing = pairing_row(d, each, cx);
