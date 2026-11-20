@@ -9,6 +9,14 @@ use patchwork_core::costs::{CostFilter, CostRange, CostReport};
 
 use crate::settings::SettingsDialog;
 
+/// What the overview and the charts measure.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum CostMetric {
+    #[default]
+    Cost,
+    Tokens,
+}
+
 /// The latest report, the range it covers, and the chart bar picked.
 #[derive(Default)]
 pub struct CostsState {
@@ -16,6 +24,7 @@ pub struct CostsState {
     /// Set once a report has been asked for since the pane opened or the replies changed.
     pub(in crate::settings) asked: bool,
     pub(super) range: CostRange,
+    pub(super) metric: CostMetric,
     /// The provider, model or project the page is narrowed to.
     pub(super) filter: Option<CostFilter>,
     /// The bar under the pointer or picked with the arrow keys, whose figures the chart shows.
@@ -53,6 +62,11 @@ impl SettingsDialog {
         self.costs.range = range;
         self.costs.bar = None;
         self.costs.asked = false;
+        cx.notify();
+    }
+
+    pub(super) fn set_cost_metric(&mut self, metric: CostMetric, cx: &mut Context<Self>) {
+        self.costs.metric = metric;
         cx.notify();
     }
 

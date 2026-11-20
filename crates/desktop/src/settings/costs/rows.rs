@@ -11,7 +11,7 @@ use patchwork_core::costs::{ChatCost, CostFilter, ProviderCost, Tally};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::list_box;
 use crate::settings::dialog::SettingsEvent;
-use crate::ui::theme::{Theme, fs_sm, fs_xl, radius};
+use crate::ui::theme::{Theme, fs_lg, fs_sm, fs_xs, radius};
 use crate::ui::{agent_label, agent_logo, button, format_tokens};
 
 /// `$12.34`, `$1,234`, or `<$0.01` for a cost too small to show.
@@ -23,61 +23,104 @@ pub(super) fn dollars(cost: f64) -> String {
     } else if cost < 1000. {
         format!("${cost:.2}")
     } else {
-        let whole = format!("{:.0}", cost.round());
-        let mut grouped = String::new();
-        for (i, c) in whole.chars().enumerate() {
-            if i > 0 && (whole.len() - i) % 3 == 0 {
-                grouped.push(',');
-            }
-            grouped.push(c);
-        }
-        format!("${grouped}")
+        format!("${}", grouped(cost.round() as u64))
     }
 }
 
-/// A figure, big, over its name and a smaller second figure.
-pub(super) fn stat(label: &str, value: String, detail: String, t: &Theme) -> Stateful<Div> {
-    div()
-        .id(SharedString::from(format!("cost-{label}")))
-        .role(Role::Group)
-        .aria_label(SharedString::from(format!("{label}: {value}, {detail}")))
-        .flex()
-        .flex_col()
-        .gap(px(2.))
-        .min_w_0()
-        .p(px(12.))
-        .rounded(px(radius()))
-        .border_1()
-        .border_color(t.border)
-        .child(
-            div()
-                .text_size(px(fs_sm()))
-                .text_color(t.text_muted)
-                .child(label.to_string()),
-        )
-        .child(
-            div()
-                .text_size(px(fs_xl()))
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(value),
-        )
-        .child(
-            div()
-                .text_size(px(fs_sm()))
-                .text_color(t.text_subtle)
-                .truncate()
-                .child(detail),
-        )
+/// `33,271,711,671`.
+pub(super) fn grouped(n: u64) -> String {
+    let whole = n.to_string();
+    let mut out = String::new();
+    for (i, c) in whole.chars().enumerate() {
+        if i > 0 && (whole.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 
-/// A tally's tile: its cost, with its tokens under it.
-pub(super) fn tally_stat(label: &str, tally: &Tally, t: &Theme) -> Stateful<Div> {
-    stat(
-        label,
-        format!("{} tokens", format_tokens(tally.tokens())),
-        dollars(tally.cost()),
-        t,
-    )
+/// What a tally measures on the charts: its cost, or its tokens.
+pub(super) fn value(tally: &Tally, by_cost: bool) -> f64 {
+    if by_cost {
+        tally.cost()
+    } else {
+        tally.tokens() as f64
+    }
+}
+
+/// A charted value written out: `$12.34`, or `45.2k` tokens.
+pub(super) fn amount(value: f64, by_cost: bool) -> String {
+    if by_cost {
+        dollars(value)
+    } else {
+        format_tokens(value as u64)
+    }
+}
+
+/// One cell of a strip: a name, a figure, and a smaller second figure.
+pub(super) struct Cell {
+    pub(super) label: &'static str,
+    pub(super) value: String,
+    pub(super) detail: String,
+}
+
+/// A row of figures in one box, side by side.
+pub(super) fn strip(
+    id: &'static str,
+    label: &'static str,
+    cells: Vec<Cell>,
+    t: &Theme,
+) -> AnyElement {
+    let border = t.border;
+    div()
+        .id(id)
+        .role(Role::Group)
+        .aria_label(label)
+        .grid()
+        .grid_cols(cells.len() as u16)
+        .overflow_hidden()
+        .rounded(px(radius()))
+        .border_1()
+        .border_color(border)
+        .children(cells.into_iter().enumerate().map(|(i, c)| {
+            div()
+                .id(ElementId::Integer(i as u64))
+                .role(Role::Group)
+                .aria_label(SharedString::from(format!(
+                    "{}: {}, {}",
+                    c.label, c.value, c.detail
+                )))
+                .flex()
+                .flex_col()
+                .items_center()
+                .gap(px(2.))
+                .min_w_0()
+                .px(px(8.))
+                .py(px(12.))
+                .when(i > 0, |d| d.border_l_1().border_color(border))
+                .child(
+                    div()
+                        .text_size(px(fs_lg()))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(c.value),
+                )
+                .child(
+                    div()
+                        .text_size(px(fs_sm()))
+                        .text_color(t.text_muted)
+                        .child(c.label),
+                )
+                .child(
+                    div()
+                        .max_w_full()
+                        .text_size(px(fs_xs()))
+                        .text_color(t.text_subtle)
+                        .truncate()
+                        .child(c.detail),
+                )
+        }))
+        .into_any_element()
 }
 
 /// A thin bar filled to `share` (0–1) of its width.

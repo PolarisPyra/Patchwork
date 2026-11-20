@@ -3,13 +3,16 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Role, SharedString, div, prelude::*, px};
-use patchwork_core::costs::{CostFilter, CostRange};
+use patchwork_core::costs::{CostFilter, CostRange, Tally};
 
 use super::chart::chart;
-use super::rows::{chat_row, dollars, kinds, pick_row, provider_row, sources, stat, tally_stat};
+use super::hero::hero;
+use super::lines::lines;
+use super::rows::{Cell, chat_row, dollars, grouped, kinds, pick_row, provider_row, sources, strip};
+use super::state::CostMetric;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{list_box, section_heading, segmented};
-use crate::ui::theme::{fs_sm, radius_sm, theme};
+use crate::ui::theme::{fs_sm, radius_lg, radius_sm, theme};
 use crate::ui::{agent_label, button, format_tokens, icon, spinner};
 
 pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
@@ -37,6 +40,15 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         &ranges,
         &t,
         SettingsDialog::set_cost_range,
+        cx,
+    );
+    let metric = segmented(
+        "costs-metric",
+        "Measure",
+        d.costs.metric,
+        &[(CostMetric::Cost, "Cost"), (CostMetric::Tokens, "Tokens")],
+        &t,
+        SettingsDialog::set_cost_metric,
         cx,
     );
     let hover = t.bg_hover;
@@ -84,6 +96,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .items_center()
         .gap(px(8.))
         .pb(px(8.))
+        .child(metric)
         .child(picker)
         .children(clear)
         .child(div().flex_1())
@@ -96,42 +109,64 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             .into_any_element();
     }
     let range = &report.in_range;
-    let span = match report.range {
-        CostRange::All => stat(
-            "Replies",
-            range.replies.to_string(),
-            report
-                .since
-                .map(|s| format!("Since {}", s.format("%b %-d, %Y")))
-                .unwrap_or_default(),
-            &t,
-        ),
-        r => tally_stat(&format!("Last {}", r.label()), range, &t),
-    };
-    let month = tally_stat("This month", &report.month, &t);
-    let tiles = div()
-        .id("costs-summary")
+    let by_cost = d.costs.metric == CostMetric::Cost;
+    let overview = div()
+        .id("costs-overview")
         .role(Role::Group)
-        .aria_label("Summary")
-        .grid()
-        .grid_cols(3)
-        .gap(px(8.))
-        .child(tally_stat("Today", &report.today, &t))
-        .child(stat(
-            "Daily average",
-            format!("{} tokens", format_tokens(report.daily_tokens)),
-            dollars(report.daily_cost),
-            &t,
-        ))
-        .child(span)
-        .child(month)
-        .child(tally_stat("All time", &report.all, &t))
-        .child(stat(
-            "Saved by cache",
-            dollars(range.cache_saved),
-            format!("{:.0}% of input from cache", range.cache_share() * 100.),
-            &t,
-        ));
+        .aria_label("Overview")
+        .flex()
+        .gap(px(24.))
+        .p(px(16.))
+        .rounded(px(radius_lg()))
+        .border_1()
+        .border_color(t.border)
+        .child(hero(&report, by_cost, &t))
+        .child(chart(&report, d.costs.bar, by_cost, &t, cx));
+    // A period's figure in the metric picked, with the other one under it.
+    let cell = |label: &'static str, tally: &Tally| {
+        let tokens = format!("{} tokens", format_tokens(tally.tokens()));
+        let (value, detail) = if by_cost {
+            (dollars(tally.cost()), tokens)
+        } else {
+            (tokens, dollars(tally.cost()))
+        };
+        Cell {
+            label,
+            value,
+            detail,
+        }
+    };
+    let per_reply = if by_cost {
+        format!(
+            "{} per reply",
+            dollars(range.cost() / range.replies.max(1) as f64)
+        )
+    } else {
+        format!(
+            "{} tokens per reply",
+            format_tokens(range.tokens() / range.replies.max(1))
+        )
+    };
+    let summary = strip(
+        "costs-summary",
+        "Summary",
+        vec![
+            cell("Today", &report.today),
+            cell("This month", &report.month),
+            cell("All time", &report.all),
+            Cell {
+                label: "Saved by cache",
+                value: dollars(range.cache_saved),
+                detail: format!("{:.0}% of input cached", range.cache_share() * 100.),
+            },
+            Cell {
+                label: "Replies",
+                value: grouped(range.replies),
+                detail: per_reply,
+            },
+        ],
+        &t,
+    );
     let chats: Vec<AnyElement> = report
         .chats
         .iter()
@@ -198,13 +233,9 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .flex_col()
         .gap(px(8.))
         .child(header)
-        .child(tiles)
-        .child(section_heading(
-            if report.monthly { "By month" } else { "By day" },
-            false,
-            &t,
-        ))
-        .child(chart(&report, d.costs.bar, &t, cx))
+        .child(overview)
+        .child(summary)
+        .children(lines(&report, by_cost, &t))
         .child(section_heading("Tokens", false, &t))
         .child(kinds(range, &t))
         .when(range.subagent_tokens > 0, |d| {
