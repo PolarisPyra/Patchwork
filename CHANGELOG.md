@@ -3,6 +3,23 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.126] - 2026-11-20
+
+**v26.11.126** · 2 changes from 1 contributor
+
+- **Redesigned Costs dashboard.** Settings Costs page now shows a Cost or Tokens switch, an overview, and per-provider lines to see totals and changes over time.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* feat(settings): a redesigned Costs dashboard with a cost/tokens switch, overview and provider lines by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/263
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.125...26.11.126
+
+</details>
+
 ## [26.11.125] - 2026-11-19
 
 **v26.11.125** · 2 changes from 1 contributor
