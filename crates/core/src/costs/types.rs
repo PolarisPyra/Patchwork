@@ -210,6 +210,31 @@ pub struct CostReport {
     pub chats: Vec<ChatCost>,
 }
 
+impl CostReport {
+    /// The days (or months) of the range with at least one counted reply.
+    #[must_use]
+    pub fn active_periods(&self) -> usize {
+        self.buckets.iter().filter(|b| b.tally.replies > 0).count()
+    }
+
+    /// The day (or month) that cost most, or used the most tokens when `by_cost` is false; None
+    /// when no period has any.
+    #[must_use]
+    pub fn peak(&self, by_cost: bool) -> Option<&Bucket> {
+        let value = |b: &Bucket| {
+            if by_cost {
+                b.tally.cost()
+            } else {
+                b.tally.tokens() as f64
+            }
+        };
+        self.buckets
+            .iter()
+            .filter(|b| value(b) > 0.)
+            .max_by(|a, b| value(a).total_cmp(&value(b)))
+    }
+}
+
 /// A finished reply's tokens, with what it is counted under. The ledger keeps one for each reply
 /// that is deleted.
 #[derive(Debug, Clone, PartialEq)]
