@@ -30,7 +30,7 @@ pub(super) fn hero(report: &CostReport, by_cost: bool, t: &Theme) -> Div {
         let part = value(&p.in_range, by_cost);
         let share = if whole > 0. { part / whole } else { 0. };
         let name = agent_label(p.agent);
-        let color = series(ix, t);
+        let color = series(p.agent, t);
         div()
             .id(ElementId::Integer(ix as u64))
             .role(Role::ListItem)

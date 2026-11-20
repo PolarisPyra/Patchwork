@@ -9,7 +9,6 @@ use gpui::{
     prelude::*, px, relative,
 };
 use patchwork_core::costs::{Bucket, CostReport};
-use patchwork_core::provider::AgentKind;
 
 use super::rows::{amount, series, value};
 use crate::settings::SettingsDialog;
@@ -44,16 +43,6 @@ pub(super) fn scale_top(top: f64) -> f64 {
     step * power
 }
 
-/// A provider's chart colour, by its place in the report's providers.
-pub(super) fn color_of(report: &CostReport, agent: AgentKind, t: &Theme) -> Hsla {
-    let ix = report
-        .providers
-        .iter()
-        .position(|p| p.agent == agent)
-        .unwrap_or(0);
-    series(ix, t)
-}
-
 /// A dot of `color` before `name`, as the legends and the card show a provider.
 pub(super) fn swatch(name: impl Into<SharedString>, color: Hsla) -> Div {
     div()
@@ -83,7 +72,7 @@ pub(super) fn legend(id: &'static str, report: &CostReport, t: &Theme) -> Option
                     .id(ElementId::Integer(ix as u64))
                     .role(Role::ListItem)
                     .aria_label(agent_label(p.agent))
-                    .child(swatch(agent_label(p.agent), series(ix, t)))
+                    .child(swatch(agent_label(p.agent), series(p.agent, t)))
             }))
             .into_any_element()
     })
@@ -217,7 +206,7 @@ fn card(report: &CostReport, ix: usize, b: &Bucket, by_cost: bool, t: &Theme) ->
         )
         .children(b.by_agent.iter().map(|(agent, tally)| {
             line(
-                swatch(agent_label(*agent), color_of(report, *agent, t)),
+                swatch(agent_label(*agent), series(*agent, t)),
                 amount(value(tally, by_cost), by_cost),
             )
         }))
@@ -270,12 +259,7 @@ pub(super) fn chart(
             .by_agent
             .iter()
             .rev()
-            .map(|(agent, tally)| {
-                (
-                    (value(tally, by_cost) / top) as f32,
-                    color_of(report, *agent, t),
-                )
-            })
+            .map(|(agent, tally)| ((value(tally, by_cost) / top) as f32, series(*agent, t)))
             .filter(|(h, _)| *h > 0.)
             .collect();
         let dim = picked.is_some_and(|p| p != ix);
