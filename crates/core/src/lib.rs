@@ -7,8 +7,10 @@
 pub use patchwork_system::VERSION;
 
 pub mod android;
+pub mod artifacts;
 pub mod backgrounds;
 pub mod bots;
+pub mod browser;
 pub mod checks;
 pub mod computer;
 pub mod costs;
@@ -200,6 +202,7 @@ impl Core {
             Some(core) if threads::chat_tools::is_tool(tool) => core
                 .runner
                 .run_chat_tool(&core, thread_id, tool, args, stopped),
+            Some(core) if tool == artifacts::TOOL => core.run_artifact_tool(thread_id, args),
             Some(core) if tool.starts_with(android::TOOL_PREFIX) => {
                 core.android_tool(thread_id, tool, args, stopped)
             }
@@ -222,6 +225,7 @@ impl Core {
                     tools.extend(core.chat_tools(thread_id));
                     tools.extend(core.delegate_tools(thread_id));
                     tools.extend(core.android_tools(thread_id));
+                    tools.extend(core.artifact_tools(thread_id));
                     tools
                 })
                 .unwrap_or_default()

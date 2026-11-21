@@ -206,6 +206,8 @@ pub(super) fn tool_started(message_id: &str, start: ToolStart<'_>) -> Parsed {
             output: None,
             child_thread_id: None,
             lines: None,
+            title: None,
+            kind: None,
         },
     })
 }

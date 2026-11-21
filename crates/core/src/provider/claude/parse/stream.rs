@@ -51,6 +51,9 @@ pub(super) fn claude_tool_use(
     );
     if let Parsed::Event(AgentEvent::ToolStarted { tool, .. }) = &mut started {
         tool.lines = edit_lines(name, input);
+        if name == crate::artifacts::CLAUDE_NAME {
+            tool.title = input["title"].as_str().map(str::to_owned);
+        }
     }
     out.push(started);
 
@@ -257,7 +260,31 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
         }
         // Text arrives token by token in `stream_event`s; the full `assistant` text is skipped.
         Some("stream_event") => {
+            // An artifact takes a while to write, so its card shows as soon as the call begins
+            // rather than once its input is whole; the full call then fills it in.
+            let block = &v["event"]["content_block"];
+            if parent.is_none()
+                && v["event"]["type"] == "content_block_start"
+                && block["type"] == "tool_use"
+                && block["name"] == crate::artifacts::CLAUDE_NAME
+            {
+                claude_tool_use(block, root, message_id, None, &mut out);
+                if let (Some(index), Some(Parsed::Event(AgentEvent::ToolStarted { tool, .. }))) =
+                    (v["event"]["index"].as_u64(), out.first())
+                {
+                    super::writing::started(message_id, index, tool);
+                }
+            }
             let delta = &v["event"]["delta"];
+            if let Some(index) = v["event"]["index"].as_u64().filter(|_| parent.is_none()) {
+                if delta["type"] == "input_json_delta" {
+                    let json = delta["partial_json"].as_str().unwrap_or_default();
+                    out.extend(super::writing::grew(message_id, index, json));
+                }
+                if v["event"]["type"] == "content_block_stop" {
+                    super::writing::stopped(message_id, index);
+                }
+            }
             // A subagent's text is not part of the reply, so only the top level counts.
             if parent.is_none() && delta["type"] == "text_delta" {
                 let text = delta["text"].as_str().unwrap_or_default();

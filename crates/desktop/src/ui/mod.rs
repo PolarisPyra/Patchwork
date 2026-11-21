@@ -25,7 +25,7 @@ pub mod theme;
 
 pub use controls::{
     BtnKind, above, badge, btn, button, checkbox, dropdown_chip, focus_ring, icon, icon_button,
-    kind_icon, input_box, menu_item, mix, motion_clock, overflows, popup, popup_shadow,
+    kind_icon, input_box, menu_item, mix, motion_clock, next_step, overflows, popup, popup_shadow,
     redraw_after, spinner, tooltip,
 };
 pub use scrollbar::{list_scrollbar, scrollbar};

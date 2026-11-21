@@ -179,6 +179,8 @@ fn an_open_command_or_subagent_is_a_background_task_without_a_stop() {
         ended_at: None,
         output: None,
         lines: None,
+        title: None,
+        kind: None,
     };
     assert!(background_task(&edit).is_none());
 }

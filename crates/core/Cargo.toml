@@ -47,6 +47,10 @@ zip = { workspace = true, features = ["deflate-flate2-zlib-rs"] }
 # Computer use: a screenshot of the primary monitor, and the pointer and keyboard under it.
 enigo = { workspace = true, default-features = true }
 image = { workspace = true, features = ["png", "jpeg", "webp"] }
+# Browser frames decode straight to the BGRA pixels the app draws.
+zune-jpeg = { workspace = true, default-features = true }
+# Markdown artifacts are drawn as HTML.
+pulldown-cmark = { workspace = true, features = ["html"] }
 # A chat background an agent drew as an SVG is kept as a picture.
 resvg.workspace = true
 # Chat background pictures are named after a hash of their bytes, so the same one is kept once.

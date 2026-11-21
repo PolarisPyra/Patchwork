@@ -6,6 +6,7 @@ mod requests;
 mod stream;
 mod tasks;
 mod todos;
+mod writing;
 
 #[doc(inline)]
 pub(crate) use requests::claude_target;

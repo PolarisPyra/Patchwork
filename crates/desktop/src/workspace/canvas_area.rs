@@ -1,14 +1,48 @@
-//! The canvas beside the chat: what opens in it, and how wide it is.
+//! The canvas beside the chat: what opens in it, and how wide it is. An artifact opened from the
+//! chat shows there too.
 
 // Rust guideline compliant 2026-10-09
 
 use gpui::{MouseButton, Role, Window, div, prelude::*, px};
 use patchwork_core::threads::Message;
+use std::sync::Arc;
+
+use crate::artifacts::ArtifactsPage;
 use crate::canvas::{CANVAS_MAX_FRACTION, CANVAS_MIN, Canvas, CanvasTab};
 use crate::ui::theme::{ACTIVITY_BAR_W, theme};
 use super::state::Workspace;
 
 impl Workspace {
+    /// Shows version `n` of the artifact `id` beside the chat, or on the Artifacts page when that
+    /// shows.
+    pub(crate) fn open_artifact_beside(
+        &mut self,
+        id: String,
+        n: u32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(thread) = self.thread.as_ref().map(|t| t.id.clone()) else {
+            return;
+        };
+        if self.page == super::Page::Artifacts {
+            self.open_artifact(id, n, window, cx);
+            return;
+        }
+        match &self.artifact_beside {
+            Some((of, page)) if *of == thread => page.update(cx, |page, cx| page.open(id, n, cx)),
+            _ => {
+                cx.background_spawn(async { patchwork_core::browser::warm_browser() })
+                    .detach();
+                let (core, thumbs) = (Arc::clone(&self.core), self.thumbs.clone());
+                let page = cx.new(|cx| ArtifactsPage::beside_chat(core, thumbs, id, n, cx));
+                cx.subscribe_in(&page, window, Self::on_artifacts).detach();
+                self.artifact_beside = Some((thread, page));
+            }
+        }
+        cx.notify();
+    }
+
     /// Opens a changed file's diff, or the file itself when it has no changes.
     pub fn open_change(&mut self, path: &str, window: &mut Window, cx: &mut Context<Self>) {
         // A file in conflict opens on its code, where its conflicts are settled.
@@ -202,7 +236,13 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
         let project = self.project().map(|p| &p.id);
+        let thread = self.thread.as_ref().map(|t| &t.id);
+        let beside = self
+            .artifact_beside
+            .as_ref()
+            .filter(|(of, _)| Some(of) == thread);
         let (content, label): (gpui::AnyView, _) = match (&self.android, &self.canvas) {
+            _ if let Some((_, page)) = beside => (page.clone().into(), "Resize artifact panel"),
             (Some(android), _) if Some(&android.read(cx).project_id) == project => {
                 (android.clone().into(), "Resize Android panel")
             }

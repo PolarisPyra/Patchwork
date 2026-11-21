@@ -167,10 +167,29 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
         Some("api.reasoning") => vec![thinking(message_id, text("delta"))],
         Some("api.tool") => {
             let name = crate::harness::tools::display_name(text("name"));
-            vec![tool_started(
+            let mut started = tool_started(
                 message_id,
                 ToolStart::new(text("id"), name, text("summary").into()),
-            )]
+            );
+            if let Parsed::Event(AgentEvent::ToolStarted { tool, .. }) = &mut started
+                && crate::artifacts::is_artifact_call(tool)
+            {
+                if v["arguments"].is_null() {
+                    tool.title = v["title"].as_str().map(str::to_owned);
+                    tool.kind = v["kind"].as_str().map(str::to_owned);
+                    tool.lines =
+                        v["lines"]
+                            .as_u64()
+                            .filter(|&n| n > 0)
+                            .map(|n| crate::threads::EditLines {
+                                added: u32::try_from(n).unwrap_or(u32::MAX),
+                                removed: 0,
+                            });
+                } else {
+                    crate::artifacts::fill_in(tool, &v["arguments"]);
+                }
+            }
+            vec![started]
         }
         Some("api.tool_done") => {
             let mut out = vec![tool_finished(

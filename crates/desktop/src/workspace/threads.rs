@@ -37,6 +37,7 @@ impl Workspace {
     pub(super) fn place(&self) -> Option<Place> {
         match self.page {
             super::Page::Orchestrator => Some(Place::Orchestrator),
+            super::Page::Artifacts => None,
             super::Page::Chats if self.bot_shown.is_some() => {
                 self.bot_shown.clone().map(Place::Bot)
             }
@@ -316,6 +317,13 @@ impl Workspace {
             }
             AgentEvent::ApprovalResolved { approval_id, .. } => {
                 cx.dismiss_system_notification(&format!("{}|{approval_id}", envelope.thread_id));
+            }
+            AgentEvent::ArtifactsChanged => {
+                self.load_artifact_list(cx);
+                if let Some(page) = &self.artifacts {
+                    page.update(cx, crate::artifacts::ArtifactsPage::reload);
+                }
+                return;
             }
             // Changed from a chat app: what Settings does when it changes them.
             AgentEvent::SettingsChanged => {

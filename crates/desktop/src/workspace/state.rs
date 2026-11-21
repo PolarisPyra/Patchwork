@@ -65,6 +65,8 @@ pub enum Page {
     /// The sidebar, the open chat, and the panels around it.
     Chats,
     Orchestrator,
+    /// What agents made to look at, drawn live.
+    Artifacts,
 }
 
 /// The sidebar's width: its default, and how narrow and wide a drag may make it.
@@ -121,6 +123,16 @@ pub struct Workspace {
     pub(super) orchestrator: Entity<Orchestrator>,
     /// The orchestrator page's backdrop, drawn under it as a view of its own.
     pub(super) orchestrator_backdrop: Entity<OrchestratorBackdrop>,
+    /// The Artifacts page while it shows. Closed with it, so its browser runs only then.
+    pub(super) artifacts: Option<Entity<crate::artifacts::ArtifactsPage>>,
+    /// The artifact shown beside a chat, with that chat's id; it shows while the chat does.
+    pub(super) artifact_beside: Option<(String, Entity<crate::artifacts::ArtifactsPage>)>,
+    /// Whether the chat an artifact came from shows in a card over the Artifacts page.
+    pub(super) artifact_chat: bool,
+    /// Every artifact, so a chat's artifact cards can name theirs and open it.
+    pub(crate) artifact_list: Vec<patchwork_core::artifacts::Artifact>,
+    /// The artifacts' pictures, for the chats' cards and the gallery.
+    pub(crate) thumbs: Entity<crate::artifacts::Thumbs>,
     pub branch: Option<String>,
     /// The folder Source Control last read: the open task's worktree, or the project's folder.
     pub git_root: Option<String>,
@@ -329,6 +341,8 @@ impl Workspace {
         });
         let orchestrator = cx.new(|cx| Orchestrator::new(&entity, composer.clone(), window, cx));
         let orchestrator_backdrop = cx.new(|cx| OrchestratorBackdrop::new(&orchestrator, cx));
+        let thumbs = cx.new(|_| crate::artifacts::Thumbs::new(Arc::clone(&core)));
+        cx.observe(&thumbs, |_, _, cx| cx.notify()).detach();
         let status_region =
             cx.new(|cx| Region::new(&entity, |w, _, cx| w.status_bar(cx).into_any_element(), cx));
         let (panel, panel_height) = panel_area::new_panel(Arc::clone(&core), &settings, window, cx);
@@ -352,6 +366,11 @@ impl Workspace {
             orchestrator_tasks: true,
             orchestrator,
             orchestrator_backdrop,
+            artifacts: None,
+            artifact_beside: None,
+            artifact_chat: false,
+            artifact_list: Vec::new(),
+            thumbs,
             branch: None,
             git_root: None,
             git_seq: 0,
@@ -470,6 +489,7 @@ impl Workspace {
         this.await_theme_switch(window, cx);
         this.watch_window(window, cx);
         this.load_git(cx);
+        this.load_artifact_list(cx);
         // The composer starts focused, so typing and the app's keys work before any click.
         let composer = this.composer.read(cx).editor.focus_handle(cx);
         window.focus(&composer, cx);
@@ -555,6 +575,7 @@ impl Workspace {
         match self.page {
             Page::Chats => self.view.filter(|_| !self.peeking),
             Page::Orchestrator => self.orchestrator_tasks.then_some(View::Tasks),
+            Page::Artifacts => None,
         }
     }
 

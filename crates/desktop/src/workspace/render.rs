@@ -28,6 +28,7 @@ impl Render for Workspace {
             _ if self.page == Page::Orchestrator => {
                 format!("{} - Orchestrator mode", crate::APP_TITLE)
             }
+            _ if self.page == Page::Artifacts => format!("{} - Artifacts", crate::APP_TITLE),
             (_, Some(bot)) => format!("{} - {}", crate::APP_TITLE, bot.name),
             (Some(thread), None) => {
                 format!("{} - {}", crate::APP_TITLE, display_title(&thread.title))
@@ -42,20 +43,42 @@ impl Render for Workspace {
         self.remember_place(cx);
         let t = *theme(cx);
         let orchestrating = self.page == Page::Orchestrator;
+        // The page and its browser are made when it shows and closed when it is left.
+        let artifacts = if self.page == Page::Artifacts {
+            Some(self.artifacts_page(window, cx))
+        } else {
+            if self.artifacts.take().is_some() {
+                self.cool_browser_unless_shown(cx);
+            }
+            self.artifact_chat = false;
+            None
+        };
+        // The panel beside a chat closes with its browser once another chat is open, so a page
+        // no one sees is not drawn.
+        let thread = self.thread.as_ref().map(|t| &t.id);
+        if self
+            .artifact_beside
+            .as_ref()
+            .is_some_and(|(of, _)| Some(of) != thread)
+        {
+            self.artifact_beside = None;
+            self.cool_browser_unless_shown(cx);
+        }
+        let chats = self.page == Page::Chats;
         let sidebar = self.sidebar_view().map(|_| {
             let width = px(self.sidebar_width);
             self.sidebar_region
                 .clone()
                 .cached(StyleRefinement::default().flex_none().w(width))
         });
-        let bot_page = if orchestrating {
-            None
-        } else {
+        let bot_page = if chats {
             self.bot_page_view(window, cx)
+        } else {
+            None
         };
         // The chat's file panel and terminal belong to the chat a bot's page takes the place of.
         let beside_chat = bot_page.is_none();
-        let bot_details = if beside_chat && !orchestrating {
+        let bot_details = if beside_chat && chats {
             self.bot_details_view(window, cx)
         } else {
             None
@@ -66,6 +89,7 @@ impl Render for Workspace {
         let granular_dialog = self.granular_dialog(window, cx);
         let credential_dialog = self.credential_dialog(cx);
         let error = self.error_toast(&t, cx);
+        let artifact_chat = self.artifact_chat_card(&t, cx);
         div()
             .id("workspace")
             .track_focus(&self.focus)
@@ -92,6 +116,12 @@ impl Render for Workspace {
             // Escape that nothing closed with it, such as a menu or a dialog, takes the focus off
             // whatever has it: the chat box, a field, a button. Tab brings the chat box back.
             .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, window, cx| {
+                // Escape from the chat's card, once its message box has let it go, closes it.
+                if e.keystroke.key == "escape" && this.artifact_chat && !this.covered() {
+                    this.close_artifact_chat(window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
                 if e.keystroke.key == "escape" && !this.focus.is_focused(window) {
                     window.focus(&this.focus, cx);
                     cx.stop_propagation();
@@ -110,6 +140,7 @@ impl Render for Workspace {
                 if keys.key == "space" && !held.modified() {
                     match this.page {
                         Page::Orchestrator => this.orchestrator_tasks = !this.orchestrator_tasks,
+                        Page::Artifacts => {}
                         Page::Chats => {
                             let open = this.sidebar_view().is_some();
                             // Looking in on a chat from the orchestrator ends here.
@@ -218,6 +249,11 @@ impl Render for Workspace {
                 this.peeking = false;
                 cx.notify();
             }))
+            .on_action(cx.listener(|this, _: &crate::ShowArtifacts, _, cx| {
+                this.page = Page::Artifacts;
+                this.peeking = false;
+                cx.notify();
+            }))
             .on_action(cx.listener(|this, _: &crate::ShowArchived, _, cx| {
                 this.view = Some(View::Archived);
                 this.page = Page::Chats;
@@ -291,8 +327,18 @@ impl Render for Workspace {
                                 ),
                             )
                     }))
+                    .children(artifacts.map(|page| {
+                        div()
+                            .relative()
+                            .flex()
+                            .flex_1()
+                            .min_w_0()
+                            .min_h_0()
+                            .child(page)
+                            .children(artifact_chat)
+                    }))
                     .children(bot_page)
-                    .children((!orchestrating && self.bot_shown.is_none()).then(|| {
+                    .children((chats && self.bot_shown.is_none()).then(|| {
                         div()
                             .flex()
                             .flex_col()
@@ -375,6 +421,55 @@ impl Workspace {
 }
 
 impl Workspace {
+    /// Starts a chat asking for a new artifact, or opens the chat an artifact came from.
+    pub(super) fn on_artifacts(
+        &mut self,
+        _: &gpui::Entity<crate::artifacts::ArtifactsPage>,
+        event: &crate::artifacts::ArtifactsEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            crate::artifacts::ArtifactsEvent::OpenChat(id) => {
+                let same = self.thread.as_ref().is_some_and(|t| &t.id == id);
+                if self.artifact_chat && same {
+                    self.close_artifact_chat(window, cx);
+                } else {
+                    self.open_artifact_chat(id, window, cx);
+                }
+            }
+            crate::artifacts::ArtifactsEvent::Closed => {
+                self.artifact_beside = None;
+                self.cool_browser_unless_shown(cx);
+                window.focus(&self.focus, cx);
+            }
+            crate::artifacts::ArtifactsEvent::OpenFull { id, n } => {
+                self.artifact_beside = None;
+                self.open_artifact(id.clone(), *n, window, cx);
+            }
+            crate::artifacts::ArtifactsEvent::AskFix { thread_id, text } => {
+                if self.page == Page::Artifacts {
+                    self.open_artifact_chat(thread_id, window, cx);
+                } else {
+                    self.open_thread(thread_id, cx);
+                }
+                if self.thread.as_ref().is_some_and(|t| &t.id == thread_id) {
+                    self.send(text.clone(), Vec::new(), None, None, cx);
+                }
+            }
+            crate::artifacts::ArtifactsEvent::MakeNew(kind) => {
+                self.page = Page::Chats;
+                self.peeking = false;
+                self.new_chat(cx);
+                self.composer.update(cx, |c, cx| {
+                    c.set_draft(kind.request(), Vec::new(), cx);
+                    c.focus(window, cx);
+                });
+            }
+        }
+        cx.notify();
+    }
+
     /// Whether a dialog or a menu is over the window. It keeps the keys to itself.
     fn covered(&self) -> bool {
         self.palette.is_some()

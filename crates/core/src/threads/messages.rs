@@ -76,6 +76,14 @@ pub struct ToolCall {
     /// `Write`, every line of its text, which is right only when it created the file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lines: Option<EditLines>,
+    /// What the call names the thing it makes, such as an artifact's title, read from its input
+    /// as soon as it arrives.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// What kind of thing the call makes, such as an artifact's type, read from its input as
+    /// soon as it arrives.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
 }
 
 /// How many lines an edit adds and removes.

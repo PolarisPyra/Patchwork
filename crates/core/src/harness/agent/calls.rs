@@ -41,7 +41,13 @@ impl Agent {
             }
         };
         let summary = crate::harness::tools::summary(&call.name, &args, &self.root);
-        emit(&json!({"type": "api.tool", "id": call.id, "name": call.name, "summary": summary}));
+        let mut started =
+            json!({"type": "api.tool", "id": call.id, "name": call.name, "summary": summary});
+        // An artifact's card reads its title and size from the whole input.
+        if call.name == crate::artifacts::TOOL {
+            started["arguments"] = args.clone();
+        }
+        emit(&started);
         // A call to a tool this turn does not offer, such as one copied from earlier history, is
         // refused before it can run.
         if !self.offers(&call.name) {

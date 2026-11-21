@@ -171,6 +171,7 @@ pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str
         | AgentEvent::Notice { .. }
         | AgentEvent::OptionsChanged
         | AgentEvent::SettingsChanged
+        | AgentEvent::ArtifactsChanged
         | AgentEvent::OpenChat
         | AgentEvent::RestartToUpdate
         | AgentEvent::Show { .. }
@@ -297,7 +298,14 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
                 ended_at: *ended_at,
             }),
         },
+        // A call shown while its input was still streaming takes its full form in place.
         AgentEvent::ToolStarted { tool, .. } => {
+            if let Some(shown) = msg.tools.iter_mut().find(|t| t.id == tool.id) {
+                let started_at = shown.started_at;
+                *shown = tool.clone();
+                shown.started_at = started_at.or(tool.started_at);
+                return;
+            }
             end_thinking(msg);
             msg.parts.push(Part::Tool {
                 id: tool.id.clone(),
@@ -486,6 +494,7 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         | AgentEvent::Notice { .. }
         | AgentEvent::OptionsChanged
         | AgentEvent::SettingsChanged
+        | AgentEvent::ArtifactsChanged
         | AgentEvent::OpenChat
         | AgentEvent::RestartToUpdate
         | AgentEvent::Show { .. }
