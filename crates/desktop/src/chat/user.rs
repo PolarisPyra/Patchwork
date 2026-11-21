@@ -308,8 +308,8 @@ impl Workspace {
             "Restore checkpoint",
             Some(
                 "Put the project's files back as they were before this message? Changes made \
-                 since, by the agent or by you, are discarded, and this message and the ones \
-                 after it are removed.",
+                 since, by the agent or by you, are discarded, files created since are deleted, \
+                 and this message and the ones after it are removed.",
             ),
             &["Restore", "Cancel"],
             cx,
