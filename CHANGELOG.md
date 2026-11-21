@@ -3,6 +3,23 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.133] - 2026-11-21
+
+**v26.11.133** · 2 changes from 1 contributor
+
+- **Claude artifacts without prompts.** Claude creates and updates artifacts without asking for permission each time, with versions still available to go back to.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* fix(chat): Claude makes artifacts without asking for permission by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/286
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.132...26.11.133
+
+</details>
+
 ## [26.11.132] - 2026-11-21
 
 **v26.11.132** · 4 changes from 1 contributor
