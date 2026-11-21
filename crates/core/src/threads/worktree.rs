@@ -633,7 +633,7 @@ impl Core {
         if thread.parent.is_some()
             || !first_turn
             || ssh::is_remote(path)
-            || self.edits_in_place(project_id)
+            || !self.task_gets_worktree(&thread.id, project_id)
             || self.is_worktree_project(path)
             || self.is_dispatcher(&thread.id)
         {
@@ -1095,7 +1095,7 @@ impl Core {
                 || thread.messages.iter().any(|m| m.role == Role::Assistant)
                 || self.worktree_record(&thread.id).is_some()
                 || self.store.state(&failed_key(&thread.id)).is_some()
-                || self.edits_in_place(project_id)
+                || !self.task_gets_worktree(&thread.id, project_id)
                 || self.is_dispatcher(&thread.id)
             {
                 continue;

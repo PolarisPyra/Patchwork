@@ -102,6 +102,16 @@ impl Workspace {
         strip.state.as_ref().map(|s| s.worktree.root.clone())
     }
 
+    /// Whether the open task's worktree holds anything yet: files changed there, or commits.
+    pub(crate) fn thread_worktree_changed(&self) -> bool {
+        let id = self.thread.as_ref().map(|t| &t.id);
+        self.worktree
+            .as_ref()
+            .filter(|s| Some(&s.key.0) == id)
+            .and_then(|s| s.state.as_ref())
+            .is_some_and(|s| !s.changes.is_empty() || s.commits > 0)
+    }
+
     /// Reads the open task's worktree off the main thread when the task changed since it was
     /// last read.
     pub(crate) fn load_worktree(&mut self, cx: &mut Context<Self>) {
@@ -493,52 +503,48 @@ pub fn worktree_strip(
     // Opening it shows the changed files and the Discard and Merge buttons.
     let can_open = pending;
     let branch: SharedString = state.worktree.branch.clone().into();
-    let label: Option<SharedString> = strip
+    // While only a note or an error shows, it still says the task works in its own worktree.
+    let label: SharedString = strip
         .busy
         .map(str::to_owned)
         .or_else(|| (pending || state.behind > 0).then(|| summary(&state)))
-        .map(Into::into);
-    let toggle = label.map(|label| {
-        button("worktree-toggle", label.clone())
-            .when(can_open, |b| b.aria_expanded(open))
-            .flex_none()
-            .gap(px(6.))
-            .text_color(muted)
-            .hover(move |s| s.text_color(fg))
-            .tooltip(tooltip(format!("Working in its own worktree on {branch}")))
-            .child(
-                icon("git-branch", 13.)
-                    .flex_none()
-                    .text_color(t.accent_text),
-            )
-            .child(
-                div()
-                    .id("worktree-state")
-                    .role(Role::Status)
-                    .aria_label(label.clone())
-                    .flex_none()
-                    .whitespace_nowrap()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(t.text)
-                    .child(label),
-            )
-            .child(
-                div()
-                    .min_w_0()
-                    .truncate()
-                    .text_color(t.text_subtle)
-                    .child(branch.clone()),
-            )
-            .when(can_open, |b| {
-                b.child(icon(if open { "caret-down" } else { "caret-right" }, 12.).flex_none())
-            })
-            .on_click(cx.listener(|w, _, _, cx| {
-                if let Some(strip) = w.worktree.as_mut() {
-                    strip.open = !strip.open;
-                }
-                cx.notify();
-            }))
-    });
+        .unwrap_or_else(|| "Worktree".to_owned())
+        .into();
+    let toggle = button("worktree-toggle", label.clone())
+        .when(can_open, |b| b.aria_expanded(open))
+        .flex_none()
+        .gap(px(6.))
+        .text_color(muted)
+        .hover(move |s| s.text_color(fg))
+        .tooltip(tooltip(format!("Working in a worktree on {branch}")))
+        .child(icon("folders", 13.).flex_none().text_color(t.accent_text))
+        .child(
+            div()
+                .id("worktree-state")
+                .role(Role::Status)
+                .aria_label(label.clone())
+                .flex_none()
+                .whitespace_nowrap()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(t.text)
+                .child(label),
+        )
+        .child(
+            div()
+                .min_w_0()
+                .truncate()
+                .text_color(t.text_subtle)
+                .child(branch.clone()),
+        )
+        .when(can_open, |b| {
+            b.child(icon(if open { "caret-down" } else { "caret-right" }, 12.).flex_none())
+        })
+        .on_click(cx.listener(|w, _, _, cx| {
+            if let Some(strip) = w.worktree.as_mut() {
+                strip.open = !strip.open;
+            }
+            cx.notify();
+        }));
     let more = icon_button("worktree-menu", "Worktree actions", "dots-three", 14., cx)
         .flex_none()
         .aria_expanded(menu.is_some())
@@ -564,7 +570,7 @@ pub fn worktree_strip(
         .min_w_0()
         .items_center()
         .gap(px(8.))
-        .children(toggle)
+        .child(toggle)
         .child(more)
         .when(idle && conflicted, |d| {
             d.child(

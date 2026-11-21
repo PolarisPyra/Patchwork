@@ -209,7 +209,7 @@ pub(super) const ENTRIES: &[Entry] = &[
             Pane {
                 id: "worktrees",
                 label: "Worktrees",
-                icon: "git-branch",
+                icon: "folders",
             },
         ],
     },
