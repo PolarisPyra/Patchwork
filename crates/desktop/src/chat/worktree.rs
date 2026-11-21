@@ -437,7 +437,7 @@ fn no_worktree(error: &str, t: &Theme) -> Stateful<gpui::Div> {
         .gap(px(6.))
         .text_color(t.danger)
         .tooltip(tooltip(text.clone()))
-        .child(icon("git-branch", 13.).flex_none())
+        .child(icon("warning", 13.).flex_none())
         .child(div().min_w_0().truncate().child(text))
 }
 

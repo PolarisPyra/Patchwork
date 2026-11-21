@@ -196,7 +196,7 @@ impl ChangesView {
                     row_action(
                         "discard-all",
                         "Discard all changes",
-                        "arrow-counter-clockwise",
+                        "trash",
                         name.clone(),
                         &t,
                     )

@@ -317,7 +317,7 @@ impl AndroidPanel {
                 icon_button(
                     "android-reload",
                     "Reload the app",
-                    "arrows-clockwise",
+                    "arrow-clockwise",
                     14.,
                     cx,
                 )
@@ -330,7 +330,7 @@ impl AndroidPanel {
                     icon_button(
                         "android-restart",
                         "Restart the app",
-                        "arrow-counter-clockwise",
+                        "arrow-clockwise",
                         14.,
                         cx,
                     )

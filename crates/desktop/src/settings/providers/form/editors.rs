@@ -280,7 +280,7 @@ impl SettingsDialog {
                         .child(if loading {
                             spinner(13., t.text_muted).into_any_element()
                         } else {
-                            icon("arrow-clockwise", 13.).into_any_element()
+                            icon("arrows-clockwise", 13.).into_any_element()
                         })
                         .child(if fetched {
                             "Refresh list"

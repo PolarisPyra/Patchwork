@@ -170,7 +170,7 @@ impl ChangesView {
                     row_action(
                         format!("discard:{side}:{path}"),
                         "Discard changes",
-                        "arrow-counter-clockwise",
+                        "trash",
                         group.clone(),
                         t,
                     )
