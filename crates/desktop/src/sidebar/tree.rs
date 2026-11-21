@@ -220,11 +220,12 @@ pub(super) fn thread_row(
         } else {
             spinner(12., t.accent_text).into_any_element()
         };
+        // At the box's right edge, in line with the times of the rows around it.
         div()
             .size(px(20.))
             .flex()
             .items_center()
-            .justify_center()
+            .justify_end()
             .child(mark)
             .into_any_element()
     } else {
