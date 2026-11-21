@@ -280,7 +280,7 @@ pub fn render(
                         .ml_auto()
                         .px(px(10.))
                         .gap(px(6.))
-                        .child(icon("arrow-clockwise", 13.))
+                        .child(icon("arrows-clockwise", 13.))
                         .child("Refresh")
                         .on_click(cx.listener(|d, _, _, cx| d.list_scheduled(cx))),
                 ),

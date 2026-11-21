@@ -192,7 +192,7 @@ fn use_row(
                 icon_button(
                     SharedString::from(format!("mcp-refresh-{key}")),
                     "List tools again",
-                    "arrow-clockwise",
+                    "arrows-clockwise",
                     15.,
                     cx,
                 )

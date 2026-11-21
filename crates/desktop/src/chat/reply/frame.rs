@@ -109,7 +109,7 @@ pub(super) fn foot(
                 "Fork into the same worktree"
             };
             let (thread_id, message_id) = (thread_id.clone(), message_id.clone());
-            action_button(format!("fork-other-{}", m.id), label, "git-branch", t).on_click(
+            action_button(format!("fork-other-{}", m.id), label, "git-fork", t).on_click(
                 cx.listener(move |w, _, _, cx| {
                     w.fork(&thread_id, &message_id, Some(new), cx);
                 }),

@@ -400,7 +400,7 @@ pub fn user_message(
             .tooltip(tooltip(
                 "Put the project's files back as they were before this message",
             ))
-            .child(icon("arrow-counter-clockwise", 13.))
+            .child(icon("arrow-u-up-left", 13.))
             .child("Restore")
             .on_click(
                 cx.listener(move |w, _, window, cx| w.restore_checkpoint(&message_id, window, cx)),

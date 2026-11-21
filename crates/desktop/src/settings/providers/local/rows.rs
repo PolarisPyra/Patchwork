@@ -206,7 +206,7 @@ impl SettingsDialog {
                 .child(if checking {
                     spinner(13., t.text_muted).into_any_element()
                 } else {
-                    icon("arrow-clockwise", 15.).into_any_element()
+                    icon("arrows-clockwise", 15.).into_any_element()
                 })
                 .on_click(cx.listener(move |d, _, _, cx| {
                     d.providers.local.health.remove(&recheck);

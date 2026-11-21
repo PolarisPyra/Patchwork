@@ -124,12 +124,13 @@ impl Workspace {
     }
 }
 
-/// The sidebar's mark on a task's worktree, and what it says.
-fn worktree_mark(mark: WorktreeMark, t: &Theme) -> (AnyElement, &'static str) {
+/// The sidebar's mark on a task's worktree, and what it says. None for a worktree with nothing
+/// to do.
+fn worktree_mark(mark: WorktreeMark, t: &Theme) -> Option<(AnyElement, &'static str)> {
     let (label, color, name) = match mark {
-        WorktreeMark::Unmerged => ("Unmerged changes", t.accent_text, "git-branch"),
-        WorktreeMark::OffBranch => ("Worktree on another branch", t.warning, "git-branch"),
-        WorktreeMark::Clean => ("No changes", t.text_muted, "git-commit"),
+        WorktreeMark::Unmerged => ("Unmerged changes", t.accent_text, "git-pull-request"),
+        WorktreeMark::OffBranch => ("Worktree on another branch", t.warning, "warning"),
+        WorktreeMark::Clean => return None,
     };
     let element = div()
         .id("worktree-mark")
@@ -141,7 +142,7 @@ fn worktree_mark(mark: WorktreeMark, t: &Theme) -> (AnyElement, &'static str) {
         .text_color(color)
         .child(icon(name, 13.))
         .into_any_element();
-    (element, label)
+    Some((element, label))
 }
 
 pub(super) fn thread_row(
@@ -248,7 +249,7 @@ pub(super) fn thread_row(
     let worktree = w
         .worktree_marks
         .get(&th.id)
-        .map(|mark| worktree_mark(*mark, &t));
+        .and_then(|mark| worktree_mark(*mark, &t));
     let label: SharedString = match &worktree {
         Some((_, says)) => format!("{title}, {}", says.to_lowercase()).into(),
         None => title.clone().into(),
