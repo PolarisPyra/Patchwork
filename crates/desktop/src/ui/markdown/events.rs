@@ -13,9 +13,11 @@ use super::inline::{opens_outside, urls_in};
 use super::render::LIST_INDENT;
 use super::render::Markdown;
 use gpui::{
-    ClipboardItem, Div, FontStyle, FontWeight, HighlightStyle, SharedString, StrikethroughStyle,
-    StyledText, UnderlineStyle, div, prelude::*, px, relative,
+    ClipboardItem, Div, FontStyle, Image, ImageFormat, Role, img, FontWeight, HighlightStyle,
+    SharedString, StrikethroughStyle, StyledText, UnderlineStyle, div, prelude::*, px, relative,
 };
+use std::sync::Arc;
+
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Tag, TagEnd};
 use crate::ui::theme::{font_mono, fs_lg, fs_md, fs_sm, fs_xs, radius, radius_sm, Theme};
 use crate::ui::selection::{Kind, Selectable, selectable, text_id};
@@ -442,6 +444,14 @@ impl Markdown<'_> {
         let copy = code.clone();
         let text = highlighted(code, &lang, t);
         let text = self.selectable(text, Kind::Code(lang.clone().into()));
+        let drawing = (lang == "svg").then(|| {
+            Arc::new(Image::from_bytes(
+                ImageFormat::Svg,
+                copy.as_bytes().to_vec(),
+            ))
+        });
+        let source = copy.clone();
+        let drawing_id = SharedString::from(format!("{id}-drawing"));
         let block = div()
             .rounded(px(radius()))
             .border_1()
@@ -485,7 +495,27 @@ impl Markdown<'_> {
                     .text_size(px(fs_sm()))
                     .line_height(relative(1.5))
                     .font_family(font_mono())
-                    .child(text),
+                    .map(|body| match drawing {
+                        // The app decodes it off the UI thread and keeps it; the source shows if
+                        // it can't be drawn.
+                        Some(svg) => body.child(
+                            div()
+                                .id(drawing_id)
+                                .role(Role::Image)
+                                .aria_label("Drawing")
+                                .flex()
+                                .justify_center()
+                                .bg(gpui::white())
+                                .rounded(px(radius_sm()))
+                                .p(px(8.))
+                                .child(
+                                    img(svg)
+                                        .max_w_full()
+                                        .with_fallback(move || source.clone().into_any_element()),
+                                ),
+                        ),
+                        None => body.child(text),
+                    }),
             );
         self.push(block, 8., 8.);
     }
