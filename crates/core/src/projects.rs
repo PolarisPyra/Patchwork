@@ -367,6 +367,21 @@ impl Core {
                     .into(),
             );
         }
+        let ignored = crate::threads::worktree_cleanup::ignored_only_here(&root)?;
+        if !ignored.is_empty() {
+            let shown: Vec<&str> = ignored.iter().take(5).map(String::as_str).collect();
+            let more = ignored.len().saturating_sub(shown.len());
+            let more = if more > 0 {
+                format!(" and {more} more")
+            } else {
+                String::new()
+            };
+            return Err(format!(
+                "This worktree has files git ignores that the project doesn't have: {}{more}. Move them out before removing it",
+                shown.join(", ")
+            )
+            .into());
+        }
         Ok(Some(root))
     }
 

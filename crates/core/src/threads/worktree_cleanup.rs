@@ -139,12 +139,42 @@ impl Core {
 }
 
 /// Whether `keep` keeps `worktree` as it is: with changes not committed, tracked files changed,
-/// or any file, ignored ones too, that its branch doesn't hold.
+/// or any file, ignored ones too, that its branch doesn't hold. Keeping uncommitted changes also
+/// keeps ignored files the project's folder doesn't have as they are, such as an edited `.env`
+/// or a local database, which committing before the folder goes would leave out.
 fn kept(worktree: &Worktree, keep: KeepWorktrees) -> Result<bool, crate::Error> {
     let args: &[&str] = match keep {
         KeepWorktrees::Uncommitted => &["status", "--porcelain"],
         KeepWorktrees::Tracked => &["status", "--porcelain", "--untracked-files=no"],
         KeepWorktrees::AnyFiles => &["status", "--porcelain", "--ignored"],
     };
-    Ok(!git(&worktree.top, args)?.trim().is_empty())
+    if !git(&worktree.top, args)?.trim().is_empty() {
+        return Ok(true);
+    }
+    Ok(keep == KeepWorktrees::Uncommitted && !ignored_only_here(&worktree.top)?.is_empty())
+}
+
+/// The ignored files of the worktree at `top` that its repository's main folder doesn't have as
+/// they are, by path from `top`: files a task made or changed that git doesn't track, such as a
+/// `.env` or a database. A folder git ignores whole, such as a build folder, isn't one; nor is a
+/// file copied in as the main folder has it. Empty for a worktree on an SSH host.
+pub(crate) fn ignored_only_here(top: &str) -> Result<Vec<String>, crate::Error> {
+    if ssh::is_remote(top) {
+        return Ok(Vec::new());
+    }
+    let Some(main) = main_top(top) else {
+        return Ok(Vec::new());
+    };
+    let listed = git(top, &["status", "--porcelain", "--ignored", "-z"])?;
+    Ok(listed
+        .split('\0')
+        .filter_map(|entry| entry.strip_prefix("!! "))
+        .filter(|path| !path.ends_with('/'))
+        .filter(|path| {
+            let here = std::fs::read(Path::new(top).join(path));
+            let there = std::fs::read(Path::new(&main).join(path));
+            !matches!((here, there), (Ok(a), Ok(b)) if a == b)
+        })
+        .map(str::to_owned)
+        .collect())
 }
