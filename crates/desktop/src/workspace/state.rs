@@ -524,10 +524,12 @@ impl Workspace {
     /// Follows the window: its focus, its appearance, and its coming back to the front.
     fn watch_window(&self, window: &mut Window, cx: &mut Context<Self>) {
         // A branch merged or a worktree changed outside the app shows once the window is back,
-        // and within a minute while it waits.
+        // and within a minute while it waits. Source Control reads git again too, for changes
+        // the file watcher missed, such as on a network drive or past the system's watch limit.
         cx.observe_window_activation(window, |this, window, cx| {
             if window.is_window_active() {
                 this.reload_worktree_marks(cx);
+                this.read_git(false, cx);
             }
         })
         .detach();
