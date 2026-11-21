@@ -200,6 +200,26 @@ impl Render for ChangesView {
             });
             entries.extend(unstaged.into_iter().map(|(c, side)| Entry::Change(c, side)));
         }
+        // Until the branch has commits, its changes are the ones above.
+        if let Some(compare) = self
+            .compare
+            .as_ref()
+            .filter(|c| c.commits > 0 && !c.files.is_empty())
+        {
+            entries.push(Entry::Header {
+                title: "Branch Changes",
+                count: compare.files.len(),
+                group: Group::Branch(compare.base.clone()),
+            });
+            if self.compare_open {
+                entries.extend(
+                    compare
+                        .files
+                        .iter()
+                        .map(|c| Entry::BranchChange(c.clone(), compare.since.clone())),
+                );
+            }
+        }
         entries.push(Entry::End);
         self.full_access = full_access;
         self.has_changes = has_changes;

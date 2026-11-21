@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui::{Entity, Pixels, Point, ScrollHandle, WeakEntity, Window, prelude::*};
+use patchwork_core::threads::BranchCompare;
 use patchwork_core::workspace::{
     CommitDetail, CommitOptions, GitCommit, GitSyncState, Operation, PullRequest,
 };
@@ -210,6 +211,10 @@ pub struct ChangesView {
     prefilled: Option<String>,
     /// The commit whose message and files show under its row, once they are read.
     pub(super) detail: Option<(String, Option<Result<CommitDetail, String>>)>,
+    /// The open task's worktree against the branch it goes back into, and whether its files
+    /// show.
+    pub(super) compare: Option<BranchCompare>,
+    pub(super) compare_open: bool,
 }
 
 impl ChangesView {
@@ -272,6 +277,8 @@ impl ChangesView {
             asking: None,
             prefilled: None,
             detail: None,
+            compare: None,
+            compare_open: false,
         }
     }
 
@@ -309,6 +316,7 @@ impl ChangesView {
             self.asking = None;
             self.prefilled = None;
             self.detail = None;
+            self.compare = None;
             let draft = root
                 .as_ref()
                 .and_then(|r| self.drafts.get(r).cloned())
@@ -329,6 +337,7 @@ impl ChangesView {
                     this.load_sync(cx);
                 }
                 this.load_log(cx);
+                this.load_compare(cx);
                 this.load_missing(cx);
             });
         })
@@ -418,6 +427,36 @@ impl ChangesView {
             })
         })
         .detach();
+    }
+
+    /// Reads what the open task's worktree changed since its branch left the project's branch,
+    /// when Source Control shows that worktree.
+    fn load_compare(&mut self, cx: &mut Context<Self>) {
+        let (Some(core), Some(root)) = (self.core(cx), self.root.clone()) else {
+            return;
+        };
+        let Some(thread) = self.thread_id(cx) else {
+            self.compare = None;
+            return;
+        };
+        crate::ui::off_thread(
+            cx,
+            move || core.branch_compare(&thread),
+            move |this, compare, cx| {
+                // Another folder was opened since.
+                if this.root.as_ref() != Some(&root) {
+                    return;
+                }
+                this.compare = match compare {
+                    Ok(compare) => compare.filter(|c| c.root == root),
+                    Err(e) => {
+                        log::warn!(error:% = e; "could not compare the task's branch: {{error}}");
+                        None
+                    }
+                };
+                cx.notify();
+            },
+        );
     }
 
     /// Which of the focused reply's files are gone from the folder its task works in

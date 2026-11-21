@@ -41,4 +41,4 @@ pub use title::{title_from, without_leading_attachments};
 pub use types::{AccessMode, Goal, GoalStatus, LastPlace, ResumePoint, Thread, ThreadParent};
 pub(crate) use types::NOT_FOUND;
 #[doc(inline)]
-pub use worktree::{Worktree, WorktreeMark, WorktreeState};
+pub use worktree::{BranchCompare, Worktree, WorktreeMark, WorktreeState};

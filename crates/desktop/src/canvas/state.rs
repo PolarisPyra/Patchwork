@@ -55,6 +55,9 @@ pub struct Canvas {
     pub(super) staged: Vec<bool>,
     /// Which part of the file's change the diff shows, for a file staged in part.
     pub side: patchwork_core::workspace::DiffSide,
+    /// The commit the diff starts from in place of the last one: a task's branch shown against
+    /// where it left the branch it goes back into. Such a diff is read, not staged.
+    pub since: Option<String>,
     pub(super) media: Option<FileMedia>,
     /// The conflicts git left in the file, and the one last stepped to.
     pub(super) conflicts: Vec<patchwork_core::workspace::Conflict>,
@@ -127,6 +130,7 @@ impl Canvas {
             diff: None,
             staged: Vec::new(),
             side: patchwork_core::workspace::DiffSide::All,
+            since: None,
             media: None,
             conflicts: Vec::new(),
             conflict_shown: None,
@@ -199,31 +203,33 @@ impl Canvas {
         let seq = self.load_seq;
         let (root, turn, side) = (self.root.clone(), self.turn(cx), self.side);
         let revision = self.revision.clone();
+        let since = self.since.clone();
         let task = cx.background_spawn(async move {
             use patchwork_core::orchestration::changes::turn_files::turn_file_diff;
             use patchwork_core::workspace as ws;
             let file = ws::read_file(&root, &path).map_err(|e| e.to_string());
             // One part of a file staged in part, while it still has that part.
             let part = match (&turn, side) {
-                _ if revision.is_some() => None,
+                _ if revision.is_some() || since.is_some() => None,
                 (Some(_), _) | (None, ws::DiffSide::All) => None,
                 (None, side) => ws::git_file_diff(&root, &path, side)
                     .ok()
                     .filter(|diff| !diff.trim().is_empty()),
             };
             let staged = match &part {
-                None if revision.is_some() => Vec::new(),
+                None if revision.is_some() || since.is_some() => Vec::new(),
                 Some(diff) => {
                     let changes = diff.lines().filter(|l| l.starts_with("@@")).count();
                     vec![side == ws::DiffSide::Staged; changes]
                 }
                 None => ws::staged_hunks(&root, &path, turn.as_ref()).unwrap_or_default(),
             };
-            let diff = match (&revision, &turn, part) {
-                (Some(shown), _, _) => ws::commit_file_diff(&root, &shown.hash, &shown.path),
-                (None, _, Some(part)) => Ok(part),
-                (None, Some(turn), None) => turn_file_diff(&root, turn, &path),
-                (None, None, None) => ws::git_file_diff(&root, &path, ws::DiffSide::All),
+            let diff = match (&revision, &since, &turn, part) {
+                (Some(shown), _, _, _) => ws::commit_file_diff(&root, &shown.hash, &shown.path),
+                (None, Some(since), _, _) => ws::diff_since(&root, &path, since),
+                (None, None, _, Some(part)) => Ok(part),
+                (None, None, Some(turn), None) => turn_file_diff(&root, turn, &path),
+                (None, None, None, None) => ws::git_file_diff(&root, &path, ws::DiffSide::All),
             }
             .map_err(|e| e.to_string());
             let media = ws::file_media(&root, std::slice::from_ref(&path))
