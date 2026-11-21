@@ -9,8 +9,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{
-    AnyElement, Bounds, ExternalPaths, Hsla, KeyDownEvent, ObjectFit, Pixels, Role, SharedString,
-    Window, div, hsla, img, point, prelude::*, px, relative, size,
+    AnyElement, Bounds, Entity, ExternalPaths, Hsla, KeyDownEvent, ObjectFit, Pixels, Role,
+    SharedString, Subscription, WeakEntity, Window, div, hsla, img, point, prelude::*, px,
+    relative, size,
 };
 use patchwork_core::orchestration::Target;
 use patchwork_core::themes::{Applied, Scene, Scheme, Shown};
@@ -470,7 +471,6 @@ impl Render for Orchestrator {
                 .child(div().flex_none().h(px(PILL_H + 6.)))
                 .child(list)
         });
-        let backdrop = self.backdrop(cx);
         div()
             .id("orchestrator")
             .role(Role::Main)
@@ -480,7 +480,6 @@ impl Render for Orchestrator {
             .overflow_hidden()
             .font_family(font_ui())
             .text_color(ink(0.9))
-            .child(div().absolute().inset_0().child(backdrop))
             .child(
                 column()
                     .child(
@@ -496,5 +495,28 @@ impl Render for Orchestrator {
                     .child(requests),
             )
             .children(picker)
+    }
+}
+
+/// The page's backdrop as a view of its own, which the workspace draws under the page: a
+/// backdrop that moves redraws only itself, and the pill and cards over it keep their frame.
+pub struct OrchestratorBackdrop {
+    page: WeakEntity<Orchestrator>,
+    _changes: Subscription,
+}
+
+impl OrchestratorBackdrop {
+    pub fn new(page: &Entity<Orchestrator>, cx: &mut Context<Self>) -> Self {
+        Self {
+            page: page.downgrade(),
+            _changes: cx.observe(page, |_, _, cx| cx.notify()),
+        }
+    }
+}
+
+impl Render for OrchestratorBackdrop {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let backdrop = self.page.update(cx, |page, cx| page.backdrop(cx)).ok();
+        div().size_full().children(backdrop)
     }
 }

@@ -5,12 +5,11 @@
 // Rust guideline compliant 2026-10-09
 
 use std::f32::consts::{PI, TAU};
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
+use crate::ui::redraw_after;
 use gpui::{
-    App, Background, EntityId, Hsla, PathBuilder, Pixels, Point, Role, Window, canvas, div, hsla,
+    Background, Hsla, PathBuilder, Pixels, Point, Role, Window, canvas, div, hsla,
     linear_color_stop, linear_gradient, point, prelude::*, px,
 };
 
@@ -78,44 +77,6 @@ const STIR: f32 = 3.;
 
 /// Avatars this small are too small to see sway, so they keep still and only blink.
 const SMALL: f32 = 24.;
-
-thread_local! {
-    /// The views that have an avatar frame coming, and when.
-    static PENDING: RefCell<HashMap<EntityId, Instant>> = RefCell::new(HashMap::new());
-}
-
-/// Draws the view being painted again after `wait`, once for all the avatars it holds: a
-/// frame already coming sooner covers this one.
-fn next_frame(wait: Duration, window: &mut Window, cx: &App) {
-    let view = window.current_view();
-    let due = Instant::now() + wait;
-    let sooner = PENDING.with(|p| {
-        let mut pending = p.borrow_mut();
-        match pending.get(&view) {
-            Some(&at) if at <= due => false,
-            _ => {
-                pending.insert(view, due);
-                true
-            }
-        }
-    });
-    if !sooner {
-        return;
-    }
-    let timer = cx.background_executor().timer(wait);
-    window
-        .spawn(cx, async move |cx| {
-            timer.await;
-            PENDING.with(|p| {
-                let mut pending = p.borrow_mut();
-                if pending.get(&view).is_some_and(|&at| at <= due) {
-                    pending.remove(&view);
-                }
-            });
-            let _ = cx.update(|_, cx| cx.notify(view));
-        })
-        .detach();
-}
 
 /// How long until avatar `seed` next blinks at `t`; zero while it blinks.
 fn until_blink(seed: u64, t: f32) -> f32 {
@@ -368,7 +329,7 @@ pub fn avatar(id: &str, name: &str, mood: Mood, size: f32) -> impl IntoElement {
             let (pose, shut) = if still {
                 (Pose::STILL, 0.)
             } else if mood == Mood::Working {
-                next_frame(FRAME, window, cx);
+                redraw_after(FRAME, window, cx);
                 (Pose::at(mood, size, now), blink(seed, now))
             } else {
                 // It rests between blinks and stirs, and wakes only for those.
@@ -379,10 +340,10 @@ pub fn avatar(id: &str, name: &str, mood: Mood, size: f32) -> impl IntoElement {
                 };
                 let shut = blink(seed, now);
                 if stirring > 0. || shut > 0. {
-                    next_frame(CALM, window, cx);
+                    redraw_after(CALM, window, cx);
                 } else {
                     let wait = until_blink(seed, now).min(until_stir);
-                    next_frame(Duration::from_secs_f32(wait).max(CALM), window, cx);
+                    redraw_after(Duration::from_secs_f32(wait).max(CALM), window, cx);
                 }
                 (Pose::at(mood, size, now).scaled(stirring), shut)
             };

@@ -21,8 +21,8 @@ use gpui::{
 use patchwork_core::themes::{CellSize, Color, Dust, Motion, SavedScene, Scene, Sprite};
 
 use super::field::{
-    FLY, FRAMES_PER_SECOND, Grid, Ink, PREVIEW_PAGE, SKY, cell_width, depth_in_pill, no_pill, now,
-    paint_layer, scale_of, scatter,
+    FLY, FRAMES_PER_SECOND, Grid, Ink, PREVIEW_PAGE, SKY, cell_width, depth_in_pill, next_frame,
+    no_pill, now, paint_layer, scale_of, scatter,
 };
 use super::sky;
 
@@ -312,7 +312,7 @@ pub fn scene_field<T: 'static>(
             };
             let still = still || !moves(scene);
             if !still {
-                window.request_animation_frame();
+                next_frame(window, cx);
             }
             let time = if still {
                 0.

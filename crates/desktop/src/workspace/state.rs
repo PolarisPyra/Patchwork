@@ -29,7 +29,7 @@ use crate::chat::lineage::Lineage;
 use crate::chat::plan::ShownPlan;
 use crate::chat::prompts::Answering;
 use crate::chat::queue::{ChatDrafts, QueuedEdit};
-use crate::orchestrator::Orchestrator;
+use crate::orchestrator::{Orchestrator, OrchestratorBackdrop};
 use crate::workspace::add_project::AddProject;
 use crate::ui::menu::Menu;
 use crate::workspace::palette::Palette;
@@ -119,6 +119,8 @@ pub struct Workspace {
     /// it leaves the chats' sidebar as it was.
     pub(super) orchestrator_tasks: bool,
     pub(super) orchestrator: Entity<Orchestrator>,
+    /// The orchestrator page's backdrop, drawn under it as a view of its own.
+    pub(super) orchestrator_backdrop: Entity<OrchestratorBackdrop>,
     pub branch: Option<String>,
     /// The folder Source Control last read: the open task's worktree, or the project's folder.
     pub git_root: Option<String>,
@@ -205,6 +207,8 @@ pub struct Workspace {
     /// The sidebar and the chat, each drawn as its own view so a scroll in one leaves the other's frame.
     pub(super) sidebar_region: Entity<Region>,
     pub(super) chat_region: Entity<Region>,
+    /// The chat's background, under the chat region, so a moving backdrop leaves the chat's frame.
+    pub(super) backdrop_region: Entity<Region>,
     /// The status bar, so its spinner redraws only the bar as it turns, not the whole workspace.
     pub(super) status_region: Entity<Region>,
     pub sidebar_width: f32,
@@ -316,7 +320,15 @@ impl Workspace {
                 cx,
             )
         });
+        let backdrop_region = cx.new(|cx| {
+            Region::new(
+                &entity,
+                |w, _, cx| crate::chat::backdrop::backdrop_layer(w, cx),
+                cx,
+            )
+        });
         let orchestrator = cx.new(|cx| Orchestrator::new(&entity, composer.clone(), window, cx));
+        let orchestrator_backdrop = cx.new(|cx| OrchestratorBackdrop::new(&orchestrator, cx));
         let status_region =
             cx.new(|cx| Region::new(&entity, |w, _, cx| w.status_bar(cx).into_any_element(), cx));
         let (panel, panel_height) = panel_area::new_panel(Arc::clone(&core), &settings, window, cx);
@@ -339,6 +351,7 @@ impl Workspace {
             page: Page::Orchestrator,
             orchestrator_tasks: true,
             orchestrator,
+            orchestrator_backdrop,
             branch: None,
             git_root: None,
             git_seq: 0,
@@ -393,6 +406,7 @@ impl Workspace {
             composer,
             sidebar_region,
             chat_region,
+            backdrop_region,
             status_region,
             sidebar_width: SIDEBAR_WIDTH,
             resizing: None,

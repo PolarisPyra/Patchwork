@@ -2,12 +2,14 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::f32::consts::TAU;
 use std::sync::OnceLock;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use gpui::{
-    Anchor, App, BoxShadow, Div, ElementId, FontWeight, Hsla, IntoElement, PathBuilder, Role,
-    SharedString, Stateful, StyleRefinement, Window, anchored, canvas, deferred, div, point,
+    Anchor, App, BoxShadow, Div, ElementId, EntityId, FontWeight, Hsla, IntoElement, PathBuilder,
+    Role, SharedString, Stateful, StyleRefinement, Window, anchored, canvas, deferred, div, point,
     prelude::*, px,
 };
 use crate::ui::theme::{fs_md, fs_sm, radius, radius_sm, Theme, theme};
@@ -128,8 +130,8 @@ pub fn spinner(size: f32, color: Hsla) -> impl IntoElement {
     let start = *START.get_or_init(Instant::now);
     let ring = canvas(
         |_, _, _| {},
-        move |bounds, (), window: &mut Window, _| {
-            window.request_animation_frame();
+        move |bounds, (), window: &mut Window, cx: &mut App| {
+            next_step(window, cx);
             let scale = size / 24.;
             let center = bounds.center();
             let radius = 9. * scale;
@@ -178,6 +180,67 @@ pub fn spinner(size: f32, color: Hsla) -> impl IntoElement {
         .aria_label("Loading")
         .flex_none()
         .child(ring)
+}
+
+/// How often what moves in place, a spinner's arc or a card's shimmer, moves on.
+const MOTION_FPS: f32 = 60.;
+
+thread_local! {
+    /// The views that have a frame coming, and when.
+    static PENDING: RefCell<HashMap<EntityId, Instant>> = RefCell::new(HashMap::new());
+}
+
+/// Seconds on the clock everything that moves steps by.
+pub fn motion_clock() -> f32 {
+    static START: OnceLock<Instant> = OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_secs_f32()
+}
+
+/// Draws the view being painted again after `wait`, once for everything in it that moves: a
+/// frame already coming sooner covers this one.
+///
+/// The frame lands on the next of the clock's steps, `MOTION_FPS` a second, so every motion in
+/// the window moves in the same frames instead of each adding its own.
+pub fn redraw_after(wait: Duration, window: &mut Window, cx: &App) {
+    let view = window.current_view();
+    let now = motion_clock();
+    let step = ((now + wait.as_secs_f32()) * MOTION_FPS).floor() + 1.;
+    let wait = Duration::from_secs_f32((step / MOTION_FPS - now).max(0.));
+    let due = Instant::now() + wait;
+    let sooner = PENDING.with(|p| {
+        let mut pending = p.borrow_mut();
+        match pending.get(&view) {
+            Some(&at) if at <= due => false,
+            _ => {
+                pending.insert(view, due);
+                true
+            }
+        }
+    });
+    if !sooner {
+        return;
+    }
+    let timer = cx.background_executor().timer(wait);
+    window
+        .spawn(cx, async move |cx| {
+            timer.await;
+            PENDING.with(|p| {
+                let mut pending = p.borrow_mut();
+                if pending.get(&view).is_some_and(|&at| at <= due) {
+                    pending.remove(&view);
+                }
+            });
+            let _ = cx.update(|_, cx| cx.notify(view));
+        })
+        .detach();
+}
+
+/// Draws the view being painted again at the clock's next step.
+///
+/// Asking for the next frame instead would draw the whole view at the screen's rate, up to
+/// 120 times a second.
+pub fn next_step(window: &mut Window, cx: &App) {
+    redraw_after(Duration::ZERO, window, cx);
 }
 
 /// Whether the element `handle` tracks scrolls, as last laid out. When layout changes that, the

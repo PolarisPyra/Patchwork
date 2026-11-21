@@ -82,7 +82,6 @@ pub fn render(
     // The composer shows the worktree's status on the line above it.
     w.load_worktree(cx);
     let missing = folder::missing_folder(w, &t, cx);
-    let backdrop = backdrop::chat_backdrop(w, &t, cx);
     let parent = subagent_footer(w, &t, cx);
     let header = (!is_new).then(|| header(w, &t, window, cx));
     w.reveal_find(window, cx);
@@ -96,9 +95,7 @@ pub fn render(
         .flex_1()
         .min_w_0()
         .min_h_0()
-        .bg(t.bg_editor)
         .text_color(t.text)
-        .children(backdrop)
         .when(is_new, gpui::Styled::justify_center)
         .child(body)
         .children(header)

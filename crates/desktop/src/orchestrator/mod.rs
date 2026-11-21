@@ -10,4 +10,5 @@ mod pill;
 mod render;
 mod state;
 
+pub use render::OrchestratorBackdrop;
 pub use state::Orchestrator;
