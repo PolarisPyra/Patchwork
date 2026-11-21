@@ -7,8 +7,9 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use gpui::{Div, ObjectFit, Role, SharedString, div, img, prelude::*, px};
+use patchwork_core::orchestration::changes::checkpoint;
 use patchwork_core::orchestration::changes::turn_files::{TurnFile, TurnFileState, turn_files};
-use patchwork_core::threads::Message;
+use patchwork_core::threads::{Message, MessageStatus, Role as MessageRole};
 use patchwork_core::workspace::{FileChange, FileMedia, PreviewKind, file_media, missing_files};
 
 use crate::canvas::CanvasTab;
@@ -47,24 +48,44 @@ impl Workspace {
         };
         let root = self.thread_folder().unwrap_or_else(|| project.path.clone());
         let generation = self.changes_generation;
+        let thread_id = thread.id.clone();
         let stale: Vec<_> = thread
             .messages
             .iter()
-            .filter(|m| !m.files.is_empty())
-            .filter(|m| {
+            .enumerate()
+            .filter(|(_, m)| !m.files.is_empty())
+            .filter(|(_, m)| {
                 self.reply_files.get(&m.id).is_none_or(|f| {
                     let (files, loaded) = &f.loaded_for;
                     *files != m.files || *loaded != generation
                 })
             })
-            .map(|m| (m.id.clone(), m.files.clone(), m.turn.clone()))
+            .map(|(at, m)| {
+                // A reply still running has no end snapshot yet: it is compared with the files
+                // now, from the snapshot before its turn, kept under the message that asked.
+                let asked = (m.turn.is_none() && m.status == MessageStatus::Streaming)
+                    .then(|| {
+                        thread.messages[..at]
+                            .iter()
+                            .rev()
+                            .find(|u| u.role == MessageRole::User)
+                            .map(|u| u.id.clone())
+                    })
+                    .flatten();
+                (m.id.clone(), m.files.clone(), m.turn.clone(), asked)
+            })
             .collect();
-        for (id, files, turn) in stale {
+        for (id, files, turn, asked) in stale {
             let entry = self.reply_files.entry(id.clone()).or_default();
             entry.loaded_for = (files.clone(), generation);
             entry.loading = true;
-            let root = root.clone();
+            let (root, thread_id) = (root.clone(), thread_id.clone());
             let load = cx.background_spawn(async move {
+                let turn = turn.or_else(|| {
+                    asked.and_then(|asked| {
+                        checkpoint::turn_so_far(&root, &thread_id, &asked, &files)
+                    })
+                });
                 let turn = turn.as_ref().and_then(|turn| {
                     turn_files(&root, turn, &files)
                         .inspect_err(|e| {
@@ -355,7 +376,8 @@ fn produced_file(
 
 /// The files a reply touched, each opening its diff. A reply with snapshots of its turn keeps what
 /// the turn did, line counts included, once its changes are committed or edited again, and notes
-/// where each file stands now. Older replies show the files' uncommitted changes.
+/// where each file stands now; a reply still running shows what its turn has done so far. Older
+/// replies show the files' uncommitted changes.
 fn change_summary(
     w: &Workspace,
     m: &Message,
@@ -364,6 +386,7 @@ fn change_summary(
     cx: &mut Context<Workspace>,
 ) -> Div {
     let paths = &m.files;
+    let running = m.status == MessageStatus::Streaming;
     let (additions, deletions) = match &files.turn_files {
         Some(found) => found
             .iter()
@@ -383,9 +406,12 @@ fn change_summary(
         .iter()
         .take(listed)
         .map(|path| {
-            if m.turn.is_some() {
+            if m.turn.is_some() || files.turn_files.is_some() {
                 let file = files.turn_files.iter().flatten().find(|f| &f.path == path);
-                let note = file.and_then(|f| turn_note(f.state));
+                // A running turn names a file as it starts writing it, before the write lands.
+                let note = file
+                    .filter(|f| !(running && f.state == TurnFileState::Unchanged))
+                    .and_then(|f| turn_note(f.state));
                 let lines = file.map(|f| (f.additions, f.deletions));
                 let deleted = file.is_some_and(|f| matches!(f.state, TurnFileState::Deleted));
                 changed_file(m, path, note, lines, deleted, t, cx)
@@ -395,7 +421,7 @@ fn change_summary(
                     files.missing.contains(path) || change.is_some_and(|c| c.status == "deleted");
                 let note = if deleted {
                     Some("Deleted")
-                } else if change.is_some() {
+                } else if change.is_some() || running {
                     None
                 } else {
                     Some("No changes")

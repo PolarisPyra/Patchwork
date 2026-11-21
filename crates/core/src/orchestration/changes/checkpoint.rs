@@ -165,6 +165,84 @@ pub(in crate::orchestration) fn record_end(
     Some(TurnTrees { before, after })
 }
 
+/// What a turn still running has done so far to `paths`, commits it made included.
+///
+/// Pairs the snapshot from before the turn after `user_message_id` with that snapshot plus
+/// `paths` as they are now. Only those files are read, so it costs what the turn touched, not
+/// the whole project. None when the turn had no snapshot before it.
+#[must_use]
+pub fn turn_so_far(
+    root: &str,
+    thread_id: &str,
+    user_message_id: &str,
+    paths: &[String],
+) -> Option<TurnTrees> {
+    let before = git(
+        root,
+        &[
+            "rev-parse",
+            "--verify",
+            "-q",
+            &ref_name(thread_id, user_message_id),
+        ],
+    )
+    .ok()?;
+    let after = touched_tree(root, &before, paths)
+        .map_err(|e| log::warn!(error:% = e; "failed to read a running turn: {{error}}"))
+        .ok()?;
+    Some(TurnTrees { before, after })
+}
+
+/// `before` with `paths` as they are now on disk, leaving out ignored files as [`snapshot`] does.
+fn touched_tree(root: &str, before: &str, paths: &[String]) -> Result<String, Error> {
+    if crate::system::ssh::is_remote(root) {
+        return snapshot(root);
+    }
+    let temp = PathBuf::from(root).join(git(
+        root,
+        &[
+            "rev-parse",
+            "--git-path",
+            &format!("patchwork-index-{}", new_id()),
+        ],
+    )?);
+    let tree = (|| {
+        run(root, Some(&temp), &["read-tree", before], None)?;
+        let names = paths.join("\n") + "\n";
+        // check-ignore exits 1 when nothing is ignored.
+        let ignored = run(
+            root,
+            Some(&temp),
+            &["check-ignore", "--stdin"],
+            Some(names.as_bytes()),
+        )
+        .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
+        .unwrap_or_default();
+        let ignored: std::collections::HashSet<&str> = ignored.lines().collect();
+        let kept: Vec<&str> = paths
+            .iter()
+            .map(String::as_str)
+            .filter(|p| !ignored.contains(p))
+            .collect();
+        let names = kept.join("\0") + "\0";
+        run(
+            root,
+            Some(&temp),
+            &["update-index", "--add", "--remove", "-z", "--stdin"],
+            Some(names.as_bytes()),
+        )?;
+        git_with_index(root, &temp, &["write-tree"])
+    })();
+    let _ = std::fs::remove_file(&temp);
+    tree
+}
+
+/// [`git`] against the index at `index`.
+fn git_with_index(root: &str, index: &Path, args: &[&str]) -> Result<String, Error> {
+    let out = run(root, Some(index), args, None)?;
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
 /// The messages of the thread that have a snapshot from before their turn.
 pub fn list(root: &str, thread_id: &str) -> Vec<String> {
     let prefix = thread_refs(thread_id);

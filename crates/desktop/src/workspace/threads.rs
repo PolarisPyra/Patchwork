@@ -364,8 +364,16 @@ impl Workspace {
                 window.activate_window();
                 return;
             }
-            // A finished reply adds to what Costs counts.
+            // A finished reply adds to what Costs counts, and Source Control shows where its
+            // files ended, whether or not the file watcher saw every change.
             AgentEvent::TurnCompleted { .. } => {
+                if self
+                    .thread
+                    .as_ref()
+                    .is_some_and(|t| t.id == envelope.thread_id)
+                {
+                    self.read_git(false, cx);
+                }
                 if let Some(dialog) = &self.settings_dialog {
                     dialog.update(cx, crate::settings::SettingsDialog::refresh_costs);
                 }

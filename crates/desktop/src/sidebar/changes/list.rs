@@ -8,6 +8,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
 use gpui::{AnyElement, SharedString, Window, div, prelude::*, px};
+use patchwork_core::orchestration::changes::turn_files::TurnFileState;
 use patchwork_core::workspace::{DiffSide, FileChange};
 
 use super::rows::{group_button, group_header, row_action};
@@ -219,11 +220,25 @@ impl ChangesView {
         }
     }
 
-    /// A file the open reply changed that has no change now: deleted since, or changed back.
+    /// A file the open reply changed that has no change now: committed, deleted, or changed back
+    /// since, as its turn's snapshots tell when it has them.
     fn reply_file(&self, path: &str, cx: &mut Context<Self>) -> AnyElement {
         let t = *theme(cx);
         let hover = t.bg_hover;
         let missing = self.missing.contains(path);
+        let state = self.workspace.upgrade().and_then(|w| {
+            let w = w.read(cx);
+            let (_, message) = w.change_focus.as_ref()?;
+            let files = w.reply_files.get(message)?.turn_files.as_ref()?;
+            files.iter().find(|f| f.path == path).map(|f| f.state)
+        });
+        let note = match state {
+            _ if missing => "Deleted",
+            Some(TurnFileState::Committed) => "Committed",
+            Some(TurnFileState::Reverted) => "Reverted",
+            Some(TurnFileState::Deleted) => "Deleted",
+            _ => "No changes",
+        };
         let open = path.to_string();
         let workspace = self.workspace.clone();
         button(
@@ -252,7 +267,7 @@ impl ChangesView {
                 .flex_none()
                 .text_size(px(fs_sm()))
                 .text_color(t.text_subtle)
-                .child(if missing { "Deleted" } else { "No changes" }),
+                .child(note),
         )
         .on_click(move |_, window, cx| {
             let open = open.clone();
