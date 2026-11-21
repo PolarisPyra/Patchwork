@@ -97,17 +97,13 @@ impl Workspace {
                     .projects
                     .iter()
                     .any(|p| &p.id == id && patchwork_core::system::ssh::is_remote(&p.path));
-                items.push(item(
-                    "New task in a worktree",
-                    "git-branch",
-                    Act::WorktreeTask,
-                ));
+                items.push(item("New task in a worktree", "folders", Act::WorktreeTask));
                 if !remote && !self.settings.worktrees.disabled {
                     let in_place = self.settings.edit_in_place.iter().any(|p| p == id);
                     items.push(if in_place {
                         item(
                             "Give tasks their own worktree",
-                            "git-branch",
+                            "folders",
                             Act::EditInPlace(false),
                         )
                     } else {
