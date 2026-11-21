@@ -10,7 +10,9 @@
 // Rust guideline compliant 2026-10-09
 
 mod android;
+mod artifacts;
 mod bots;
+mod browser;
 mod canvas;
 mod chat;
 mod onboarding;
@@ -53,6 +55,7 @@ actions!(
         ShowOrchestrator,
         ShowTasks,
         ShowChanges,
+        ShowArtifacts,
         ShowArchived,
         ToggleTerminal,
         NewTerminal,

@@ -19,6 +19,7 @@ use super::body::Body;
 use super::types::Failure;
 use super::types::Reply;
 use crate::Error;
+use crate::artifacts::Written;
 use std::borrow::Cow;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::mpsc::{self, RecvTimeoutError};
@@ -315,6 +316,8 @@ impl Agent {
         reply: &mut Reply,
     ) -> Result<(), Error> {
         let mut calls: Vec<Call> = Vec::new();
+        // What each artifact call's card has shown while its input arrives, by its place.
+        let mut written: Vec<Written> = Vec::new();
         let mut usage = Value::Null;
         let mut first_token: Option<Instant> = None;
         let (mut text_loop, mut reasoning_loop) = (LoopWatch::default(), LoopWatch::default());
@@ -427,6 +430,21 @@ impl Agent {
                 }
                 if let Some(arguments) = part["function"]["arguments"].as_str() {
                     call.arguments.push_str(arguments);
+                }
+                // An artifact takes a while to write, so its card shows and fills in as it does.
+                if self.quiet || call.name != crate::artifacts::TOOL || call.id.is_empty() {
+                    continue;
+                }
+                if written.len() <= index {
+                    written.resize(index + 1, Written::default());
+                }
+                let shown = &mut written[index];
+                if shown.read(&call.arguments) {
+                    emit(&json!({
+                        "type": "api.tool", "id": call.id, "name": call.name,
+                        "summary": shown.command.clone().unwrap_or_default(),
+                        "title": shown.title, "kind": shown.kind, "lines": shown.lines,
+                    }));
                 }
             }
             self.watch(reply, &calls, &mut text_loop, &mut reasoning_loop)?;

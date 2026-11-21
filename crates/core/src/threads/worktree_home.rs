@@ -12,7 +12,7 @@ use super::worktree::{Worktree, git, key, locked};
 use super::worktree_condition::{Condition, repaired_condition};
 
 /// The project's folder for what Patchwork keeps in it.
-const PROJECT_DIR: &str = ".patchwork";
+pub(crate) const PROJECT_DIR: &str = ".patchwork";
 
 /// The folder in [`PROJECT_DIR`] that holds worktrees. A development build keeps its own, so it
 /// never sweeps the installed app's.
@@ -50,21 +50,33 @@ pub(crate) fn top_of(path: &Path) -> Option<PathBuf> {
 pub(crate) fn make_home(top: &str) -> Result<PathBuf, Error> {
     let dir = home(top);
     std::fs::create_dir_all(&dir).map_err(|e| format!("Cannot create {}: {e}", dir.display()))?;
-    if let Err(e) = exclude(top) {
+    if let Err(e) = exclude(top, &format!("{PROJECT_DIR}/{FOLDER}")) {
         log::warn!(error:% = e; "could not keep the worktrees folder out of git status: {{error}}");
     }
     Ok(dir)
 }
 
-/// Adds the worktrees folder to `info/exclude` of the repository at `top`, once.
-fn exclude(top: &str) -> Result<(), Error> {
+/// Keeps `dir`, a folder Patchwork made in a project, out of `git status` through the
+/// repository's own exclude file. Does nothing when the project is not in a repository.
+pub(crate) fn keep_out_of_git(project: &str, dir: &str) {
+    let Ok(prefix) = git(project, &["rev-parse", "--show-prefix"]) else {
+        return;
+    };
+    if let Err(e) = exclude(project, &format!("{}{dir}", prefix.trim())) {
+        log::warn!(dir:%, error:% = e; "could not keep {{dir}} out of git status: {{error}}");
+    }
+}
+
+/// Adds `folder`, a path from the top of the repository `in_repo` is in, to the repository's
+/// `info/exclude`, once.
+fn exclude(in_repo: &str, folder: &str) -> Result<(), Error> {
     let common = git(
-        top,
+        in_repo,
         &["rev-parse", "--path-format=absolute", "--git-common-dir"],
     )?;
     let info = Path::new(common.trim()).join("info");
     let file = info.join("exclude");
-    let line = format!("/{PROJECT_DIR}/{FOLDER}/");
+    let line = format!("/{folder}/");
     let text = std::fs::read_to_string(&file).unwrap_or_default();
     if text.lines().any(|l| l.trim() == line) {
         return Ok(());

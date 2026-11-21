@@ -74,6 +74,7 @@ xcap = { version = "0.9", default-features = false }
 zbus = { version = "5", default-features = false }
 zeroize = { version = "1", default-features = false }
 zip = { version = "9", default-features = false }
+zune-jpeg = { version = "0.5", default-features = false }
 
 # Debug builds of the app are optimized too: unoptimized, GPUI takes about 50ms to lay out a
 # frame, so resizing and scrolling stutter. The other workspace crates stay unoptimized.

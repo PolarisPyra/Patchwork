@@ -212,6 +212,16 @@ const MIGRATIONS: &[Migration] = &[
         name: "reply_costs",
         sql: include_str!("0040_reply_costs.sql"),
     },
+    Migration {
+        id: 41,
+        name: "artifacts",
+        sql: include_str!("0041_artifacts.sql"),
+    },
+    Migration {
+        id: 42,
+        name: "artifact_pins",
+        sql: include_str!("0042_artifact_pins.sql"),
+    },
 ];
 
 fn fail(m: &Migration, e: impl std::fmt::Display) -> Error {

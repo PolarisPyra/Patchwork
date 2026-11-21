@@ -97,9 +97,21 @@ pub(super) fn codex_item(
                 item["server"].as_str().unwrap_or_default(),
                 item["tool"].as_str().unwrap_or_default()
             );
-            out.push(tool_started(message_id, ToolStart::new(id, "MCP", summary)));
+            let mut started = tool_started(message_id, ToolStart::new(id, "MCP", summary));
+            if let Parsed::Event(AgentEvent::ToolStarted { tool, .. }) = &mut started
+                && crate::artifacts::is_artifact_call(tool)
+            {
+                crate::artifacts::fill_in(tool, &item["arguments"]);
+            }
+            out.push(started);
             if completed {
-                out.push(tool_finished(message_id, id, failed, ""));
+                let output: Vec<&str> = item["result"]["content"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|c| c["text"].as_str())
+                    .collect();
+                out.push(tool_finished(message_id, id, failed, &output.join("\n")));
             }
         }
         Some("webSearch") => {
