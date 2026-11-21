@@ -497,7 +497,8 @@ fn renamed_from(root: &str, rel: &str) -> Result<Option<String>, Error> {
 /// what it leads to, and a file already gone counts as removed.
 ///
 /// On this computer the file goes to the Trash, where it can be got back, since git never had
-/// it; it is deleted only when there is no Trash to move it to. On an SSH host it is deleted.
+/// it; when there is no Trash to move it to, such as on some network or external drives, it stays
+/// and the error says so. On an SSH host it is deleted, as its prompt says.
 fn remove(root: &str, rel: &str) -> Result<(), Error> {
     if let Some(at) = crate::system::ssh::split(root) {
         return crate::system::ssh::fs::remove_inside(at.host, at.path, rel);
@@ -506,12 +507,8 @@ fn remove(root: &str, rel: &str) -> Result<(), Error> {
     if path.symlink_metadata().is_err() {
         return Ok(());
     }
-    if let Err(e) = crate::system::fs::move_to_trash(&path) {
-        log::warn!(path:% = path.display(), error:% = e; "could not move {{path}} to the Trash, deleting it: {{error}}");
-        match std::fs::remove_file(path) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
-            _ => {}
-        }
-    }
-    Ok(())
+    crate::system::fs::move_to_trash(&path).map_err(|e| {
+        log::warn!(path:% = path.display(), error:% = e; "could not move {{path}} to the Trash: {{error}}");
+        format!("Couldn't move {rel} to the Trash, so it was kept: {e}").into()
+    })
 }
