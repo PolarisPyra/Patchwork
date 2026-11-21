@@ -2,15 +2,23 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::time::Duration;
 use gpui::{
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, NavigationDirection, Role,
-    StyleRefinement, Window, deferred, div, prelude::*, px, relative,
+    Animation, AnimationExt, ease_out_quint, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, NavigationDirection, Role, StyleRefinement, Window, deferred, div, prelude::*,
+    px, relative,
 };
 use crate::ui::menu::Menu;
 use crate::ui::theme::{font_ui, fs_md, radius, radius_sm, STATUSBAR_H, Theme, theme};
 use crate::ui::{button, display_title, icon};
 use super::state::{Page, Place, SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
 use super::bars;
+
+/// How long the error toast stays before it slides away, and how long the slide takes.
+const ERROR_SHOWN: Duration = Duration::from_secs(5);
+const ERROR_SLIDE: Duration = Duration::from_millis(200);
+/// How often a toast the mouse holds checks whether it was let go.
+const ERROR_HOLD: Duration = Duration::from_millis(250);
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -88,6 +96,7 @@ impl Render for Workspace {
         let background_dialog = self.background_dialog(window, cx);
         let granular_dialog = self.granular_dialog(window, cx);
         let credential_dialog = self.credential_dialog(cx);
+        self.time_error(cx);
         let error = self.error_toast(&t, cx);
         let artifact_chat = self.artifact_chat_card(&t, cx);
         div()
@@ -489,10 +498,14 @@ impl Workspace {
     ) -> Option<impl IntoElement + use<>> {
         let error = self.error.clone()?;
         let (hover, fg) = (t.bg_hover, t.text);
+        let leaving = self.error_leaving;
         Some(
             deferred(
                 div()
                     .id("error-toast")
+                    .on_hover(cx.listener(|this, hovered: &bool, _, _| {
+                        this.error_hovered = *hovered;
+                    }))
                     .absolute()
                     .right(px(16.))
                     .bottom(px(STATUSBAR_H + 12.))
@@ -524,10 +537,73 @@ impl Workspace {
                                 this.error = None;
                                 cx.notify();
                             })),
+                    )
+                    .with_animation(
+                        if leaving {
+                            "error-toast-leave"
+                        } else {
+                            "error-toast"
+                        },
+                        Animation::new(ERROR_SLIDE).with_easing(ease_out_quint()),
+                        move |toast, delta| {
+                            if leaving {
+                                toast.right(px(16. - 436. * delta)).opacity(1. - delta)
+                            } else {
+                                toast
+                            }
+                        },
                     ),
             )
             .with_priority(1),
         )
+    }
+
+    /// Starts, once for each error, the timer that slides the error toast away after
+    /// [`ERROR_SHOWN`]. The mouse over the toast holds it; with reduced motion it goes without
+    /// sliding.
+    fn time_error(&mut self, cx: &mut Context<Self>) {
+        let Some(error) = self.error.clone() else {
+            self.error_timer = None;
+            self.error_leaving = false;
+            self.error_hovered = false;
+            return;
+        };
+        if self
+            .error_timer
+            .as_ref()
+            .is_some_and(|(timed, _)| *timed == error)
+        {
+            return;
+        }
+        self.error_leaving = false;
+        let shown = error.clone();
+        let timer = cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(ERROR_SHOWN).await;
+            while this
+                .update(cx, |this, _| this.error_hovered)
+                .unwrap_or(false)
+            {
+                cx.background_executor().timer(ERROR_HOLD).await;
+            }
+            let slide = this.update(cx, |this, cx| {
+                let slide = !crate::ui::theme::applied(cx).reduce_motion;
+                this.error_leaving = slide;
+                cx.notify();
+                slide
+            });
+            if slide.unwrap_or(false) {
+                cx.background_executor().timer(ERROR_SLIDE).await;
+            }
+            // The window closing drops the toast with it, so there is nothing to do then.
+            let _ = this.update(cx, |this, cx| {
+                if this.error.as_ref() == Some(&shown) {
+                    this.error = None;
+                    this.error_leaving = false;
+                    cx.notify();
+                }
+            });
+        });
+        self.error_timer = Some((error, timer));
     }
 
     pub(super) fn on_resize(
