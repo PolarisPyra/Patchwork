@@ -205,6 +205,11 @@ pub struct Workspace {
     pub(super) project_events: mpsc::UnboundedSender<ProjectChanged>,
     /// The last error an action hit, shown above the status bar until dismissed.
     pub error: Option<String>,
+    /// The error the toast's timer runs for and that timer, whether the toast is sliding away,
+    /// and whether the mouse is over it, which holds it.
+    pub(super) error_timer: Option<(String, Task<()>)>,
+    pub(super) error_leaving: bool,
+    pub(super) error_hovered: bool,
     /// The file panel right of the chat, its width once dragged, and where a drag of it started.
     pub canvas: Option<Entity<Canvas>>,
     pub(super) canvas_width: Option<f32>,
@@ -419,6 +424,9 @@ impl Workspace {
             changes_generation: 0,
             project_events,
             error: None,
+            error_timer: None,
+            error_leaving: false,
+            error_hovered: false,
             canvas: None,
             canvas_width: None,
             canvas_resizing: None,
