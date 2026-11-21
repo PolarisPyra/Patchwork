@@ -396,7 +396,16 @@ impl ChangesView {
                     .any(|c| &c.path == file && c.status == "untracked")
             })
         });
-        let (title, detail, yes) = if all_new {
+        // An SSH host has no Trash to move them to.
+        let remote = self.workspace.upgrade().is_some_and(|w| {
+            w.read(cx)
+                .git_root
+                .as_deref()
+                .is_some_and(patchwork_core::system::ssh::is_remote)
+        });
+        let (title, detail, yes) = if all_new && remote {
+            ("Delete", format!("Delete {what} for good?"), "Delete")
+        } else if all_new {
             (
                 "Move to Trash",
                 format!("Move {what} to the Trash?"),
