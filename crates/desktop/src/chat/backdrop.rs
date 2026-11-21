@@ -14,8 +14,10 @@ use patchwork_core::backgrounds::{BackgroundImage, ChatBackground};
 use patchwork_core::themes::{SavedScene, Scheme};
 
 use crate::ui::backdrop::{PreviewFlight, butterfly_backdrop, preset_fill, scene_backdrop};
-use crate::ui::theme::{Theme, applied};
+use crate::ui::theme::{InScheme, Theme, applied, theme};
 use crate::workspace::Workspace;
+
+use super::scheme::in_scheme;
 
 /// How much of the window color is laid over a chat's picture, as on the Orchestrator page.
 const PICTURE_DIM: f32 = 0.45;
@@ -92,6 +94,24 @@ pub fn scheme_for(w: &Workspace, background: &ChatBackground) -> Option<Scheme> 
         _ => None,
     };
     background.scheme(scene.map(|saved| &saved.file))
+}
+
+/// The chat's background on its own: the window's color and the backdrop over it. The workspace
+/// draws it as a view under the chat's, so a backdrop that moves redraws only itself, not the
+/// transcript over it.
+pub fn backdrop_layer(w: &mut Workspace, cx: &mut Context<Workspace>) -> AnyElement {
+    let scheme = chat_scheme(w);
+    let _scope = scheme.map(InScheme::enter);
+    let t = *theme(cx);
+    let layer = div()
+        .relative()
+        .size_full()
+        .bg(t.bg_editor)
+        .children(chat_backdrop(w, &t, cx));
+    match scheme {
+        Some(scheme) => in_scheme(scheme, layer).into_any_element(),
+        None => layer.into_any_element(),
+    }
 }
 
 pub fn chat_backdrop(

@@ -23,6 +23,37 @@ pub fn deny_dumps() -> std::io::Result<()> {
     Ok(())
 }
 
+/// Keeps this process on small memory pages, so the memory it reports is the memory it uses.
+///
+/// Where the system hands out huge pages unasked, as many Linux systems do, the allocator's
+/// mostly empty blocks are each backed by a whole two-megabyte page, about a quarter of the app's
+/// memory. The programs Patchwork starts keep the setting. On Linux only; elsewhere this does
+/// nothing.
+///
+/// # Errors
+///
+/// Returns the system's error when the setting cannot be changed.
+pub fn small_pages() -> std::io::Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        // SAFETY: `PR_SET_THP_DISABLE` takes numbers, the unused ones zero, and reads no memory
+        // of ours.
+        let set = unsafe {
+            libc::prctl(
+                libc::PR_SET_THP_DISABLE,
+                libc::c_ulong::from(1_u8),
+                libc::c_ulong::from(0_u8),
+                libc::c_ulong::from(0_u8),
+                libc::c_ulong::from(0_u8),
+            )
+        };
+        if set != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
 /// Keeps the memory `value` is in from being written to the swap file.
 ///
 /// The pages stay in memory for as long as Patchwork runs, so `value` should be something that

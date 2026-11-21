@@ -176,6 +176,8 @@ fn main() {
     if let Some(code) = run_helper() {
         std::process::exit(code);
     }
+    // Before the app's memory grows; the helpers above are left as they were.
+    let pages = patchwork_core::system::memory::small_pages();
     // The platform's folders: the XDG ones on Linux, `Library` on macOS, and `AppData` on
     // Windows, the ones earlier versions of Patchwork used.
     let (Some(config), Some(data), Some(cache)) = (
@@ -194,6 +196,9 @@ fn main() {
     patchwork_core::logging::start_main_log(&dirs.logs);
     if let Err(e) = dumps {
         log::warn!(error:% = e; "a crash could write Patchwork's memory to a core file: {{error}}");
+    }
+    if let Err(e) = pages {
+        log::warn!(error:% = e; "Patchwork's memory may be counted in huge pages: {{error}}");
     }
     let (events, received) = mpsc::unbounded();
     let core = match Core::open(
@@ -234,7 +239,6 @@ fn main() {
     core.start_update_checks();
     core.start_limit_resumes();
     core.start_worktree_cleanup();
-
     gpui_platform::application()
         .with_assets(assets::Assets)
         .run(move |cx: &mut App| {

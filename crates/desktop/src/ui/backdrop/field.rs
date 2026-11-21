@@ -15,12 +15,12 @@
 )]
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
-use std::sync::OnceLock;
-use std::time::Instant;
+use std::time::Duration;
 
 use gpui::{
-    App, Bounds, BoxShadow, Corners, Font, FontFeatures, Hsla, Pixels, Point, ShapedLine,
+    App, Bounds, BoxShadow, Corners, EntityId, Font, FontFeatures, Hsla, Pixels, Point, ShapedLine,
     TextAlign, TextRun, Window, canvas, fill, font, hsla, point, prelude::*, px, size,
 };
 
@@ -33,7 +33,7 @@ pub(super) const SKY: (f32, f32) = (13., 16.);
 pub(super) const FLY: (f32, f32) = (8., 10.);
 
 /// How often the picture changes. A frame between two changes repaints the lines already shaped.
-pub(super) const FRAMES_PER_SECOND: f32 = 30.;
+pub(super) const FRAMES_PER_SECOND: f32 = 20.;
 
 /// The colors the picture is drawn in.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -350,8 +350,33 @@ pub(super) fn cell_width(font_size: f32, window: &Window) -> f32 {
 
 /// Seconds since the page's clock started.
 pub(super) fn now() -> f32 {
-    static START: OnceLock<Instant> = OnceLock::new();
-    START.get_or_init(Instant::now).elapsed().as_secs_f32()
+    crate::ui::motion_clock()
+}
+
+/// Draws the view being painted again when the picture next changes, instead of on every frame
+/// the screen shows, which would lay out the whole window up to the screen's rate. While another
+/// window is active the picture holds still; the window draws itself again when it is active.
+pub(super) fn next_frame(window: &Window, cx: &App) {
+    if !window.is_window_active() {
+        return;
+    }
+    thread_local! {
+        /// The views already waiting for the picture's next change.
+        static WAITING: RefCell<HashSet<EntityId>> = RefCell::new(HashSet::new());
+    }
+    let view = window.current_view();
+    if !WAITING.with_borrow_mut(|waiting| waiting.insert(view)) {
+        return;
+    }
+    let step = 1. / FRAMES_PER_SECOND;
+    let wait = Duration::from_secs_f32(step - now() % step);
+    window
+        .spawn(cx, async move |cx| {
+            cx.background_executor().timer(wait).await;
+            WAITING.with_borrow_mut(|waiting| waiting.remove(&view));
+            let _ = cx.update(|_, cx| cx.notify(view));
+        })
+        .detach();
 }
 
 /// A number that looks random and is the same every time for the same two inputs.
@@ -420,7 +445,7 @@ pub fn butterfly_field(
         |_, _, _| {},
         move |bounds, (), window: &mut Window, cx| {
             if !still {
-                window.request_animation_frame();
+                next_frame(window, cx);
             }
             let time = (now() * FRAMES_PER_SECOND).floor() / FRAMES_PER_SECOND;
             let mut flight = flight.borrow_mut();

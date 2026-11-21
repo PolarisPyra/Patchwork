@@ -235,9 +235,24 @@ impl Render for Workspace {
                     .child(self.activity_bar(cx))
                     .children(sidebar)
                     .children(orchestrating.then(|| {
-                        self.orchestrator
-                            .clone()
-                            .cached(StyleRefinement::default().flex_1().min_w_0().min_h_0())
+                        // The backdrop is its own view under the page, so as it moves the page's
+                        // frame is reused.
+                        div()
+                            .relative()
+                            .flex()
+                            .flex_1()
+                            .min_w_0()
+                            .min_h_0()
+                            .child(
+                                self.orchestrator_backdrop
+                                    .clone()
+                                    .cached(StyleRefinement::default().absolute().inset_0()),
+                            )
+                            .child(
+                                self.orchestrator.clone().cached(
+                                    StyleRefinement::default().flex_1().min_w_0().min_h_0(),
+                                ),
+                            )
                     }))
                     .children(bot_page)
                     .children((!orchestrating && self.bot_shown.is_none()).then(|| {
@@ -252,9 +267,7 @@ impl Render for Workspace {
                                     .flex()
                                     .flex_1()
                                     .min_h_0()
-                                    .child(self.chat_region.clone().cached(
-                                        StyleRefinement::default().flex_1().min_w_0().min_h_0(),
-                                    ))
+                                    .child(self.chat_layers())
                                     .children(bot_details)
                                     .children(canvas),
                             )
@@ -272,11 +285,16 @@ impl Render for Workspace {
                         .h(px(STATUSBAR_H)),
                 ),
             )
-            .children(self.palette.clone().map(|p| deferred(p).with_priority(2)))
+            // Cached, so a moving chat backdrop under them does not draw them again each frame.
+            .children(
+                self.palette
+                    .clone()
+                    .map(|p| deferred(p.cached(overlay())).with_priority(2)),
+            )
             .children(
                 self.settings_dialog
                     .clone()
-                    .map(|d| deferred(d).with_priority(2)),
+                    .map(|d| deferred(d.cached(overlay())).with_priority(2)),
             )
             .children(
                 self.add_project
@@ -293,6 +311,29 @@ impl Render for Workspace {
             )
             .children(crate::ui::selection::menu(cx))
             .into_any_element()
+    }
+}
+
+impl Workspace {
+    /// The chat over its background, each its own cached view: a moving backdrop redraws only
+    /// itself and reuses the chat's last frame.
+    pub(super) fn chat_layers(&self) -> gpui::Div {
+        div()
+            .relative()
+            .flex()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .child(
+                self.backdrop_region
+                    .clone()
+                    .cached(StyleRefinement::default().absolute().inset_0()),
+            )
+            .child(
+                self.chat_region
+                    .clone()
+                    .cached(StyleRefinement::default().flex_1().min_w_0().min_h_0()),
+            )
     }
 }
 
@@ -377,4 +418,13 @@ impl Workspace {
             cx.notify();
         }
     }
+}
+
+/// The window-filling place of a dialog drawn over everything.
+fn overlay() -> StyleRefinement {
+    StyleRefinement::default()
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
 }
