@@ -1,6 +1,7 @@
 //! The tools a chat's agent uses Android devices with, offered on Patchwork's own server when
-//! the user allows it and the chat's project is a mobile app: list and start devices, build and
-//! run the app, look at the screen, tap, swipe and type, and read the app's log.
+//! the user allows it and the chat has a project: list and start devices, build and run the
+//! project's app, look at the screen, tap, swipe and type, and read the app's log. They are
+//! offered before the project holds an app, so an agent that creates one can run it.
 //!
 //! Every agent Patchwork runs reaches its own server, so one set of tools serves them all. A
 //! tool's result is text; a screenshot is written to a file the agent then reads as a picture.
@@ -33,6 +34,10 @@ const TOOLS: [&str; 9] = [
     "logcat",
 ];
 
+/// What an agent is told when the chat's project holds no app to build yet.
+const NO_APP: &str = "This chat's project holds no Android app yet. Create one in it, then \
+                      build and run it with android_run.";
+
 /// The lines of log an agent is given when it does not say how many.
 const LOG_LINES: u64 = 200;
 
@@ -61,9 +66,9 @@ fn tool(name: &str, description: &str, mut properties: Value, required: &[&str])
     })
 }
 
-/// The tools as Patchwork's own server lists them, for an app built with `framework`.
-fn tools(project: &MobileProject) -> Vec<Value> {
-    let framework = project.framework.label();
+/// The tools as Patchwork's own server lists them, for the project's app when it has one.
+fn tools(project: Option<&MobileProject>) -> Vec<Value> {
+    let framework = project.map_or("Android", |project| project.framework.label());
     let pixel = |what: &str| json!({"type": "integer", "description": format!("{what}, in pixels of the latest android_screenshot.")});
     vec![
         tool(
@@ -173,22 +178,21 @@ fn device_line(device: &Device) -> String {
 }
 
 impl Core {
-    /// The mobile app of the chat's project. None when the chat has no project or its project
-    /// is no mobile app.
-    fn thread_app(&self, thread_id: &str) -> Option<(String, MobileProject)> {
+    /// The chat's project and its folder. None when the chat has no project.
+    fn thread_project(&self, thread_id: &str) -> Option<(String, PathBuf)> {
         let project_id = self.store.thread(thread_id)?.project_id?;
         let root = self.project_root(&project_id).ok()?;
-        Some((project_id, detect(&PathBuf::from(root))?))
+        Some((project_id, PathBuf::from(root)))
     }
 
     /// The Android tools as Patchwork's own server lists them for the chat's agent. None unless
-    /// the user lets agents use Android devices and the chat's project is a mobile app.
+    /// the user lets agents use Android devices and the chat has a project.
     pub(crate) fn android_tools(&self, thread_id: &str) -> Vec<Value> {
         if !self.store.settings().android_use {
             return Vec::new();
         }
-        self.thread_app(thread_id)
-            .map(|(_, project)| tools(&project))
+        self.thread_project(thread_id)
+            .map(|(_, root)| tools(detect(&root).as_ref()))
             .unwrap_or_default()
     }
 
@@ -247,7 +251,7 @@ impl Core {
     fn agent_devices(
         &self,
         project_id: &str,
-        project: &MobileProject,
+        project: Option<&MobileProject>,
         snapshot: &Snapshot,
     ) -> String {
         let mut lines = vec!["Virtual devices:".to_string()];
@@ -275,6 +279,10 @@ impl Core {
             Ok(devices) => lines.extend(devices.iter().map(device_line)),
             Err(e) => lines.push(format!("- adb could not list them: {e}")),
         }
+        let Some(project) = project else {
+            lines.push(format!("Build variants: none. {NO_APP}"));
+            return lines.join("\n");
+        };
         let picked = self.android_variant(project_id, project).name();
         let variants: Vec<String> = gradle::variants(project)
             .iter()
@@ -294,7 +302,7 @@ impl Core {
     /// # Errors
     ///
     /// Returns an error the agent is told, when the user has not allowed the tools, the chat's
-    /// project is no mobile app, an argument is wrong, or the device or the build fails.
+    /// project holds no app to build, an argument is wrong, or the device or the build fails.
     pub(crate) fn android_tool(
         &self,
         thread_id: &str,
@@ -309,14 +317,19 @@ impl Core {
                     .into(),
             );
         }
-        let (project_id, project) = self
-            .thread_app(thread_id)
-            .ok_or("This chat's project is not an Android app.")?;
-        let sdk: Sdk = self.android_sdk(&project.root)?;
-        let snapshot = self.android_snapshot(&project.root);
+        let (project_id, root) = self
+            .thread_project(thread_id)
+            .ok_or("This chat has no project.")?;
+        let found = detect(&root);
+        let app = || found.as_ref().ok_or_else(|| Error::from(NO_APP));
+        let root = found
+            .as_ref()
+            .map_or(root.clone(), |project| project.root.clone());
+        let sdk: Sdk = self.android_sdk(&root)?;
+        let snapshot = self.android_snapshot(&root);
         let device = || self.agent_device(&project_id, &snapshot, args);
         match tool.strip_prefix(TOOL_PREFIX).unwrap_or(tool) {
-            "devices" => Ok(self.agent_devices(&project_id, &project, &snapshot)),
+            "devices" => Ok(self.agent_devices(&project_id, found.as_ref(), &snapshot)),
             "start" => {
                 let avd = args["avd"].as_str().unwrap_or_default();
                 if !snapshot.avds.iter().any(|known| known.name == avd) {
@@ -325,14 +338,15 @@ impl Core {
                     )
                     .into());
                 }
-                let booting = self.start_emulator(&project.root, avd, Boot::Quick)?;
-                self.await_boot(&project.root, &booting)?;
+                let booting = self.start_emulator(&root, avd, Boot::Quick)?;
+                self.await_boot(&root, &booting)?;
                 Ok(format!("{avd} is running as {}.", booting.serial))
             }
             "run" => {
+                let project = app()?;
                 let device = device()?;
                 let variant = match args["variant"].as_str().filter(|name| !name.is_empty()) {
-                    Some(name) => gradle::variants(&project)
+                    Some(name) => gradle::variants(project)
                         .into_iter()
                         .find(|variant| variant.name() == name)
                         .ok_or_else(|| {
@@ -340,7 +354,7 @@ impl Core {
                                 "The app has no variant {name}. List them with android_devices."
                             )
                         })?,
-                    None => self.android_variant(&project_id, &project),
+                    None => self.android_variant(&project_id, project),
                 };
                 let target = RunTarget {
                     serial: &device.serial,
@@ -348,7 +362,7 @@ impl Core {
                     variant: &variant,
                     mode: RunMode::Once,
                 };
-                let output = self.android_run_once(&project, &target, stopped)?;
+                let output = self.android_run_once(project, &target, stopped)?;
                 Ok(format!(
                     "Built {} and installed it on {}.\n{output}",
                     variant.name(),
@@ -406,8 +420,10 @@ impl Core {
             }
             "logcat" => {
                 let device = device()?;
-                let variant = self.android_variant(&project_id, &project);
-                let package = gradle::application_id(&project, &variant);
+                let package = found.as_ref().and_then(|project| {
+                    let variant = self.android_variant(&project_id, project);
+                    gradle::application_id(project, &variant)
+                });
                 let level = args["level"]
                     .as_str()
                     .and_then(|level| level.chars().next())
