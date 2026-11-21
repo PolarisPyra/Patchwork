@@ -81,7 +81,6 @@ pub fn render(
     let goal = goal::goal_banner(w, &t, cx);
     // The composer shows the worktree's status on the line above it.
     w.load_worktree(cx);
-    w.load_worktree_pick(cx);
     w.load_worktree_told(cx);
     let missing = folder::missing_folder(w, &t, cx);
     let parent = subagent_footer(w, &t, cx);

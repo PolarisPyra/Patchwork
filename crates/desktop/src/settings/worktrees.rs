@@ -86,7 +86,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         |d, on, cx| d.update(|s| s.worktrees.cleanup.with_deleted_tasks = on, cx),
         cx,
     );
-    let projects = (on).then(|| project_rows(d, &t, cx));
+    let projects = project_rows(d, &t, cx);
     let stale = stale_row(&t, d, cx);
     let keep = keep_row(worktrees.cleanup.keep, &t, d, cx);
     div()
@@ -94,7 +94,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .flex_col()
         .child(section_heading("Tasks", true, &t))
         .child(use_row)
-        .children(projects)
+        .child(projects)
         .child(section_heading("Forks", false, &t))
         .child(fork_row)
         .child(section_heading("Cleanup", false, &t))
@@ -107,27 +107,20 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
 /// A switch for each project on this computer: whether its new tasks get a worktree each or edit
 /// its folder. Tasks that already started keep where they work.
 fn project_rows(d: &SettingsDialog, t: &Theme, cx: &mut Context<SettingsDialog>) -> Div {
+    let worktrees_off = d.settings.worktrees.disabled;
     let rows: Vec<_> = d
         .settings
         .projects
         .iter()
         .filter(|p| !patchwork_core::system::ssh::is_remote(&p.path))
         .map(|p| {
-            let on = !d.settings.edit_in_place.contains(&p.id);
+            let on = !worktrees_off && !d.settings.edit_in_place.contains(&p.id);
             let id = p.id.clone();
             token_row(p.name.clone(), None, t).child(
                 switch(format!("worktrees-project-{}", p.id), p.name.clone(), on, t).on_click(
                     cx.listener(move |d, _, _, cx| {
                         let id = id.clone();
-                        d.update(
-                            move |s| {
-                                s.edit_in_place.retain(|p| p != &id);
-                                if on {
-                                    s.edit_in_place.push(id.clone());
-                                }
-                            },
-                            cx,
-                        );
+                        d.update(move |s| s.set_edit_in_place(&id, on), cx);
                     }),
                 ),
             )

@@ -561,19 +561,15 @@ impl Core {
         settings.worktrees.disabled || settings.edit_in_place.iter().any(|id| id == project_id)
     }
 
-    /// Sets whether the project's new tasks edit its own folder rather than a worktree each.
+    /// Sets whether the project's new tasks edit its own folder rather than a worktree each, as
+    /// [`Settings::set_edit_in_place`](crate::settings::Settings::set_edit_in_place) does.
     /// Tasks that already have a worktree keep it.
     ///
     /// # Errors
     ///
     /// Returns an error when the settings cannot be saved.
     pub fn set_edits_in_place(&self, project_id: &str, in_place: bool) -> Result<(), Error> {
-        self.update_settings(|s| {
-            s.edit_in_place.retain(|id| id != project_id);
-            if in_place {
-                s.edit_in_place.push(project_id.to_owned());
-            }
-        })
+        self.update_settings(|s| s.set_edit_in_place(project_id, in_place))
     }
 
     /// Whether `path` is a worktree Patchwork made as a project of its own, which needs no
@@ -651,7 +647,7 @@ impl Core {
         if thread.parent.is_some()
             || !first_turn
             || ssh::is_remote(path)
-            || !self.task_gets_worktree(&thread.id, project_id)
+            || self.edits_in_place(project_id)
             || self.is_worktree_project(path)
             || self.is_dispatcher(&thread.id)
         {
@@ -1154,7 +1150,7 @@ impl Core {
                 || thread.messages.iter().any(|m| m.role == Role::Assistant)
                 || self.worktree_record(&thread.id).is_some()
                 || self.store.state(&failed_key(&thread.id)).is_some()
-                || !self.task_gets_worktree(&thread.id, project_id)
+                || self.edits_in_place(project_id)
                 || self.is_dispatcher(&thread.id)
             {
                 continue;

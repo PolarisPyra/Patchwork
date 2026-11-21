@@ -489,13 +489,13 @@ impl Render for Composer {
             .child(agent_chip)
             .child(div().flex_1())
             // The worktree's status, at the end of the line before Format.
-            .children(worktree_pick.map(|pick| {
+            .child(
                 div()
                     .min_w_0()
                     .text_size(px(fs_xs()))
                     .line_height(px(16.))
-                    .child(pick)
-            }))
+                    .child(worktree_pick),
+            )
             .children(worktree.map(|status| {
                 div()
                     .min_w_0()

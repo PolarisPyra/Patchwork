@@ -539,9 +539,6 @@ impl Workspace {
                     {
                         log::warn!(error:% = e; "could not set the chat's agent: {{error}}");
                     }
-                    if let Some(project) = thread.project_id.clone() {
-                        self.apply_worktree_pick(&id, &project);
-                    }
                     self.thread = Some(thread);
                     id
                 }
