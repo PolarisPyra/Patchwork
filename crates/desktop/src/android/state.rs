@@ -82,6 +82,11 @@ pub struct AndroidPanel {
     pub(super) running_on: Option<String>,
     /// Whether the run under way was asked to stop, so its exit code is no failure.
     pub(super) stop_asked: bool,
+    /// The device a Kotlin or Java app was last run on, and its virtual device: saving builds
+    /// and installs it there again.
+    pub(super) last_run: Option<(String, Option<String>)>,
+    /// Counts saves, so only the last of a burst rebuilds.
+    pub(super) saves: u64,
     /// The variants the app can be built as, and the one runs build.
     pub(super) variants: Vec<Variant>,
     pub(super) variant: Variant,
@@ -159,6 +164,8 @@ impl AndroidPanel {
             run: Run::Idle,
             running_on: None,
             stop_asked: false,
+            last_run: None,
+            saves: 0,
             variants: Vec::new(),
             variant: Variant::default(),
             log: None,
@@ -417,8 +424,9 @@ impl AndroidPanel {
 
     /// Runs the framework's own command for the device `serial` in a terminal of its own. `avd` is
     /// the virtual device an emulator runs.
-    fn launch(&mut self, serial: String, avd: Option<String>, cx: &mut Context<Self>) {
+    pub(super) fn launch(&mut self, serial: String, avd: Option<String>, cx: &mut Context<Self>) {
         self.run = Run::Preparing;
+        self.last_run = Some((serial.clone(), avd.clone()));
         self.stop_asked = false;
         self.running_on = Some(serial.clone());
         let (core, project) = (Arc::clone(&self.core), self.project.clone());
@@ -461,7 +469,7 @@ impl AndroidPanel {
         match code {
             Some(0) => {}
             // A run asked to stop ends as its tool ends when interrupted.
-            _ if std::mem::take(&mut self.stop_asked) => {}
+            _ if std::mem::take(&mut self.stop_asked) => self.last_run = None,
             Some(code) => {
                 self.failure = Some(Error::Tool {
                     message: format!(
