@@ -35,7 +35,11 @@ pub fn key_bytes(ks: &Keystroke, app_cursor: bool) -> Option<String> {
     };
     match ks.key.as_str() {
         "enter" => Some(alt("\r")),
-        "backspace" => Some(alt(if m.control { "\x08" } else { "\x7f" })),
+        // Ctrl+Backspace and Ctrl+Delete take a word either side, as a shell's Ctrl+W and
+        // Alt+D do.
+        "backspace" if m.control => Some("\x17".into()),
+        "backspace" => Some(alt("\x7f")),
+        "delete" if m.control && !m.shift && !m.alt => Some("\x1bd".into()),
         "tab" => Some(if m.shift {
             "\x1b[Z".into()
         } else {

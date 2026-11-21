@@ -6,10 +6,10 @@
 use std::ops::Range;
 
 use gpui::{
-    App, Bounds, CursorStyle, FontStyle, FontWeight, StrikethroughStyle, ElementId,
-    ElementInputHandler, Entity, GlobalElementId, Hsla, LayoutId, MouseButton, PaintQuad, Pixels,
-    Point, Role, SharedString, Style, TextRun, UnderlineStyle, Window, div, fill, point,
-    prelude::*, px, relative, size,
+    App, Bounds, CursorStyle, FontStyle, FontWeight, StrikethroughStyle, ElementId, DispatchPhase,
+    ElementInputHandler, Entity, GlobalElementId, Hsla, LayoutId, MouseButton, MouseMoveEvent,
+    MouseUpEvent, PaintQuad, Pixels, Point, Role, SharedString, Style, TextRun, UnderlineStyle,
+    Window, div, fill, point, prelude::*, px, relative, size,
 };
 use super::markdown;
 use super::state::{DrawnLine, TextArea};
@@ -69,9 +69,7 @@ impl Render for TextArea {
             .on_action(cx.listener(Self::select_page_up))
             .on_action(cx.listener(Self::select_page_down))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
-            .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))
-            .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
-            .on_mouse_move(cx.listener(Self::on_mouse_move))
+            .on_mouse_down(MouseButton::Middle, cx.listener(Self::paste_primary))
             .on_mouse_down(MouseButton::Right, cx.listener(Self::open_menu))
             .w_full()
             .child(TextElement {
@@ -279,7 +277,13 @@ impl Element for TextElement {
         let area = self.area.read(cx);
         let text_color = area.text_color.unwrap_or(text);
         let placeholder_color = area.placeholder_color.unwrap_or(subtle);
+        // A selection the field keeps while another part has the keys is drawn fainter.
         let selection_color = area.selection_color.unwrap_or(selection);
+        let selection_color = if area.focus.is_focused(window) {
+            selection_color
+        } else {
+            selection_color.opacity(0.5)
+        };
         let line_height = window.line_height();
         let empty = area.content.is_empty();
         let (text, color) = if empty {
@@ -388,7 +392,12 @@ impl Element for TextElement {
                 window.request_animation_frame();
             }
         }
-        let caret = selected.is_empty().then(|| at(cursor)).flatten().map(|p| {
+        // While selected text is dragged, the caret shows where it would go.
+        let caret = match area.drop_at {
+            Some(to) => at(area.shown_offset(to)),
+            None => selected.is_empty().then(|| at(cursor)).flatten(),
+        };
+        let caret = caret.map(|p| {
             fill(
                 Bounds::new(origin + p, size(px(1.), line_height)),
                 caret_color,
@@ -413,7 +422,23 @@ impl Element for TextElement {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let focus = self.area.read(cx).focus.clone();
+        let area = self.area.read(cx);
+        let focus = area.focus.clone();
+        // A press on the field follows the pointer over the whole window until it is let go.
+        if area.selecting || area.moving.is_some() {
+            let field = self.area.clone();
+            window.on_mouse_event(move |e: &MouseMoveEvent, phase, window, cx| {
+                if phase == DispatchPhase::Bubble {
+                    field.update(cx, |field, cx| field.drag(e.position, window, cx));
+                }
+            });
+            let field = self.area.clone();
+            window.on_mouse_event(move |e: &MouseUpEvent, phase, window, cx| {
+                if phase == DispatchPhase::Bubble && e.button == MouseButton::Left {
+                    field.update(cx, |field, cx| field.end_drag(e, window, cx));
+                }
+            });
+        }
         // Where the text starts, left of the field by however far it is scrolled. Positions from
         // the mouse and the input method are measured from here.
         let scroll_x = prepaint.scroll_x;

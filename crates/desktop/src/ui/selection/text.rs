@@ -180,3 +180,43 @@ pub(super) fn end_row(out: &mut String, before: Option<&Known>, cells: usize) {
         }
     }
 }
+
+/// The word around byte `at` of `text`, or the run of blanks or of punctuation it is in, within
+/// its line: what a double click takes in the chat, the fields and the terminal alike.
+pub fn word_at(text: &str, at: usize) -> Range<usize> {
+    let kind = |c: char| {
+        if c.is_alphanumeric() || c == '_' {
+            0
+        } else if c.is_whitespace() {
+            1
+        } else {
+            2
+        }
+    };
+    let mut at = at.min(text.len());
+    while !text.is_char_boundary(at) {
+        at -= 1;
+    }
+    let (before, after) = text.split_at(at);
+    // Between two runs, the press belongs to the one after it, unless it is a line's end.
+    let Some(here) = after
+        .chars()
+        .next()
+        .filter(|c| *c != '\n')
+        .or_else(|| before.chars().next_back().filter(|c| *c != '\n'))
+    else {
+        return at..at;
+    };
+    let here = kind(here);
+    let start = before
+        .char_indices()
+        .rev()
+        .take_while(|(_, c)| kind(*c) == here && *c != '\n')
+        .last()
+        .map_or(before.len(), |(i, _)| i);
+    let end = after
+        .char_indices()
+        .find(|(_, c)| kind(*c) != here || *c == '\n')
+        .map_or(text.len(), |(i, _)| before.len() + i);
+    start..end
+}

@@ -75,8 +75,9 @@ pub struct Panel {
     pub(super) grid: Option<(u16, u16)>,
     pub(super) origin: Point<Pixels>,
     pub(super) resize_timer: Option<Task<()>>,
-    /// A drag selecting on the screen is under way.
+    /// A drag selecting on the screen is under way, and how it goes.
     pub(super) selecting: bool,
+    pub(super) drag: super::terminal::Drag,
     /// The button held down over a program that hears the mouse, and the cell last reported.
     pub(super) mouse_held: Option<u8>,
     pub(super) mouse_cell: Option<(u16, u16)>,
@@ -99,6 +100,18 @@ impl EventEmitter<PanelEvent> for Panel {}
 impl Panel {
     pub fn new(core: Arc<Core>, settings: &Settings, cx: &mut Context<Self>) -> Self {
         let picked = core.state(SHELL_KEY);
+        // A selection made elsewhere after the terminal's takes its place.
+        cx.observe_global::<crate::ui::selection::Owner>(|this: &mut Self, cx| {
+            if crate::ui::selection::owner(cx) == crate::ui::selection::Owner::Terminal {
+                return;
+            }
+            for shell in &mut this.shells {
+                if shell.selection.take().is_some() {
+                    cx.notify();
+                }
+            }
+        })
+        .detach();
         Self {
             core,
             tab: PanelTab::Terminal,
@@ -120,6 +133,7 @@ impl Panel {
             origin: Point::default(),
             resize_timer: None,
             selecting: false,
+            drag: super::terminal::Drag::default(),
             mouse_held: None,
             mouse_cell: None,
             blink_from: std::time::Instant::now(),

@@ -6,12 +6,13 @@ use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use gpui::{
-    AnyElement, App, Bounds, ClipboardItem, ContentMask, Entity, Hitbox, IntoElement, KeyBinding,
-    ListState, Pixels, Point, SharedString, Styled, TextLayout, Window, actions, canvas, fill,
-    point, px,
+    AnyElement, App, Bounds, ClipboardItem, ContentMask, DispatchPhase, Entity, Hitbox,
+    HitboxBehavior, IntoElement, KeyBinding, ListState, MouseButton, MouseDownEvent, Pixels, Point,
+    SharedString, Styled, TextLayout, Window, actions, canvas, fill, point, px,
 };
 
-use super::text::{markdown, plain};
+use super::owner::{Owner, claim, to_primary};
+use super::text::{markdown, plain, word_at};
 use crate::ui::menu::Menu;
 use crate::ui::theme::theme;
 
@@ -20,11 +21,16 @@ use crate::ui::theme::theme;
 pub(super) const CHIP_PAD_X: f32 = 3.;
 pub(super) const CHIP_INSET_Y: f32 = 1.;
 
-actions!(selection, [CopySelection]);
+actions!(selection, [CopySelection, SelectAllText, ClearSelection]);
 
-/// The key that copies the marked text, where no text field has the keys.
+/// The keys that copy, mark all and drop the marked text, where no text field has the keys.
 pub fn bindings() -> Vec<KeyBinding> {
-    vec![KeyBinding::new("ctrl-c", CopySelection, Some("Workspace"))]
+    let context = Some("Workspace");
+    vec![
+        KeyBinding::new("ctrl-c", CopySelection, context),
+        KeyBinding::new("ctrl-a", SelectAllText, context),
+        KeyBinding::new("escape", ClearSelection, context),
+    ]
 }
 
 /// One text drawn this frame, where a pointer can reach it.
@@ -70,6 +76,16 @@ pub enum Kind {
 /// or `[` and `](https://…)`.
 pub type Mark = (Range<usize>, SharedString, SharedString);
 
+/// What a drag marks by: the letter, the word, or the whole text, as one, two or three clicks
+/// began it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum Unit {
+    #[default]
+    Letter,
+    Word,
+    Whole,
+}
+
 /// A text seen since the selection began, kept after it scrolls away so a mark can run past it.
 pub(super) struct Known {
     pub(super) place: Place,
@@ -91,12 +107,17 @@ pub(super) struct Selection {
     pub(super) marked: HashMap<u64, Range<usize>>,
     /// The last text marked, top to bottom: the only one whose highlight stops where its mark does.
     pub(super) last: Option<u64>,
-    /// The marked text, top to bottom, as Ctrl+C copies it.
+    /// The marked text, top to bottom, as Markdown, for the menu's Copy as Markdown.
     pub(super) text: String,
-    /// The marked text as it reads, with no Markdown, for the menu's Copy as raw text.
+    /// The marked text as it reads, with no Markdown, as Ctrl+C copies it.
     pub(super) plain: String,
-    /// The text the drag began in, and where in it.
-    pub(super) anchor: Option<(u64, usize)>,
+    /// Everything is marked, by Ctrl+A: each text drawn is marked whole.
+    pub(super) all: bool,
+    /// The text the drag began in, and the part of it the press took: a place, a word or the
+    /// whole text.
+    pub(super) anchor: Option<(u64, Range<usize>)>,
+    /// What the drag marks by.
+    pub(super) unit: Unit,
     pub(super) dragging: bool,
     /// Where the pointer was when the drag was last worked out: every text hears each move.
     pub(super) seen: Option<Point<Pixels>>,
@@ -123,20 +144,53 @@ pub fn begin_frame(cx: &mut App) {
     cx.default_global::<Selection>().drawn.clear();
 }
 
-/// Copies the marked text, if any is.
+/// Copies the marked text as it reads, if any is.
 pub fn copy(cx: &mut App) {
-    let text = cx.default_global::<Selection>().text.clone();
+    let text = cx.default_global::<Selection>().plain.clone();
     if !text.is_empty() {
         cx.write_to_clipboard(ClipboardItem::new_string(text));
     }
 }
 
+/// Marks every text, as Ctrl+A does, copying as `markdown` and `plain`: the whole chat, which
+/// holds more than is drawn.
+pub fn select_all(markdown: String, plain: String, window: &mut Window, cx: &mut App) {
+    to_primary(&plain, cx);
+    let selection = cx.default_global::<Selection>();
+    selection.anchor = None;
+    selection.dragging = false;
+    selection.marked.clear();
+    selection.last = None;
+    selection.all = true;
+    selection.text = markdown;
+    selection.plain = plain;
+    claim(Owner::Chat, cx);
+    window.refresh();
+}
+
+/// Drops what is marked, as Escape does. Returns whether anything was.
+pub fn clear(window: &mut Window, cx: &mut App) -> bool {
+    let selection = cx.default_global::<Selection>();
+    if selection.marked.is_empty() && !selection.all {
+        return false;
+    }
+    selection.unmark();
+    window.refresh();
+    true
+}
+
 impl Selection {
-    /// Marks `range` of the one text `id`, whose words are `text`, and nothing else.
-    pub(super) fn mark(&mut self, id: u64, range: Range<usize>, text: &str) {
+    /// Drops every mark.
+    pub(super) fn unmark(&mut self) {
         self.marked.clear();
         self.text.clear();
         self.plain.clear();
+        self.all = false;
+    }
+
+    /// Marks `range` of the one text `id`, whose words are `text`, and nothing else.
+    pub(super) fn mark(&mut self, id: u64, range: Range<usize>, text: &str) {
+        self.unmark();
         if range.start < range.end
             && range.end <= text.len()
             && text.is_char_boundary(range.start)
@@ -295,23 +349,30 @@ impl Selection {
     /// Marks everything from where the drag began to `position`, text by text in reading order,
     /// including texts scrolled out of view. Returns whether what is marked changed.
     pub(super) fn drag_to(&mut self, position: Point<Pixels>) -> bool {
-        let Some((anchor, anchor_at)) = self.anchor else {
+        let Some((anchor, held)) = self.anchor.clone() else {
             return false;
         };
         let Some((to, to_at)) = self.hit(position) else {
             return false;
         };
-        let (Some(from_place), Some(to_place)) = (
+        let (Some(from_place), Some(to_known)) = (
             self.known.get(&anchor).map(|known| known.place),
-            self.known.get(&to).map(|known| known.place),
+            self.known.get(&to),
         ) else {
             return false;
         };
+        let to_place = to_known.place;
+        // A drag begun by a double or triple click takes whole words or whole texts.
+        let reach = match self.unit {
+            Unit::Letter => to_at..to_at,
+            Unit::Word => word_at(&to_known.layout.text(), to_at),
+            Unit::Whole => 0..to_known.layout.len(),
+        };
         let ((first, first_place, first_at), (last, last_place, last_at)) =
-            if (from_place, anchor_at) <= (to_place, to_at) {
-                ((anchor, from_place, anchor_at), (to, to_place, to_at))
+            if (from_place, held.start) <= (to_place, reach.start) {
+                ((anchor, from_place, held.start), (to, to_place, reach.end))
             } else {
-                ((to, to_place, to_at), (anchor, from_place, anchor_at))
+                ((to, to_place, reach.start), (anchor, from_place, held.end))
             };
         let mut between: Vec<(Place, u64)> = self
             .known
@@ -342,6 +403,7 @@ impl Selection {
         }
         self.text = markdown(&pieces);
         self.plain = plain(&pieces);
+        self.all = false;
         self.marked != before
     }
 }
@@ -394,6 +456,49 @@ pub fn overlay(list: ListState) -> impl IntoElement {
                 for gap in gaps {
                     window.paint_quad(fill(gap, color));
                 }
+            });
+        },
+    )
+    .absolute()
+    .top_0()
+    .left_0()
+    .size_full()
+}
+
+/// Drawn behind a scrolling list of texts, before them: a press beside or between its texts,
+/// which nothing in the list took, starts a drag from the nearest text, as one on it would.
+pub fn margin() -> impl IntoElement {
+    canvas(
+        |bounds, window, _| window.insert_hitbox(bounds, HitboxBehavior::Normal),
+        |_, hitbox, window, _| {
+            window.on_mouse_event(move |event: &MouseDownEvent, phase, window, cx| {
+                if phase != DispatchPhase::Bubble
+                    || event.button != MouseButton::Left
+                    || window.default_prevented()
+                    || !hitbox.is_hovered(window)
+                {
+                    return;
+                }
+                let selection = cx.default_global::<Selection>();
+                if selection.menu.is_some() {
+                    return;
+                }
+                selection.survey(window);
+                if event.modifiers.shift && selection.anchor.is_some() {
+                    selection.drag_to(event.position);
+                } else {
+                    let Some((id, at)) = selection.hit(event.position) else {
+                        return;
+                    };
+                    selection.anchor = Some((id, at..at));
+                    selection.unit = Unit::Letter;
+                }
+                selection.dragging = true;
+                selection.seen = None;
+                if !selection.marked.is_empty() {
+                    claim(Owner::Chat, cx);
+                }
+                window.refresh();
             });
         },
     )

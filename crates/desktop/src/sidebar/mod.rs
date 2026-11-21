@@ -18,4 +18,5 @@ mod tree;
 pub mod usage;
 
 use render::{empty_row, twistie};
+pub use export::thread_markdown;
 pub use render::render;

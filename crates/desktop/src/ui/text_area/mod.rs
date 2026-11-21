@@ -5,6 +5,7 @@
 
 mod state;
 mod keys;
+mod mouse;
 mod input;
 mod history;
 mod markdown;
