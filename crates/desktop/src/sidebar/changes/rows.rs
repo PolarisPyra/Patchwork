@@ -122,11 +122,12 @@ pub(super) fn group_header(
 impl ChangesView {
     /// One file (`ChangeRow`): its name and folder, the actions shown on hover, its line counts,
     /// and its status letter. Opens its diff, or the `side` of it the row is for when the file is
-    /// in both groups.
+    /// in both groups, or its diff from commit `since` for a file the task's branch changed.
     pub(super) fn change_row(
         &self,
         c: &FileChange,
         side: DiffSide,
+        since: Option<String>,
         full_access: bool,
         t: &Theme,
         cx: &mut Context<Self>,
@@ -135,7 +136,11 @@ impl ChangesView {
         let deleted = c.status == "deleted";
         // A file can be both staged and not, so it can be in two groups at once.
         let shown = side;
-        let side = if c.staged { "staged" } else { "unstaged" };
+        let side = match (&since, c.staged) {
+            (Some(_), _) => "branch",
+            (None, true) => "staged",
+            (None, false) => "unstaged",
+        };
         // Where it was renamed from, or how it conflicts, said with its status.
         let label = match (&c.renamed_from, &c.conflict) {
             (_, Some(kind)) => format!("Conflict: {kind}"),
@@ -262,8 +267,10 @@ impl ChangesView {
                 )
                 .on_click(move |_, window, cx| {
                     let open = open.clone();
-                    let _ = workspace.update(cx, |w, cx| {
-                        w.open_change_side(&open, shown, window, cx);
+                    let since = since.clone();
+                    let _ = workspace.update(cx, |w, cx| match since {
+                        Some(since) => w.open_change_since(&open, since, window, cx),
+                        None => w.open_change_side(&open, shown, window, cx),
                     });
                 }),
             )

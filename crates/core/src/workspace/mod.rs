@@ -34,13 +34,13 @@ pub use hunks::{apply_hunk, staged_hunks};
 #[doc(inline)]
 pub use git::{
     ASKPASS_ENV, CredentialKind, CredentialRequest, run_askpass, set_credential_prompter,
-    abort_operation, accept_file, add_remote, checkout, cherry_pick, commit, commit_detail,
-    commit_file_diff, file_log, git_blame, continue_operation, create_branch, create_tag,
-    delete_branch, delete_tag, discard_unstaged, fetch, fetch_remote, git_branch, git_branches,
-    git_changes, git_file_diff, git_log, git_stashes, git_sync_state, has_conflict_markers,
-    list_files, merge, pull, push, push_tags, rebase, remove_remote, rename_branch, reset_to,
-    revert_commit, revert_file, set_upstream, stash, stash_apply, stash_drop, sync, undo_commit,
-    unstage_all, unstage_file,
+    abort_operation, accept_file, changes_since, diff_since, add_remote, checkout, cherry_pick,
+    commit, commit_detail, commit_file_diff, file_log, git_blame, continue_operation,
+    create_branch, create_tag, delete_branch, delete_tag, discard_unstaged, fetch, fetch_remote,
+    git_branch, git_branches, git_changes, git_file_diff, git_log, git_stashes, git_sync_state,
+    has_conflict_markers, list_files, merge, pull, push, push_tags, rebase, remove_remote,
+    rename_branch, reset_to, revert_commit, revert_file, set_upstream, stash, stash_apply,
+    stash_drop, sync, undo_commit, unstage_all, unstage_file,
 };
 pub(crate) use git::{
     CheckState, answer_askpass, base_ref, branch_summary, check_state, committed_since,
