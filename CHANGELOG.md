@@ -3,6 +3,41 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.131] - 2026-11-21
+
+**v26.11.131** · 12 changes from 1 contributor
+
+- **Per-task worktrees.** Choose whether each task works in its own worktree or directly in the project folder before sending its first message.
+- **Branch changes view.** Source Control shows every file a task's branch changed since it left the base branch, committed or not.
+- **Live changed files.** A running reply's changed files update as it works, and Source Control catches changes made outside the app.
+- **Safe checkpoint restore.** Restoring a checkpoint is refused while another task works in the same folder, so other tasks' newer work is kept.
+- **Editor opens task worktree.** Open in editor from a task with a worktree opens that worktree, so the editor shows the task's changes.
+- **Kept new files.** Discarding a new file no longer deletes it for good when the Trash can't take it; the file is kept and you're told.
+- **Worktree cleanup keeps ignored files.** Cleanup no longer deletes git-ignored files such as an edited .env when it keeps a worktree with uncommitted changes.
+
+### Plus 3 more bug fixes.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* fix(chat): Open in editor and Open folder open the task's worktree by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/272
+* fix(chat): changed files stay in sync with the project by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/274
+* feat(worktrees): choose whether a task works in a worktree or the project folder by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/273
+* fix(chat): restoring a checkpoint keeps work it shouldn't touch by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/276
+* fix(source-control): a new file the Trash can't take is kept, not deleted by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/279
+* fix(ui): icons say what their actions do by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/275
+* fix(artifacts): an artifact's id can't name a path outside its folder by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/280
+* feat(app): error popups slide away after 5 seconds by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/282
+* feat(source-control): see everything a task's branch changed since it left the base branch by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/281
+* fix(worktrees): discarding a shared worktree names the tasks that lose work too by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/277
+* fix(worktrees): cleanup keeps ignored files such as .env by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/278
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.130...26.11.131
+
+</details>
+
 ## [26.11.130] - 2026-11-21
 
 **v26.11.130** · 6 changes from 1 contributor
