@@ -168,8 +168,9 @@ impl Canvas {
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
         self.path.as_ref()?;
-        // A commit's changes are not the file's to stage or reject.
-        if self.revision.is_some() && self.active_tab() == CanvasTab::Diff {
+        // A commit's changes, or a branch's, are not the file's to stage or reject.
+        if (self.revision.is_some() || self.since.is_some()) && self.active_tab() == CanvasTab::Diff
+        {
             return None;
         }
         let change = self.change(cx)?;

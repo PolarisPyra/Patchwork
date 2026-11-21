@@ -46,6 +46,12 @@ impl Render for Composer {
         let notice = self.model_notice(agent, model.as_deref(), vision_set, &t, cx);
         let (worktree, worktree_files) =
             workspace.update(cx, |w, cx| crate::chat::worktree::worktree_strip(w, &t, cx));
+        let (worktree_pick, worktree_told) = workspace.update(cx, |w, cx| {
+            (
+                crate::chat::worktree_choice::worktree_pick_chip(w, &t, cx),
+                crate::chat::worktree_choice::worktree_told_line(w, &t, cx),
+            )
+        });
         let w = workspace.read(cx);
         let usage = w
             .thread
@@ -483,6 +489,13 @@ impl Render for Composer {
             .child(agent_chip)
             .child(div().flex_1())
             // The worktree's status, at the end of the line before Format.
+            .children(worktree_pick.map(|pick| {
+                div()
+                    .min_w_0()
+                    .text_size(px(fs_xs()))
+                    .line_height(px(16.))
+                    .child(pick)
+            }))
             .children(worktree.map(|status| {
                 div()
                     .min_w_0()
@@ -518,6 +531,7 @@ impl Render for Composer {
             .flex()
             .flex_col()
             .children(notice)
+            .children(worktree_told)
             .children(worktree_files)
             .children(status_line)
             .child(pill)

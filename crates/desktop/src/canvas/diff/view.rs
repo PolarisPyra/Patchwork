@@ -259,8 +259,9 @@ impl Canvas {
             .pl(px(16.))
             .text_color(t.text_subtle)
             .child(div().flex_1().whitespace_nowrap().child(row.text.clone()))
-            // A commit's changes are read, not staged, discarded or sent back for review.
-            .when(self.revision.is_none(), |d| {
+            // A commit's changes, or a branch's, are read, not staged, discarded or sent back
+            // for review.
+            .when(self.revision.is_none() && self.since.is_none(), |d| {
                 d.child(
                     div()
                         .flex()

@@ -5,11 +5,12 @@
 use crate::Error;
 use std::collections::{HashMap, HashSet};
 
-use crate::workspace::{CommitDetail, CommitOptions, FileChange, GitCommit, GitRef};
+use crate::workspace::{CommitDetail, CommitOptions, GitCommit, GitRef};
 
 use super::branches::branch_base;
 use super::run::{explained, git, git_branch, git_raw, git_succeeds, has_head};
 use super::changes::parse_numstat;
+use super::compare::name_status;
 
 /// Stages every change under `root`, untracked files included, for a commit of everything there.
 /// The rest of the repository stays as it is when `root` is one of its folders. Refused while a
@@ -171,29 +172,7 @@ pub fn commit_detail(root: &str, hash: &str) -> Result<CommitDetail, Error> {
         .into_iter()
         .map(|(path, added, deleted)| (path, (added, deleted)))
         .collect();
-    let mut files = Vec::new();
-    let names = show("--name-status")?;
-    let mut fields = names.split('\0');
-    while let Some(code) = fields.next().filter(|c| !c.is_empty()) {
-        let renamed = code.starts_with(['R', 'C']);
-        let from = renamed.then(|| fields.next()).flatten();
-        let Some(path) = fields.next() else { break };
-        let (additions, deletions) = counts.get(path).copied().unwrap_or((0, 0));
-        files.push(FileChange {
-            path: path.to_string(),
-            status: match code.chars().next() {
-                Some('A' | 'C') => "added",
-                Some('D') => "deleted",
-                Some('R') => "renamed",
-                _ => "modified",
-            }
-            .into(),
-            additions,
-            deletions,
-            renamed_from: from.filter(|_| code.starts_with('R')).map(String::from),
-            ..FileChange::default()
-        });
-    }
+    let files = name_status(&show("--name-status")?, &counts);
     Ok(CommitDetail {
         body: body.trim().to_string(),
         email: email.to_string(),

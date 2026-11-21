@@ -8,6 +8,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
 use gpui::{AnyElement, SharedString, Window, div, prelude::*, px};
+use patchwork_core::orchestration::changes::turn_files::TurnFileState;
 use patchwork_core::workspace::{DiffSide, FileChange};
 
 use super::rows::{group_button, group_header, row_action};
@@ -26,6 +27,9 @@ pub(super) enum Group {
     Staged(Vec<String>),
     /// The changes not staged, by path, which its header discards or stages at once.
     Unstaged(Vec<String>),
+    /// What the task's branch changed since it left the branch it goes back into, named here,
+    /// which its header shows or hides.
+    Branch(String),
 }
 
 /// One row of the list.
@@ -40,6 +44,8 @@ pub(super) enum Entry {
     },
     /// A changed file, and the side of its diff the row opens when it is in both groups.
     Change(FileChange, DiffSide),
+    /// A file the task's branch changed, and the commit its diff starts from.
+    BranchChange(FileChange, String),
     /// A file the open reply changed that has no change now.
     ReplyFile(String),
     /// The space under the last row.
@@ -55,6 +61,7 @@ impl Entry {
             Entry::Change(c, _) => (2, &c.path, &c.status, c.staged).hash(state),
             Entry::ReplyFile(path) => (3, path).hash(state),
             Entry::End => 4.hash(state),
+            Entry::BranchChange(c, _) => (5, &c.path, &c.status).hash(state),
         }
     }
 }
@@ -126,7 +133,11 @@ impl ChangesView {
             } => group_header(title, count, self.header_actions(&group, cx), &t).into_any_element(),
             Entry::Change(c, side) => div()
                 .px(px(4.))
-                .child(self.change_row(&c, side, self.full_access, &t, cx))
+                .child(self.change_row(&c, side, None, self.full_access, &t, cx))
+                .into_any_element(),
+            Entry::BranchChange(c, since) => div()
+                .px(px(4.))
+                .child(self.change_row(&c, DiffSide::All, Some(since), true, &t, cx))
                 .into_any_element(),
             Entry::ReplyFile(path) => div()
                 .px(px(4.))
@@ -140,6 +151,29 @@ impl ChangesView {
     fn header_actions(&self, group: &Group, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let t = *theme(cx);
         match group {
+            Group::Branch(base) => {
+                let (open, hover, fg) = (self.compare_open, t.bg_hover, t.text);
+                vec![
+                    button("branch-compare", format!("Changes since {base}"))
+                        .aria_expanded(open)
+                        .flex_none()
+                        .gap(px(4.))
+                        .rounded(px(radius_sm()))
+                        .px(px(6.))
+                        .py(px(2.))
+                        .text_size(px(fs_sm()))
+                        .text_color(t.text_subtle)
+                        .hover(move |s| s.bg(hover).text_color(fg))
+                        .tooltip(tooltip(format!("Changes since this branch left {base}")))
+                        .child(base.clone())
+                        .child(icon(if open { "caret-down" } else { "caret-right" }, 12.))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.compare_open = !this.compare_open;
+                            cx.notify();
+                        }))
+                        .into_any_element(),
+                ]
+            }
             Group::Merge => {
                 let lead = if self.resolving {
                     spinner(12., t.text_subtle).into_any_element()
@@ -196,7 +230,7 @@ impl ChangesView {
                     row_action(
                         "discard-all",
                         "Discard all changes",
-                        "arrow-counter-clockwise",
+                        "trash",
                         name.clone(),
                         &t,
                     )
@@ -219,11 +253,25 @@ impl ChangesView {
         }
     }
 
-    /// A file the open reply changed that has no change now: deleted since, or changed back.
+    /// A file the open reply changed that has no change now: committed, deleted, or changed back
+    /// since, as its turn's snapshots tell when it has them.
     fn reply_file(&self, path: &str, cx: &mut Context<Self>) -> AnyElement {
         let t = *theme(cx);
         let hover = t.bg_hover;
         let missing = self.missing.contains(path);
+        let state = self.workspace.upgrade().and_then(|w| {
+            let w = w.read(cx);
+            let (_, message) = w.change_focus.as_ref()?;
+            let files = w.reply_files.get(message)?.turn_files.as_ref()?;
+            files.iter().find(|f| f.path == path).map(|f| f.state)
+        });
+        let note = match state {
+            _ if missing => "Deleted",
+            Some(TurnFileState::Committed) => "Committed",
+            Some(TurnFileState::Reverted) => "Reverted",
+            Some(TurnFileState::Deleted) => "Deleted",
+            _ => "No changes",
+        };
         let open = path.to_string();
         let workspace = self.workspace.clone();
         button(
@@ -252,7 +300,7 @@ impl ChangesView {
                 .flex_none()
                 .text_size(px(fs_sm()))
                 .text_color(t.text_subtle)
-                .child(if missing { "Deleted" } else { "No changes" }),
+                .child(note),
         )
         .on_click(move |_, window, cx| {
             let open = open.clone();

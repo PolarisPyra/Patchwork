@@ -61,6 +61,24 @@ pub struct WorktreeState {
     /// The branch that already has every file the worktree changed, as the worktree has it, while
     /// the worktree has no commits of its own: cleaning it up loses nothing.
     pub landed_on: Option<String>,
+    /// The titles of the other tasks working in the same worktree, forks that share it, whose
+    /// work discarding throws away too.
+    pub shared_with: Vec<String>,
+}
+
+/// A task's worktree against the branch it goes back into, for Source Control to show.
+#[derive(Debug, Clone)]
+pub struct BranchCompare {
+    /// The folder compared: the worktree's copy of the project's folder.
+    pub root: String,
+    /// The branch it goes back into, as the project has it checked out.
+    pub base: String,
+    /// The commit the worktree's branch left that branch at, which its diffs start from.
+    pub since: String,
+    /// The commits the worktree's branch made since.
+    pub commits: usize,
+    /// The files that differ from that commit, committed or not, named from `root`.
+    pub files: Vec<FileChange>,
 }
 
 /// What a task's worktree needs from the user, as the sidebar marks it.
@@ -633,7 +651,7 @@ impl Core {
         if thread.parent.is_some()
             || !first_turn
             || ssh::is_remote(path)
-            || self.edits_in_place(project_id)
+            || !self.task_gets_worktree(&thread.id, project_id)
             || self.is_worktree_project(path)
             || self.is_dispatcher(&thread.id)
         {
@@ -985,6 +1003,13 @@ impl Core {
         } else {
             None
         };
+        let shared_with = self
+            .sharers(&worktree.top)
+            .into_iter()
+            .filter(|id| id != thread_id)
+            .filter_map(|id| self.store.thread(&id))
+            .map(|t| t.title)
+            .collect();
         Ok(Some(WorktreeState {
             worktree,
             changes,
@@ -992,6 +1017,40 @@ impl Core {
             behind,
             off_branch,
             landed_on,
+            shared_with,
+        }))
+    }
+
+    /// Everything task `thread_id`'s worktree changed since its branch left the project's
+    /// branch, commits included. None for a task without one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when git can't read the worktree or the project.
+    pub fn branch_compare(&self, thread_id: &str) -> Result<Option<BranchCompare>, Error> {
+        let Some(worktree) = self.thread_worktree(thread_id) else {
+            return Ok(None);
+        };
+        let project = self.project_top(thread_id)?;
+        let head = git(&project, &["rev-parse", "HEAD"])?;
+        let since = git(&worktree.top, &["merge-base", "HEAD", head.trim()])?
+            .trim()
+            .to_owned();
+        let base = workspace::git_branch(&project).unwrap_or_else(|| "the project's HEAD".into());
+        let commits = git(
+            &worktree.top,
+            &["rev-list", "--count", &format!("{since}..HEAD")],
+        )?
+        .trim()
+        .parse()
+        .unwrap_or(0);
+        let files = workspace::changes_since(&worktree.root, &since)?;
+        Ok(Some(BranchCompare {
+            root: worktree.root,
+            base,
+            since,
+            commits,
+            files,
         }))
     }
 
@@ -1095,7 +1154,7 @@ impl Core {
                 || thread.messages.iter().any(|m| m.role == Role::Assistant)
                 || self.worktree_record(&thread.id).is_some()
                 || self.store.state(&failed_key(&thread.id)).is_some()
-                || self.edits_in_place(project_id)
+                || !self.task_gets_worktree(&thread.id, project_id)
                 || self.is_dispatcher(&thread.id)
             {
                 continue;

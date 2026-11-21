@@ -183,7 +183,7 @@ pub fn agent_step(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) ->
         .child(if checking {
             spinner(14., accent).into_any_element()
         } else {
-            icon("arrow-clockwise", 14.).into_any_element()
+            icon("arrows-clockwise", 14.).into_any_element()
         })
         .child("Check again");
     let recheck = if checking {

@@ -1,5 +1,6 @@
-//! Settings → Worktrees: whether tasks get worktrees at all, whether a fork gets one of its own,
-//! what cleaning up keeps, and the button that deletes stale task worktrees now.
+//! Settings → Worktrees: whether tasks get worktrees at all and in which projects, whether a fork
+//! gets one of its own, what cleaning up keeps, and the button that deletes stale task worktrees
+//! now.
 
 // Rust guideline compliant 2026-10-09
 
@@ -9,7 +10,7 @@ use gpui::{AnyElement, Div, Role, SharedString, Stateful, div, prelude::*, px};
 use patchwork_core::settings::KeepWorktrees;
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{choices, section_heading, select_box, switch_row, token_row};
+use crate::settings::controls::{choices, section_heading, select_box, switch, switch_row, token_row};
 use crate::ui::theme::{Theme, fs_sm, theme};
 use crate::ui::{BtnKind, btn};
 
@@ -85,6 +86,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         |d, on, cx| d.update(|s| s.worktrees.cleanup.with_deleted_tasks = on, cx),
         cx,
     );
+    let projects = (on).then(|| project_rows(d, &t, cx));
     let stale = stale_row(&t, d, cx);
     let keep = keep_row(worktrees.cleanup.keep, &t, d, cx);
     div()
@@ -92,6 +94,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .flex_col()
         .child(section_heading("Tasks", true, &t))
         .child(use_row)
+        .children(projects)
         .child(section_heading("Forks", false, &t))
         .child(fork_row)
         .child(section_heading("Cleanup", false, &t))
@@ -99,6 +102,44 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .child(keep)
         .child(stale)
         .into_any_element()
+}
+
+/// A switch for each project on this computer: whether its new tasks get a worktree each or edit
+/// its folder. Tasks that already started keep where they work.
+fn project_rows(d: &SettingsDialog, t: &Theme, cx: &mut Context<SettingsDialog>) -> Div {
+    let rows: Vec<_> = d
+        .settings
+        .projects
+        .iter()
+        .filter(|p| !patchwork_core::system::ssh::is_remote(&p.path))
+        .map(|p| {
+            let on = !d.settings.edit_in_place.contains(&p.id);
+            let id = p.id.clone();
+            token_row(p.name.clone(), None, t).child(
+                switch(format!("worktrees-project-{}", p.id), p.name.clone(), on, t).on_click(
+                    cx.listener(move |d, _, _, cx| {
+                        let id = id.clone();
+                        d.update(
+                            move |s| {
+                                s.edit_in_place.retain(|p| p != &id);
+                                if on {
+                                    s.edit_in_place.push(id.clone());
+                                }
+                            },
+                            cx,
+                        );
+                    }),
+                ),
+            )
+        })
+        .collect();
+    div()
+        .flex()
+        .flex_col()
+        .when(!rows.is_empty(), |d| {
+            d.child(section_heading("Projects", false, t))
+        })
+        .children(rows)
 }
 
 /// The row whose button deletes stale worktrees, with how many it deleted last.

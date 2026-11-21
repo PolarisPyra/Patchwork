@@ -30,6 +30,7 @@ mod transcript;
 pub mod user;
 mod view;
 pub mod worktree;
+pub mod worktree_choice;
 
 pub use transcript::{Pieces, Row};
 pub use view::{OPEN_HOLD, render};

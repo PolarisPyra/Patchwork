@@ -25,6 +25,7 @@ use crate::chat::composer::Composer;
 use crate::chat::files::ReplyFiles;
 use crate::chat::goal::GoalClear;
 use crate::chat::worktree::WorktreeStrip;
+use crate::chat::worktree_choice::WorktreePick;
 use crate::chat::lineage::Lineage;
 use crate::chat::plan::ShownPlan;
 use crate::chat::prompts::Answering;
@@ -165,6 +166,10 @@ pub struct Workspace {
     /// The strips of tasks switched away from while a step ran or had something to say, by task
     /// id, so coming back shows it.
     pub parked_worktrees: HashMap<String, WorktreeStrip>,
+    /// Where the task that hasn't started yet works, as picked in the composer.
+    pub worktree_pick: Option<WorktreePick>,
+    /// Whether the user was told where each project's tasks work, by project id; None while read.
+    pub worktree_told: HashMap<String, Option<bool>>,
     /// What each task's worktree needs from the user, as the sidebar marks it.
     pub worktree_marks: HashMap<String, WorktreeMark>,
     /// The tasks as they were when the marks were last read, so a change reads them again.
@@ -200,6 +205,11 @@ pub struct Workspace {
     pub(super) project_events: mpsc::UnboundedSender<ProjectChanged>,
     /// The last error an action hit, shown above the status bar until dismissed.
     pub error: Option<String>,
+    /// The error the toast's timer runs for and that timer, whether the toast is sliding away,
+    /// and whether the mouse is over it, which holds it.
+    pub(super) error_timer: Option<(String, Task<()>)>,
+    pub(super) error_leaving: bool,
+    pub(super) error_hovered: bool,
     /// The file panel right of the chat, its width once dragged, and where a drag of it started.
     pub canvas: Option<Entity<Canvas>>,
     pub(super) canvas_width: Option<f32>,
@@ -391,6 +401,8 @@ impl Workspace {
             goal_closed: None,
             worktree: None,
             parked_worktrees: HashMap::new(),
+            worktree_pick: None,
+            worktree_told: HashMap::new(),
             worktree_marks: HashMap::new(),
             worktree_marks_key: None,
             hovered_row: None,
@@ -412,6 +424,9 @@ impl Workspace {
             changes_generation: 0,
             project_events,
             error: None,
+            error_timer: None,
+            error_leaving: false,
+            error_hovered: false,
             canvas: None,
             canvas_width: None,
             canvas_resizing: None,
@@ -524,10 +539,12 @@ impl Workspace {
     /// Follows the window: its focus, its appearance, and its coming back to the front.
     fn watch_window(&self, window: &mut Window, cx: &mut Context<Self>) {
         // A branch merged or a worktree changed outside the app shows once the window is back,
-        // and within a minute while it waits.
+        // and within a minute while it waits. Source Control reads git again too, for changes
+        // the file watcher missed, such as on a network drive or past the system's watch limit.
         cx.observe_window_activation(window, |this, window, cx| {
             if window.is_window_active() {
                 this.reload_worktree_marks(cx);
+                this.read_git(false, cx);
             }
         })
         .detach();

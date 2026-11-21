@@ -78,6 +78,25 @@ impl Workspace {
         }
     }
 
+    /// Opens a file's diff from commit `since`, where a task's branch left the branch it goes
+    /// back into, to the file as it is now.
+    pub fn open_change_since(
+        &mut self,
+        path: &str,
+        since: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(root) = self.git_root.clone() else {
+            return;
+        };
+        self.open_canvas_at(path, root, None, CanvasTab::Diff, window, cx);
+        // The canvas reads its diff once this update ends.
+        if let Some(canvas) = &self.canvas {
+            canvas.update(cx, |canvas, _| canvas.since = Some(since));
+        }
+    }
+
     /// Opens `path` in the file panel, on `tab`, with the reply it came from.
     pub fn open_canvas(
         &mut self,

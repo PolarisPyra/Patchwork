@@ -364,8 +364,16 @@ impl Workspace {
                 window.activate_window();
                 return;
             }
-            // A finished reply adds to what Costs counts.
+            // A finished reply adds to what Costs counts, and Source Control shows where its
+            // files ended, whether or not the file watcher saw every change.
             AgentEvent::TurnCompleted { .. } => {
+                if self
+                    .thread
+                    .as_ref()
+                    .is_some_and(|t| t.id == envelope.thread_id)
+                {
+                    self.read_git(false, cx);
+                }
                 if let Some(dialog) = &self.settings_dialog {
                     dialog.update(cx, crate::settings::SettingsDialog::refresh_costs);
                 }
@@ -530,6 +538,9 @@ impl Workspace {
                         && let Err(e) = self.core.set_thread_role(&id, role)
                     {
                         log::warn!(error:% = e; "could not set the chat's agent: {{error}}");
+                    }
+                    if let Some(project) = thread.project_id.clone() {
+                        self.apply_worktree_pick(&id, &project);
                     }
                     self.thread = Some(thread);
                     id

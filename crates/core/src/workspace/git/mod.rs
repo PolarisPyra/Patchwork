@@ -6,6 +6,7 @@ mod askpass;
 mod branches;
 mod changes;
 mod commits;
+mod compare;
 mod file_history;
 mod operation;
 mod remote;
@@ -32,6 +33,8 @@ pub use changes::{
 pub(crate) use commits::{committed_since, stage_for_commit, staged_summary, truncated};
 #[doc(inline)]
 pub use commits::{commit, commit_detail, git_log};
+#[doc(inline)]
+pub use compare::{changes_since, diff_since};
 #[doc(inline)]
 pub use file_history::{commit_file_diff, file_log, git_blame};
 #[doc(inline)]

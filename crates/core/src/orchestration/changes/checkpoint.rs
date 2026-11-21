@@ -20,6 +20,9 @@ use crate::threads::{ResumePoint, Thread, TurnTrees};
 const REFS: &str = "refs/patchwork/checkpoints";
 /// Snapshots from the end of a turn, one ref per reply the turn wrote.
 const END_REFS: &str = "refs/patchwork/turn-ends";
+/// The project as it was just before a checkpoint was restored, one ref per thread, so a restore
+/// can be taken back with git.
+const PRE_RESTORE_REFS: &str = "refs/patchwork/pre-restore";
 
 fn thread_refs(thread_id: &str) -> String {
     format!("{REFS}/{thread_id}/")
@@ -165,6 +168,84 @@ pub(in crate::orchestration) fn record_end(
     Some(TurnTrees { before, after })
 }
 
+/// What a turn still running has done so far to `paths`, commits it made included.
+///
+/// Pairs the snapshot from before the turn after `user_message_id` with that snapshot plus
+/// `paths` as they are now. Only those files are read, so it costs what the turn touched, not
+/// the whole project. None when the turn had no snapshot before it.
+#[must_use]
+pub fn turn_so_far(
+    root: &str,
+    thread_id: &str,
+    user_message_id: &str,
+    paths: &[String],
+) -> Option<TurnTrees> {
+    let before = git(
+        root,
+        &[
+            "rev-parse",
+            "--verify",
+            "-q",
+            &ref_name(thread_id, user_message_id),
+        ],
+    )
+    .ok()?;
+    let after = touched_tree(root, &before, paths)
+        .map_err(|e| log::warn!(error:% = e; "failed to read a running turn: {{error}}"))
+        .ok()?;
+    Some(TurnTrees { before, after })
+}
+
+/// `before` with `paths` as they are now on disk, leaving out ignored files as [`snapshot`] does.
+fn touched_tree(root: &str, before: &str, paths: &[String]) -> Result<String, Error> {
+    if crate::system::ssh::is_remote(root) {
+        return snapshot(root);
+    }
+    let temp = PathBuf::from(root).join(git(
+        root,
+        &[
+            "rev-parse",
+            "--git-path",
+            &format!("patchwork-index-{}", new_id()),
+        ],
+    )?);
+    let tree = (|| {
+        run(root, Some(&temp), &["read-tree", before], None)?;
+        let names = paths.join("\n") + "\n";
+        // check-ignore exits 1 when nothing is ignored.
+        let ignored = run(
+            root,
+            Some(&temp),
+            &["check-ignore", "--stdin"],
+            Some(names.as_bytes()),
+        )
+        .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
+        .unwrap_or_default();
+        let ignored: std::collections::HashSet<&str> = ignored.lines().collect();
+        let kept: Vec<&str> = paths
+            .iter()
+            .map(String::as_str)
+            .filter(|p| !ignored.contains(p))
+            .collect();
+        let names = kept.join("\0") + "\0";
+        run(
+            root,
+            Some(&temp),
+            &["update-index", "--add", "--remove", "-z", "--stdin"],
+            Some(names.as_bytes()),
+        )?;
+        git_with_index(root, &temp, &["write-tree"])
+    })();
+    let _ = std::fs::remove_file(&temp);
+    tree
+}
+
+/// [`git`] against the index at `index`.
+fn git_with_index(root: &str, index: &Path, args: &[&str]) -> Result<String, Error> {
+    let out = run(root, Some(index), args, None)?;
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
 /// The messages of the thread that have a snapshot from before their turn.
 pub fn list(root: &str, thread_id: &str) -> Vec<String> {
     let prefix = thread_refs(thread_id);
@@ -199,8 +280,11 @@ fn remove_added(root: &str, rel: &str) -> Result<(), Error> {
     std::fs::remove_file(&path).map_err(|e| format!("{}: {e}", path.display()).into())
 }
 
-/// Puts the project's files back as they were before the turn for `message_id`: files changed or
-/// deleted since are rewritten, and files created since are deleted. Ignored files are left alone.
+/// Puts the project's files back as they were before the turn for `message_id`.
+///
+/// Files changed or deleted since are rewritten, and files created since are deleted. Ignored
+/// files are left alone, judged by the ignore rules as they were at the checkpoint, so a folder
+/// ignored then and not since stays. The project as it was is kept at `refs/patchwork/pre-restore/<thread>` first.
 ///
 /// # Errors
 ///
@@ -218,6 +302,15 @@ pub fn restore(root: &str, thread_id: &str, message_id: &str) -> Result<(), Erro
     )
     .map_err(|_discarded| "This message has no checkpoint to restore")?;
     let now = snapshot(root)?;
+    git(
+        root,
+        &[
+            "update-ref",
+            &format!("{PRE_RESTORE_REFS}/{thread_id}"),
+            &now,
+        ],
+    )
+    .map_err(|e| format!("Could not keep the files as they are before restoring: {e}"))?;
     let diff = run(
         root,
         None,
@@ -235,10 +328,11 @@ pub fn restore(root: &str, thread_id: &str, message_id: &str) -> Result<(), Erro
     )?;
     let fields: Vec<&[u8]> = diff.stdout.split(|&b| b == 0).collect();
     let mut rewrite = Vec::new();
+    let mut added = Vec::new();
     for pair in fields.chunks(2) {
         let [status, path] = pair else { continue };
         if status == b"A" {
-            remove_added(root, &String::from_utf8_lossy(path))?;
+            added.push(String::from_utf8_lossy(path).into_owned());
         } else {
             rewrite.extend_from_slice(path);
             rewrite.push(0);
@@ -254,6 +348,23 @@ pub fn restore(root: &str, thread_id: &str, message_id: &str) -> Result<(), Erro
             "--pathspec-file-nul",
         ];
         run(root, None, &args, Some(&rewrite))?;
+    }
+    if added.is_empty() {
+        return Ok(());
+    }
+    // Rewriting put the checkpoint's ignore rules back; a file they ignore was never in it.
+    let names = added.join("\n") + "\n";
+    let ignored = run(
+        root,
+        None,
+        &["check-ignore", "--no-index", "--stdin"],
+        Some(names.as_bytes()),
+    )
+    .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
+    .unwrap_or_default();
+    let ignored: std::collections::HashSet<&str> = ignored.lines().collect();
+    for path in added.iter().filter(|p| !ignored.contains(p.as_str())) {
+        remove_added(root, path)?;
     }
     Ok(())
 }
@@ -330,6 +441,7 @@ pub fn remove(root: &str, thread_id: &str, message_ids: Option<&[String]>) {
         for name in ends.unwrap_or_default().lines() {
             delete_ref(root, name);
         }
+        delete_ref(root, &format!("{PRE_RESTORE_REFS}/{thread_id}"));
     }
 }
 
@@ -388,6 +500,16 @@ impl Core {
             .ok_or("Only project tasks have checkpoints")?;
         // Not the project's own folder for a task whose worktree isn't there now.
         let root = self.thread_root(thread_id)?;
+        // Another task editing the same folder, such as one more task in the project's own folder,
+        // would lose what it wrote since the checkpoint.
+        let other_running = self.store.threads().iter().any(|t| {
+            t.id != thread_id
+                && (self.runner.is_running(&t.id) || self.runner.is_starting(&t.id))
+                && self.thread_root(&t.id).is_ok_and(|r| r == root)
+        });
+        if other_running {
+            return Err("Another task is working in this folder. Stop it before restoring".into());
+        }
         // An idle agent still holds the session being undone.
         self.runner.retire_idle(thread_id);
         let thread = self.thread(thread_id)?;
