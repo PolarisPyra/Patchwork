@@ -112,6 +112,12 @@ impl Workspace {
         if let Some(keys) = reload {
             self.type_in_run(keys, cx);
         }
+        // A Kotlin or Java app has no tool that stays, so a save builds and installs it again.
+        if let Some(android) = self.android.clone() {
+            android.update(cx, |android, cx| {
+                android.rebuild_on_save(&changed.paths, cx);
+            });
+        }
         let Some(files) = changed.changes else {
             return;
         };

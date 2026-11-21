@@ -55,6 +55,27 @@ impl Framework {
                 .extension()
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("dart"))
     }
+
+    /// Whether saving the project-relative `path` should build and install a Kotlin or Java app
+    /// again, which has no tool that stays to reload it. What Gradle writes itself never does, so
+    /// a build cannot start the next one.
+    #[must_use]
+    pub fn rebuilds_on_save(self, path: &str) -> bool {
+        /// Folders Gradle, Kotlin and the IDE write into.
+        const WRITTEN: [&str; 4] = ["build", ".gradle", ".kotlin", ".idea"];
+        /// The sources, resources and build scripts an app is made from.
+        const SOURCES: [&str; 5] = ["kt", "kts", "java", "xml", "gradle"];
+        let path = std::path::Path::new(path);
+        matches!(self, Self::KotlinMultiplatform | Self::NativeAndroid)
+            && !path.components().any(|part| {
+                WRITTEN
+                    .iter()
+                    .any(|w| part.as_os_str().eq_ignore_ascii_case(w))
+            })
+            && path
+                .extension()
+                .is_some_and(|extension| SOURCES.iter().any(|s| extension.eq_ignore_ascii_case(s)))
+    }
 }
 
 /// A mobile app found in a project.

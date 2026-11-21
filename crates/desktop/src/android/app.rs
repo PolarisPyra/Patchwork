@@ -18,6 +18,10 @@ use crate::ui::{dropdown_chip, icon_button, spinner, tooltip};
 /// What stops a command in a terminal: the interrupt key.
 const INTERRUPT: &str = "\u{3}";
 
+/// How long saves must stop before the app is built again: an editor saving several files, or
+/// an agent writing them one by one, builds once.
+const SETTLE: std::time::Duration = std::time::Duration::from_millis(800);
+
 impl AndroidPanel {
     /// Reads the variants the app can be built as, and the one last picked for the project.
     pub(super) fn load_variants(&self, cx: &mut Context<Self>) {
@@ -121,6 +125,46 @@ impl AndroidPanel {
         match framework.reload() {
             Some(Reload::Typed(keys)) => Some(keys),
             _ => None,
+        }
+    }
+
+    /// Builds and installs a Kotlin or Java app again once the project-relative `paths` were
+    /// saved, on the device it last ran on. A burst of saves rebuilds once, after the last.
+    pub fn rebuild_on_save(&mut self, paths: &[String], cx: &mut Context<Self>) {
+        let framework = self.project.framework;
+        if self.last_run.is_none() || !paths.iter().any(|path| framework.rebuilds_on_save(path)) {
+            return;
+        }
+        self.saves += 1;
+        let saves = self.saves;
+        self.rebuild_after(saves, cx);
+    }
+
+    /// Rebuilds after [`SETTLE`], unless another save came since save number `saves`.
+    fn rebuild_after(&self, saves: u64, cx: &mut Context<Self>) {
+        crate::ui::after(cx, SETTLE, move |this, cx| {
+            if this.saves == saves {
+                this.rebuild(saves, cx);
+            }
+        });
+    }
+
+    /// Builds and installs the app again on the device it last ran on, once the build under way
+    /// has ended.
+    fn rebuild(&mut self, saves: u64, cx: &mut Context<Self>) {
+        if self.run != Run::Idle {
+            self.rebuild_after(saves, cx);
+            return;
+        }
+        let Some((serial, avd)) = self.last_run.clone() else {
+            return;
+        };
+        let online = self
+            .devices()
+            .iter()
+            .any(|d| d.serial == serial && d.state == DeviceState::Online);
+        if online {
+            self.launch(serial, avd, cx);
         }
     }
 
