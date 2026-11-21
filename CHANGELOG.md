@@ -3,6 +3,32 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.130] - 2026-11-21
+
+**v26.11.130** · 6 changes from 1 contributor
+
+- **Agent artifacts.** Agents can make pages, charts, diagrams, documents and slide decks that you open, pin and step through by version.
+- **SVG pictures in chat.** SVG code blocks in agent replies now draw as pictures, with the source shown if the image can't be drawn.
+- **Android auto rebuild on save.** Saving a Kotlin or Java file rebuilds and reloads your native Android app on the emulator or device without pressing Run.
+- **Desktop-style text selection.** Selecting, copying and pasting text now works as in a desktop editor and terminal, so Ctrl+C copies what you selected.
+
+### Plus 1 more performance improvement.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* feat(chat): SVG code blocks in replies draw as pictures by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/268
+* feat(android): saving a Kotlin or Java file rebuilds the app on the emulator by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/267
+* perf(app): moving backdrops, spinners and avatars redraw only themselves, in step by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/269
+* fix(selection): selecting, copying and pasting text work as in a desktop editor and terminal by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/270
+* feat(artifacts): agents make pages, charts and documents you can open, pin and step through by version by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/271
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.129...26.11.130
+
+</details>
+
 ## [26.11.129] - 2026-11-20
 
 **v26.11.129** · 2 changes from 1 contributor
