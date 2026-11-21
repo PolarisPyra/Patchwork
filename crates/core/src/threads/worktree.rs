@@ -61,6 +61,9 @@ pub struct WorktreeState {
     /// The branch that already has every file the worktree changed, as the worktree has it, while
     /// the worktree has no commits of its own: cleaning it up loses nothing.
     pub landed_on: Option<String>,
+    /// The titles of the other tasks working in the same worktree, forks that share it, whose
+    /// work discarding throws away too.
+    pub shared_with: Vec<String>,
 }
 
 /// What a task's worktree needs from the user, as the sidebar marks it.
@@ -985,6 +988,13 @@ impl Core {
         } else {
             None
         };
+        let shared_with = self
+            .sharers(&worktree.top)
+            .into_iter()
+            .filter(|id| id != thread_id)
+            .filter_map(|id| self.store.thread(&id))
+            .map(|t| t.title)
+            .collect();
         Ok(Some(WorktreeState {
             worktree,
             changes,
@@ -992,6 +1002,7 @@ impl Core {
             behind,
             off_branch,
             landed_on,
+            shared_with,
         }))
     }
 
