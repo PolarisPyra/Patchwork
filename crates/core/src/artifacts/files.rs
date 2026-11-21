@@ -27,7 +27,15 @@ impl Core {
     /// The folder the artifact `artifact`'s files are kept in. It may not exist yet.
     pub(super) fn artifact_folder(&self, artifact: &Artifact) -> PathBuf {
         let short = artifact.id.get(..8).unwrap_or(&artifact.id);
-        let name = format!("{}-{short}", artifact.key);
+        // A key from before keys were checked may hold a path; it stays inside the folder. A
+        // backslash or a colon is a path only on Windows, so elsewhere such a key keeps its folder.
+        let key = artifact.key.replace('/', "-");
+        let key = if cfg!(windows) {
+            key.replace(['\\', ':'], "-")
+        } else {
+            key
+        };
+        let name = format!("{key}-{short}");
         match self.local_project(&artifact.thread_id) {
             Some(project) => Path::new(&project)
                 .join(PROJECT_DIR)

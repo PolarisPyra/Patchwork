@@ -86,6 +86,10 @@ impl Core {
     /// exist, `old_str` does not appear exactly once, or the database write fails.
     pub(crate) fn run_artifact_tool(&self, thread_id: &str, args: &Value) -> Result<String, Error> {
         let key = text(args, "id").ok_or("Give the artifact's id")?.trim();
+        // It names the artifact's folder, so it can't name a path.
+        if key.contains(['/', '\\', ':', '\0']) || key.starts_with('.') {
+            return Err("Give the id as a plain name, such as \"sales-chart\"".into());
+        }
         let existing = self.store.artifact_by_key(thread_id, key);
         let command = text(args, "command").unwrap_or_default();
         let (artifact, content) = match (command, existing) {
