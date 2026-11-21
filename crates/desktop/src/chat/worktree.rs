@@ -412,7 +412,19 @@ fn discard_detail(state: &WorktreeState) -> String {
         n => Some(format!("{n} unmerged commits are dropped")),
     };
     let parts: Vec<String> = files.into_iter().chain(commits).collect();
-    format!("{}.", parts.join(", and "))
+    let shared = match state.shared_with.as_slice() {
+        [] => String::new(),
+        [one] => format!(" \"{one}\" works in this worktree too and loses its changes as well."),
+        many => format!(
+            " {} other tasks work in this worktree too and lose their changes as well: {}.",
+            many.len(),
+            many.iter()
+                .map(|t| format!("\"{t}\""))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    };
+    format!("{}.{shared}", parts.join(", and "))
 }
 
 /// "3 files changed · 1 commit · 2 behind".
