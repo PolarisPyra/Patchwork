@@ -242,7 +242,7 @@ fn row_text(
 
 pub(super) fn draw_screen(
     screen: &vt100::Screen,
-    selection: Option<((u16, u16), (u16, u16))>,
+    selection: &[(u16, u16, u16)],
     metrics: &Metrics,
     settings: &TerminalSettings,
     focused: bool,
@@ -266,22 +266,15 @@ pub(super) fn draw_screen(
             .whitespace_nowrap()
             .child(StyledText::new(text).with_highlights(runs))
     });
-    let selection = selection
-        .map(ordered)
-        .filter(|(a, b)| a != b)
-        .map(|(a, b)| {
-            (a.0..=b.0).map(move |row| {
-                let from = if row == a.0 { a.1 } else { 0 };
-                let to = if row == b.0 { b.1 } else { cols };
-                div()
-                    .absolute()
-                    .top(px(f32::from(row) * line_h))
-                    .left(px(f32::from(from) * cell_w))
-                    .w(px(f32::from(to.saturating_sub(from)) * cell_w))
-                    .h(px(line_h))
-                    .bg(t.bg_selected)
-            })
-        });
+    let selection = selection.iter().map(|&(row, from, to)| {
+        div()
+            .absolute()
+            .top(px(f32::from(row) * line_h))
+            .left(px(f32::from(from) * cell_w))
+            .w(px(f32::from(to.saturating_sub(from)) * cell_w))
+            .h(px(line_h))
+            .bg(t.bg_selected)
+    });
     let cursor = (cursor_shown && !screen.hide_cursor() && screen.scrollback() == 0).then(|| {
         let (row, col) = screen.cursor_position();
         let under = screen
@@ -320,7 +313,7 @@ pub(super) fn draw_screen(
         .line_height(px(line_h))
         .font_weight(metrics.weight)
         .text_color(palette.fg)
-        .children(selection.into_iter().flatten())
+        .children(selection)
         .child(div().flex().flex_col().children(lines))
         .children(cursor)
 }

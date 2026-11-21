@@ -368,6 +368,7 @@ pub fn transcript(
         .flex_col()
         .flex_1()
         .min_h_0()
+        .child(crate::ui::selection::margin())
         .child(
             div()
                 .id("transcript")

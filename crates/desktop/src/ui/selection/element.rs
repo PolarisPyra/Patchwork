@@ -12,7 +12,9 @@ use gpui::{
     TextLayout, Window, fill, point, px,
 };
 
-use super::state::{CHIP_INSET_Y, CHIP_PAD_X, Drawn, Kind, Known, Mark, Place, Selection};
+use super::owner::{Owner, claim, to_primary};
+use super::state::{CHIP_INSET_Y, CHIP_PAD_X, Drawn, Kind, Known, Mark, Place, Selection, Unit};
+use super::text::word_at;
 use crate::ui::menu::{Dismissed, Menu, MenuItem};
 use crate::ui::theme::{radius_sm, theme};
 
@@ -174,6 +176,10 @@ impl Element for Selectable {
             }
         }
         let selection = cx.default_global::<Selection>();
+        // With everything marked, each text is marked whole as it is drawn.
+        if selection.all {
+            selection.marked.insert(self.id, 0..layout.len());
+        }
         let marked = selection.marked.get(&self.id).cloned();
         let continues = selection.last != Some(self.id);
         if let Some(range) = marked {
@@ -262,49 +268,75 @@ impl Element for Selectable {
                     Ok(at) | Err(at) => at,
                 }
             };
+            let extend = event.modifiers.shift && selection.anchor.is_some();
             match event.button {
                 // A press anywhere drops what was marked, unless it is on the open menu, which
-                // keeps it to copy; the text under it then starts anew.
+                // keeps it to copy, or Shift holds it to reach further; the text under it then
+                // starts anew.
                 MouseButton::Left if phase == DispatchPhase::Capture => {
-                    if selection.menu.is_some() {
+                    if selection.menu.is_some() || extend {
                         return;
                     }
                     selection.anchor = None;
                     selection.dragging = false;
+                    selection.unit = Unit::Letter;
                     // A new selection starts from the texts on screen.
                     let Selection { drawn, known, .. } = &mut *selection;
                     known.retain(|id, _| drawn.iter().any(|drawn| drawn.id == *id));
-                    if !selection.marked.is_empty() {
-                        selection.marked.clear();
-                        selection.text.clear();
-                        selection.plain.clear();
+                    if !selection.marked.is_empty() || selection.all {
+                        selection.unmark();
                         window.refresh();
                     }
                 }
                 MouseButton::Left if hovered => {
+                    // The press is the chat's: what is under it is not the window's to focus.
+                    window.prevent_default();
                     let (at, text) = (at(), layout.text());
-                    match event.click_count {
-                        0 | 1 => {
-                            selection.anchor = Some((id, at));
-                            selection.dragging = true;
-                            selection.seen = None;
+                    selection.dragging = true;
+                    selection.seen = None;
+                    if extend {
+                        // Shift+click reaches from where the selection began to here.
+                        selection.survey(window);
+                        selection.drag_to(event.position);
+                    } else {
+                        match event.click_count {
+                            0 | 1 => {
+                                selection.anchor = Some((id, at..at));
+                                selection.unit = Unit::Letter;
+                            }
+                            2 => {
+                                let word = word_at(&text, at);
+                                selection.anchor = Some((id, word.clone()));
+                                selection.unit = Unit::Word;
+                                selection.mark(id, word, &text);
+                            }
+                            _ => {
+                                selection.anchor = Some((id, 0..text.len()));
+                                selection.unit = Unit::Whole;
+                                selection.mark(id, 0..text.len(), &text);
+                            }
                         }
-                        2 => selection.mark(id, word_at(&text, at), &text),
-                        _ => selection.mark(id, 0..text.len(), &text),
+                    }
+                    if !selection.marked.is_empty() {
+                        claim(Owner::Chat, cx);
                     }
                     window.refresh();
                 }
                 // A right click keeps what is marked under it, or else marks the word there.
                 MouseButton::Right if hovered => {
                     let (at, text) = (at(), layout.text());
-                    let on_marked = selection
-                        .marked
-                        .get(&id)
-                        .is_some_and(|range| range.start <= at && at <= range.end);
+                    let on_marked = selection.all
+                        || selection
+                            .marked
+                            .get(&id)
+                            .is_some_and(|range| range.start <= at && at <= range.end);
                     if !on_marked {
                         selection.anchor = None;
                         selection.dragging = false;
                         selection.mark(id, word_at(&text, at), &text);
+                        if !selection.marked.is_empty() {
+                            claim(Owner::Chat, cx);
+                        }
                     }
                     let link =
                         link_at(&layout, &links, event.position).map(|link| links[link].1.clone());
@@ -338,6 +370,9 @@ impl Element for Selectable {
             selection.seen = Some(event.position);
             selection.survey(window);
             if selection.drag_to(event.position) {
+                if !selection.marked.is_empty() {
+                    claim(Owner::Chat, cx);
+                }
                 window.refresh();
             }
         });
@@ -346,15 +381,21 @@ impl Element for Selectable {
                 return;
             }
             let selection = cx.default_global::<Selection>();
-            selection.dragging = false;
+            // What a drag settles on goes to the primary selection, once, as the button lets go.
+            if std::mem::take(&mut selection.dragging) && phase == DispatchPhase::Capture {
+                let plain = selection.plain.clone();
+                to_primary(&plain, cx);
+                return;
+            }
+            let selection = cx.default_global::<Selection>();
             // A click that pressed and let go on the same link, marking nothing, opens it.
             if phase == DispatchPhase::Bubble
                 && selection.marked.is_empty()
-                && let Some((anchor, from)) = selection.anchor
-                && anchor == id
+                && let Some((anchor, from)) = &selection.anchor
+                && *anchor == id
                 && up_hitbox.is_hovered(window)
                 && let Some(link) = link_at(&up_layout, &up_links, event.position)
-                && up_links[link].0.contains(&from)
+                && up_links[link].0.contains(&from.start)
             {
                 cx.open_url(&up_links[link].1);
             }
@@ -408,13 +449,13 @@ pub(super) fn open_menu(
     if !marked.is_empty() {
         items.push(
             MenuItem::new("Copy", move |_, cx| {
-                cx.write_to_clipboard(ClipboardItem::new_string(marked.clone()));
+                cx.write_to_clipboard(ClipboardItem::new_string(plain.clone()));
             })
             .icon("copy"),
         );
         items.push(
-            MenuItem::new("Copy as raw text", move |_, cx| {
-                cx.write_to_clipboard(ClipboardItem::new_string(plain.clone()));
+            MenuItem::new("Copy as Markdown", move |_, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(marked.clone()));
             })
             .icon("copy"),
         );
@@ -432,32 +473,6 @@ pub(super) fn open_menu(
         .detach();
     cx.default_global::<Selection>().menu = Some((menu, at));
     window.refresh();
-}
-
-/// The word of `text` at byte `at`, or the one character there when it is not in a word.
-pub(super) fn word_at(text: &str, at: usize) -> Range<usize> {
-    let at = at.min(text.len());
-    if !text.is_char_boundary(at) {
-        return at..at;
-    }
-    let in_word = |c: char| c.is_alphanumeric() || c == '_';
-    let start = text[..at]
-        .char_indices()
-        .rev()
-        .take_while(|&(_, c)| in_word(c))
-        .last()
-        .map_or(at, |(i, _)| i);
-    let end = text[at..]
-        .char_indices()
-        .find(|&(_, c)| !in_word(c))
-        .map_or(text.len(), |(i, _)| at + i);
-    if start < end {
-        return start..end;
-    }
-    text[at..]
-        .chars()
-        .next()
-        .map_or(at..at, |c| at..at + c.len_utf8())
 }
 
 /// The boxes behind `range` of a text: one for a single line, or the end of the first line, the

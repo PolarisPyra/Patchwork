@@ -5,14 +5,16 @@
 use std::time::Instant;
 
 use gpui::{
-    App, ClipboardItem, KeyDownEvent, Modifiers, Pixels, Point, ScrollEvent, Window, prelude::*, px,
+    App, ClipboardItem, KeyDownEvent, Keystroke, Modifiers, Pixels, Point, PromptLevel,
+    ScrollEvent, Window, prelude::*, px,
 };
 
 use crate::panel::Panel;
-use crate::panel::cells::ordered;
 use crate::panel::input::{Mouse, key_bytes, mouse_bytes};
+use crate::ui::selection::from_primary;
 
-use super::shell::{Metrics, Shell};
+use super::select::selected_text;
+use super::shell::Metrics;
 
 impl Panel {
     fn type_text(&mut self, data: String) {
@@ -80,22 +82,64 @@ impl Panel {
         true
     }
 
-    pub(super) fn copy_selection(&self, cx: &mut App) -> bool {
-        let Some(text) = self.active_shell().and_then(selected_text) else {
+    pub(super) fn copy_selection(&mut self, cx: &mut App) -> bool {
+        let Some(text) = self.active_shell_mut().and_then(selected_text) else {
             return false;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         true
     }
 
-    pub(super) fn paste(&mut self, cx: &mut App) {
-        let Some(text) = cx.read_from_clipboard().and_then(|c| c.text()) else {
-            return;
+    pub(super) fn paste(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(text) = cx.read_from_clipboard().and_then(|c| c.text()) {
+            self.paste_text(&text, window, cx);
+        }
+    }
+
+    /// Pastes `text` into the shell. A line copied with its line end would run as soon as it
+    /// landed, so the end comes off; several lines a shell would run one by one ask first,
+    /// unless the program there takes a paste whole.
+    pub(super) fn paste_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let text = text.replace("\r\n", "\n");
+        let text = match text.strip_suffix('\n') {
+            Some(line) if !line.contains('\n') => line.to_string(),
+            _ => text,
         };
         let bracketed = self
             .active_shell()
             .is_some_and(|s| s.parser.screen().bracketed_paste());
-        let text = text.replace("\r\n", "\r").replace('\n', "\r");
+        if bracketed || !text.contains('\n') {
+            return self.send_paste(&text, bracketed);
+        }
+        let lines = text.lines().count();
+        let answer = window.prompt(
+            PromptLevel::Warning,
+            &format!("Paste {lines} lines into the shell?"),
+            None,
+            &["Paste", "Paste as one line", "Cancel"],
+            cx,
+        );
+        cx.spawn_in(window, async move |this, cx| {
+            let text = match answer.await {
+                Ok(0) => text,
+                Ok(1) => text
+                    .lines()
+                    .map(str::trim)
+                    .filter(|line| !line.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                _ => return,
+            };
+            let _ = this.update(cx, |this, cx| {
+                this.send_paste(&text, false);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn send_paste(&mut self, text: &str, bracketed: bool) {
+        let text = text.replace('\n', "\r");
         self.type_text(if bracketed {
             format!("\x1b[200~{text}\x1b[201~")
         } else {
@@ -106,25 +150,68 @@ impl Panel {
     pub(in crate::panel) fn on_terminal_key(
         &mut self,
         e: &KeyDownEvent,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let ks = &e.keystroke;
         let m = &ks.modifiers;
-        // Ctrl+Shift+C and V copy and paste, as Ctrl+C and V belong to the shell.
-        let copy_paste = if cfg!(target_os = "macos") {
-            m.platform && !m.shift
+        // Ctrl+Shift+C and V copy and paste. Ctrl+C copies too while text is selected, then
+        // drops the selection so the next Ctrl+C reaches the shell as an interrupt; Ctrl+V
+        // pastes. On macOS, Cmd copies and pastes and Ctrl+C always interrupts.
+        let (copy_paste, plain) = if cfg!(target_os = "macos") {
+            (m.platform && !m.shift, false)
         } else {
-            m.control && m.shift
+            (m.control && m.shift, m.control && !m.shift && !m.alt)
         };
+        if plain && ks.key == "c" && self.copy_selection(cx) {
+            if let Some(shell) = self.active_shell_mut() {
+                shell.selection = None;
+            }
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
         if copy_paste && ks.key == "c" {
             if self.copy_selection(cx) {
                 cx.stop_propagation();
             }
             return;
         }
-        if copy_paste && ks.key == "v" {
-            self.paste(cx);
+        if (copy_paste || plain) && ks.key == "v" {
+            self.paste(window, cx);
+            cx.stop_propagation();
+            return;
+        }
+        // Escape lets go of the selection first; with none, it reaches the program.
+        if ks.key == "escape"
+            && !m.modified()
+            && let Some(shell) = self.active_shell_mut()
+            && shell.selection.take().is_some()
+        {
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
+        let select_all = if cfg!(target_os = "macos") {
+            m.platform && !m.shift
+        } else {
+            m.control && m.shift
+        };
+        if select_all && ks.key == "a" {
+            self.select_all(cx);
+            cx.stop_propagation();
+            return;
+        }
+        if self.scroll_key(ks) {
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
+        // Shift+Insert pastes the primary selection, as in xterm.
+        if ks.key == "insert" && m.shift && !m.control && !m.alt && !m.platform {
+            if let Some(text) = from_primary(cx) {
+                self.paste_text(&text, window, cx);
+            }
             cx.stop_propagation();
             return;
         }
@@ -137,6 +224,42 @@ impl Panel {
         self.type_text(bytes);
         cx.stop_propagation();
         cx.notify();
+    }
+
+    /// Scrolls the view through the lines kept for a key that does so: Shift+Page Up and Down by
+    /// a screen, Ctrl+Shift+Up and Down by a line, Ctrl+Home and End to either end. A full-screen
+    /// program keeps no lines, so it gets these keys itself.
+    fn scroll_key(&mut self, ks: &Keystroke) -> bool {
+        let m = &ks.modifiers;
+        let primary = if cfg!(target_os = "macos") {
+            m.platform
+        } else {
+            m.control
+        };
+        if m.alt {
+            return false;
+        }
+        let Some(shell) = self.active_shell_mut() else {
+            return false;
+        };
+        let screen = shell.parser.screen_mut();
+        if screen.alternate_screen() {
+            return false;
+        }
+        let rows = usize::from(screen.size().0);
+        let at = screen.scrollback();
+        let to = match (ks.key.as_str(), primary, m.shift) {
+            ("pageup", false, true) => at.saturating_add(rows),
+            ("pagedown", false, true) => at.saturating_sub(rows),
+            ("up", true, true) => at.saturating_add(1),
+            ("down", true, true) => at.saturating_sub(1),
+            ("home", true, false) => usize::MAX,
+            ("end", true, false) => 0,
+            _ => return false,
+        };
+        // The screen stops at the oldest line it keeps.
+        screen.set_scrollback(to);
+        true
     }
 
     pub(super) fn on_terminal_scroll(
@@ -190,7 +313,6 @@ impl Panel {
                 .parser
                 .screen_mut()
                 .set_scrollback(back.max(0.) as usize);
-            shell.selection = None;
         }
         cx.stop_propagation();
         cx.notify();
@@ -217,13 +339,4 @@ impl Panel {
             (x.max(0.).round() as u16).min(cols),
         )
     }
-}
-
-fn selected_text(shell: &Shell) -> Option<String> {
-    let (a, b) = ordered(shell.selection?);
-    if a == b {
-        return None;
-    }
-    let text = shell.parser.screen().contents_between(a.0, a.1, b.0, b.1);
-    (!text.is_empty()).then_some(text)
 }

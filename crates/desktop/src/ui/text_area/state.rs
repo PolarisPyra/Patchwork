@@ -6,11 +6,13 @@ use std::ops::Range;
 
 use gpui::{
     Bounds, Entity, EventEmitter, FocusHandle, Hsla, KeyBinding, Pixels, Point, ScrollHandle,
-    SharedString, Window, WrappedLine, actions, point, prelude::*, px,
+    SharedString, Task, Window, WrappedLine, actions, point, prelude::*, px,
 };
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::history::History;
+use super::mouse::Grain;
+use crate::ui::selection::{Owner, claim, owner, to_primary};
 
 actions!(
     text_area,
@@ -150,6 +152,16 @@ pub struct TextArea {
     pub(super) bounds: Option<Bounds<Pixels>>,
     pub(super) line_height: Pixels,
     pub(super) selecting: bool,
+    /// What a drag selects by, and what the press that began it selected.
+    pub(super) grain: Grain,
+    pub(super) anchor: Range<usize>,
+    /// Where a press on the selection landed: a drag from it moves the selected text.
+    pub(super) moving: Option<usize>,
+    /// Where the moved text would go, while it is dragged.
+    pub(super) drop_at: Option<usize>,
+    /// Where the pointer last was in a drag, and the timer that scrolls while it is outside.
+    pub(super) pointer: Option<Point<Pixels>>,
+    pub(super) scrolling: Option<Task<()>>,
     /// The colors its owner draws it in. Each one left unset is the theme's, read as it is
     /// drawn, so the field follows the theme when it changes: the text color, `text_subtle`, and
     /// the accent at 30%.
@@ -196,6 +208,16 @@ impl TextArea {
         label: impl Into<SharedString>,
         cx: &mut Context<Self>,
     ) -> Self {
+        // Another selection made after this one takes its place: only the caret is left.
+        cx.observe_global::<Owner>(|this, cx| {
+            if !this.selected.is_empty() && owner(cx) != Owner::Field(cx.entity_id()) {
+                let at = this.cursor();
+                this.selected = at..at;
+                this.reversed = false;
+                cx.notify();
+            }
+        })
+        .detach();
         Self {
             focus: cx.focus_handle(),
             content: String::new(),
@@ -208,6 +230,12 @@ impl TextArea {
             bounds: None,
             line_height: px(20.),
             selecting: false,
+            grain: Grain::default(),
+            anchor: 0..0,
+            moving: None,
+            drop_at: None,
+            pointer: None,
+            scrolling: None,
             text_color: None,
             placeholder_color: None,
             selection_color: None,
@@ -393,34 +421,32 @@ impl TextArea {
         cx.notify();
     }
 
+    /// Selects to `offset` as the user asked, which makes this the latest selection.
+    pub(super) fn select_by_user(
+        &mut self,
+        offset: usize,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.select_to(offset, window, cx);
+        self.settle(cx);
+    }
+
+    /// Makes a selection the user made the latest, and the primary selection unless it is a
+    /// secret.
+    pub(super) fn settle(&self, cx: &mut Context<Self>) {
+        if self.selected.is_empty() {
+            return;
+        }
+        claim(Owner::Field(cx.entity_id()), cx);
+        if !self.masked {
+            to_primary(&self.content[self.selected.clone()], cx);
+        }
+    }
+
     /// The word around `offset`, or the run of blanks or of punctuation it is in.
     pub(super) fn word_at(&self, offset: usize) -> Range<usize> {
-        let kind = |c: char| {
-            if c.is_alphanumeric() || c == '_' {
-                0
-            } else if c.is_whitespace() {
-                1
-            } else {
-                2
-            }
-        };
-        let (before, after) = self.content.split_at(offset.min(self.content.len()));
-        // Between two runs, the press belongs to the one after it.
-        let Some(here) = after.chars().next().or_else(|| before.chars().next_back()) else {
-            return 0..0;
-        };
-        let here = kind(here);
-        let start = before
-            .char_indices()
-            .rev()
-            .take_while(|(_, c)| kind(*c) == here && *c != '\n')
-            .last()
-            .map_or(before.len(), |(i, _)| i);
-        let end = after
-            .char_indices()
-            .find(|(_, c)| kind(*c) != here || *c == '\n')
-            .map_or(self.content.len(), |(i, _)| before.len() + i);
-        start..end
+        crate::ui::selection::word_at(&self.content, offset)
     }
 
     /// The line `offset` is on, without its line end.

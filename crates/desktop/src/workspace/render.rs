@@ -142,8 +142,45 @@ impl Render for Workspace {
                 MouseButton::Navigate(NavigationDirection::Forward),
                 cx.listener(|this, _: &MouseDownEvent, _, cx| this.go_forward(cx)),
             )
-            .on_action(|_: &crate::ui::selection::CopySelection, _, cx| {
-                crate::ui::selection::copy(cx);
+            .on_action(cx.listener(
+                |this, _: &crate::ui::selection::CopySelection, window, cx| {
+                    use crate::ui::selection::{Owner, clear, copy, has_marks, owner};
+                    let chat = owner(cx) == Owner::Chat && has_marks(cx);
+                    // The terminal has its own Ctrl+C: it copies or interrupts.
+                    if this.panel.read(cx).terminal_focused(window) {
+                        if !chat {
+                            cx.propagate();
+                            return;
+                        }
+                        // As the terminal does with its own, the copied text lets go, so the
+                        // next Ctrl+C interrupts.
+                        copy(cx);
+                        clear(window, cx);
+                        return;
+                    }
+                    copy(cx);
+                },
+            ))
+            .on_action(cx.listener(
+                |this, _: &crate::ui::selection::SelectAllText, window, cx| {
+                    // The terminal takes Ctrl+A for the start of the line.
+                    let Some(thread) = &this.thread else {
+                        cx.propagate();
+                        return;
+                    };
+                    if this.panel.read(cx).terminal_focused(window) {
+                        cx.propagate();
+                        return;
+                    }
+                    // The whole chat is more than is drawn: it copies as its transcript.
+                    let text = crate::sidebar::thread_markdown(thread);
+                    crate::ui::selection::select_all(text.clone(), text, window, cx);
+                },
+            ))
+            .on_action(|_: &crate::ui::selection::ClearSelection, window, cx| {
+                // Escape still does what else it does where the keys are.
+                crate::ui::selection::clear(window, cx);
+                cx.propagate();
             })
             .on_action(cx.listener(|this, _: &crate::TogglePalette, window, cx| {
                 this.toggle_palette(window, cx);

@@ -1,14 +1,10 @@
-//! What the keys and the mouse do to the text field: moving, selecting, editing, pasting.
+//! What the keys do to the text field: moving, selecting, editing, pasting.
 
 // Rust guideline compliant 2026-10-09
 
 use std::ops::Range;
 
-use gpui::{
-    ClipboardItem, EntityInputHandler, FocusHandle, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    Pixels, Point, Window, point, prelude::*, px,
-};
-use crate::ui::menu::{Dismissed, Menu, MenuItem};
+use gpui::{ClipboardItem, EntityInputHandler, Window, point, prelude::*, px};
 use super::state::{
     Arrow, Backspace, BackspaceEmpty, Bottom, Copy, CtrlSubmit, Cut, Delete, DeleteWordLeft,
     DeleteWordRight, Down, Edge, End, Home, Left, Newline, PageDown, PageUp, Paste, Right,
@@ -89,7 +85,7 @@ impl TextArea {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.select_to(self.previous_boundary(self.cursor()), window, cx);
+        self.select_by_user(self.previous_boundary(self.cursor()), window, cx);
     }
 
     pub(super) fn select_right(
@@ -98,12 +94,12 @@ impl TextArea {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.select_to(self.next_boundary(self.cursor()), window, cx);
+        self.select_by_user(self.next_boundary(self.cursor()), window, cx);
     }
 
     pub(super) fn select_up(&mut self, _: &SelectUp, window: &mut Window, cx: &mut Context<Self>) {
         let to = self.vertical(-1.).unwrap_or(0);
-        self.select_to(to, window, cx);
+        self.select_by_user(to, window, cx);
     }
 
     pub(super) fn select_down(
@@ -113,7 +109,7 @@ impl TextArea {
         cx: &mut Context<Self>,
     ) {
         let to = self.vertical(1.).unwrap_or(self.content.len());
-        self.select_to(to, window, cx);
+        self.select_by_user(to, window, cx);
     }
 
     pub(super) fn select_all(
@@ -123,6 +119,7 @@ impl TextArea {
         cx: &mut Context<Self>,
     ) {
         self.select_everything(window, cx);
+        self.settle(cx);
     }
 
     /// Selects the whole text, so typing replaces it.
@@ -131,9 +128,21 @@ impl TextArea {
         self.select_to(self.content.len(), window, cx);
     }
 
-    /// The start of the cursor's line.
+    /// The first character of the cursor's line past its indent, or the line's start when the
+    /// cursor is there already.
+    fn smart_home(&self) -> usize {
+        let line = self.line_at(self.cursor());
+        let text = &self.content[line.clone()];
+        let first = line.start + text.len() - text.trim_start().len();
+        if self.cursor() == first {
+            line.start
+        } else {
+            first
+        }
+    }
+
     pub(super) fn home(&mut self, _: &Home, window: &mut Window, cx: &mut Context<Self>) {
-        self.move_to(self.line_at(self.cursor()).start, window, cx);
+        self.move_to(self.smart_home(), window, cx);
     }
 
     /// The end of the cursor's line.
@@ -147,7 +156,7 @@ impl TextArea {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.select_to(self.line_at(self.cursor()).start, window, cx);
+        self.select_by_user(self.smart_home(), window, cx);
     }
 
     pub(super) fn select_end(
@@ -156,7 +165,7 @@ impl TextArea {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.select_to(self.line_at(self.cursor()).end, window, cx);
+        self.select_by_user(self.line_at(self.cursor()).end, window, cx);
     }
 
     pub(super) fn top(&mut self, _: &Top, window: &mut Window, cx: &mut Context<Self>) {
@@ -173,7 +182,7 @@ impl TextArea {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.select_to(0, window, cx);
+        self.select_by_user(0, window, cx);
     }
 
     pub(super) fn select_bottom(
@@ -182,7 +191,7 @@ impl TextArea {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.select_to(self.content.len(), window, cx);
+        self.select_by_user(self.content.len(), window, cx);
     }
 
     /// The start of the word before `offset`, past any blanks in between.
@@ -234,7 +243,7 @@ impl TextArea {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.select_to(self.word_start_before(self.cursor()), window, cx);
+        self.select_by_user(self.word_start_before(self.cursor()), window, cx);
     }
 
     pub(super) fn select_word_right(
@@ -243,7 +252,7 @@ impl TextArea {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.select_to(self.word_end_after(self.cursor()), window, cx);
+        self.select_by_user(self.word_end_after(self.cursor()), window, cx);
     }
 
     pub(super) fn delete_word_left(
@@ -304,7 +313,7 @@ impl TextArea {
         cx: &mut Context<Self>,
     ) {
         let to = self.vertical(-self.page_rows()).unwrap_or(0);
-        self.select_to(to, window, cx);
+        self.select_by_user(to, window, cx);
     }
 
     pub(super) fn select_page_down(
@@ -316,7 +325,7 @@ impl TextArea {
         let to = self
             .vertical(self.page_rows())
             .unwrap_or(self.content.len());
-        self.select_to(to, window, cx);
+        self.select_by_user(to, window, cx);
     }
 
     pub(super) fn backspace(&mut self, _: &Backspace, window: &mut Window, cx: &mut Context<Self>) {
@@ -365,16 +374,28 @@ impl TextArea {
 
     pub(super) fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-            let text = text.replace("\r\n", "\n");
-            // A one-line field has no line to break, and a token copied with its line end is
-            // not the token.
-            let text = if self.single_line {
-                text.trim_matches('\n').replace('\n', " ")
-            } else {
-                text
-            };
-            self.replace_text_in_range(None, &text, window, cx);
+            self.insert_pasted(&text, window, cx);
         }
+    }
+
+    /// Puts pasted `text` in place of the selection, as one undo step of its own.
+    pub(super) fn insert_pasted(
+        &mut self,
+        text: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let text = text.replace("\r\n", "\n");
+        // A one-line field has no line to break, and a token copied with its line end is not
+        // the token.
+        let text = if self.single_line {
+            text.trim_matches('\n').replace('\n', " ")
+        } else {
+            text
+        };
+        self.history.typing_at = None;
+        self.replace_text_in_range(None, &text, window, cx);
+        self.history.typing_at = None;
     }
 
     pub(super) fn copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
@@ -396,99 +417,8 @@ impl TextArea {
             cx.write_to_clipboard(ClipboardItem::new_string(
                 self.content[self.selected.clone()].to_string(),
             ));
+            self.history.typing_at = None;
             self.replace_text_in_range(None, "", window, cx);
-        }
-    }
-
-    pub(super) fn on_mouse_down(
-        &mut self,
-        event: &MouseDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let offset = self.offset_at(event.position);
-        // A second press selects the word under it, and a third its line.
-        if event.click_count > 1 {
-            self.selecting = false;
-            self.selected = if event.click_count == 2 {
-                self.word_at(offset)
-            } else {
-                self.line_at(offset)
-            };
-            self.reversed = false;
-            window.notify_text_selection_changed(&self.focus);
-            return cx.notify();
-        }
-        self.selecting = true;
-        if event.modifiers.shift {
-            self.select_to(offset, window, cx);
-        } else {
-            self.move_to(offset, window, cx);
-        }
-    }
-
-    pub(super) fn on_mouse_up(&mut self, _: &MouseUpEvent, _: &mut Window, _: &mut Context<Self>) {
-        self.selecting = false;
-    }
-
-    pub(super) fn on_mouse_move(
-        &mut self,
-        event: &MouseMoveEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.selecting {
-            let offset = self.offset_at(event.position);
-            self.select_to(offset, window, cx);
-        }
-    }
-
-    /// A right click: the caret moves there unless it is on the selection, and a menu opens to
-    /// cut, copy, paste or select all. Each runs as its key would, so the owner's own handling,
-    /// such as the composer attaching a pasted picture, still applies.
-    pub(crate) fn open_menu(
-        &mut self,
-        event: &MouseDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let offset = self.offset_at(event.position);
-        window.focus(&self.focus, cx);
-        if !(self.selected.start <= offset && offset <= self.selected.end) {
-            self.move_to(offset, window, cx);
-        }
-        let can_copy = !self.selected.is_empty() && !self.masked;
-        let item = |label: &'static str, action: Box<dyn gpui::Action>, focus: &FocusHandle| {
-            let focus = focus.clone();
-            MenuItem::new(label, move |window, cx| {
-                window.focus(&focus, cx);
-                focus.dispatch_action(action.as_ref(), window, cx);
-            })
-        };
-        let mut items = Vec::new();
-        if can_copy {
-            items.push(item("Cut", Box::new(Cut), &self.focus));
-            items.push(item("Copy", Box::new(Copy), &self.focus).icon("copy"));
-        }
-        items.push(item("Paste", Box::new(Paste), &self.focus));
-        items.push(item("Select all", Box::new(SelectAll), &self.focus).separated());
-        let menu = Menu::open("Edit", items, window, cx);
-        cx.subscribe_in(&menu, window, |this, _, _: &Dismissed, window, cx| {
-            this.menu = None;
-            window.focus(&this.focus, cx);
-            cx.notify();
-        })
-        .detach();
-        self.menu = Some((menu, event.position));
-        cx.stop_propagation();
-        cx.notify();
-    }
-
-    /// The offset under a point in the window.
-    fn offset_at(&self, position: Point<Pixels>) -> usize {
-        match self.bounds {
-            Some(bounds) => self.offset_for(position - bounds.origin),
-            None => self.content.len(),
         }
     }
 

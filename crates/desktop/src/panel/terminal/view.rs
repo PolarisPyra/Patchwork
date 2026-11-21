@@ -5,15 +5,17 @@
 use std::time::Duration;
 
 use gpui::{
-    AnyElement, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Role, ScrollEvent,
-    Window, canvas, div, prelude::*,
+    AnyElement, DispatchPhase, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Role,
+    ScrollEvent, Window, canvas, div, prelude::*,
 };
 
 use crate::panel::Panel;
-use crate::panel::cells::{draw_screen, line_at, word_at};
+use crate::panel::cells::draw_screen;
 use crate::panel::input::Mouse;
+use crate::ui::selection::from_primary;
 use crate::ui::theme::theme;
 
+use super::select::spans;
 use super::shell::Metrics;
 
 /// How long the cursor shows, then hides, while it blinks.
@@ -32,11 +34,38 @@ impl Panel {
         let measure = {
             let this = cx.entity().downgrade();
             let metrics = metrics.clone();
+            let selecting = self.selecting;
             canvas(
-                move |bounds, _, cx| {
-                    let _ = this.update(cx, |this, cx| this.fit(bounds, &metrics, cx));
+                {
+                    let this = this.clone();
+                    let metrics = metrics.clone();
+                    move |bounds, _, cx| {
+                        let _ = this.update(cx, |this, cx| this.fit(bounds, &metrics, cx));
+                    }
                 },
-                |_, (), _, _| {},
+                // A drag that began on the screen follows the pointer over the whole window.
+                move |_, (), window, _| {
+                    if !selecting {
+                        return;
+                    }
+                    let (moved, released) = ((this.clone(), metrics.clone()), (this, metrics));
+                    window.on_mouse_event(move |e: &MouseMoveEvent, phase, _, cx| {
+                        if phase == DispatchPhase::Bubble {
+                            let (this, metrics) = &moved;
+                            let _ = this.update(cx, |this, cx| {
+                                if this.selecting {
+                                    this.drag_to(e.position, metrics, cx);
+                                }
+                            });
+                        }
+                    });
+                    window.on_mouse_event(move |e: &MouseUpEvent, phase, _, cx| {
+                        if phase == DispatchPhase::Bubble && e.button == MouseButton::Left {
+                            let (this, metrics) = &released;
+                            let _ = this.update(cx, |this, cx| this.release(e, metrics, cx));
+                        }
+                    });
+                },
             )
             .absolute()
             .size_full()
@@ -57,11 +86,18 @@ impl Panel {
                 });
             }));
         }
+        let selection = self
+            .active_shell_mut()
+            .and_then(|shell| {
+                let span = shell.selection?;
+                Some(spans(shell.parser.screen_mut(), span, shell.block))
+            })
+            .unwrap_or_default();
         let screen = self.active_shell().map(|shell| {
             let screen = shell.parser.screen();
             draw_screen(
                 screen,
-                shell.selection,
+                &selection,
                 &metrics,
                 &self.settings,
                 focused,
@@ -96,47 +132,16 @@ impl Panel {
                             this.mouse_held = Some(0);
                             return;
                         }
-                        if e.modifiers.alt
-                            && this.settings.alt_click_moves_cursor
-                            && this.alt_click(e.position, &metrics)
-                        {
-                            cx.notify();
-                            return;
-                        }
-                        let cell = this.cell_at(e.position, &metrics);
-                        let under = this.cell_under(e.position, &metrics);
-                        if let Some(shell) = this.active_shell_mut() {
-                            // A double click takes the word, a triple click the line, as in xterm.
-                            let screen = shell.parser.screen();
-                            shell.selection = Some(match e.click_count {
-                                0 | 1 => (cell, cell),
-                                2 => word_at(screen, under),
-                                _ => line_at(screen, under.0),
-                            });
-                        }
-                        this.selecting = e.click_count < 2;
-                        cx.notify();
+                        this.press(e, &metrics, cx);
                     }
                 }),
             )
             .on_mouse_move(cx.listener({
                 let metrics = metrics.clone();
-                move |this, e: &MouseMoveEvent, _, cx| {
+                move |this, e: &MouseMoveEvent, _, _| {
                     let event = this.mouse_held.map_or(Mouse::Move, Mouse::Drag);
-                    if !this.selecting
-                        && this.report_mouse(event, e.position, e.modifiers, &metrics)
-                    {
-                        return;
-                    }
-                    if !this.selecting || !e.dragging() {
-                        return;
-                    }
-                    let cell = this.cell_at(e.position, &metrics);
-                    if let Some(shell) = this.active_shell_mut()
-                        && let Some((_, end)) = &mut shell.selection
-                    {
-                        *end = cell;
-                        cx.notify();
+                    if !this.selecting {
+                        this.report_mouse(event, e.position, e.modifiers, &metrics);
                     }
                 }
             }))
@@ -144,22 +149,10 @@ impl Panel {
                 MouseButton::Left,
                 cx.listener({
                     let metrics = metrics.clone();
-                    move |this, e: &MouseUpEvent, _, cx| {
+                    move |this, e: &MouseUpEvent, _, _| {
                         if this.mouse_held.take().is_some() {
                             this.report_mouse(Mouse::Release(0), e.position, e.modifiers, &metrics);
-                            return;
                         }
-                        this.selecting = false;
-                        let copy = this.settings.copy_on_selection;
-                        if let Some(shell) = this.active_shell_mut()
-                            && shell.selection.is_some_and(|(a, b)| a == b)
-                        {
-                            shell.selection = None;
-                        }
-                        if copy {
-                            this.copy_selection(cx);
-                        }
-                        cx.notify();
                     }
                 }),
             )
@@ -171,6 +164,9 @@ impl Panel {
                         window.focus(&this.term_focus, cx);
                         if this.report_mouse(Mouse::Press(1), e.position, e.modifiers, &metrics) {
                             this.mouse_held = Some(1);
+                        } else if let Some(text) = from_primary(cx) {
+                            // A middle click pastes the primary selection, as in xterm.
+                            this.paste_text(&text, window, cx);
                         }
                     }
                 }),
@@ -207,13 +203,14 @@ impl Panel {
                             this.mouse_held = Some(2);
                             return;
                         }
-                        match this.settings.right_click_behavior {
+                        let behavior = this.settings.right_click_behavior;
+                        match behavior {
                             Behavior::CopyPaste if this.copy_selection(cx) => {
                                 if let Some(shell) = this.active_shell_mut() {
                                     shell.selection = None;
                                 }
                             }
-                            Behavior::CopyPaste | Behavior::Paste => this.paste(cx),
+                            Behavior::CopyPaste | Behavior::Paste => this.paste(window, cx),
                             _ => {}
                         }
                         cx.notify();

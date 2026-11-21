@@ -46,8 +46,8 @@ fn reply_markdown(msg: &Message) -> String {
     blocks.join("\n\n")
 }
 
-/// The thread's transcript as Markdown.
-fn thread_markdown(thread: &Thread) -> String {
+/// The thread's transcript as Markdown, as it is exported and as Ctrl+A in the chat copies it.
+pub fn thread_markdown(thread: &Thread) -> String {
     let agent = agent_label(thread.agent);
     let mut out = vec![format!("# {}", display_title(&thread.title))];
     for msg in &thread.messages {

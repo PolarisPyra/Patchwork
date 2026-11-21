@@ -191,6 +191,63 @@ pub(super) const FIXED_KEYS: &[(&str, &[&str], &str)] = &[
     ("Panel", &["Ctrl", "Shift", "C"], "Copy in the terminal"),
     ("Panel", &["Ctrl", "Shift", "V"], "Paste in the terminal"),
     (
+        "Panel",
+        &["Ctrl", "C"],
+        "Copy the terminal's selection, or stop what runs",
+    ),
+    ("Panel", &["Ctrl", "V"], "Paste in the terminal"),
+    (
+        "Panel",
+        &["Shift", "Insert"],
+        "Paste the primary selection in the terminal",
+    ),
+    (
+        "Panel",
+        &["Ctrl", "Shift", "A"],
+        "Select all in the terminal",
+    ),
+    ("Panel", &["Escape"], "Clear the terminal's selection"),
+    (
+        "Panel",
+        &["Shift", "Page Up"],
+        "Scroll the terminal up a page",
+    ),
+    (
+        "Panel",
+        &["Shift", "Page Down"],
+        "Scroll the terminal down a page",
+    ),
+    (
+        "Panel",
+        &["Ctrl", "Shift", "Up"],
+        "Scroll the terminal up a line",
+    ),
+    (
+        "Panel",
+        &["Ctrl", "Shift", "Down"],
+        "Scroll the terminal down a line",
+    ),
+    (
+        "Panel",
+        &["Ctrl", "Home"],
+        "Scroll to the top of the terminal",
+    ),
+    (
+        "Panel",
+        &["Ctrl", "End"],
+        "Scroll to the bottom of the terminal",
+    ),
+    (
+        "Panel",
+        &["Ctrl", "Backspace"],
+        "Delete the word before the cursor",
+    ),
+    (
+        "Panel",
+        &["Ctrl", "Delete"],
+        "Delete the word after the cursor",
+    ),
+    (
         "Sidebar",
         &["Ctrl", "Click"],
         "Select or unselect a chat or task",

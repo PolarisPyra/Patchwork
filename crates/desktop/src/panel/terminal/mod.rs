@@ -6,7 +6,9 @@
 // Rust guideline compliant 2026-10-09
 
 mod interact;
+mod select;
 mod shell;
 mod view;
 
+pub(super) use select::Drag;
 pub(super) use shell::{Metrics, Shell};

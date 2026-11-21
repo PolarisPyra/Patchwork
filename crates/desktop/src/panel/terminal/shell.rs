@@ -38,8 +38,10 @@ pub struct Shell {
     pub(super) parser: vt100::Parser,
     /// What is typed, written to the shell in order.
     pub(super) input: UnboundedSender<String>,
-    /// A drag over the screen: where it started and where it is, as (row, column).
-    pub(super) selection: Option<((u16, u16), (u16, u16))>,
+    /// What is selected: where it started and where it is, on the lines kept.
+    pub(in crate::panel) selection: Option<super::select::Span>,
+    /// The selection is a block of columns, as Alt+drag makes.
+    pub(super) block: bool,
     /// Wheel movement short of a whole line.
     pub(super) scroll_rest: f32,
     _frames: Task<()>,
@@ -320,6 +322,7 @@ impl Panel {
             parser,
             input,
             selection: None,
+            block: false,
             scroll_rest: 0.,
             _frames: frames,
             _writer: writer,
@@ -342,16 +345,15 @@ impl Panel {
                 });
             }
             match frame {
-                TerminalFrame::Output { data } => shell.parser.process(data.as_bytes()),
+                TerminalFrame::Output { data } => shell.process(data.as_bytes()),
                 // A shell that failed stays, so its last output can be read; one that ended
                 // cleanly closes.
                 TerminalFrame::Exit { code: Some(code) }
                     if code != 0 && shell.exit_code.is_none() =>
                 {
                     shell.exit_code = Some(code);
-                    shell
-                        .parser
-                        .process(exit_text(&shell.name, code).as_bytes());
+                    let text = exit_text(&shell.name, code);
+                    shell.process(text.as_bytes());
                 }
                 TerminalFrame::Exit { .. } => {
                     self.kill(id, cx);
