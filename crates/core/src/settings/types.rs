@@ -209,6 +209,20 @@ impl Settings {
         }
     }
 
+    /// Sets whether the project's new tasks edit its own folder rather than a worktree each.
+    /// Turning worktrees on for one project while they are off everywhere turns them back on
+    /// and keeps every other project editing its folder.
+    pub fn set_edit_in_place(&mut self, project_id: &str, in_place: bool) {
+        if !in_place && self.worktrees.disabled {
+            self.worktrees.disabled = false;
+            self.edit_in_place = self.projects.iter().map(|p| p.id.clone()).collect();
+        }
+        self.edit_in_place.retain(|id| id != project_id);
+        if in_place {
+            self.edit_in_place.push(project_id.to_owned());
+        }
+    }
+
     /// The agent new chats start on: the first connected one, else Claude.
     #[must_use]
     pub fn default_agent(&self) -> AgentKind {

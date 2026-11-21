@@ -1,6 +1,6 @@
-//! Where a task works, said before it starts and once it has: the composer's switch between a
-//! worktree of its own and the project's folder for a task whose first turn hasn't run, and the
-//! line that tells, once per project, that its tasks work in worktrees.
+//! Where a project's tasks work: the composer's switch between a worktree for each new task and
+//! the project's folder, and the line that tells, once per project, that its tasks work in
+//! worktrees.
 
 // Rust guideline compliant 2026-10-09
 
@@ -8,138 +8,45 @@ use std::sync::Arc;
 
 use gpui::{Role, SharedString, Stateful, div, prelude::*, px};
 use patchwork_core::system::ssh::is_remote;
-use patchwork_core::threads::Role as MessageRole;
+use patchwork_core::projects::Project;
 
 use crate::chat::goal::strip_action;
 use crate::ui::theme::{Theme, fs_sm, radius_sm};
 use crate::ui::{button, icon, icon_button, tooltip};
 use crate::workspace::Workspace;
 
-/// What was picked for where a task that hasn't started works.
-pub struct WorktreePick {
-    /// The task's id, or `new:` and the project's id for the task the composer's next message
-    /// starts.
-    key: String,
-    /// Whether it gets a worktree of its own; None while the pick is read.
-    on: Option<bool>,
-    /// Whether the user picked it, so the task the next message starts keeps it.
-    picked: bool,
-}
-
 impl Workspace {
-    /// The task whose worktree can still be picked: its key, its id once it exists, and its
-    /// project's id. That is the open task before its first turn, or the task the composer's
-    /// next message starts, in a git repository on this computer.
-    fn pick_target(&self) -> Option<(String, Option<String>, String)> {
-        let project = self.project()?;
-        if is_remote(&project.path) || self.branch.is_none() || self.bot_shown.is_some() {
-            return None;
+    /// The project whose tasks the composer's switch picks a worktree or the folder for: the
+    /// open task's, or the one the next message starts a task in. None when it has none, and
+    /// why it can't have worktrees when it is no git repository on this computer.
+    fn pick_project(&self) -> Result<&Project, &'static str> {
+        let project = self
+            .project()
+            .ok_or("Pick a project to work in a worktree")?;
+        if is_remote(&project.path) {
+            return Err("Projects over SSH edit their folder");
         }
-        match &self.thread {
-            None => Some((format!("new:{}", project.id), None, project.id.clone())),
-            Some(thread) => {
-                let unstarted = thread.parent.is_none()
-                    && thread.session_id.is_none()
-                    && !thread
-                        .messages
-                        .iter()
-                        .any(|m| m.role == MessageRole::Assistant);
-                (unstarted && self.thread_folder().is_none()).then(|| {
-                    let id = thread.id.clone();
-                    (id.clone(), Some(id), project.id.clone())
-                })
-            }
+        if self.branch.is_none() {
+            return Err("Only a git repository can have worktrees");
         }
+        Ok(project)
     }
 
-    /// Reads what was picked for the task whose worktree can still be picked, off the main
-    /// thread, when that task changed. A task nothing was picked for works in the project's
-    /// folder until a worktree is picked.
-    pub(crate) fn load_worktree_pick(&mut self, cx: &mut Context<Self>) {
-        let Some((key, thread, _)) = self.pick_target() else {
-            return;
-        };
-        if self.worktree_pick.as_ref().is_some_and(|p| p.key == key) {
-            return;
-        }
-        let Some(thread) = thread else {
-            // Picked, so the task the next message starts keeps it over the project's setting.
-            self.worktree_pick = Some(WorktreePick {
-                key,
-                on: Some(false),
-                picked: true,
-            });
-            return;
-        };
-        self.worktree_pick = Some(WorktreePick {
-            key: key.clone(),
-            on: None,
-            picked: false,
-        });
-        let core = Arc::clone(&self.core);
-        let read = cx.background_spawn(async move {
-            core.task_worktree_pick(&thread).unwrap_or_else(|| {
-                if let Err(e) = core.set_task_gets_worktree(&thread, false) {
-                    log::warn!(error:% = e; "could not pick where the task works: {{error}}");
-                }
-                false
-            })
-        });
-        cx.spawn(async move |this, cx| {
-            let on = read.await;
-            this.update(cx, |this, cx| {
-                if let Some(pick) = this.worktree_pick.as_mut().filter(|p| p.key == key) {
-                    pick.on = Some(on);
-                    cx.notify();
-                }
-            })
-        })
-        .detach();
-    }
-
-    /// Flips where the task whose worktree can still be picked works.
+    /// Flips whether the project's new tasks work in a worktree each or edit its folder, as its
+    /// switch in Settings → Worktrees does.
     fn flip_worktree_pick(&mut self, cx: &mut Context<Self>) {
-        let Some((key, thread, _)) = self.pick_target() else {
+        let Ok(project) = self.pick_project().map(|p| p.id.clone()) else {
             return;
         };
-        let Some(pick) = self.worktree_pick.as_mut().filter(|p| p.key == key) else {
-            return;
-        };
-        let Some(on) = pick.on.map(|on| !on) else {
-            return;
-        };
-        pick.on = Some(on);
-        pick.picked = true;
-        if let Some(id) = thread {
-            let core = Arc::clone(&self.core);
-            crate::ui::off_thread(
-                cx,
-                move || core.set_task_gets_worktree(&id, on),
-                |_, done, _| {
-                    if let Err(e) = done {
-                        log::warn!(error:% = e; "could not pick where the task works: {{error}}");
-                    }
-                },
-            );
-        }
+        let in_place =
+            !self.settings.worktrees.disabled && !self.settings.edit_in_place.contains(&project);
+        self.settings.set_edit_in_place(&project, in_place);
+        self.change(
+            "change where the project's tasks work",
+            move |core| core.set_edits_in_place(&project, in_place),
+            cx,
+        );
         cx.notify();
-    }
-
-    /// Gives task `thread_id`, just started in `project_id` by the composer's message, what was
-    /// picked for it there.
-    pub(crate) fn apply_worktree_pick(&mut self, thread_id: &str, project_id: &str) {
-        let key = format!("new:{project_id}");
-        let Some(pick) = self.worktree_pick.take() else {
-            return;
-        };
-        if pick.key != key || !pick.picked {
-            return;
-        }
-        if let Some(on) = pick.on
-            && let Err(e) = self.core.set_task_gets_worktree(thread_id, on)
-        {
-            log::warn!(error:% = e; "could not pick where the task works: {{error}}");
-        }
     }
 
     /// Reads whether the user was told where the open task's project's tasks work, off the main
@@ -188,40 +95,46 @@ impl Workspace {
     }
 }
 
-/// The composer's switch between a worktree of its own and the project's folder, for the task
-/// whose worktree can still be picked. Hidden while worktrees are turned off in Settings.
+/// The composer's switch between a worktree for each new task and the project's folder, the
+/// same setting as the project's switch in Settings → Worktrees. It always shows, and says why
+/// when the project can't have worktrees.
 pub fn worktree_pick_chip(
     w: &Workspace,
     t: &Theme,
     cx: &mut Context<Workspace>,
-) -> Option<Stateful<gpui::Div>> {
-    if w.settings.worktrees.disabled {
-        return None;
-    }
-    let (key, _, _) = w.pick_target()?;
-    let on = w.worktree_pick.as_ref().filter(|p| p.key == key)?.on?;
+) -> Stateful<gpui::Div> {
+    let picked = w.pick_project();
+    let on = picked.is_ok_and(|project| {
+        !w.settings.worktrees.disabled && !w.settings.edit_in_place.contains(&project.id)
+    });
     let (label, glyph) = if on {
         ("Worktree", "folders")
     } else {
         ("Project folder", "folder")
     };
     let (muted, fg) = (t.text_muted, t.text);
-    Some(
-        button("worktree-pick", format!("Works in: {label}"))
-            .aria_toggled(on.into())
-            .flex_none()
-            .gap(px(6.))
-            .text_color(muted)
+    let chip = button("worktree-pick", format!("New tasks work in: {label}"))
+        .aria_toggled(on.into())
+        .flex_none()
+        .gap(px(6.))
+        .text_color(muted)
+        .child(icon(glyph, 13.).flex_none())
+        .child(div().whitespace_nowrap().child(label));
+    match picked {
+        Err(why) => chip
+            .aria_label(format!("New tasks work in: {label}. {why}"))
+            .opacity(0.6)
+            .cursor_default()
+            .tooltip(tooltip(why)),
+        Ok(_) => chip
             .hover(move |s| s.text_color(fg))
             .tooltip(tooltip(if on {
-                "Edit the project folder instead"
+                "New tasks edit the project folder instead"
             } else {
-                "Work in a worktree"
+                "New tasks work in a worktree each"
             }))
-            .child(icon(glyph, 13.).flex_none())
-            .child(div().whitespace_nowrap().child(label))
             .on_click(cx.listener(|w, _, _, cx| w.flip_worktree_pick(cx))),
-    )
+    }
 }
 
 /// The line that says, the first time a project's task changes something in its worktree, where
