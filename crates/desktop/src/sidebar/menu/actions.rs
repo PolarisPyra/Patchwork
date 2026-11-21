@@ -83,6 +83,19 @@ impl Workspace {
                 if self.settings.granular_chats {
                     items.push(item("Granular settings…", "gauge", Act::Granular));
                 }
+                // Where the task works: its worktree, or its project's folder.
+                let local = self
+                    .thread_by_id(id)
+                    .and_then(|t| t.project_id.as_ref())
+                    .is_some_and(|p| {
+                        self.settings.projects.iter().any(|project| {
+                            &project.id == p
+                                && !patchwork_core::system::ssh::is_remote(&project.path)
+                        })
+                    });
+                if local {
+                    items.push(item("Open folder", "folder-open", Act::OpenFolder));
+                }
                 items.extend(self.chat_app_items(id));
                 items.push(item("Export to…", "export", Act::Export));
                 if self.settings.logging.thread_menu {
@@ -331,6 +344,18 @@ impl Workspace {
             }
             (Target::Project(id), Act::ChangeFolder) => {
                 return self.change_project_folder(id.clone(), cx);
+            }
+            (Target::Thread(id), Act::OpenFolder) => {
+                let (core, id) = (Arc::clone(&self.core), id.clone());
+                let root = cx.background_spawn(async move { core.thread_root(&id) });
+                cx.spawn(async move |_, cx| match root.await {
+                    Ok(root) => cx.update(|cx| cx.open_with_system(std::path::Path::new(&root))),
+                    Err(e) => {
+                        log::warn!(error:% = e; "could not open the task's folder: {{error}}");
+                    }
+                })
+                .detach();
+                return;
             }
             (Target::Project(id), Act::OpenFolder) => {
                 let Some(project) = self.settings.projects.iter().find(|p| &p.id == id) else {

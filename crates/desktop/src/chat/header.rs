@@ -32,10 +32,11 @@ pub(super) fn header(
 ) -> Div {
     let lineage = lineage::lineage_card(w, t, window, cx);
     let hover = t.bg_hover;
-    // A project on an SSH host has no folder here for an editor to open.
+    // A task with its own worktree opens that; a project on an SSH host has no folder here
+    // for an editor to open.
     let open = w
         .project()
-        .map(|p| p.path.clone())
+        .map(|p| w.thread_folder().unwrap_or_else(|| p.path.clone()))
         .filter(|root| !patchwork_core::system::ssh::is_remote(root))
         .map(|root| {
             button("open-in-editor", "Open in editor")
