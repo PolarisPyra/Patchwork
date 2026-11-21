@@ -3,6 +3,28 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.132] - 2026-11-21
+
+**v26.11.132** · 4 changes from 1 contributor
+
+- **Android tools for new projects.** Agents now get the android_* tools when a project has no app yet, and in chats that create the app.
+- **Worktree chip follows your project setting.** The Worktree or Project folder chip stays visible during tasks and new tasks start on the project's chosen location.
+
+### Plus 1 more bug fix.
+
+<details>
+<summary>Full changelog</summary>
+
+## What's Changed
+* fix(android): agents get the Android tools before the project holds an app by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/283
+* fix(sidebar): a working task's spinner lines up with the times by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/284
+* feat(worktrees): the composer's worktree chip always shows and matches the project's setting by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/285
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.131...26.11.132
+
+</details>
+
 ## [26.11.131] - 2026-11-21
 
 **v26.11.131** · 12 changes from 1 contributor
