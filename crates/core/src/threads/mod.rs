@@ -14,7 +14,7 @@ mod standing;
 pub(crate) mod title;
 mod types;
 mod worktree;
-mod worktree_cleanup;
+pub(crate) mod worktree_cleanup;
 mod worktree_condition;
 pub(crate) mod worktree_home;
 mod worktree_include;
