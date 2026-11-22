@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.137] - 2026-11-22
+
+## What's Changed
+* fix(deps): update url to 2.5.9 for RUSTSEC-2026-0592 by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/294
+* fix(antigravity): keep ACP warm between turns, fix live thinking and usage plan badge by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/295
+* ci(release): bump all workspace crates in Cargo.lock on release by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/296
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.136...26.11.137
+
 ## [26.11.136] - 2026-11-22
 
 ## What's Changed
