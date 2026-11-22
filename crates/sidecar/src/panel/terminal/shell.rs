@@ -158,7 +158,6 @@ impl Panel {
                         let id = attached.info.id;
                         this.add_shell(attached, rx, cx);
                         this.active = Some(id);
-                        this.focus_terminal = true;
                     }
                     Err(e) => this.error = Some(e.to_string()),
                 }
