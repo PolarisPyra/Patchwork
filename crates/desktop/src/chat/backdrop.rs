@@ -100,14 +100,43 @@ pub fn scheme_for(w: &Workspace, background: &ChatBackground) -> Option<Scheme> 
 /// draws it as a view under the chat's, so a backdrop that moves redraws only itself, not the
 /// transcript over it.
 pub fn backdrop_layer(w: &mut Workspace, cx: &mut Context<Workspace>) -> AnyElement {
-    let scheme = chat_scheme(w);
+    let background = chat_background(w);
+    layer_for(w, &background, cx)
+}
+
+/// The Quilts page's background: its own from Settings, else the one every chat shares.
+fn quilts_background(w: &Workspace) -> ChatBackground {
+    w.settings
+        .quilts_background
+        .clone()
+        .unwrap_or_else(|| w.settings.chat_background.clone())
+}
+
+/// The scheme the Quilts page's background is drawn for, when it is drawn for one.
+pub fn quilts_scheme(w: &Workspace) -> Option<Scheme> {
+    scheme_for(w, &quilts_background(w))
+}
+
+/// The Quilts page's background on its own, as `backdrop_layer` draws the chat's.
+pub fn quilts_backdrop_layer(w: &mut Workspace, cx: &mut Context<Workspace>) -> AnyElement {
+    let background = quilts_background(w);
+    layer_for(w, &background, cx)
+}
+
+/// The window's color with `background` over it, in the scheme it is drawn for.
+fn layer_for(
+    w: &mut Workspace,
+    background: &ChatBackground,
+    cx: &mut Context<Workspace>,
+) -> AnyElement {
+    let scheme = scheme_for(w, background);
     let _scope = scheme.map(InScheme::enter);
     let t = *theme(cx);
     let layer = div()
         .relative()
         .size_full()
         .bg(t.bg_editor)
-        .children(chat_backdrop(w, &t, cx));
+        .children(backdrop_for(w, background, &t, cx));
     match scheme {
         Some(scheme) => in_scheme(scheme, layer).into_any_element(),
         None => layer.into_any_element(),

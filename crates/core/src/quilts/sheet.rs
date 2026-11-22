@@ -1,4 +1,4 @@
-//! A sheet artifact's CSV read into cells, with its formulas worked out.
+//! A sheet quilt's CSV read into cells, with its formulas worked out.
 //!
 //! A cell that starts with `=` is a formula: numbers, cells such as `B2`, the operators
 //! `+ - * / ^`, brackets, and `SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `ROUND` and `ABS` over

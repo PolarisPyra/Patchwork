@@ -234,8 +234,8 @@ pub enum AgentEvent {
     /// The settings were changed from outside the window, as a chat app does: the window reads
     /// them anew and applies the theme. Not about a thread.
     SettingsChanged,
-    /// An artifact of the thread was made or changed, so the Artifacts page reads them anew.
-    ArtifactsChanged,
+    /// A quilt of the thread was made or changed, so the Quilts page reads them anew.
+    QuiltsChanged,
     /// A chat app asked for the thread to be opened in the window.
     OpenChat,
     /// A chat app had the downloaded update installed: the window restarts into it. Not about a

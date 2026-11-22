@@ -4,7 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 mod actions;
-mod artifact_chat;
+mod quilt_chat;
 mod bots;
 mod add_project;
 mod background_dialog;

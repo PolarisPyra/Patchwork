@@ -29,8 +29,8 @@ pub enum Step<'a> {
     Compaction(bool),
     /// A Patchwork tool a chat-app bot ran, drawn as a pill so its history reads at a glance.
     Note(&'a ToolCall),
-    /// A call of the artifact tool, drawn as a card that opens what it saved.
-    Artifact(&'a ToolCall),
+    /// A call of the quilt tool, drawn as a card that opens what it saved.
+    Quilt(&'a ToolCall),
 }
 
 /// The prefix of the tools Patchwork's own MCP server gives an agent.
@@ -122,9 +122,9 @@ pub fn steps_of(message: &Message, notes: bool) -> Vec<Step<'_>> {
 /// Adds a call or a block of reasoning to the step it continues, or starts a step with it.
 fn push_entry<'a>(steps: &mut Vec<Step<'a>>, entry: Entry<'a>, notes: bool) {
     if let Entry::Tool(tool) = entry
-        && patchwork_core::artifacts::is_artifact_call(tool)
+        && patchwork_core::quilts::is_quilt_call(tool)
     {
-        steps.push(Step::Artifact(tool));
+        steps.push(Step::Quilt(tool));
         return;
     }
     if let Entry::Tool(tool) = entry
@@ -182,7 +182,7 @@ fn size_of(step: &Step) -> usize {
         Step::Agents(tools) => tools.len(),
         Step::Approvals(ids) => ids.len(),
         Step::Text(_) | Step::Plan(_) => 1,
-        Step::Compaction(_) | Step::Note(_) | Step::Artifact(_) => 0,
+        Step::Compaction(_) | Step::Note(_) | Step::Quilt(_) => 0,
     }
 }
 
@@ -278,10 +278,7 @@ pub fn fold_head_of(message: &Message, actions: usize, open: bool) -> FoldSummar
 /// questions the agent asked, compactions, and Patchwork tool notes.
 pub fn shown(message: &Message, step: &Step, i: usize, hidden: usize) -> bool {
     i >= hidden
-        || matches!(
-            step,
-            Step::Compaction(_) | Step::Note(_) | Step::Artifact(_)
-        )
+        || matches!(step, Step::Compaction(_) | Step::Note(_) | Step::Quilt(_))
         || matches!(step, Step::Agents(tools) if tools.iter().any(|t| is_running(t)))
         || matches!(step, Step::Approvals(ids) if ids.iter().any(|id| message
             .approvals

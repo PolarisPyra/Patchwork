@@ -57,6 +57,8 @@ pub(super) enum Place {
     Peek(String),
     /// A bot's page, by the bot's id.
     Bot(String),
+    /// The Quilts page, with the quilt it had open, by its id, or its gallery.
+    Quilts(Option<String>),
 }
 
 /// What fills the window beside the activity bar.
@@ -66,7 +68,7 @@ pub enum Page {
     Chats,
     Orchestrator,
     /// What agents made to look at, drawn live.
-    Artifacts,
+    Quilts,
 }
 
 /// The sidebar's width: its default, and how narrow and wide a drag may make it.
@@ -123,16 +125,19 @@ pub struct Workspace {
     pub(super) orchestrator: Entity<Orchestrator>,
     /// The orchestrator page's backdrop, drawn under it as a view of its own.
     pub(super) orchestrator_backdrop: Entity<OrchestratorBackdrop>,
-    /// The Artifacts page while it shows. Closed with it, so its browser runs only then.
-    pub(super) artifacts: Option<Entity<crate::artifacts::ArtifactsPage>>,
-    /// The artifact shown beside a chat, with that chat's id; it shows while the chat does.
-    pub(super) artifact_beside: Option<(String, Entity<crate::artifacts::ArtifactsPage>)>,
-    /// Whether the chat an artifact came from shows in a card over the Artifacts page.
-    pub(super) artifact_chat: bool,
-    /// Every artifact, so a chat's artifact cards can name theirs and open it.
-    pub(crate) artifact_list: Vec<patchwork_core::artifacts::Artifact>,
-    /// The artifacts' pictures, for the chats' cards and the gallery.
-    pub(crate) thumbs: Entity<crate::artifacts::Thumbs>,
+    /// The Quilts page while it shows. Closed with it, so its browser runs only then.
+    pub(super) quilts: Option<Entity<crate::quilts::QuiltsPage>>,
+    /// The quilt the Quilts page has open, by its id, which it opens on again when it is
+    /// made.
+    pub(super) quilt_open: Option<String>,
+    /// The quilt shown beside a chat, with that chat's id; it shows while the chat does.
+    pub(super) quilt_beside: Option<(String, Entity<crate::quilts::QuiltsPage>)>,
+    /// Whether the chat a quilt came from shows in a card over the Quilts page.
+    pub(super) quilt_chat: bool,
+    /// Every quilt, so a chat's quilt cards can name theirs and open it.
+    pub(crate) quilt_list: Vec<patchwork_core::quilts::Quilt>,
+    /// The quilts' pictures, for the chats' cards and the gallery.
+    pub(crate) thumbs: Entity<crate::quilts::Thumbs>,
     pub branch: Option<String>,
     /// The folder Source Control last read: the open task's worktree, or the project's folder.
     pub git_root: Option<String>,
@@ -228,6 +233,8 @@ pub struct Workspace {
     pub(super) chat_region: Entity<Region>,
     /// The chat's background, under the chat region, so a moving backdrop leaves the chat's frame.
     pub(super) backdrop_region: Entity<Region>,
+    /// The Quilts page's background, under the page, as `backdrop_region` is under the chat.
+    pub(super) quilts_backdrop_region: Entity<Region>,
     /// The status bar, so its spinner redraws only the bar as it turns, not the whole workspace.
     pub(super) status_region: Entity<Region>,
     pub sidebar_width: f32,
@@ -346,9 +353,16 @@ impl Workspace {
                 cx,
             )
         });
+        let quilts_backdrop_region = cx.new(|cx| {
+            Region::new(
+                &entity,
+                |w, _, cx| crate::chat::backdrop::quilts_backdrop_layer(w, cx),
+                cx,
+            )
+        });
         let orchestrator = cx.new(|cx| Orchestrator::new(&entity, composer.clone(), window, cx));
         let orchestrator_backdrop = cx.new(|cx| OrchestratorBackdrop::new(&orchestrator, cx));
-        let thumbs = cx.new(|_| crate::artifacts::Thumbs::new(Arc::clone(&core)));
+        let thumbs = cx.new(|_| crate::quilts::Thumbs::new(Arc::clone(&core)));
         cx.observe(&thumbs, |_, _, cx| cx.notify()).detach();
         let status_region =
             cx.new(|cx| Region::new(&entity, |w, _, cx| w.status_bar(cx).into_any_element(), cx));
@@ -373,10 +387,11 @@ impl Workspace {
             orchestrator_tasks: true,
             orchestrator,
             orchestrator_backdrop,
-            artifacts: None,
-            artifact_beside: None,
-            artifact_chat: false,
-            artifact_list: Vec::new(),
+            quilts: None,
+            quilt_open: None,
+            quilt_beside: None,
+            quilt_chat: false,
+            quilt_list: Vec::new(),
             thumbs,
             branch: None,
             git_root: None,
@@ -437,6 +452,7 @@ impl Workspace {
             sidebar_region,
             chat_region,
             backdrop_region,
+            quilts_backdrop_region,
             status_region,
             sidebar_width: SIDEBAR_WIDTH,
             resizing: None,
@@ -500,7 +516,7 @@ impl Workspace {
         this.await_theme_switch(window, cx);
         this.watch_window(window, cx);
         this.load_git(cx);
-        this.load_artifact_list(cx);
+        this.load_quilt_list(cx);
         // The composer starts focused, so typing and the app's keys work before any click.
         let composer = this.composer.read(cx).editor.focus_handle(cx);
         window.focus(&composer, cx);
@@ -588,7 +604,7 @@ impl Workspace {
         match self.page {
             Page::Chats => self.view.filter(|_| !self.peeking),
             Page::Orchestrator => self.orchestrator_tasks.then_some(View::Tasks),
-            Page::Artifacts => None,
+            Page::Quilts => None,
         }
     }
 

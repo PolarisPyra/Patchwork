@@ -22,7 +22,7 @@ pub mod queue;
 pub mod rail;
 mod reply;
 pub mod review;
-mod scheme;
+pub(crate) mod scheme;
 pub mod secret;
 pub mod subagents;
 pub mod timeline;

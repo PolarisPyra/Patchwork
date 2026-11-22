@@ -1,5 +1,5 @@
 //! A web page drawn by the installed Chrome or Chromium, running headless, inside the window:
-//! the artifacts on the Artifacts page, and pages the person browses.
+//! the quilts on the Quilts page, and pages the person browses.
 //!
 //! It draws what `patchwork_core::browser` streams and sends the pointer and keys back. With no
 //! browser installed it asks for one.

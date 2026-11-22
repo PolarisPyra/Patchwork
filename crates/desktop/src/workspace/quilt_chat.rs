@@ -1,5 +1,5 @@
-//! The Artifacts page as the window drives it: opening it on an artifact a chat made, and the
-//! chat an artifact came from in a card floating over it, so the artifact stays in sight while
+//! The Quilts page as the window drives it: opening it on a quilt a chat made, and the
+//! chat a quilt came from in a card floating over it, so the quilt stays in sight while
 //! the agent is asked to change it.
 
 // Rust guideline compliant 2026-10-09
@@ -8,9 +8,9 @@ use std::sync::Arc;
 
 use gpui::{AnyElement, Entity, KeyDownEvent, Role, Window, div, prelude::*, px, relative};
 
-use crate::artifacts::ArtifactsPage;
+use crate::quilts::QuiltsPage;
 
-use super::state::{Page, Workspace};
+use super::state::{Page, Place, Workspace};
 use crate::ui::theme::{Theme, fs_md, radius_lg};
 use crate::ui::{display_title, icon_button, popup_shadow, tooltip};
 
@@ -18,104 +18,138 @@ use crate::ui::{display_title, icon_button, popup_shadow, tooltip};
 const SIZE: (f32, f32) = (440., 640.);
 
 impl Workspace {
-    /// The Artifacts page, made the first time it shows.
-    pub(super) fn artifacts_page(
+    /// The Quilts page, made the first time it shows.
+    pub(super) fn quilts_page(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Entity<ArtifactsPage> {
-        if let Some(page) = &self.artifacts {
+    ) -> Entity<QuiltsPage> {
+        if let Some(page) = &self.quilts {
             return page.clone();
         }
         let core = Arc::clone(&self.core);
         let thumbs = self.thumbs.clone();
         let came_from = self.thread.as_ref().map(|t| t.id.clone());
-        let page = cx.new(|cx| ArtifactsPage::new(core, thumbs, came_from, cx));
-        cx.subscribe_in(&page, window, Self::on_artifacts).detach();
-        self.artifacts = Some(page.clone());
+        let open = self.quilt_open.clone();
+        let workspace = cx.entity();
+        let page = cx.new(|cx| {
+            // The workspace draws it cached, so it draws again when the chat's scheme changes.
+            cx.observe(&workspace, |_, _, cx| cx.notify()).detach();
+            let mut page = QuiltsPage::new(core, thumbs, came_from, cx);
+            page.go(open, cx);
+            page
+        });
+        cx.subscribe_in(&page, window, Self::on_quilts).detach();
+        self.quilts = Some(page.clone());
         page
     }
 
-    /// Stops the spare browser once neither the Artifacts page nor the panel beside a chat is
+    /// Stops the spare browser once neither the Quilts page nor the panel beside a chat is
     /// left to use it.
     pub(super) fn cool_browser_unless_shown(&self, cx: &mut Context<Self>) {
-        if self.artifacts.is_none() && self.artifact_beside.is_none() {
+        if self.quilts.is_none() && self.quilt_beside.is_none() {
             cx.background_spawn(async { patchwork_core::browser::cool_browser() })
                 .detach();
         }
     }
 
-    /// Shows version `n` of the artifact `id` on the Artifacts page.
-    pub(crate) fn open_artifact(
+    /// Shows version `n` of the quilt `id` on the Quilts page.
+    pub(crate) fn open_quilt(
         &mut self,
         id: String,
         n: u32,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.page = Page::Artifacts;
+        let from = self.place();
+        self.page = Page::Quilts;
         self.peeking = false;
-        let page = self.artifacts_page(window, cx);
+        self.quilt_open = Some(id.clone());
+        self.went_from(from);
+        let page = self.quilts_page(window, cx);
         page.update(cx, |page, cx| page.open(id, n, cx));
         cx.notify();
     }
 
-    /// Reads every artifact again, for the chats' artifact cards.
-    pub(super) fn load_artifact_list(&mut self, cx: &mut Context<Self>) {
+    /// Shows the Quilts page, as its icon and its shortcut do: on the gallery, or as it is when
+    /// it already shows.
+    pub(super) fn show_quilts_page(&mut self, cx: &mut Context<Self>) {
+        let open = self
+            .quilt_open
+            .clone()
+            .filter(|_| self.page == Page::Quilts);
+        self.go_to(&Place::Quilts(open), cx);
+    }
+
+    /// Shows the Quilts page with the quilt `open` open, or its gallery, and whether it
+    /// could: a quilt deleted since is not.
+    pub(super) fn show_quilts(&mut self, open: Option<&String>, cx: &mut Context<Self>) -> bool {
+        if open.is_some_and(|id| !self.quilt_list.iter().any(|a| &a.id == id)) {
+            return false;
+        }
+        self.page = Page::Quilts;
+        self.peeking = false;
+        self.quilt_open = open.cloned();
+        if let Some(page) = &self.quilts {
+            page.update(cx, |page, cx| page.go(open.cloned(), cx));
+        }
+        cx.notify();
+        true
+    }
+
+    /// Reads every quilt again, for the chats' quilt cards.
+    pub(super) fn load_quilt_list(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
         crate::ui::off_thread(
             cx,
-            move || core.artifacts(),
+            move || core.quilts(),
             |this, list, cx| {
-                this.artifact_list = list;
+                this.quilt_list = list;
                 cx.notify();
             },
         );
     }
 
-    /// Opens chat `id` in the card over the Artifacts page, with its message box focused.
-    pub(super) fn open_artifact_chat(
+    /// Opens chat `id` in the card over the Quilts page, with its message box focused.
+    pub(super) fn open_quilt_chat(
         &mut self,
         id: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_thread(id, cx);
-        // Opening a chat shows the chats' page; the card shows it over this one instead.
-        self.page = Page::Artifacts;
+        self.show_thread(id, cx);
+        // Opening a chat shows the chats' page; the card shows it over this one instead, and the
+        // window stays where it was for the back button.
+        self.page = Page::Quilts;
         if self.thread.as_ref().is_none_or(|t| t.id != id) {
             self.error = Some("That chat is gone".to_owned());
             cx.notify();
             return;
         }
-        self.artifact_chat = true;
-        self.set_artifact_chat_shown(Some(id.to_owned()), cx);
+        self.quilt_chat = true;
+        self.set_quilt_chat_shown(Some(id.to_owned()), cx);
         self.composer.update(cx, |c, cx| c.focus(window, cx));
         cx.notify();
     }
 
     /// Closes the card.
-    pub(super) fn close_artifact_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.artifact_chat = false;
-        self.set_artifact_chat_shown(None, cx);
+    pub(super) fn close_quilt_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.quilt_chat = false;
+        self.set_quilt_chat_shown(None, cx);
         window.focus(&self.focus, cx);
         cx.notify();
     }
 
     /// Tells the page which chat the card shows, for its chat button.
-    fn set_artifact_chat_shown(&self, shown: Option<String>, cx: &mut Context<Self>) {
-        if let Some(page) = &self.artifacts {
+    fn set_quilt_chat_shown(&self, shown: Option<String>, cx: &mut Context<Self>) {
+        if let Some(page) = &self.quilts {
             page.update(cx, |page, cx| page.set_chat_shown(shown, cx));
         }
     }
 
     /// The card, while it shows: the chat's title and close button over the chat itself.
-    pub(super) fn artifact_chat_card(
-        &self,
-        t: &Theme,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        if !self.artifact_chat || self.page != Page::Artifacts {
+    pub(super) fn quilt_chat_card(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.quilt_chat || self.page != Page::Quilts {
             return None;
         }
         let title = self
@@ -124,7 +158,7 @@ impl Workspace {
             .map(|thread| display_title(&thread.title))
             .unwrap_or_default();
         let card = div()
-            .id("artifact-chat")
+            .id("quilt-chat")
             .role(Role::Dialog)
             .aria_label(format!("Chat: {title}"))
             .occlude()
@@ -145,7 +179,7 @@ impl Workspace {
             .shadow(popup_shadow(t))
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
                 if e.keystroke.key == "escape" {
-                    this.close_artifact_chat(window, cx);
+                    this.close_quilt_chat(window, cx);
                     cx.stop_propagation();
                 }
             }))
@@ -170,10 +204,10 @@ impl Workspace {
                             .child(title),
                     )
                     .child(
-                        icon_button("artifact-chat-close", "Close chat", "x", 14., cx)
+                        icon_button("quilt-chat-close", "Close chat", "x", 14., cx)
                             .tooltip(tooltip("Close chat"))
                             .on_click(cx.listener(|this, _, window, cx| {
-                                this.close_artifact_chat(window, cx);
+                                this.close_quilt_chat(window, cx);
                             })),
                     ),
             )

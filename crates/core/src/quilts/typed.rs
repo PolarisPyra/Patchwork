@@ -1,5 +1,5 @@
-//! The pages of the typed artifacts: a doc on paper, a slide deck, a sheet's grid, a design's
-//! frame on a canvas, and a whiteboard that pans and zooms. A data artifact is a page drawn as
+//! The pages of the typed quilts: a doc on paper, a slide deck, a sheet's grid, a design's
+//! frame on a canvas, and a whiteboard that pans and zooms. A data quilt is a page drawn as
 //! it is.
 
 // Rust guideline compliant 2026-10-09

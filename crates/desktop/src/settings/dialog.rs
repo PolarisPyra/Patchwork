@@ -31,6 +31,7 @@ use super::updates;
 use super::worktrees;
 
 /// What the dialog tells the workspace.
+#[derive(Debug)]
 pub enum SettingsEvent {
     /// A setting was saved; the workspace reads them again.
     Changed,
@@ -107,6 +108,11 @@ pub(super) const ENTRIES: &[Entry] = &[
                 id: "chat-background",
                 label: "Chat theme",
                 icon: "chat-circle",
+            },
+            Pane {
+                id: "quilts-background",
+                label: "Quilts theme",
+                icon: "code-block",
             },
             Pane {
                 id: "interface",
@@ -285,6 +291,15 @@ pub struct SettingsDialog {
     pub(super) tokens: tokens::TokensState,
     pub(super) costs: costs::CostsState,
     pub(super) updates: updates::UpdatesState,
+}
+
+impl std::fmt::Debug for SettingsDialog {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SettingsDialog")
+            .field("section", &self.section)
+            .field("error", &self.error)
+            .finish_non_exhaustive()
+    }
 }
 
 impl EventEmitter<SettingsEvent> for SettingsDialog {}

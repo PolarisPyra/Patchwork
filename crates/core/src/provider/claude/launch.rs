@@ -26,8 +26,8 @@ pub fn launch_args(settings: &Settings, hooks: &[AgentHook], instructions: Strin
         "off".to_string(),
         "--append-system-prompt".to_string(),
         instructions,
-        // Claude's own `Artifact` publishes to claude.ai; artifacts belong on Patchwork's page,
-        // through Patchwork's `artifact` tool.
+        // Claude's own `Artifact` publishes to claude.ai; quilts belong on Patchwork's Quilts page,
+        // through Patchwork's `quilt` tool.
         "--disallowedTools".to_string(),
         "Artifact".to_string(),
     ];

@@ -172,7 +172,7 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
                 ToolStart::new(text("id"), name, text("summary").into()),
             );
             if let Parsed::Event(AgentEvent::ToolStarted { tool, .. }) = &mut started
-                && crate::artifacts::is_artifact_call(tool)
+                && crate::quilts::is_quilt_call(tool)
             {
                 if v["arguments"].is_null() {
                     tool.title = v["title"].as_str().map(str::to_owned);
@@ -186,7 +186,7 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
                                 removed: 0,
                             });
                 } else {
-                    crate::artifacts::fill_in(tool, &v["arguments"]);
+                    crate::quilts::fill_in(tool, &v["arguments"]);
                 }
             }
             vec![started]

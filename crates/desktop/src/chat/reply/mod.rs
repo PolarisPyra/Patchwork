@@ -3,7 +3,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-mod artifact;
+mod quilt;
 mod pieces;
 mod frame;
 mod note;

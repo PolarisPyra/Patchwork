@@ -1,4 +1,4 @@
-//! Keeping artifacts: pinning one to the gallery's top, renaming it, deleting it, and the menu
+//! Keeping quilts: pinning one to the gallery's top, renaming it, deleting it, and the menu
 //! that does each from a card.
 
 // Rust guideline compliant 2026-10-09
@@ -7,13 +7,13 @@ use std::sync::Arc;
 
 use gpui::{Pixels, Point, PromptLevel, Window, prelude::*};
 
-use super::state::ArtifactsPage;
+use super::state::QuiltsPage;
 use crate::ui::menu::{Menu, MenuItem};
 use crate::ui::off_thread;
 use crate::ui::text_area::{Submitted, TextArea};
 
-impl ArtifactsPage {
-    /// Opens the menu of the artifact `id` at `at`: pin or unpin, rename, and delete.
+impl QuiltsPage {
+    /// Opens the menu of the quilt `id` at `at`: pin or unpin, rename, and delete.
     pub(super) fn open_menu(
         &mut self,
         id: &str,
@@ -21,10 +21,10 @@ impl ArtifactsPage {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(artifact) = self.list.iter().find(|a| a.id == id) else {
+        let Some(quilt) = self.list.iter().find(|a| a.id == id) else {
             return;
         };
-        let pinned = artifact.pinned;
+        let pinned = quilt.pinned;
         let this = cx.entity().downgrade();
         let item = |label: &str,
                     icon: &'static str,
@@ -53,7 +53,7 @@ impl ArtifactsPage {
             .danger(),
         ];
         let menu = Menu::open_for(
-            artifact.title.clone(),
+            quilt.title.clone(),
             items,
             window,
             cx,
@@ -67,14 +67,17 @@ impl ArtifactsPage {
         cx.notify();
     }
 
-    /// Pins the artifact `id` to the gallery's top, or unpins it.
+    /// Pins the quilt `id` to the gallery's top, or unpins it.
     pub(super) fn pin(&mut self, id: String, pinned: bool, cx: &mut Context<Self>) {
+        if pinned {
+            self.play(super::patch::Act::Hop, cx);
+        }
         let core = Arc::clone(&self.core);
         // The core tells the window, which reads them again.
-        off_thread(cx, move || core.pin_artifact(&id, pinned), Self::failed);
+        off_thread(cx, move || core.pin_quilt(&id, pinned), Self::failed);
     }
 
-    /// Opens the artifact `id` with a field in place of its title, which Enter saves and Escape
+    /// Opens the quilt `id` with a field in place of its title, which Enter saves and Escape
     /// leaves.
     pub(super) fn start_rename(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
         if self.selected.as_deref() != Some(id) {
@@ -102,7 +105,7 @@ impl ArtifactsPage {
         cx.notify();
     }
 
-    /// Saves the title typed for the opened artifact.
+    /// Saves the title typed for the opened quilt.
     pub(super) fn finish_rename(&mut self, cx: &mut Context<Self>) {
         let (Some(field), Some(id)) = (self.renaming.take(), self.selected.clone()) else {
             return;
@@ -113,7 +116,7 @@ impl ArtifactsPage {
             return;
         }
         let core = Arc::clone(&self.core);
-        off_thread(cx, move || core.rename_artifact(&id, &title), Self::failed);
+        off_thread(cx, move || core.rename_quilt(&id, &title), Self::failed);
     }
 
     /// Leaves the title as it was.
@@ -123,15 +126,15 @@ impl ArtifactsPage {
         cx.notify();
     }
 
-    /// Asks, then deletes the artifact `id` with every version, going back to the gallery when it
+    /// Asks, then deletes the quilt `id` with every version, going back to the gallery when it
     /// was the one opened.
     pub(super) fn delete(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(artifact) = self.list.iter().find(|a| a.id == id) else {
+        let Some(quilt) = self.list.iter().find(|a| a.id == id) else {
             return;
         };
         let answer = window.prompt(
             PromptLevel::Warning,
-            &format!("Delete \u{201c}{}\u{201d}?", artifact.title),
+            &format!("Delete \u{201c}{}\u{201d}?", quilt.title),
             Some("Every version of it is deleted too."),
             &["Delete", "Cancel"],
             cx,
@@ -144,7 +147,7 @@ impl ArtifactsPage {
             let _ = this.update(cx, |_, cx| {
                 off_thread(
                     cx,
-                    move || core.delete_artifact(&id).map(|()| id),
+                    move || core.delete_quilt(&id).map(|()| id),
                     |this, deleted, cx| match deleted {
                         // The core tells the window, which reads them again.
                         Ok(id) if this.selected.as_ref() == Some(&id) => this.close(cx),
@@ -159,7 +162,7 @@ impl ArtifactsPage {
     /// Shows what went wrong, when something did.
     fn failed(&mut self, done: Result<(), patchwork_core::system::Error>, cx: &mut Context<Self>) {
         if let Err(e) = done {
-            log::warn!(error:% = e; "could not change an artifact: {{error}}");
+            log::warn!(error:% = e; "could not change a quilt: {{error}}");
             self.error = Some(e.to_string());
             cx.notify();
         }

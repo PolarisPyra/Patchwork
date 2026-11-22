@@ -1,5 +1,5 @@
-//! Settings → Orchestrator theme and Chat theme: what is behind the Orchestrator page
-//! and behind chats. The Orchestrator has a card for none, the butterfly, each animated
+//! Settings → Orchestrator theme, Chat theme and Quilts theme: what is behind the
+//! Orchestrator page, behind chats and behind the Quilts page. The Orchestrator has a card for none, the butterfly, each animated
 //! background, each of the backgrounds chats come with and each picture, and the card that adds a
 //! picture; an agent can be asked to write an animated one.
 //!
@@ -261,7 +261,7 @@ fn picker(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> Entity<Ba
     picker
 }
 
-pub(in crate::settings) fn orchestrator_background_pane(
+pub(crate) fn orchestrator_background_pane(
     d: &mut SettingsDialog,
     window: &mut Window,
     cx: &mut Context<SettingsDialog>,
@@ -317,7 +317,7 @@ pub(in crate::settings) fn orchestrator_background_pane(
         .into_any_element()
 }
 
-pub(in crate::settings) fn chat_background_pane(
+pub(crate) fn chat_background_pane(
     d: &mut SettingsDialog,
     window: &mut Window,
     cx: &mut Context<SettingsDialog>,
@@ -355,5 +355,56 @@ pub(in crate::settings) fn chat_background_pane(
         // The row that draws a picture comes right under the pictures, with no line between.
         .child(new_picture)
         .child(generate_with)
+        .into_any_element()
+}
+
+/// The Quilts theme's picker, made on the first look at its pane, showing the saved
+/// background. Its first choice is the background every chat shares.
+fn quilts_picker(
+    d: &mut SettingsDialog,
+    cx: &mut Context<SettingsDialog>,
+) -> Entity<BackgroundPicker> {
+    let value = d.settings.quilts_background.clone();
+    let shared = Some(d.settings.chat_background.clone());
+    if let Some(picker) = &d.themes.quilts_picker {
+        picker.update(cx, |p, _| p.set_value(value, shared));
+        return picker.clone();
+    }
+    let core = Arc::clone(&d.core);
+    let picker = cx.new(|cx| BackgroundPicker::new(core, "Quilts theme", value, None, shared, cx));
+    cx.subscribe(&picker, |d, _, e: &PickerEvent, cx| match e {
+        PickerEvent::Picked(background) => {
+            let background = background.clone();
+            d.update(|s| s.quilts_background = background, cx);
+        }
+        PickerEvent::PicturesChanged => {
+            d.settings = d.core.settings();
+            d.themes.loaded = false;
+            cx.emit(SettingsEvent::Changed);
+            cx.notify();
+        }
+    })
+    .detach();
+    d.themes.quilts_picker = Some(picker.clone());
+    picker
+}
+
+pub(crate) fn quilts_background_pane(
+    d: &mut SettingsDialog,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    let t = *theme(cx);
+    let picker = quilts_picker(d, cx);
+    div()
+        .id("quilts-background-pane")
+        .flex()
+        .flex_col()
+        .children(
+            d.themes
+                .error
+                .clone()
+                .map(|e| alert("backgrounds-error", e, t.danger)),
+        )
+        .child(anchored(div().id("label-quilts-background"), "Quilts theme").child(picker))
         .into_any_element()
 }

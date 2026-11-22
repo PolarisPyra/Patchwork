@@ -85,7 +85,7 @@ pub(super) const COMMANDS: &[Command] = &[
         "Show source control",
         Some("Opens the sidebar on the project's changes and commits"),
     ),
-    cmd("artifacts.show", "Sidebar", "Show artifacts", None),
+    cmd("quilts.show", "Sidebar", "Show quilts", None),
     cmd(
         "sidebar.showArchived",
         "Sidebar",
@@ -173,7 +173,7 @@ pub(super) const DEFAULT_RULES: &[(&str, &str, bool)] = &[
     ("orchestrator.show", "mod+1", false),
     ("sidebar.showTasks", "mod+2", false),
     ("sidebar.showChanges", "mod+3", false),
-    ("artifacts.show", "mod+4", false),
+    ("quilts.show", "mod+4", false),
     ("sidebar.showArchived", "mod+5", false),
     ("workspace.deleteChat", "delete", true),
     ("transcript.selectAll", "mod+a", true),
@@ -283,9 +283,15 @@ pub(super) const FIXED_KEYS: &[(&str, &[&str], &str)] = &[
 pub(super) type Overrides = HashMap<String, Option<String>>;
 
 pub(super) fn load(core: &Core) -> Overrides {
-    core.state(STATE_KEY)
+    let mut overrides: Overrides = core
+        .state(STATE_KEY)
         .and_then(|json| serde_json::from_str(&json).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // A key set for the Quilts page before it was named that keeps working.
+    if let Some(key) = overrides.remove("artifacts.show") {
+        overrides.entry("quilts.show".to_owned()).or_insert(key);
+    }
+    overrides
 }
 
 /// A command's key: the user's, or the built-in one.
@@ -412,7 +418,7 @@ fn action_for(id: &str) -> Option<Box<dyn Action>> {
         "orchestrator.show" => Box::new(crate::ShowOrchestrator),
         "sidebar.showTasks" => Box::new(crate::ShowTasks),
         "sidebar.showChanges" => Box::new(crate::ShowChanges),
-        "artifacts.show" => Box::new(crate::ShowArtifacts),
+        "quilts.show" => Box::new(crate::ShowQuilts),
         "sidebar.showArchived" => Box::new(crate::ShowArchived),
         "terminal.toggle" => Box::new(crate::ToggleTerminal),
         "terminal.new" => Box::new(crate::NewTerminal),
@@ -434,8 +440,10 @@ const SKIP_SHELL: &[&str] = &[
     "settings.open",
 ];
 
-/// Builds the window's keymap: moving focus, quitting, the text fields' keys, and each command's
-/// key as the user left it. In a terminal, Tab and the commands' keys other than the panel's,
+/// Builds the window's keymap.
+///
+/// It holds moving focus, quitting, the text fields' keys, and each command's key as the user
+/// left it. In a terminal, Tab and the commands' keys other than the panel's,
 /// search's and settings' go to the shell.
 pub fn bind_keys(core: &Core, cx: &mut App) {
     let overrides = load(core);

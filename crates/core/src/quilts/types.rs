@@ -1,13 +1,13 @@
-//! An artifact, what kind of content it holds, and its versions.
+//! A quilt, what kind of content it holds, and its versions.
 
 // Rust guideline compliant 2026-10-09
 
 use serde::{Deserialize, Serialize};
 
-/// What an artifact holds, which decides how it is drawn.
+/// What a quilt holds, which decides how it is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ArtifactKind {
+pub enum QuiltKind {
     /// A web page, scripts and styles included.
     Html,
     /// An SVG picture.
@@ -35,7 +35,7 @@ pub enum ArtifactKind {
     Whiteboard,
 }
 
-impl ArtifactKind {
+impl QuiltKind {
     /// Every kind, in the order the tool lists them.
     pub const ALL: [Self; 12] = [
         Self::Doc,
@@ -52,7 +52,7 @@ impl ArtifactKind {
         Self::Code,
     ];
 
-    /// The kinds a person can ask for from the Artifacts page, in the order they are offered.
+    /// The kinds the Quilts page has a tile for, in the order they are shown.
     pub const MADE_NEW: [Self; 6] = [
         Self::Doc,
         Self::Slides,
@@ -61,6 +61,22 @@ impl ArtifactKind {
         Self::Data,
         Self::Whiteboard,
     ];
+
+    /// The tile in `MADE_NEW` a quilt of this kind is counted under: web pages, components
+    /// and SVG pictures are designs, Markdown is a doc, and a diagram goes on the whiteboard.
+    /// Code has no tile.
+    #[must_use]
+    pub fn tile(self) -> Option<Self> {
+        match self {
+            Self::Doc | Self::Markdown => Some(Self::Doc),
+            Self::Slides => Some(Self::Slides),
+            Self::Sheet => Some(Self::Sheet),
+            Self::Design | Self::Html | Self::React | Self::Svg => Some(Self::Design),
+            Self::Data => Some(Self::Data),
+            Self::Whiteboard | Self::Mermaid => Some(Self::Whiteboard),
+            Self::Code => None,
+        }
+    }
 
     /// What the person sees the kind called.
     #[must_use]
@@ -78,25 +94,6 @@ impl ArtifactKind {
             Self::Design => "Design",
             Self::Data => "Data",
             Self::Whiteboard => "Whiteboard",
-        }
-    }
-
-    /// The message that asks a new chat's agent for one, which the person finishes.
-    #[must_use]
-    pub fn request(self) -> &'static str {
-        match self {
-            Self::Doc => "Make a doc artifact: ",
-            Self::Slides => "Make a slides artifact: ",
-            Self::Sheet => "Make a sheet artifact: ",
-            Self::Design => "Make a design artifact: ",
-            Self::Data => "Make a data dashboard artifact: ",
-            Self::Whiteboard => "Make a whiteboard artifact: ",
-            Self::Html => "Make a web page artifact: ",
-            Self::Svg => "Make an SVG artifact: ",
-            Self::Markdown => "Make a Markdown artifact: ",
-            Self::Mermaid => "Make a diagram artifact: ",
-            Self::React => "Make a React artifact: ",
-            Self::Code => "Make a code artifact: ",
         }
     }
 
@@ -192,13 +189,13 @@ impl ArtifactKind {
 
 /// Something an agent made for the person to look at, as it stands.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct Artifact {
+pub struct Quilt {
     pub id: String,
     /// The chat whose agent made it.
     pub thread_id: String,
     /// What the agent calls it, unique in its chat.
     pub key: String,
-    pub kind: ArtifactKind,
+    pub kind: QuiltKind,
     pub title: String,
     /// The language of code, such as `rust`.
     pub language: Option<String>,
@@ -210,9 +207,9 @@ pub struct Artifact {
     pub versions: u32,
 }
 
-/// One version of an artifact's content.
+/// One version of a quilt's content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ArtifactVersion {
+pub struct QuiltVersion {
     /// Its number, from 1.
     pub n: u32,
     pub content: String,

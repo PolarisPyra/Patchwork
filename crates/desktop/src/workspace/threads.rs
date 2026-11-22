@@ -37,7 +37,7 @@ impl Workspace {
     pub(super) fn place(&self) -> Option<Place> {
         match self.page {
             super::Page::Orchestrator => Some(Place::Orchestrator),
-            super::Page::Artifacts => None,
+            super::Page::Quilts => Some(Place::Quilts(self.quilt_open.clone())),
             super::Page::Chats if self.bot_shown.is_some() => {
                 self.bot_shown.clone().map(Place::Bot)
             }
@@ -57,6 +57,7 @@ impl Workspace {
             Place::Orchestrator => LastPlace::Orchestrator,
             Place::Chat(id) | Place::Peek(id) => LastPlace::Chat(id),
             Place::Bot(id) => LastPlace::Bot(id),
+            Place::Quilts(_) => return None,
         })
     }
 
@@ -106,9 +107,14 @@ impl Workspace {
 
     pub(super) fn go_to(&mut self, to: &Place, cx: &mut Context<Self>) {
         let from = self.place();
-        if self.show(to, cx)
-            && let Some(from) = from.filter(|from| from != to)
-        {
+        if self.show(to, cx) {
+            self.went_from(from);
+        }
+    }
+
+    /// Records `from` for the back button, unless the window still shows it.
+    pub(super) fn went_from(&mut self, from: Option<Place>) {
+        if let Some(from) = from.filter(|from| Some(from) != self.place().as_ref()) {
             self.history_back.push(from);
             self.history_forward.clear();
         }
@@ -173,6 +179,7 @@ impl Workspace {
             }
             Place::Chat(id) => self.show_thread(id, cx),
             Place::Bot(id) => self.show_bot(id, cx),
+            Place::Quilts(open) => self.show_quilts(open.as_ref(), cx),
             Place::Peek(id) => {
                 let shown = self.show_thread(id, cx);
                 self.peeking |= shown;
@@ -182,7 +189,7 @@ impl Workspace {
     }
 
     /// Shows chat `id`, and whether it could be opened.
-    fn show_thread(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
+    pub(super) fn show_thread(&mut self, id: &str, cx: &mut Context<Self>) -> bool {
         let opened = match self.core.thread(id) {
             Ok(thread) => {
                 // A chat opened from the orchestrator page is shown in place of the page.
@@ -318,10 +325,10 @@ impl Workspace {
             AgentEvent::ApprovalResolved { approval_id, .. } => {
                 cx.dismiss_system_notification(&format!("{}|{approval_id}", envelope.thread_id));
             }
-            AgentEvent::ArtifactsChanged => {
-                self.load_artifact_list(cx);
-                if let Some(page) = &self.artifacts {
-                    page.update(cx, crate::artifacts::ArtifactsPage::reload);
+            AgentEvent::QuiltsChanged => {
+                self.load_quilt_list(cx);
+                if let Some(page) = &self.quilts {
+                    page.update(cx, crate::quilts::QuiltsPage::reload);
                 }
                 return;
             }

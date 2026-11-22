@@ -89,6 +89,9 @@ pub struct RemovedBackground {
     /// The bots that showed it as their own background.
     #[serde(default)]
     pub bots: Vec<String>,
+    /// It was the Quilts page's background.
+    #[serde(default)]
+    pub quilts: bool,
 }
 
 /// The longest side a picture is kept at. A background is mostly covered by the window color, so
@@ -375,11 +378,16 @@ impl Core {
                 bots.push(bot.id);
             }
         }
-        let shared = self.store.settings().chat_background == picture;
+        let settings = self.store.settings();
+        let shared = settings.chat_background == picture;
+        let quilts = settings.quilts_background.as_ref() == Some(&picture);
         let mut page = [false; 3];
         self.update_settings(|s| {
             if shared {
                 s.chat_background = ChatBackground::None;
+            }
+            if quilts {
+                s.quilts_background = None;
             }
             page = s.drop_picture(file);
         })?;
@@ -389,6 +397,7 @@ impl Core {
             shared,
             page,
             bots,
+            quilts,
         })
     }
 
@@ -428,6 +437,9 @@ impl Core {
         self.update_settings(|s| {
             if removed.shared && s.chat_background == ChatBackground::None {
                 s.chat_background = picture.clone();
+            }
+            if removed.quilts && s.quilts_background.is_none() {
+                s.quilts_background = Some(picture.clone());
             }
             s.return_picture(file, removed.page);
         })?;

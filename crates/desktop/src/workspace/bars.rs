@@ -266,7 +266,7 @@ impl Workspace {
         // Lit while its page shows, with the task list open or closed. Toggled follows the list.
         let on_page = self.page == Page::Orchestrator;
         let orchestrating = on_page && self.orchestrator_tasks;
-        let on_artifacts = self.page == Page::Artifacts;
+        let on_quilts = self.page == Page::Quilts;
         div()
             .id("activity-bar")
             .role(Role::Navigation)
@@ -297,14 +297,10 @@ impl Workspace {
             .child(entry(View::Tasks, "Tasks", "chats", cx))
             .child(entry(View::Changes, "Source Control", "git-diff", cx))
             .child(
-                activity_button("Artifacts", "Artifacts".into(), &t, on_artifacts)
-                    .aria_toggled(on_artifacts.into())
+                activity_button("Quilts", "Quilts".into(), &t, on_quilts)
+                    .aria_toggled(on_quilts.into())
                     .child(icon("code-block", 20.))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.page = Page::Artifacts;
-                        this.peeking = false;
-                        cx.notify();
-                    })),
+                    .on_click(cx.listener(|this, _, _, cx| this.show_quilts_page(cx))),
             )
             .child(entry(View::Archived, "Archived", "archive", cx))
             .child(

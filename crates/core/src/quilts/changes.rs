@@ -1,4 +1,4 @@
-//! What changed between two versions of an artifact, line by line, with the unchanged lines far
+//! What changed between two versions of a quilt, line by line, with the unchanged lines far
 //! from any change folded away.
 
 // Rust guideline compliant 2026-10-09
@@ -25,7 +25,7 @@ pub enum ChangeRow {
 
 /// The rows that turn `old` into `new`, with the unchanged lines far from any change folded.
 #[must_use]
-pub fn artifact_changes(old: &str, new: &str) -> Vec<ChangeRow> {
+pub fn quilt_changes(old: &str, new: &str) -> Vec<ChangeRow> {
     fold(&line_changes(old, new))
 }
 

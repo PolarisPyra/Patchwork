@@ -14,13 +14,13 @@ use crate::ui::theme::InScheme;
 
 /// Its child, laid out, prepainted and painted in `scheme`'s theme. The views it holds, such as
 /// the composer, draw while it does, so they take that theme too.
-pub(super) struct InSchemeElement {
+pub(crate) struct InSchemeElement {
     scheme: Scheme,
     child: AnyElement,
 }
 
 /// `child`, drawn in `scheme`'s theme.
-pub(super) fn in_scheme(scheme: Scheme, child: impl IntoElement) -> InSchemeElement {
+pub(crate) fn in_scheme(scheme: Scheme, child: impl IntoElement) -> InSchemeElement {
     InSchemeElement {
         scheme,
         child: child.into_any_element(),

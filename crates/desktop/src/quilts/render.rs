@@ -1,4 +1,4 @@
-//! The Artifacts page drawn: the gallery, or the artifact opened, drawn live or as its source,
+//! The Quilts page drawn: the gallery, or the quilt opened, drawn live or as its source,
 //! with its versions.
 
 // Rust guideline compliant 2026-10-09
@@ -7,9 +7,9 @@ use gpui::{
     AnyElement, Div, KeyDownEvent, Role, SharedString, Stateful, StyledText, Window, div,
     prelude::*, px, uniform_list,
 };
-use patchwork_core::artifacts::{Artifact, ArtifactKind, ChangeRow};
+use patchwork_core::quilts::{Quilt, QuiltKind, ChangeRow};
 
-use super::state::{ArtifactsPage, Show};
+use super::state::{QuiltsPage, Show};
 use crate::ui::theme::{Theme, font_mono, fs_md, fs_sm, radius_sm, theme};
 use crate::ui::menu::Menu;
 use crate::ui::{button, focus_ring, format_relative, icon_button, input_box, scrollbar, tooltip};
@@ -18,36 +18,34 @@ use crate::ui::{button, focus_ring, format_relative, icon_button, input_box, scr
 const CHANGE_LINE: f32 = 20.;
 
 /// The language the source is coloured as.
-fn language(artifact: &Artifact) -> &str {
-    match artifact.kind {
-        ArtifactKind::Html | ArtifactKind::Slides | ArtifactKind::Design | ArtifactKind::Data => {
-            "html"
-        }
-        ArtifactKind::Svg | ArtifactKind::Whiteboard => "xml",
-        ArtifactKind::Markdown | ArtifactKind::Doc => "markdown",
-        ArtifactKind::Sheet | ArtifactKind::Mermaid => "",
-        ArtifactKind::React => "jsx",
-        ArtifactKind::Code => artifact.language.as_deref().unwrap_or_default(),
+fn language(quilt: &Quilt) -> &str {
+    match quilt.kind {
+        QuiltKind::Html | QuiltKind::Slides | QuiltKind::Design | QuiltKind::Data => "html",
+        QuiltKind::Svg | QuiltKind::Whiteboard => "xml",
+        QuiltKind::Markdown | QuiltKind::Doc => "markdown",
+        QuiltKind::Sheet | QuiltKind::Mermaid => "",
+        QuiltKind::React => "jsx",
+        QuiltKind::Code => quilt.language.as_deref().unwrap_or_default(),
     }
 }
 
 /// The icon each type is listed with.
-pub(crate) fn kind_icon(kind: ArtifactKind) -> &'static str {
+pub(crate) fn kind_icon(kind: QuiltKind) -> &'static str {
     match kind {
-        ArtifactKind::Html | ArtifactKind::React => "globe",
-        ArtifactKind::Svg | ArtifactKind::Mermaid => "sparkle",
-        ArtifactKind::Markdown => "eye",
-        ArtifactKind::Code => "code",
-        ArtifactKind::Doc => "file-text",
-        ArtifactKind::Slides => "play",
-        ArtifactKind::Sheet => "list-numbers",
-        ArtifactKind::Design => "palette",
-        ArtifactKind::Data => "chart-bar",
-        ArtifactKind::Whiteboard => "note-pencil",
+        QuiltKind::Html | QuiltKind::React => "globe",
+        QuiltKind::Svg | QuiltKind::Mermaid => "sparkle",
+        QuiltKind::Markdown => "eye",
+        QuiltKind::Code => "code",
+        QuiltKind::Doc => "file-text",
+        QuiltKind::Slides => "play",
+        QuiltKind::Sheet => "list-numbers",
+        QuiltKind::Design => "palette",
+        QuiltKind::Data => "chart-bar",
+        QuiltKind::Whiteboard => "note-pencil",
     }
 }
 
-impl ArtifactsPage {
+impl QuiltsPage {
     /// Preview, when the kind is drawn, Code and Changes, as tabs.
     fn tabs(&self, drawn: bool, t: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
         let (fg, muted, selected) = (t.text, t.text_muted, t.bg_selected_muted);
@@ -93,7 +91,7 @@ impl ArtifactsPage {
                 }))
         };
         div()
-            .id("artifact-tabs")
+            .id("quilt-tabs")
             .role(Role::TabList)
             .aria_label("Show")
             .flex()
@@ -141,7 +139,7 @@ impl ArtifactsPage {
             .items_center()
             .gap(px(2.))
             .child(step(
-                "artifact-older",
+                "quilt-older",
                 "Older version",
                 "arrow-left",
                 before,
@@ -150,7 +148,7 @@ impl ArtifactsPage {
             .child(
                 // The arrow keys step through the versions, as a slider's do through its values.
                 div()
-                    .id("artifact-version")
+                    .id("quilt-version")
                     .role(Role::Slider)
                     .aria_label("Version")
                     .aria_numeric_value((at + 1) as f64)
@@ -176,7 +174,7 @@ impl ArtifactsPage {
                     })),
             )
             .child(step(
-                "artifact-newer",
+                "quilt-newer",
                 "Newer version",
                 "arrow-right",
                 after,
@@ -185,7 +183,7 @@ impl ArtifactsPage {
             .when(after.is_some(), |d| {
                 d.child(
                     crate::ui::btn(
-                        "artifact-restore",
+                        "quilt-restore",
                         "Restore",
                         crate::ui::BtnKind::Plain,
                         false,
@@ -197,9 +195,9 @@ impl ArtifactsPage {
             })
     }
 
-    fn header(&self, artifact: &Artifact, t: &Theme, cx: &mut Context<Self>) -> Div {
-        let chat_shown = self.chat_shown.as_ref() == Some(&artifact.thread_id);
-        let (id, pinned, docked) = (artifact.id.clone(), artifact.pinned, self.docked);
+    fn header(&self, quilt: &Quilt, t: &Theme, cx: &mut Context<Self>) -> Div {
+        let chat_shown = self.chat_shown.as_ref() == Some(&quilt.thread_id);
+        let (id, pinned, docked) = (quilt.id.clone(), quilt.pinned, self.docked);
         let title = match &self.renaming {
             Some(field) => div()
                 .flex_1()
@@ -216,7 +214,7 @@ impl ArtifactsPage {
                 .min_w_0()
                 .truncate()
                 .text_size(px(fs_md()))
-                .child(artifact.title.clone()),
+                .child(quilt.title.clone()),
         };
         div()
             .flex()
@@ -229,8 +227,8 @@ impl ArtifactsPage {
             .border_color(t.border)
             .when(!docked, |d| {
                 d.child(
-                    icon_button("artifact-back", "Back to artifacts", "arrow-left", 16., cx)
-                        .tooltip(tooltip("Back to artifacts"))
+                    icon_button("quilt-back", "Back to quilts", "arrow-left", 16., cx)
+                        .tooltip(tooltip("Back to quilts"))
                         .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
                 )
             })
@@ -238,7 +236,7 @@ impl ArtifactsPage {
             .when(!docked && self.renaming.is_none(), |d| {
                 let id = id.clone();
                 d.child(
-                    icon_button("artifact-rename", "Rename", "pencil-simple", 16., cx)
+                    icon_button("quilt-rename", "Rename", "pencil-simple", 16., cx)
                         .tooltip(tooltip("Rename"))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.start_rename(&id, window, cx);
@@ -248,7 +246,7 @@ impl ArtifactsPage {
             .when(!docked, |d| {
                 let id = id.clone();
                 d.child(
-                    icon_button("artifact-pin", "Pin", "push-pin", 16., cx)
+                    icon_button("quilt-pin", "Pin", "push-pin", 16., cx)
                         .tooltip(tooltip(if pinned { "Unpin" } else { "Pin" }))
                         .aria_toggled(pinned.into())
                         .when(pinned, |b| b.bg(t.bg_selected_muted))
@@ -258,67 +256,55 @@ impl ArtifactsPage {
                 )
             })
             .child(self.versions(t, cx))
-            .child(self.tabs(artifact.kind.drawn(), t, cx))
+            .child(self.tabs(quilt.kind.drawn(), t, cx))
             .when(!docked, |d| {
                 d.child(
-                    icon_button("artifact-copy", "Copy", "copy", 16., cx)
+                    icon_button("quilt-copy", "Copy", "copy", 16., cx)
                         .tooltip(tooltip("Copy"))
                         .on_click(cx.listener(|this, _, _, cx| this.copy(cx))),
                 )
                 .child(
-                    icon_button("artifact-save", "Save as", "export", 16., cx)
+                    icon_button("quilt-save", "Save as", "export", 16., cx)
                         .tooltip(tooltip("Save as"))
                         .on_click(cx.listener(|this, _, _, cx| this.save_as(cx))),
                 )
                 .child(
-                    icon_button("artifact-chat", "Chat", "chat-circle", 16., cx)
+                    icon_button("quilt-chat", "Chat", "chat-circle", 16., cx)
                         .tooltip(tooltip("Chat"))
                         .aria_expanded(chat_shown)
                         .when(chat_shown, |b| b.bg(t.bg_selected_muted))
                         .on_click(cx.listener(|this, _, _, cx| this.open_chat(cx))),
                 )
                 .child(
-                    icon_button("artifact-delete", "Delete", "trash", 16., cx)
+                    icon_button("quilt-delete", "Delete", "trash", 16., cx)
                         .tooltip(tooltip("Delete"))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.delete(id.clone(), window, cx);
                         })),
                 )
             })
-            .when(artifact.kind == ArtifactKind::Slides, |d| {
+            .when(quilt.kind == QuiltKind::Slides, |d| {
                 d.child(
-                    icon_button("artifact-present", "Present", "play", 16., cx)
+                    icon_button("quilt-present", "Present", "play", 16., cx)
                         .tooltip(tooltip("Present"))
                         .on_click(cx.listener(|this, _, _, cx| this.open_outside(cx))),
                 )
             })
-            .when(artifact.kind.drawn(), |d| {
+            .when(quilt.kind.drawn(), |d| {
                 d.child(
-                    icon_button(
-                        "artifact-open",
-                        "Open in browser",
-                        "arrow-square-out",
-                        16.,
-                        cx,
-                    )
-                    .tooltip(tooltip("Open in browser"))
-                    .on_click(cx.listener(|this, _, _, cx| this.open_outside(cx))),
+                    icon_button("quilt-open", "Open in browser", "arrow-square-out", 16., cx)
+                        .tooltip(tooltip("Open in browser"))
+                        .on_click(cx.listener(|this, _, _, cx| this.open_outside(cx))),
                 )
             })
             .when(docked, |d| {
                 d.child(
-                    icon_button(
-                        "artifact-full",
-                        "Open on Artifacts page",
-                        "code-block",
-                        16.,
-                        cx,
-                    )
-                    .tooltip(tooltip("Open on Artifacts page"))
-                    .on_click(cx.listener(|this, _, _, cx| this.open_full(cx))),
+                    icon_button("quilt-full", "Open on Quilts page", "code-block", 16., cx)
+                        .tooltip(tooltip("Open on Quilts page"))
+                        .on_click(cx.listener(|this, _, _, cx| this.open_full(cx))),
                 )
                 .child(
-                    icon_button("artifact-close", "Close artifact", "x", 16., cx)
+                    icon_button("quilt-close", "Close quilt", "x", 16., cx)
                         .tooltip(tooltip("Close"))
                         .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
                 )
@@ -343,7 +329,7 @@ impl ArtifactsPage {
                 .text_size(px(fs_sm()))
                 .child(
                     div()
-                        .id("artifact-page-errors")
+                        .id("quilt-page-errors")
                         .role(Role::Alert)
                         .flex_1()
                         .min_w_0()
@@ -355,7 +341,7 @@ impl ArtifactsPage {
                         }),
                 )
                 .child(
-                    button("artifact-ask-fix", "Ask to fix")
+                    button("quilt-ask-fix", "Ask to fix")
                         .flex_none()
                         .px(px(8.))
                         .py(px(2.))
@@ -370,13 +356,13 @@ impl ArtifactsPage {
     }
 
     /// The version's source, coloured.
-    fn source(&self, artifact: &Artifact, t: &Theme) -> AnyElement {
+    fn source(&self, quilt: &Quilt, t: &Theme) -> AnyElement {
         let code: SharedString = self
             .version()
             .map(|v| v.content.clone())
             .unwrap_or_default()
             .into();
-        let runs = crate::ui::highlight::highlight_code(&code, language(artifact));
+        let runs = crate::ui::highlight::highlight_code(&code, language(quilt));
         let text = StyledText::new(code).with_highlights(
             runs.iter()
                 .map(|(range, token)| (range.clone(), token.style(t))),
@@ -388,9 +374,9 @@ impl ArtifactsPage {
             .bg(t.bg_editor)
             .child(
                 div()
-                    .id("artifact-source")
+                    .id("quilt-source")
                     .role(Role::Document)
-                    .aria_label(format!("{} source", artifact.title))
+                    .aria_label(format!("{} source", quilt.title))
                     .tab_index(0)
                     .focus_visible(focus_ring)
                     .size_full()
@@ -407,10 +393,10 @@ impl ArtifactsPage {
 
     /// What changed in the version since the one before it: lines taken out, then put in, with
     /// the unchanged lines far from a change folded.
-    fn changes_view(&self, artifact: &Artifact, t: &Theme, cx: &mut Context<Self>) -> AnyElement {
+    fn changes_view(&self, quilt: &Quilt, t: &Theme, cx: &mut Context<Self>) -> AnyElement {
         let t = *t;
         let list = uniform_list(
-            "artifact-changes-lines",
+            "quilt-changes-lines",
             self.changes.len(),
             cx.processor(move |this, range: std::ops::Range<usize>, _, _| {
                 range
@@ -444,9 +430,9 @@ impl ArtifactsPage {
         .track_scroll(&self.changes_scroll)
         .size_full();
         div()
-            .id("artifact-changes")
+            .id("quilt-changes")
             .role(Role::Document)
-            .aria_label(format!("{} changes", artifact.title))
+            .aria_label(format!("{} changes", quilt.title))
             .tab_index(0)
             .focus_visible(focus_ring)
             .flex_1()
@@ -460,13 +446,13 @@ impl ArtifactsPage {
     }
 
     fn viewer(&self, t: &Theme, cx: &mut Context<Self>) -> AnyElement {
-        let Some(artifact) = self.current().cloned() else {
+        let Some(quilt) = self.current().cloned() else {
             return div().into_any_element();
         };
         let body = match self.show {
-            Show::Changes => self.changes_view(&artifact, t, cx),
-            Show::Code => self.source(&artifact, t),
-            Show::Preview if !artifact.kind.drawn() => self.source(&artifact, t),
+            Show::Changes => self.changes_view(&quilt, t, cx),
+            Show::Code => self.source(&quilt, t),
+            Show::Preview if !quilt.kind.drawn() => self.source(&quilt, t),
             Show::Preview => match &self.preview {
                 Some(view) => div()
                     .flex_1()
@@ -482,11 +468,11 @@ impl ArtifactsPage {
             .flex_1()
             .min_w_0()
             .min_h_0()
-            .child(self.header(&artifact, t, cx))
+            .child(self.header(&quilt, t, cx))
             .children(self.page_alert(t, cx))
             .children(self.error.clone().map(|e| {
                 div()
-                    .id("artifact-error")
+                    .id("quilt-error")
                     .role(Role::Alert)
                     .px(px(12.))
                     .py(px(6.))
@@ -499,20 +485,21 @@ impl ArtifactsPage {
     }
 }
 
-impl Render for ArtifactsPage {
+impl Render for QuiltsPage {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = *theme(cx);
         let open = self.current().is_some();
         div()
-            .id("artifacts-page")
+            .id("quilts-page")
             .role(Role::Region)
-            .aria_label("Artifacts")
+            .aria_label("Quilts")
             .track_focus(&self.focus)
             .flex()
             .size_full()
             .min_w_0()
             .min_h_0()
-            .bg(t.bg_app)
+            // The full page shows the chat's background under it; beside a chat it is a panel.
+            .when(self.docked, |d| d.bg(t.bg_app))
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
                 if e.keystroke.key == "escape" && this.current().is_some() {
                     this.close(cx);
@@ -523,7 +510,7 @@ impl Render for ArtifactsPage {
                 if open {
                     d.child(self.viewer(&t, cx))
                 } else if self.docked {
-                    // Beside a chat, the artifact shows once it is read; there is no gallery.
+                    // Beside a chat, the quilt shows once it is read; there is no gallery.
                     d
                 } else {
                     d.child(self.gallery(&t, window, cx))

@@ -23,6 +23,7 @@ const PIXELS_PER_LINE: f32 = 40.;
 const MOST_ERRORS: usize = 20;
 
 /// The errors the shown page met changed.
+#[derive(Debug)]
 pub struct PageErrorsChanged;
 
 #[expect(
@@ -30,7 +31,7 @@ pub struct PageErrorsChanged;
     reason = "independent flags the page reports, not a state machine"
 )]
 pub struct BrowserView {
-    /// What it is about, for the screen reader: the artifact's title, or "Web page".
+    /// What it is about, for the screen reader: the quilt's title, or "Web page".
     pub(super) label: String,
     /// Whether it has an address bar, for a page the person browses rather than one Patchwork
     /// opened.
@@ -61,6 +62,14 @@ pub struct BrowserView {
     errors: Vec<String>,
     /// Whether the page was last told the app's theme is dark.
     dark: Option<bool>,
+}
+
+impl std::fmt::Debug for BrowserView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BrowserView")
+            .field("label", &self.label)
+            .finish_non_exhaustive()
+    }
 }
 
 impl gpui::EventEmitter<PageErrorsChanged> for BrowserView {}
@@ -187,6 +196,7 @@ impl BrowserView {
     }
 
     /// The errors the shown page met, the first first.
+    #[must_use]
     pub fn errors(&self) -> &[String] {
         &self.errors
     }

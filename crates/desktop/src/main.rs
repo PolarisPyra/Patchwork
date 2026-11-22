@@ -10,7 +10,7 @@
 // Rust guideline compliant 2026-10-09
 
 mod android;
-mod artifacts;
+mod quilts;
 mod bots;
 mod browser;
 mod canvas;
@@ -55,7 +55,7 @@ actions!(
         ShowOrchestrator,
         ShowTasks,
         ShowChanges,
-        ShowArtifacts,
+        ShowQuilts,
         ShowArchived,
         ToggleTerminal,
         NewTerminal,

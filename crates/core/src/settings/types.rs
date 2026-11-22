@@ -102,6 +102,9 @@ pub struct Settings {
     pub logo: Option<String>,
     /// What shows behind every chat's messages, unless the chat has its own.
     pub chat_background: ChatBackground,
+    /// What shows behind the Quilts page. None is the background every chat shares.
+    #[serde(alias = "artifactsBackground")]
+    pub quilts_background: Option<ChatBackground>,
     /// The theme whose colors the app is drawn in, by its id. None draws `theme`.
     pub theme_id: Option<String>,
     /// The color scheme `theme` System draws while the system is light, by its id. None is
