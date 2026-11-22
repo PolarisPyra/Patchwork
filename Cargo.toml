@@ -103,6 +103,11 @@ debug = false
 [profile.dev]
 debug = "line-tables-only"
 
+# The app that ships: one codegen unit and thin LTO let the optimizer see across crates.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
 [workspace.lints.rust]
 ambiguous_negative_literals = "warn"
 missing_debug_implementations = "warn"
