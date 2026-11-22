@@ -34,6 +34,17 @@ pub(super) fn screen(turn: &Turn, item: Parsed) -> Option<Parsed> {
     else {
         return Some(item);
     };
+    // After Stop, cancel incoming permission checks (including swarm worker requests) instead of
+    // auto-approving them.
+    if turn.cancelled.load(Ordering::SeqCst) {
+        let mut cancel_reply = reply;
+        cancel_reply["cancel"] = Value::Bool(true);
+        write_line(
+            &turn.stdin,
+            &provider::approval_reply(turn.agent, &cancel_reply, false, &HashMap::new()),
+        );
+        return None;
+    }
     let asks = turn.mode != crate::chats::AccessMode::FullAccess;
     // A tool the agent blocks goes on to be refused as an approval, where the chat shows why.
     let blocked = turn
@@ -129,6 +140,15 @@ pub(super) fn request_approval(
     questions: Vec<Question>,
     target: Option<permissions::Target>,
 ) {
+    if turn.cancelled.load(Ordering::SeqCst) {
+        let mut cancel_reply = reply;
+        cancel_reply["cancel"] = Value::Bool(true);
+        write_line(
+            &turn.stdin,
+            &provider::approval_reply(turn.agent, &cancel_reply, false, &HashMap::new()),
+        );
+        return;
+    }
     let mut approval = Approval {
         questions,
         kind: target.as_ref().map(|t| t.kind),

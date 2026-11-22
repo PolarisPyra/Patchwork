@@ -26,7 +26,8 @@ impl SettingsDialog {
                         "scheduled" => self.cancel_task(cx),
                         "gateway" => self.close_gateway(cx),
                         "providers" => {
-                            self.cancel_prompt(cx)
+                            self.cancel_antigravity_auth(cx)
+                                || self.cancel_prompt(cx)
                                 || self.cancel_address(cx)
                                 || self.cancel_form(cx)
                         }

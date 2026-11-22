@@ -54,7 +54,13 @@ pub fn opencode_call(kind: PermissionKind, resource: &str) -> Option<(String, Va
 /// Antigravity's `exec` is for a POSIX shell.
 #[must_use]
 pub fn patchwork_command(agent: AgentKind, args: &[&str]) -> Option<String> {
-    let exe = std::env::current_exe().ok()?;
+    // On Linux, an AppImage's `current_exe()` points inside an ephemeral `/tmp/.mount_*` FUSE
+    // mount that disappears on restart; prefer the persistent `APPIMAGE` path when available.
+    let exe = std::env::var_os("APPIMAGE")
+        .filter(|v| !v.is_empty())
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_file())
+        .or_else(|| std::env::current_exe().ok())?;
     let path = exe.to_string_lossy();
     let args = args.join(" ");
     let posix = || format!("'{}' {args}", path.replace('\'', r"'\''"));
@@ -119,7 +125,7 @@ pub fn shell_command(call: &Value) -> Option<String> {
         return Some(words.join(" "));
     }
     let args = &call["toolCall"]["args"];
-    ["CommandLine", "command", "cmd"]
+    ["CommandLine", "command_line", "command", "cmd"]
         .iter()
         .find_map(|key| args[*key].as_str())
         .map(String::from)
@@ -349,10 +355,17 @@ const PROMPT_ENV: &str = "PATCHWORK_SYSTEM_PROMPT";
 /// Environment for an Antigravity turn: the system prompt its session start hook hands over.
 #[must_use]
 pub fn antigravity_env(spec: &TurnSpec) -> Vec<(&'static str, String)> {
-    antigravity_prompt(spec)
-        .map(|text| (PROMPT_ENV, text.to_string()))
-        .into_iter()
-        .collect()
+    let mut env = Vec::new();
+    if let Some(text) = antigravity_prompt(spec) {
+        env.push((PROMPT_ENV, text.to_string()));
+    }
+    if spec.compact_window > 0 {
+        env.push((
+            "AGY_CLI_AUTO_COMPACT_OVERRIDE",
+            spec.compact_window.to_string(),
+        ));
+    }
+    env
 }
 
 fn antigravity_prompt<'a>(spec: &TurnSpec<'a>) -> Option<&'a str> {
@@ -399,16 +412,11 @@ pub fn antigravity_dir(spec: &TurnSpec) -> Option<std::path::PathBuf> {
 }
 
 /// The hooks file Antigravity runs, or None when there are no hooks to run.
+///
+/// The system prompt goes natively through ACP's `_meta.antigravity.systemPrompt.append`, so
+/// only Patchwork's permission hook and the user's hooks live here.
 fn antigravity_hooks(spec: &TurnSpec) -> Option<String> {
     let mut hooks = hooks_json(spec.hooks);
-    // The prompt is the session's first system message, so a resumed conversation keeps the one
-    // it started with.
-    if antigravity_prompt(spec).is_some() {
-        let prompt = json!({
-            "hooks": [{"type": "command", "command": patchwork_command(AgentKind::Antigravity, &[PROMPT_ARG])?}],
-        });
-        prepend(&mut hooks, "SessionStart", prompt);
-    }
     // Installed for every turn, so a rule saved while the turn runs decides its next call.
     if relay_running() {
         let permission = json!({

@@ -197,7 +197,7 @@ pub fn list_models(kind: AgentKind) -> Vec<ModelOption> {
     let (default_model, models) = match kind {
         AgentKind::Claude => (claude::configured_model(), claude::models()),
         AgentKind::Codex => (codex::configured_model(), codex::models()),
-        AgentKind::Antigravity => (None, antigravity::models()),
+        AgentKind::Antigravity => (antigravity::configured_model(), antigravity::models()),
         AgentKind::OpenCode => (None, opencode::models()),
         AgentKind::Api => (
             crate::provider::api::config::default_model(),

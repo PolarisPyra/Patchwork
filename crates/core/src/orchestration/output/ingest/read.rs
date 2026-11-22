@@ -131,6 +131,8 @@ pub(in crate::orchestration) fn ingest(
     let mut turn_requests = 0;
     // Claude's task list, shown as the plan of whichever reply changes it.
     let mut claude_tasks = provider::claude::TaskList::default();
+    // Antigravity's native ACP swarm tracker (`_antigravity/swarm` + `members.json` fallback).
+    let mut antigravity_swarm = provider::antigravity::SwarmState::default();
 
     // Kinds of output the parser had no use for, logged once each per turn, so a CLI that
     // changes how it reports something shows up in the agent log.
@@ -197,7 +199,69 @@ pub(in crate::orchestration) fn ingest(
             }
             continue;
         }
-        let mut parsed = provider::parse_line(turn.agent, &value, &turn.spec(), &turn.message_id);
+        // Antigravity ACP sends native swarm roster/board notifications on `_antigravity/swarm`,
+        // and routes child worker `session/update` frames tagged with `childSessionId` /
+        // `workerSessionId` to each worker's child thread.
+        if turn.agent == AgentKind::Antigravity
+            && value.get("id").is_none()
+            && value["method"].as_str() == Some("session/update")
+            && let Some(child_target) =
+                provider::antigravity::extract_child_target(&value, turn.session_id.as_deref())
+        {
+            let key = format!(
+                "{}{}",
+                provider::antigravity::SWARM_TASK_PREFIX,
+                child_target.child_session_id
+            );
+            let child_key = if children.contains_key(&key) {
+                key.as_str()
+            } else {
+                child_target.child_session_id.as_str()
+            };
+            if let Some(child) = children.get_mut(child_key) {
+                let events =
+                    provider::antigravity::subagent_events(&value, &turn.spec(), &child.message_id);
+                publish_child(&turn, child, events);
+            }
+            continue;
+        }
+        let mut parsed = if turn.agent == AgentKind::Antigravity
+            && value.get("id").is_none()
+            && value["method"].as_str() == Some("_antigravity/swarm")
+        {
+            antigravity_swarm.apply_notification(&value["params"], &turn.message_id)
+        } else {
+            provider::parse_line(turn.agent, &value, &turn.spec(), &turn.message_id)
+        };
+        if turn.agent == AgentKind::Antigravity
+            && value["method"].as_str() == Some("session/update")
+            && matches!(
+                value["params"]["update"]["name"].as_str(),
+                Some("swarm" | "post_message" | "read_board" | "swarm_wait")
+            )
+        {
+            antigravity_swarm.note_swarm_tool();
+            if matches!(
+                value["params"]["update"]["status"].as_str(),
+                Some("completed" | "failed")
+            ) && let Some(sid) = turn.session_id.as_deref()
+            {
+                parsed.extend(antigravity_swarm.poll_disk_fallback(sid, &turn.message_id));
+            }
+        }
+        if turn.agent == AgentKind::Antigravity
+            && parsed.iter().any(|p| matches!(p, Parsed::Finished))
+            && let Some(sid) = turn.session_id.as_deref()
+        {
+            // Run the disk fallback BEFORE `Parsed::Finished` decides whether to close stdin, so
+            // released `agy` 1.5.x builds without `_antigravity/swarm` keep swarm workers alive.
+            let fallback = antigravity_swarm.poll_disk_fallback(sid, &turn.message_id);
+            if !fallback.is_empty() {
+                let mut combined = fallback;
+                combined.extend(parsed);
+                parsed = combined;
+            }
+        }
         if turn.agent == AgentKind::Claude
             && let Some(steps) = claude_tasks.read(&value)
         {
@@ -256,7 +320,7 @@ pub(in crate::orchestration) fn ingest(
                             // An error in the stopped reply does not carry over to the next one.
                             stream_error = None;
                             go_idle(&turn, &segments, &mut completed, &mut unsaved, true, None);
-                        } else if turn.agent == AgentKind::Codex {
+                        } else if matches!(turn.agent, AgentKind::Codex | AgentKind::Antigravity) {
                             turn.stdin.locked().take();
                         } else {
                             // What it left running toward a goal or in the background stops too.
@@ -505,8 +569,10 @@ pub(in crate::orchestration) fn ingest(
                             {
                                 background.start_unreported(task);
                             }
-                            if matches!(turn.agent, AgentKind::Claude | AgentKind::Codex)
-                                && tool.parent.is_none()
+                            if matches!(
+                                turn.agent,
+                                AgentKind::Claude | AgentKind::Codex | AgentKind::Antigravity
+                            ) && tool.parent.is_none()
                                 && let Some(child) = open_child(&turn, tool)
                             {
                                 tool.child_chat_id = Some(child.chat_id.clone());
@@ -568,6 +634,15 @@ pub(in crate::orchestration) fn ingest(
     // An idle agent changes files only through shell commands it left running; other changes
     // since its last reply are the user's own.
     let idle_untouched = turn.idle.load(Ordering::SeqCst) && !background.any_listed_live();
+    // If `agy acp` exited unexpectedly while swarm workers were still running, surface an error
+    // instead of silently completing an unfinished swarm.
+    if turn.agent == AgentKind::Antigravity
+        && !turn.cancelled.load(Ordering::SeqCst)
+        && stream_error.is_none()
+        && antigravity_swarm.has_live_work()
+    {
+        stream_error = Some("Antigravity exited while swarm workers were still running.".into());
+    }
     // The agent process is gone, and the tasks it started go with it.
     for event in background.stop_all() {
         publish_event(&turn, &mut children, &mut unsaved, event);

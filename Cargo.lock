@@ -4538,7 +4538,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-android"
-version = "26.11.134"
+version = "26.11.135"
 dependencies = [
  "futures",
  "http",
@@ -4599,7 +4599,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-modals"
-version = "26.11.134"
+version = "26.11.135"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4616,7 +4616,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-pages"
-version = "26.11.134"
+version = "26.11.135"
 dependencies = [
  "futures",
  "gpui",
@@ -4643,7 +4643,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-sidecar"
-version = "26.11.134"
+version = "26.11.135"
 dependencies = [
  "gpui",
  "image",
@@ -4676,7 +4676,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-ui"
-version = "26.11.134"
+version = "26.11.135"
 dependencies = [
  "base64 0.22.1",
  "chrono",
