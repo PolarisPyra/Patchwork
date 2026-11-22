@@ -4,6 +4,7 @@
 
 // Rust guideline compliant 2026-10-09
 
+mod auth;
 mod cli;
 mod form;
 mod local;
@@ -13,6 +14,7 @@ mod layout;
 mod rows;
 mod catalog;
 
+use auth::AntigravityAuth;
 use catalog::PromptOf;
 pub use catalog::ProvidersState;
 pub use layout::render;

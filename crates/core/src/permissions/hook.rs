@@ -244,7 +244,7 @@ fn antigravity_call(call: &Value) -> Option<(String, String, Target)> {
     };
     match tool {
         "run_command" | "execute_command" | "shell" => {
-            let command = arg(&["CommandLine", "command", "cmd"])?;
+            let command = arg(&["CommandLine", "command_line", "command", "cmd"])?;
             let target = Target::new(PermissionKind::Command, [command.clone()]);
             Some(("Run command".into(), command, target))
         }

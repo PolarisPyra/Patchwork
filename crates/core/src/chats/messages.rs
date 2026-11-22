@@ -326,7 +326,8 @@ pub struct Attachment {
 /// Media type for the image formats the agents accept, by file extension.
 #[must_use]
 pub fn image_media_type(path: &str) -> Option<&'static str> {
-    let ext = path.rsplit_once('.')?.1.to_ascii_lowercase();
+    let clean = path.split(';').next().unwrap_or(path).trim();
+    let ext = clean.rsplit_once('.')?.1.to_ascii_lowercase();
     match ext.as_str() {
         "png" => Some("image/png"),
         "jpg" | "jpeg" => Some("image/jpeg"),

@@ -155,7 +155,11 @@ pub fn steer_input(
             &prompt_text(text, attachments),
             attachments,
         )),
-        AgentKind::Antigravity => None,
+        AgentKind::Antigravity => Some(antigravity::steer_input(
+            session_id?,
+            &prompt_text(text, attachments),
+            images,
+        )),
         // `opencode run` reads one message per run; later ones start the next turn.
         AgentKind::OpenCode => opencode::uses_serve()
             .then(|| opencode::steer_line(&prompt_text(text, attachments), attachments)),
@@ -177,7 +181,7 @@ pub fn interrupt(
         AgentKind::Api => Some(api::interrupt()),
         // `opencode run` reads nothing once it starts; only the bridge to `opencode serve` can.
         AgentKind::OpenCode => opencode::uses_serve().then(opencode::interrupt_line),
-        AgentKind::Antigravity => None,
+        AgentKind::Antigravity => Some(antigravity::interrupt(session_id?)),
     }
 }
 
@@ -273,7 +277,7 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
                 .map(|config| ("OPENCODE_CONFIG_CONTENT", config)),
             )
             .collect(),
-        AgentKind::Antigravity => crate::provider::hooks::antigravity_env(spec),
+        AgentKind::Antigravity => antigravity::turn_env(spec),
         AgentKind::Claude | AgentKind::Codex | AgentKind::Api => Vec::new(),
     }
 }
@@ -322,8 +326,9 @@ pub fn turn_input(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
         AgentKind::OpenCode if opencode::uses_serve() => vec![opencode::bridge_request(spec)],
         // Patchwork's own agent reads its turn from stdin, and answers and steers after it.
         AgentKind::Api => vec![api::bridge_request(spec)],
-        // Both read the prompt from their arguments, and stdin is closed so they do not wait on it.
-        AgentKind::Antigravity | AgentKind::OpenCode => vec![],
+        AgentKind::Antigravity => antigravity::turn_input(spec),
+        // `opencode run` reads the prompt from its arguments, and stdin is closed so it does not wait on it.
+        AgentKind::OpenCode => vec![],
     }
 }
 
@@ -385,8 +390,9 @@ fn unasked(agent: AgentKind, spec: &TurnSpec, parsed: Parsed) -> Parsed {
 fn mode_asks(agent: AgentKind, spec: &TurnSpec, target: &crate::permissions::Target) -> bool {
     match (agent, spec.mode) {
         (_, AccessMode::FullAccess) => false,
-        // Claude reads in its own folder without asking, and Accept edits takes edits inside it.
-        (AgentKind::Claude, mode)
+        // Claude and Antigravity read inside the workspace without asking, and Accept edits takes
+        // edits inside it.
+        (AgentKind::Claude | AgentKind::Antigravity, mode)
             if target.kind == PermissionKind::Folder
                 || (mode == AccessMode::AutoAcceptEdits && target.kind == PermissionKind::Edit) =>
         {
@@ -416,7 +422,8 @@ pub fn approval_reply(
             opencode::approval_reply(reply, allow, answers)
         }
         AgentKind::Api => api::approval_reply(reply, allow, answers),
-        // Antigravity and `opencode run` run headless and never ask.
-        AgentKind::Antigravity | AgentKind::OpenCode => String::new(),
+        AgentKind::Antigravity => antigravity::approval_reply(reply, allow, answers),
+        // `opencode run` runs headless and never asks.
+        AgentKind::OpenCode => String::new(),
     }
 }

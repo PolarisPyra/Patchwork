@@ -181,6 +181,20 @@ pub(in crate::orchestration) fn with_remedy(agent: AgentKind, error: String) -> 
         let remedy = "This is OpenCode 1, which cannot open the database OpenCode 2 made. Either give it a database of its own by setting `OPENCODE_DB=opencode-v1.db`, or update to OpenCode 2: run `npm rm -g opencode-ai`, then `npm i -g @opencode/cli`.";
         return format!("{error}\n\n{remedy}");
     }
+    if agent == AgentKind::Antigravity
+        && [
+            "authentication required",
+            "not authenticated",
+            "not logged in",
+            "oauth",
+        ]
+        .iter()
+        .any(|said| lower.contains(said))
+    {
+        return format!(
+            "{error}\n\nSign in to Antigravity in Settings → Providers, then try again."
+        );
+    }
     if agent != AgentKind::Claude {
         return error;
     }

@@ -4,11 +4,12 @@
 
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, Window, div, prelude::*, px};
 use patchwork_core::provider::api::config::{ApiProvider, ProviderView};
-use patchwork_core::provider::AgentStatus;
+use patchwork_core::provider::{AgentKind, AgentStatus};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::switch;
 use patchwork_ui::theme::{fs_sm, Theme, theme};
 use patchwork_ui::{BtnKind, agent_label, agent_logo, badge, btn, provider_logo, spinner};
+use super::AntigravityAuth;
 use super::catalog::{CLI_KINDS, PromptOf};
 use super::cli;
 use super::form;
@@ -65,6 +66,16 @@ impl SettingsDialog {
             let status = self.providers.status.get(&kind);
             let checking = status.is_none();
             let installed = status.is_some_and(|s| s.as_ref().is_some_and(|s| s.installed));
+            let signed_in = status.is_some_and(|s| s.as_ref().is_some_and(|s| s.signed_in));
+            let agy_auth_busy = kind == AgentKind::Antigravity
+                && matches!(
+                    self.providers.antigravity_auth,
+                    Some(
+                        AntigravityAuth::Starting
+                            | AntigravityAuth::Verifying { .. }
+                            | AntigravityAuth::SigningOut
+                    )
+                );
             let on = self.settings.agents.contains(&kind);
             let path = self.settings.agent_paths.get(&kind).cloned();
             let prompted = self
@@ -171,6 +182,48 @@ impl SettingsDialog {
                     ),
                     None => r,
                 })
+                .when(
+                    kind == AgentKind::Antigravity && installed && !checking,
+                    |r| {
+                        if signed_in {
+                            r.child(
+                                btn(
+                                    "agy-sign-out",
+                                    "Sign out of Antigravity",
+                                    BtnKind::Plain,
+                                    agy_auth_busy,
+                                    &t,
+                                )
+                                .child("Sign out")
+                                .when(!agy_auth_busy, |b| {
+                                    b.on_click(
+                                        cx.listener(|d, _, _, cx| d.sign_out_antigravity(cx)),
+                                    )
+                                }),
+                            )
+                        } else {
+                            r.child(
+                                btn(
+                                    "agy-sign-in",
+                                    "Sign in to Antigravity",
+                                    BtnKind::Primary,
+                                    agy_auth_busy,
+                                    &t,
+                                )
+                                .child(if agy_auth_busy {
+                                    "Signing in…"
+                                } else {
+                                    "Sign in"
+                                })
+                                .when(!agy_auth_busy, |b| {
+                                    b.on_click(
+                                        cx.listener(|d, _, _, cx| d.start_antigravity_login(cx)),
+                                    )
+                                }),
+                            )
+                        }
+                    },
+                )
                 .when(installed && cli::has_details(kind), |r| {
                     r.child(
                         btn(
@@ -225,6 +278,11 @@ impl SettingsDialog {
                         }),
                 );
             rows.push(row.into_any_element());
+            if kind == AgentKind::Antigravity
+                && let Some(panel) = self.antigravity_auth_panel(window, cx)
+            {
+                rows.push(panel.into_any_element());
+            }
             if prompting {
                 rows.push(self.prompt_editor(window, cx).into_any_element());
             }

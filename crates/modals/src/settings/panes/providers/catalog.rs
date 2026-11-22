@@ -8,6 +8,7 @@ use gpui::{Context, PathPromptOptions};
 use patchwork_core::provider::api::config::{self, ApiProvider, KeyChange, ProviderView};
 use patchwork_core::provider::{AgentKind, AgentStatus, ModelOption};
 use crate::settings::SettingsDialog;
+use super::AntigravityAuth;
 use super::cli;
 use super::form;
 use super::local;
@@ -55,6 +56,7 @@ pub struct ProvidersState {
     /// The models of each agent the vision picker offers.
     pub(super) models: HashMap<AgentKind, Vec<ModelOption>>,
     pub(super) prompt: Option<Prompt>,
+    pub(super) antigravity_auth: Option<AntigravityAuth>,
     pub(super) form: Option<form::Form>,
     pub(super) details: Option<cli::Details>,
     pub(super) local: local::LocalState,
