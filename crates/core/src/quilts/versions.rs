@@ -47,7 +47,7 @@ impl Core {
         let quilt = self.store.quilt(id).ok_or("That quilt is gone")?;
         self.store.set_quilt_pinned(id, pinned)?;
         self.emit(AgentEventEnvelope {
-            thread_id: quilt.thread_id,
+            chat_id: quilt.chat_id,
             event: AgentEvent::QuiltsChanged,
         });
         Ok(())
@@ -67,7 +67,7 @@ impl Core {
         let quilt = self.store.quilt(id).ok_or("That quilt is gone")?;
         self.store.rename_quilt(id, title)?;
         self.emit(AgentEventEnvelope {
-            thread_id: quilt.thread_id,
+            chat_id: quilt.chat_id,
             event: AgentEvent::QuiltsChanged,
         });
         Ok(())
@@ -92,7 +92,7 @@ impl Core {
             }
         }
         self.emit(AgentEventEnvelope {
-            thread_id: quilt.thread_id,
+            chat_id: quilt.chat_id,
             event: AgentEvent::QuiltsChanged,
         });
         Ok(())
@@ -124,7 +124,7 @@ impl Core {
             log::warn!(error:% = e; "could not write a quilt's files: {{error}}");
         }
         self.emit(AgentEventEnvelope {
-            thread_id: quilt.thread_id,
+            chat_id: quilt.chat_id,
             event: AgentEvent::QuiltsChanged,
         });
         Ok(n)

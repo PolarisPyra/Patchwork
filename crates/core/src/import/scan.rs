@@ -9,7 +9,7 @@ use std::path::Path;
 use crate::import::ilog;
 use crate::import::{ImportSource, ImportScan};
 use crate::provider::AgentKind;
-use crate::{import, workspace};
+use crate::{import, projects};
 use crate::Core;
 
 /// What a scan of one source found.
@@ -25,7 +25,7 @@ struct Scan {
 impl Core {
     /// Sessions `source` saved on disk that can be imported: ones whose folder
     /// still exists, that Patchwork did not run as a chat, and that are not already
-    /// threads: an agent session in `known`, or an imported transcript in `imported`.
+    /// chats: an agent session in `known`, or an imported transcript in `imported`.
     fn importable(
         &self,
         source: ImportSource,
@@ -125,20 +125,20 @@ impl Core {
         }
     }
 
-    /// Imports new sessions as threads in the project for their folder, adding
+    /// Imports new sessions as chats in the project for their folder, adding
     /// the project if needed. A conversation found by more than one source (a
-    /// T3 Code thread is also in the agent's own files) is imported once.
-    /// Returns how many threads were added. A session whose folder cannot be added as a project
+    /// T3 Code chat is also in the agent's own files) is imported once.
+    /// Returns how many chats were added. A session whose folder cannot be added as a project
     /// is left out.
     ///
     /// # Errors
     ///
-    /// Returns an error when the imported threads cannot be saved.
-    pub fn import_threads(&self, sources: &[ImportSource]) -> Result<u32, Error> {
+    /// Returns an error when the imported chats cannot be saved.
+    pub fn import_chats(&self, sources: &[ImportSource]) -> Result<u32, Error> {
         ilog!("import started: {sources:?}");
         let mut known = self.store.session_keys();
         let mut imported = self.store.imported_sources();
-        let mut threads = Vec::new();
+        let mut chats = Vec::new();
         for &source in sources {
             for session in self.importable(source, &known, &imported).new {
                 if session.imported {
@@ -177,7 +177,7 @@ impl Core {
                         session.cwd
                     );
                     // A folder that cannot be a project costs its own sessions, not the rest.
-                    match workspace::make_project(&session.cwd)
+                    match projects::make_project(&session.cwd)
                         .and_then(|p| self.register_project(p, false))
                     {
                         Ok(project) => Some(project.id),
@@ -187,12 +187,12 @@ impl Core {
                         }
                     }
                 };
-                threads.push(import::to_thread(session, project_id));
+                chats.push(import::to_chat(session, project_id));
             }
         }
-        let count = threads.len() as u32;
+        let count = chats.len() as u32;
         self.store
-            .insert_threads(threads)
+            .insert_chats(chats)
             .inspect_err(|e| ilog!("import failed saving threads: {e}"))?;
         ilog!("import finished: {count} threads added");
         Ok(count)

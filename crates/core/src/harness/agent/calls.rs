@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use crate::extensions::hooks::HookEvent;
 use crate::permissions::Target;
 use crate::permissions::PermissionKind;
-use crate::threads::AccessMode;
+use crate::chats::AccessMode;
 use super::request::Call;
 use super::{Agent, ImageIn, emit};
 
@@ -81,7 +81,7 @@ impl Agent {
                     Ok(PLAN_SHOWN.to_string())
                 }
                 "ask_user" => self.ask(&call.id, &args),
-                crate::secrets::TOOL => self.request_secret(&call.id, &args),
+                crate::vault::requests::TOOL => self.request_secret(&call.id, &args),
                 // The commands Patchwork holds for this agent, which reading or stopping asks no one.
                 "job_output" | "job_kill" | "job_list" => {
                     self.call_own(&call.id, &call.name, &args, NO_RESULT)
@@ -138,7 +138,7 @@ impl Agent {
             && let Some(path) = args["path"].as_str()
         {
             done["path"] = json!(crate::harness::tools::shown(
-                &crate::system::fs::resolve(&self.root, path),
+                &crate::system::files::paths::resolve(&self.root, path),
                 &self.root
             ));
         }
@@ -208,7 +208,7 @@ impl Agent {
             && !(name == "read_file"
                 && args["path"]
                     .as_str()
-                    .is_some_and(|p| crate::threads::image_media_type(p).is_some()))
+                    .is_some_and(|p| crate::chats::image_media_type(p).is_some()))
     }
 
     /// Why a write would undo a change made to the file since the model last read or wrote it,
@@ -217,7 +217,7 @@ impl Agent {
         if name != "write_file" {
             return None;
         }
-        let path = crate::system::fs::resolve(&self.root, args["path"].as_str()?);
+        let path = crate::system::files::paths::resolve(&self.root, args["path"].as_str()?);
         let seen = self.seen.get(&path)?;
         (version(&path)? != *seen).then(|| {
             format!(
@@ -232,7 +232,7 @@ impl Agent {
         if matches!(name, "read_file" | "write_file" | "edit_file")
             && let Some(path) = args["path"].as_str()
         {
-            let path = crate::system::fs::resolve(&self.root, path);
+            let path = crate::system::files::paths::resolve(&self.root, path);
             if let Some(version) = version(&path) {
                 self.seen.insert(path, version);
             }
@@ -277,7 +277,7 @@ impl Agent {
             name
         };
         let path = self.saved_output_dir().join(format!("{name}.txt"));
-        let saved = crate::system::fs::write_private(&path, &text).is_ok();
+        let saved = crate::system::files::paths::write_private(&path, &text).is_ok();
         crate::harness::tools::cap(text, saved.then_some(path.as_path()))
     }
 
@@ -286,7 +286,7 @@ impl Agent {
     fn reads_saved_output(&self, name: &str, args: &Value) -> bool {
         matches!(name, "read_file" | "grep")
             && args["path"].as_str().is_some_and(|p| {
-                let path = crate::system::fs::resolve(&self.root, p);
+                let path = crate::system::files::paths::resolve(&self.root, p);
                 // A path that climbs out with `..` does not count.
                 !p.contains("..") && path.starts_with(self.saved_output_dir())
             })
@@ -295,10 +295,10 @@ impl Agent {
     /// Opens the image `read_file` was pointed at for the model to see, or None when the path is
     /// not an image.
     pub(super) fn read_image(&mut self, args: &Value) -> Option<Result<String, Error>> {
-        let path = crate::system::fs::resolve(&self.root, args["path"].as_str()?);
+        let path = crate::system::files::paths::resolve(&self.root, args["path"].as_str()?);
         let path = path.to_str()?;
-        crate::threads::image_media_type(path)?;
-        let image = crate::threads::Attachment::from_path(path)
+        crate::chats::image_media_type(path)?;
+        let image = crate::chats::Attachment::from_path(path)
             .and_then(|a| crate::provider::load_images(&[a]))
             .map(|mut images| images.remove(0));
         Some(image.map(|image| {
@@ -360,7 +360,7 @@ impl Agent {
     fn request_secret(&mut self, id: &str, args: &Value) -> Result<String, Error> {
         self.call_own(
             id,
-            crate::secrets::TOOL,
+            crate::vault::requests::TOOL,
             args,
             "The turn ended before the user answered",
         )

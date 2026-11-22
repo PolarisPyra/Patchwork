@@ -8,7 +8,7 @@ use super::store::Store;
 use super::{dec, enc, err};
 use crate::Error;
 use crate::costs::ReplyCost;
-use crate::threads::TokenUsage;
+use crate::chats::TokenUsage;
 
 impl Store {
     /// Saves replies' costs, replacing any kept before under the same message.
@@ -21,12 +21,12 @@ impl Store {
         let tx = inner.conn.transaction().map_err(err)?;
         for r in rows {
             tx.execute(
-                "INSERT OR REPLACE INTO reply_costs (message_id, thread_id, title, project, agent,
+                "INSERT OR REPLACE INTO reply_costs (message_id, chat_id, title, project, agent,
                  model, at, input, cache_read, cache_write, output, cost_micros)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                 params![
                     r.message_id,
-                    r.thread_id,
+                    r.chat_id,
                     r.title,
                     r.project,
                     enc(&r.agent),
@@ -51,14 +51,14 @@ impl Store {
         let rows = inner
             .conn
             .prepare(
-                "SELECT message_id, thread_id, title, project, agent, model, at, input,
+                "SELECT message_id, chat_id, title, project, agent, model, at, input,
                  cache_read, cache_write, output, cost_micros FROM reply_costs",
             )
             .and_then(|mut stmt| {
                 stmt.query_map([], |r| {
                     Ok(ReplyCost {
                         message_id: r.get(0)?,
-                        thread_id: r.get(1)?,
+                        chat_id: r.get(1)?,
                         title: r.get(2)?,
                         project: r.get(3)?,
                         agent: dec(r.get(4)?)?,

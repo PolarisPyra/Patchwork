@@ -15,13 +15,13 @@ use crate::provider;
 use crate::events::AgentEvent;
 use crate::events::AgentEventEnvelope;
 use crate::provider::AgentKind;
-use crate::threads::{Message, MessageStatus};
+use crate::chats::{Message, MessageStatus};
 use crate::system::new_id;
 use crate::system::now_ms;
-use crate::threads::Role;
-use crate::threads::Thread;
-use crate::threads::ThreadParent;
-use crate::threads::ToolCall;
+use crate::chats::Role;
+use crate::chats::Chat;
+use crate::chats::ChatParent;
+use crate::chats::ToolCall;
 use crate::orchestration::turn::process::write_line;
 use crate::orchestration::Runner;
 use crate::orchestration::output::stream::publish;
@@ -40,12 +40,12 @@ impl Runner {
     /// and reports back when done; this waits for Claude to confirm, up to `BACKGROUND_WAIT`.
     pub(in crate::orchestration) fn background_subagents(
         &self,
-        thread_id: &str,
+        chat_id: &str,
         subagents: &[String],
     ) {
         let (stdin, controls) = {
             let turns = self.turns.locked();
-            let Some(turn) = turns.get(thread_id) else {
+            let Some(turn) = turns.get(chat_id) else {
                 return;
             };
             if turn.agent != AgentKind::Claude || turn.cancelled.load(Ordering::SeqCst) {
@@ -77,18 +77,18 @@ impl Runner {
 }
 
 /// A subagent's own thread, which its frames stream into while it runs.
-pub(in crate::orchestration) struct SubagentThread {
-    pub(in crate::orchestration) thread_id: String,
+pub(in crate::orchestration) struct SubagentChat {
+    pub(in crate::orchestration) chat_id: String,
     /// The reply its work streams into.
     pub(in crate::orchestration) message_id: String,
     pub(in crate::orchestration) has_text: bool,
 }
 
-/// Opens a read-only thread for the subagent `tool` started, with its instructions as the
+/// Opens a read-only chat for the subagent `tool` started, with its instructions as the
 /// first message and an empty reply for its work. None when the call starts no subagent.
-pub(in crate::orchestration) fn open_child(turn: &Turn, tool: &ToolCall) -> Option<SubagentThread> {
+pub(in crate::orchestration) fn open_child(turn: &Turn, tool: &ToolCall) -> Option<SubagentChat> {
     let sub = tool.subagent.as_ref()?;
-    let parent = turn.core.store.thread(&turn.thread_id)?;
+    let parent = turn.core.store.chat(&turn.chat_id)?;
     let created_at = now_ms();
     let asked = Message {
         finished_at: Some(created_at),
@@ -107,38 +107,38 @@ pub(in crate::orchestration) fn open_child(turn: &Turn, tool: &ToolCall) -> Opti
         .find(|s| !s.is_empty())
         .cloned()
         .unwrap_or_else(|| "Subagent".into());
-    let thread = Thread {
+    let chat = Chat {
         project_id: parent.project_id,
         model: sub.model.clone().or(parent.model),
         background: parent.background,
         created_at,
         messages: vec![Arc::new(asked), Arc::new(reply)],
-        parent: Some(ThreadParent {
-            thread_id: turn.thread_id.clone(),
+        parent: Some(ChatParent {
+            chat_id: turn.chat_id.clone(),
             tool_id: tool.id.clone(),
         }),
-        ..Thread::new(title, parent.agent, parent.access_mode)
+        ..Chat::new(title, parent.agent, parent.access_mode)
     };
-    if let Err(e) = turn.core.store.insert_threads(vec![thread.clone()]) {
-        log::warn!(error:% = e; "failed to save a subagent's thread: {{error}}");
+    if let Err(e) = turn.core.store.insert_chats(vec![chat.clone()]) {
+        log::warn!(error:% = e; "failed to save a subagent's chat: {{error}}");
         return None;
     }
-    let thread_id = thread.id.clone();
+    let chat_id = chat.id.clone();
     turn.core.emit(AgentEventEnvelope {
-        thread_id: thread_id.clone(),
-        event: AgentEvent::ThreadCreated { thread },
+        chat_id: chat_id.clone(),
+        event: AgentEvent::ChatCreated { chat },
     });
-    Some(SubagentThread {
-        thread_id,
+    Some(SubagentChat {
+        chat_id,
         message_id,
         has_text: false,
     })
 }
 
-/// Ends the reply in the thread of the subagent `tool_id` started, once that subagent is done.
+/// Ends the reply in the chat of the subagent `tool_id` started, once that subagent is done.
 pub(in crate::orchestration) fn finish_child(
     turn: &Turn,
-    children: &mut HashMap<String, SubagentThread>,
+    children: &mut HashMap<String, SubagentChat>,
     tool_id: &str,
     failed: bool,
 ) {
@@ -152,7 +152,7 @@ pub(in crate::orchestration) fn finish_child(
     };
     publish(
         &turn.core,
-        &child.thread_id,
+        &child.chat_id,
         AgentEvent::TurnCompleted {
             message_id: child.message_id,
             status,

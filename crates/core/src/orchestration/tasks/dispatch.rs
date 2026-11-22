@@ -1,4 +1,4 @@
-//! What only a chat app's dispatcher does with the chat tools (see `crate::threads::chat_tools`):
+//! What only a chat app's dispatcher does with the chat tools (see `crate::chats::tools`):
 //! naming the projects, picking the one a chat starts in, and having its conversations told
 //! about the chats it starts or messages.
 
@@ -9,15 +9,15 @@ use serde_json::{Value, json};
 use super::chats::busy;
 use crate::orchestration::Runner;
 use crate::settings::Settings;
-use crate::threads::Thread;
-use crate::threads::chat_tools::{fit, named};
+use crate::chats::Chat;
+use crate::chats::tools::{fit, named};
 use crate::{Core, Error};
 
 /// The projects, each with how many chats it has and how many are replying.
 pub(super) fn list_projects(runner: &Runner, core: &Core) -> String {
-    let chats: Vec<Thread> = core
+    let chats: Vec<Chat> = core
         .store
-        .threads()
+        .chats()
         .into_iter()
         .filter(|t| t.parent.is_none() && t.archived_at.is_none())
         .collect();
@@ -31,7 +31,7 @@ pub(super) fn list_projects(runner: &Runner, core: &Core) -> String {
         .projects
         .iter()
         .map(|p| {
-            let own: Vec<&Thread> = chats
+            let own: Vec<&Chat> = chats
                 .iter()
                 .filter(|t| t.project_id.as_ref() == Some(&p.id))
                 .collect();
@@ -102,15 +102,15 @@ pub(in crate::orchestration) fn project(
     }
 }
 
-/// Has the conversations of the dispatcher `caller` told when the chat `thread_id` finishes or
+/// Has the conversations of the dispatcher `caller` told when the chat `chat_id` finishes or
 /// asks something, and says whether there was one to tell. Other chats have no one told.
-pub(super) fn watch(core: &Core, caller: &Thread, thread_id: &str) -> bool {
+pub(super) fn watch(core: &Core, caller: &Chat, chat_id: &str) -> bool {
     if !core.is_dispatcher(&caller.id) {
         return false;
     }
-    let chats = core.bound_chats(&caller.id);
+    let chats = core.bound_conversations(&caller.id);
     for b in &chats {
-        core.watch_chat(thread_id, b.platform, &b.chat);
+        core.watch_conversation(chat_id, b.platform, &b.conversation);
     }
     !chats.is_empty()
 }

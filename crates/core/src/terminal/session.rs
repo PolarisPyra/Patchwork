@@ -18,7 +18,7 @@ use portable_pty::{ChildKiller, MasterPty};
 use super::activity::{self, Activity, ShellActivity};
 use super::{AttachedTerminal, Launch, TerminalFrame, TerminalInfo, pty, range};
 use crate::Error;
-use crate::system::processes::{self, Process};
+use crate::system::processes::running::{self, Process};
 
 /// Where a window gets a terminal's frames; false once the window is gone.
 pub type FrameSink = Box<dyn Fn(&TerminalFrame) -> bool + Send + Sync>;
@@ -37,7 +37,7 @@ pub struct Terminals {
     next: AtomicU32,
     attachments: Arc<AtomicU32>,
     open: Arc<Mutex<HashMap<u32, Arc<Term>>>>,
-    /// Whether the thread that closes unattended terminals has started.
+    /// Whether the chat that closes unattended terminals has started.
     reclaiming: AtomicBool,
 }
 
@@ -129,7 +129,7 @@ impl Terminals {
             }
         };
         let pid = child.process_id().and_then(|pid| i32::try_from(pid).ok());
-        let root = pid.and_then(processes::find);
+        let root = pid.and_then(running::find);
         if let (Some(dir), Some(root)) = (&dir, &root) {
             range::record(dir, root);
         }

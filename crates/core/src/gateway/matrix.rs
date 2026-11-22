@@ -112,7 +112,7 @@ impl Matrix {
                 out.push(Incoming {
                     platform: Platform::Matrix,
                     id: event["event_id"].as_str().map(str::to_string),
-                    chat: room.clone(),
+                    conversation: room.clone(),
                     sender: sender.to_string(),
                     name: sender.to_string(),
                     text: text.trim().to_string(),
@@ -180,11 +180,22 @@ impl Connector for Matrix {
         Ok(())
     }
 
-    fn send(&self, chat: &str, text: &str, _buttons: &[Button]) -> Result<Option<String>, Error> {
-        self.put_message(chat, &json!({"msgtype": "m.text", "body": text}))
+    fn send(
+        &self,
+        conversation: &str,
+        text: &str,
+        _buttons: &[Button],
+    ) -> Result<Option<String>, Error> {
+        self.put_message(conversation, &json!({"msgtype": "m.text", "body": text}))
     }
 
-    fn send_file(&self, chat: &str, name: &str, bytes: &[u8], caption: &str) -> Result<(), Error> {
+    fn send_file(
+        &self,
+        conversation: &str,
+        name: &str,
+        bytes: &[u8],
+        caption: &str,
+    ) -> Result<(), Error> {
         let url = format!(
             "{}/_matrix/media/v3/upload?filename={}",
             self.server,
@@ -202,11 +213,11 @@ impl Connector for Matrix {
             .as_str()
             .ok_or("The homeserver did not say where it kept the file")?;
         if !caption.is_empty() {
-            self.put_message(chat, &json!({"msgtype": "m.text", "body": caption}))?;
+            self.put_message(conversation, &json!({"msgtype": "m.text", "body": caption}))?;
         }
         let picture = mime(name) == "image/png";
         self.put_message(
-            chat,
+            conversation,
             &json!({
                 "msgtype": if picture { "m.image" } else { "m.file" },
                 "body": name,
@@ -218,21 +229,21 @@ impl Connector for Matrix {
         .map(drop)
     }
 
-    fn edit(&self, chat: &str, id: &str, text: &str) -> Result<(), Error> {
+    fn edit(&self, conversation: &str, id: &str, text: &str) -> Result<(), Error> {
         let content = json!({
             "msgtype": "m.text",
             "body": format!("* {text}"),
             "m.new_content": {"msgtype": "m.text", "body": text},
             "m.relates_to": {"rel_type": "m.replace", "event_id": id},
         });
-        self.put_message(chat, &content).map(drop)
+        self.put_message(conversation, &content).map(drop)
     }
 
-    fn typing(&self, chat: &str) {
+    fn typing(&self, conversation: &str) {
         let me = self.me.locked().clone();
         let path = format!(
             "/_matrix/client/v3/rooms/{}/typing/{}",
-            encode(chat),
+            encode(conversation),
             encode(&me)
         );
         let _ = self.call(

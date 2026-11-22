@@ -1,0 +1,531 @@
+//! Project file watching: working-tree, `.git`, branch, and tag changes, reported once per burst.
+//!
+//! Watches a project the way an editor's git view does: the working tree minus what git ignores,
+//! plus the top level of `.git` for commits, staging and checkouts, and its branches and tags for
+//! pushes and fetches. A burst of events is reported once, after it settles, with when each path
+//! changed.
+//!
+//! How folders are watched depends on the platform: inotify watches one folder at a time, so
+//! Linux adds a watch per folder git keeps; FSEvents and `ReadDirectoryChangesW` watch a whole tree
+//! for the price of one, so other platforms watch the root and drop ignored paths as they arrive.
+
+// Rust guideline compliant 2026-10-09
+
+use crate::system::Locked;
+use crate::Error;
+use std::collections::BTreeMap;
+use std::path::{Component, Path, PathBuf};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
+use std::sync::{Arc, Mutex, Weak};
+use std::time::{Duration, Instant};
+
+#[cfg(target_os = "linux")]
+use ignore::WalkBuilder;
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
+use notify::{Event, EventKind, RecommendedWatcher};
+
+#[cfg(target_os = "linux")]
+use linux as backend;
+#[cfg(not(target_os = "linux"))]
+use tree as backend;
+
+/// Quiet time that ends a burst of events.
+const SETTLE: Duration = Duration::from_millis(250);
+/// Longest a steady stream of events holds back a report.
+const MAX_WAIT: Duration = Duration::from_secs(1);
+
+/// Quiet time that ends a burst of changes in a folder `settled` watches: an editor's save is
+/// several.
+const BURST: Duration = Duration::from_millis(200);
+
+/// Watches `dirs`, each as `mode` says, and runs `on_change` on a thread named `name` once each
+/// burst of changes settles. The chat ends once the watcher is dropped.
+///
+/// # Errors
+///
+/// Returns an error when the watcher cannot be created, cannot watch a folder, or its chat
+/// cannot be started.
+pub(crate) fn settled(
+    name: &str,
+    dirs: &[PathBuf],
+    mode: notify::RecursiveMode,
+    on_change: impl Fn() + Send + 'static,
+) -> Result<RecommendedWatcher, Error> {
+    use notify::Watcher as _;
+    let (tx, rx) = channel();
+    let mut watcher = notify::recommended_watcher(move |res: notify::Result<Event>| {
+        if !res.is_ok_and(|e| matches!(e.kind, EventKind::Access(_))) {
+            let _ = tx.send(());
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    for dir in dirs {
+        watcher
+            .watch(dir, mode)
+            .map_err(|e| format!("Could not watch {}: {e}", dir.display()))?;
+    }
+    // Ends once the watcher is dropped, which closes the channel.
+    std::thread::Builder::new()
+        .name(name.into())
+        .spawn(move || {
+            while rx.recv().is_ok() {
+                while rx.recv_timeout(BURST).is_ok() {}
+                on_change();
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(watcher)
+}
+
+/// A project-relative path, with `/` between its parts as git writes them, and when it last
+/// changed in the burst.
+#[derive(Debug, Clone)]
+pub struct Change {
+    pub path: String,
+    pub at: Instant,
+}
+
+/// Watches until dropped.
+#[derive(Debug)]
+pub struct ProjectWatcher {
+    _watcher: Option<Arc<Mutex<RecommendedWatcher>>>,
+    /// Held while a remote project is polled; the polling chat ends once it is dropped.
+    _polling: Option<Arc<()>>,
+}
+
+impl ProjectWatcher {
+    /// Starts watching `root`. Folders are added on a thread of the watcher's own, so this
+    /// returns at once. `on_change` runs on that chat with what a burst changed; events that
+    /// arrive meanwhile wait for the next call.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the file watcher or its chat cannot be created.
+    pub fn start(
+        root: &Path,
+        on_change: impl FnMut(Vec<Change>) + Send + 'static,
+    ) -> Result<Self, Error> {
+        // Events name paths under the root as the system resolves it, such as `/private/var`
+        // for `/var` on macOS.
+        let root =
+            crate::system::files::paths::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+        let (tx, rx) = channel();
+        let watcher = notify::recommended_watcher(move |res| {
+            let _ = tx.send((Instant::now(), res));
+        })
+        .map_err(|e| e.to_string())?;
+        let watcher = Arc::new(Mutex::new(watcher));
+        let weak = Arc::downgrade(&watcher);
+        std::thread::Builder::new()
+            .name("project-watch".into())
+            .spawn(move || run(&root, &weak, &rx, on_change))
+            .map_err(|e| e.to_string())?;
+        Ok(Self {
+            _watcher: Some(watcher),
+            _polling: None,
+        })
+    }
+
+    /// Watches the project at `root` on an SSH host, which has no file events to send here, by
+    /// asking it every few seconds which files git sees changed and when each was written.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `root` is not remote or the polling chat cannot be created.
+    pub fn poll(
+        root: &str,
+        mut on_change: impl FnMut(Vec<Change>) + Send + 'static,
+    ) -> Result<Self, Error> {
+        let at = crate::system::ssh::split(root).ok_or("Not a remote project")?;
+        let (host, dir) = (at.host.to_string(), at.path.to_string());
+        let alive = Arc::new(());
+        let weak = Arc::downgrade(&alive);
+        std::thread::Builder::new()
+            .name("project-poll".into())
+            .spawn(move || {
+                let mut last: Option<BTreeMap<String, String>> = None;
+                while weak.strong_count() > 0 {
+                    if let Some(now) = remote_state(&host, &dir) {
+                        if let Some(before) = &last {
+                            let at = Instant::now();
+                            let changed: Vec<Change> = before
+                                .iter()
+                                .filter(|(p, s)| now.get(*p) != Some(*s))
+                                .chain(now.iter().filter(|(p, _)| !before.contains_key(*p)))
+                                .map(|(path, _)| Change {
+                                    path: path.clone(),
+                                    at,
+                                })
+                                .collect();
+                            if !changed.is_empty() && weak.strong_count() > 0 {
+                                on_change(changed);
+                            }
+                        }
+                        last = Some(now);
+                    }
+                    std::thread::sleep(POLL);
+                }
+            })
+            .map_err(|e| e.to_string())?;
+        Ok(Self {
+            _watcher: None,
+            _polling: Some(alive),
+        })
+    }
+}
+
+type Received = (Instant, notify::Result<Event>);
+
+/// The watcher's chat. It ends once the watcher is dropped, which closes the channel.
+fn run(
+    root: &Path,
+    watcher: &Weak<Mutex<RecommendedWatcher>>,
+    rx: &Receiver<Received>,
+    mut on_change: impl FnMut(Vec<Change>),
+) {
+    let Some(shared) = watcher.upgrade() else {
+        return;
+    };
+    backend::watch_project(&mut shared.locked(), root);
+    // A linked worktree keeps its HEAD and index in its own folder under the main repository's
+    // `.git`, and its branches in that repository's refs: both sit outside `root`.
+    let linked = LinkedGit::find(root);
+    if let Some(linked) = &linked {
+        let mut watcher = shared.locked();
+        watch_or_warn(
+            &mut watcher,
+            &linked.own,
+            notify::RecursiveMode::NonRecursive,
+        );
+        for refs in ["heads", "remotes", "tags"] {
+            let refs = linked.common.join("refs").join(refs);
+            watch_or_warn(&mut watcher, &refs, notify::RecursiveMode::Recursive);
+        }
+        // Its `packed-refs`, which a `gc` or `pack-refs` moves branches into.
+        watch_or_warn(
+            &mut watcher,
+            &linked.common,
+            notify::RecursiveMode::NonRecursive,
+        );
+        let reftable = linked.common.join("reftable");
+        if reftable.is_dir() {
+            watch_or_warn(&mut watcher, &reftable, notify::RecursiveMode::NonRecursive);
+        }
+    }
+    drop(shared);
+    let filter = Filter::new(root);
+
+    let mut changed: BTreeMap<String, Instant> = BTreeMap::new();
+    let mut since: Option<Instant> = None;
+    loop {
+        let wait = match since {
+            Some(start) => MAX_WAIT.saturating_sub(start.elapsed()).min(SETTLE),
+            // With nothing pending, wake rarely; any change ends the wait at once.
+            None => Duration::from_secs(3600),
+        };
+        let received = if wait.is_zero() {
+            Err(RecvTimeoutError::Timeout)
+        } else {
+            rx.recv_timeout(wait)
+        };
+        match received {
+            Ok((at, Ok(event))) => {
+                if matches!(event.kind, EventKind::Access(_)) {
+                    continue;
+                }
+                let before = changed.len();
+                for path in &event.paths {
+                    let mapped;
+                    let rel = match path.strip_prefix(root) {
+                        Ok(rel) => rel,
+                        Err(_) => match linked.as_ref().and_then(|l| l.as_git_path(path)) {
+                            Some(git) => {
+                                mapped = git;
+                                &mapped
+                            }
+                            None => continue,
+                        },
+                    };
+                    if !filter.keeps(path, rel) {
+                        continue;
+                    }
+                    let created_dir = matches!(event.kind, EventKind::Create(_)) && path.is_dir();
+                    if created_dir && let Some(shared) = watcher.upgrade() {
+                        // Files written into a new folder before its watch was in place.
+                        for inside in backend::dir_created(&mut shared.locked(), path) {
+                            if let Ok(rel) = inside.strip_prefix(root) {
+                                changed.insert(git_path(rel), at);
+                            }
+                        }
+                    }
+                    changed.insert(git_path(rel), at);
+                }
+                // A dropped event queue means anything may have changed.
+                if changed.len() > before || event.need_rescan() {
+                    since.get_or_insert(at);
+                }
+            }
+            Ok((at, Err(_))) => {
+                since.get_or_insert(at);
+            }
+            Err(RecvTimeoutError::Timeout) => {
+                if since.take().is_some() {
+                    let burst = std::mem::take(&mut changed);
+                    on_change(
+                        burst
+                            .into_iter()
+                            .map(|(path, at)| Change { path, at })
+                            .collect(),
+                    );
+                }
+            }
+            Err(RecvTimeoutError::Disconnected) => return,
+        }
+    }
+}
+
+/// Where a linked worktree's git state lives, outside the worktree itself.
+struct LinkedGit {
+    /// The worktree's own git folder, holding its HEAD and index.
+    own: PathBuf,
+    /// The main repository's git folder, whose refs every worktree shares.
+    common: PathBuf,
+}
+
+impl LinkedGit {
+    /// The git folders behind `root` when its `.git` is a file, as in a linked worktree, as git
+    /// itself resolves them.
+    fn find(root: &Path) -> Option<Self> {
+        if !root.join(".git").is_file() {
+            return None;
+        }
+        let shown = crate::source_control::run_git(
+            &root.to_string_lossy(),
+            &[
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-dir",
+                "--git-common-dir",
+            ],
+        )
+        .ok()?;
+        let mut lines = shown.lines();
+        let own = Path::new(lines.next()?).canonicalize().ok()?;
+        let common = Path::new(lines.next()?).canonicalize().ok()?;
+        Some(Self { own, common })
+    }
+
+    /// `path` as the same file would sit in an ordinary `.git` folder, so the filter treats it
+    /// alike: the worktree's HEAD becomes `.git/HEAD`, a branch `.git/refs/heads/<name>`, and
+    /// the shared `packed-refs` and `reftable` keep their names under `.git`.
+    fn as_git_path(&self, path: &Path) -> Option<PathBuf> {
+        if let Ok(rel) = path.strip_prefix(&self.own) {
+            return Some(Path::new(".git").join(rel));
+        }
+        let rel = path.strip_prefix(&self.common).ok()?;
+        let shared = rel.starts_with("refs")
+            || rel.starts_with("reftable")
+            || rel == Path::new("packed-refs");
+        shared.then(|| Path::new(".git").join(rel))
+    }
+}
+
+/// `rel` as git writes paths, with `/` between parts on every platform.
+fn git_path(rel: &Path) -> String {
+    rel.components()
+        .filter_map(|c| match c {
+            Component::Normal(part) => Some(part.to_string_lossy()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+// What the project watcher never watches or reports.
+
+/// Folders never watched, even where no `.gitignore` names them.
+const SKIPPED_DIRS: [&str; 3] = [".git", "node_modules", "target"];
+
+/// Decides which event paths are reported.
+struct Filter {
+    /// The root `.gitignore` and `.git/info/exclude`. Nested ignore files are left out: git
+    /// leaves the paths they name out of its status anyway, so missing one costs a refresh, not
+    /// a wrong list.
+    ignored: Gitignore,
+}
+
+impl Filter {
+    fn new(root: &Path) -> Self {
+        let mut builder = GitignoreBuilder::new(root);
+        builder.add(root.join(".gitignore"));
+        builder.add(root.join(".git/info/exclude"));
+        let ignored = builder.build().unwrap_or_else(|_| Gitignore::empty());
+        Self { ignored }
+    }
+
+    /// Whether a change to `path`, which is `rel` under the root, is reported. In `.git` its top
+    /// level counts, without git's index lock and watchman's cookie files, and so do its branches
+    /// and tags, which is all a push changes, and its reftable in a repository that keeps refs
+    /// there. Patchwork's own refs for reply snapshots don't.
+    fn keeps(&self, path: &Path, rel: &Path) -> bool {
+        let mut parts = rel.iter();
+        let Some(first) = parts.next() else {
+            return false;
+        };
+        if first == ".git" {
+            let Some(name) = parts.next() else {
+                return false;
+            };
+            if name == "refs" {
+                let kept = parts
+                    .next()
+                    .is_some_and(|kind| kind == "heads" || kind == "remotes" || kind == "tags");
+                return kept && rel.extension().is_none_or(|ext| ext != "lock");
+            }
+            if name == "reftable" {
+                return rel.extension().is_none_or(|ext| ext != "lock");
+            }
+            return parts.next().is_none() && name != "index.lock" && !is_cookie(name);
+        }
+        if is_cookie(rel.file_name().unwrap_or_default()) {
+            return false;
+        }
+        let skipped = rel
+            .iter()
+            .any(|part| SKIPPED_DIRS.iter().any(|dir| part == *dir));
+        !skipped
+            && !self
+                .ignored
+                .matched_path_or_any_parents(path, path.is_dir())
+                .is_ignore()
+    }
+}
+
+/// Watchman creates a cookie file in the watched tree whenever it is queried.
+fn is_cookie(name: &std::ffi::OsStr) -> bool {
+    name.to_string_lossy().starts_with(".watchman-cookie-")
+}
+
+/// Walks `dir` the way git sees it, hidden folders included, every ignore file applied.
+#[cfg(target_os = "linux")]
+fn walker(dir: &Path) -> WalkBuilder {
+    let mut walk = WalkBuilder::new(dir);
+    walk.hidden(false)
+        .filter_entry(|entry| !SKIPPED_DIRS.iter().any(|skip| entry.file_name() == *skip));
+    walk
+}
+
+/// Adds a watch on `path`, logging it when it fails; returns whether it was added.
+fn watch_or_warn(
+    watcher: &mut notify::RecommendedWatcher,
+    path: &Path,
+    mode: notify::RecursiveMode,
+) -> bool {
+    use notify::Watcher;
+    watcher
+        .watch(path, mode)
+        .inspect_err(|e| {
+            log::warn!(path:% = path.display(), error:% = e; "failed to watch {{path}}: {{error}}");
+        })
+        .is_ok()
+}
+
+/// inotify watches one folder at a time, so each folder git keeps gets its own watch, and
+/// ignored folders such as build output cost nothing.
+#[cfg(target_os = "linux")]
+mod linux {
+    use std::path::{Path, PathBuf};
+
+    use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+
+    use super::{walker, watch_or_warn};
+
+    /// Watches every folder of the working tree that git keeps, the top level of `.git`, and its
+    /// branches, tags and reftable.
+    pub(super) fn watch_project(watcher: &mut RecommendedWatcher, root: &Path) {
+        watch_tree(watcher, root);
+        // In a linked worktree `.git` is a file; `run` watches its git folders.
+        let git_dir = root.join(".git");
+        if git_dir.is_dir() {
+            watch_or_warn(watcher, &git_dir, RecursiveMode::NonRecursive);
+            for refs in ["heads", "remotes", "tags"] {
+                let refs = git_dir.join("refs").join(refs);
+                watch_or_warn(watcher, &refs, RecursiveMode::Recursive);
+            }
+            // A repository in the reftable format keeps every ref there instead.
+            let reftable = git_dir.join("reftable");
+            if reftable.is_dir() {
+                watch_or_warn(watcher, &reftable, RecursiveMode::NonRecursive);
+            }
+        }
+    }
+
+    /// Watches a folder created after the start, unless git ignores it, and returns the files
+    /// already in it, which were written before its watch was in place. Listing its parent applies
+    /// every ignore file above it.
+    pub(super) fn dir_created(watcher: &mut RecommendedWatcher, dir: &Path) -> Vec<PathBuf> {
+        let Some(parent) = dir.parent() else {
+            return Vec::new();
+        };
+        let kept = walker(parent)
+            .max_depth(Some(1))
+            .build()
+            .flatten()
+            .any(|entry| entry.path() == dir);
+        if kept {
+            watch_tree(watcher, dir)
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Adds a watch on `dir` and each folder under it that git keeps; returns the files found.
+    fn watch_tree(watcher: &mut RecommendedWatcher, dir: &Path) -> Vec<PathBuf> {
+        let mut files = Vec::new();
+        // Once inotify runs out of watches every folder fails the same way, so it is told once.
+        let mut warned = false;
+        for entry in walker(dir).build().flatten() {
+            if entry.file_type().is_some_and(|t| t.is_dir()) {
+                if warned {
+                    let _ = watcher.watch(entry.path(), RecursiveMode::NonRecursive);
+                } else {
+                    warned = !watch_or_warn(watcher, entry.path(), RecursiveMode::NonRecursive);
+                }
+            } else {
+                files.push(entry.into_path());
+            }
+        }
+        files
+    }
+}
+
+/// `FSEvents` and `ReadDirectoryChangesW` watch a whole tree for the price of one folder, so the
+/// root gets one recursive watch and ignored paths are dropped as their events arrive.
+#[cfg(not(target_os = "linux"))]
+mod tree {
+    use std::path::{Path, PathBuf};
+
+    use notify::{RecommendedWatcher, RecursiveMode};
+
+    use super::watch_or_warn;
+
+    /// Watches the whole project, `.git` included, in one recursive watch.
+    pub(super) fn watch_project(watcher: &mut RecommendedWatcher, root: &Path) {
+        watch_or_warn(watcher, root, RecursiveMode::Recursive);
+    }
+
+    /// A new folder is inside the recursive watch already, and its files report their own events.
+    pub(super) fn dir_created(_watcher: &mut RecommendedWatcher, _dir: &Path) -> Vec<PathBuf> {
+        Vec::new()
+    }
+}
+
+/// How often a project on an SSH host is asked what changed.
+const POLL: Duration = Duration::from_secs(3);
+
+/// What git sees in the folder `dir` on `host`: each changed or new file with its time and size,
+/// and `.git/HEAD` and `.git/index` with theirs, so commits, staging and checkouts show too.
+/// None when the host cannot be reached.
+fn remote_state(host: &str, dir: &str) -> Option<BTreeMap<String, String>> {
+    crate::system::ssh::op::poll(host, dir).ok()
+}

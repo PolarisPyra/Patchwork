@@ -1,4 +1,4 @@
-//! A thread's `/goal`: what the app keeps about it, how turns pursue it, and stopping it.
+//! A chat's `/goal`: what the app keeps about it, how turns pursue it, and stopping it.
 
 // Rust guideline compliant 2026-10-09
 

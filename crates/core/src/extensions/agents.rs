@@ -48,11 +48,11 @@ impl Core {
         }
     }
 
-    pub(crate) fn thread_agents(&self, thread_id: &str) -> Vec<agents::Agent> {
-        let project_id = self.store.with_threads(|threads| {
-            threads
+    pub(crate) fn chat_agents(&self, chat_id: &str) -> Vec<agents::Agent> {
+        let project_id = self.store.with_chats(|chats| {
+            chats
                 .iter()
-                .find(|t| t.id == thread_id)
+                .find(|t| t.id == chat_id)
                 .and_then(|t| t.project_id.clone())
         });
         self.project_agents(project_id.as_deref())
@@ -63,9 +63,9 @@ impl Core {
     /// # Errors
     ///
     /// Returns an error when the chat's changes cannot be saved to the database.
-    pub fn set_thread_role(&self, id: &str, role: Option<String>) -> Result<(), Error> {
+    pub fn set_chat_role(&self, id: &str, role: Option<String>) -> Result<(), Error> {
         let mut changed = false;
-        self.store.update_thread(id, |t| {
+        self.store.update_chat(id, |t| {
             if t.role != role {
                 t.role.clone_from(&role);
                 t.role_pending = true;
@@ -74,7 +74,7 @@ impl Core {
         })?;
         if changed {
             self.emit(AgentEventEnvelope {
-                thread_id: id.into(),
+                chat_id: id.into(),
                 event: AgentEvent::RoleChanged { role },
             });
         }
@@ -84,21 +84,21 @@ impl Core {
     /// Switches the chat to the model of the last custom agent `text` summons that names one,
     /// when the chat's CLI offers it, as `provider/model` or as the model alone. An idle agent
     /// is replaced; a running turn keeps its model until it ends.
-    pub(crate) fn switch_to_agent_model(&self, thread_id: &str, text: &str) {
+    pub(crate) fn switch_to_agent_model(&self, chat_id: &str, text: &str) {
         if !text.contains('&') {
             return;
         }
-        let agents = self.thread_agents(thread_id);
+        let agents = self.chat_agents(chat_id);
         let Some(wanted) = agents::mentioned(text)
             .filter_map(|name| agents.iter().find(|a| a.name == name)?.model.as_deref())
             .last()
         else {
             return;
         };
-        let Some((agent, model)) = self.store.with_threads(|threads| {
-            threads
+        let Some((agent, model)) = self.store.with_chats(|chats| {
+            chats
                 .iter()
-                .find(|t| t.id == thread_id)
+                .find(|t| t.id == chat_id)
                 .map(|t| (t.agent, t.model.clone()))
         }) else {
             return;
@@ -112,9 +112,9 @@ impl Core {
         if model.as_ref() == Some(&offered) {
             return;
         }
-        match self.set_thread_model(thread_id, agent, Some(offered.clone())) {
+        match self.set_chat_model(chat_id, agent, Some(offered.clone())) {
             Ok(()) => self.emit(AgentEventEnvelope {
-                thread_id: thread_id.into(),
+                chat_id: chat_id.into(),
                 event: AgentEvent::ModelChanged {
                     model: Some(offered),
                 },
@@ -129,14 +129,14 @@ impl Core {
     /// agent, which `told_role` keeps once the message is sent.
     pub(crate) fn summon_agents(
         &self,
-        thread_id: &str,
+        chat_id: &str,
         text: String,
         fresh: bool,
     ) -> (String, Option<String>) {
-        let Some((role, pending)) = self.store.with_threads(|threads| {
-            threads
+        let Some((role, pending)) = self.store.with_chats(|chats| {
+            chats
                 .iter()
-                .find(|t| t.id == thread_id)
+                .find(|t| t.id == chat_id)
                 .map(|t| (t.role.clone(), t.role_pending))
         }) else {
             return (text, None);
@@ -150,21 +150,21 @@ impl Core {
         if matches!(standing, agents::Standing::Told) && !text.contains('&') {
             return (text, None);
         }
-        let summoned = agents::summon(&self.thread_agents(thread_id), text, standing);
+        let summoned = agents::summon(&self.chat_agents(chat_id), text, standing);
         let switched = summoned.role.filter(|new| role.as_ref() != Some(new));
         (summoned.text, switched)
     }
 
     /// Records that the chat's agent was told of its role with a message just sent, and makes
     /// `switched`, a primary agent the message summoned, the chat's agent.
-    pub(crate) fn told_role(&self, thread_id: &str, switched: Option<String>) {
+    pub(crate) fn told_role(&self, chat_id: &str, switched: Option<String>) {
         let pending = self
             .store
-            .with_threads(|threads| threads.iter().any(|t| t.id == thread_id && t.role_pending));
+            .with_chats(|chats| chats.iter().any(|t| t.id == chat_id && t.role_pending));
         if !pending && switched.is_none() {
             return;
         }
-        let saved = self.store.update_thread(thread_id, |t| {
+        let saved = self.store.update_chat(chat_id, |t| {
             t.role_pending = false;
             if let Some(role) = &switched {
                 t.role = Some(role.clone());
@@ -174,7 +174,7 @@ impl Core {
             log::warn!(error:% = e; "failed to save the chat's agent: {{error}}");
         } else if switched.is_some() {
             self.emit(AgentEventEnvelope {
-                thread_id: thread_id.into(),
+                chat_id: chat_id.into(),
                 event: AgentEvent::RoleChanged { role: switched },
             });
         }

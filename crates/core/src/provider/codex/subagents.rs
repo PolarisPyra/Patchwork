@@ -5,24 +5,24 @@
 use serde_json::Value;
 use super::parse::codex_item;
 use crate::events::AgentEvent;
-use crate::threads::BackgroundTask;
-use crate::threads::SubAgent;
-use crate::threads::TaskStatus;
-use crate::threads::ToolCall;
+use crate::chats::BackgroundTask;
+use crate::chats::SubAgent;
+use crate::chats::TaskStatus;
+use crate::chats::ToolCall;
 use crate::system::now_ms;
 use crate::provider::Parsed;
 use crate::provider::tool_started;
 use crate::provider::ToolStart;
 use crate::provider::TurnSpec;
 
-/// The start of the id of a `thread/read` for a subagent's thread, which goes on with the
-/// thread's id and the name the model gave the subagent.
+/// The start of the id of a `chat/read` for a subagent's chat, which goes on with the
+/// chat's id and the name the model gave the subagent.
 pub(super) const SUBAGENT_READ: &str = "subagent";
 
-/// The call that shows the subagent on `thread`, from the read of that thread, or `name` when
+/// The call that shows the subagent on `chat`, from the read of that chat, or `name` when
 /// it could not be read.
 pub(super) fn subagent_started(
-    thread: &str,
+    chat: &str,
     name: &str,
     read: &Value,
     spec: &TurnSpec,
@@ -39,7 +39,7 @@ pub(super) fn subagent_started(
     tool_started(
         message_id,
         ToolStart {
-            id: thread,
+            id: chat,
             name: "Agent",
             summary: kind,
             subagent: Some(subagent),
@@ -57,7 +57,7 @@ fn subagent_kind(name: &str, spec: &TurnSpec) -> String {
         .map_or_else(|| name.replace('_', "-"), |a| a.name.clone())
 }
 
-/// What a subagent's own frames add to its thread: its text, and the calls it makes.
+/// What a subagent's own frames add to its chat: its text, and the calls it makes.
 #[must_use]
 pub fn subagent_events(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<AgentEvent> {
     let mut out = Vec::new();
@@ -81,7 +81,7 @@ pub fn subagent_events(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Agen
 /// The background task a still-running Codex call becomes when its turn completes.
 ///
 /// The background task an open Codex call becomes when its turn completes with the call still
-/// running: a command, or a subagent thread. Codex has no request that stops one, so the task has
+/// running: a command, or a subagent chat. Codex has no request that stops one, so the task has
 /// no id to stop it by and is listed without a stop button. Its only stop is the turn's own Stop,
 /// which ends the process running it. Codex does not wake the agent when one ends either; the
 /// agent sees the result only when it polls.

@@ -20,7 +20,7 @@ use crate::orchestration::tasks::dispatch;
 use crate::projects::Project;
 use crate::scheduled::Task;
 use crate::system::now_ms;
-use crate::threads::{BackgroundTask, MessageStatus, Role, TaskStatus, Thread};
+use crate::chats::{BackgroundTask, MessageStatus, Role, TaskStatus, Chat};
 
 /// The most tasks one answer lists.
 const LISTED: usize = 60;
@@ -78,7 +78,7 @@ fn tail(text: &str) -> String {
 
 /// Where the chat stands. It is running only while its agent's process is replying, so a chat
 /// whose reply was cut off by a crash or a restart is told as terminated.
-fn chat_state(ctx: &Ctx<'_>, chat: &Thread) -> &'static str {
+fn chat_state(ctx: &Ctx<'_>, chat: &Chat) -> &'static str {
     let runner = &ctx.core.runner;
     let live = runner.is_running(&chat.id) || runner.is_starting(&chat.id);
     if (live && chat.ask().is_some()) || ctx.core.limit_resume_at(&chat.id).is_some() {
@@ -118,7 +118,7 @@ fn chat_actions(state: &str, asking: bool, at_limit: bool) -> Vec<&'static str> 
 }
 
 /// A chat or a sub agent as a task.
-fn chat_entry(ctx: &Ctx<'_>, chat: &Thread, projects: &[Project], chats: &[Thread]) -> Entry {
+fn chat_entry(ctx: &Ctx<'_>, chat: &Chat, projects: &[Project], chats: &[Chat]) -> Entry {
     let now = now_ms();
     let state = chat_state(ctx, chat);
     let project = projects
@@ -197,11 +197,11 @@ fn chat_entry(ctx: &Ctx<'_>, chat: &Thread, projects: &[Project], chats: &[Threa
     }
     if let Some(parent) = &chat.parent {
         // A sub agent is steered through the chat that started it.
-        told["started_by_chat_id"] = json!(parent.thread_id);
+        told["started_by_chat_id"] = json!(parent.chat_id);
         told["started_by"] = json!(
             chats
                 .iter()
-                .find(|c| c.id == parent.thread_id)
+                .find(|c| c.id == parent.chat_id)
                 .map(|c| c.title.as_str())
         );
         told["actions"] = json!([]);
@@ -222,7 +222,7 @@ fn chat_entry(ctx: &Ctx<'_>, chat: &Thread, projects: &[Project], chats: &[Threa
 
 /// The background commands the chat's latest reply left, as tasks. One still marked running
 /// is told as terminated when the chat's agent is gone, since it ran inside that process.
-fn background_entries(ctx: &Ctx<'_>, chat: &Thread, application: &str) -> Vec<Entry> {
+fn background_entries(ctx: &Ctx<'_>, chat: &Chat, application: &str) -> Vec<Entry> {
     let Some(reply) = chat.messages.iter().rfind(|m| !m.background.is_empty()) else {
         return Vec::new();
     };
@@ -288,7 +288,7 @@ fn scheduled_entry(task: &Task, projects: &[Project]) -> Entry {
         "next_run_at_epoch_ms": task.next_run_at.filter(|_| task.enabled),
         "last_run": task.recent_runs.first().map(|run| json!({
             "outcome": run.outcome,
-            "chat_id": run.thread_id,
+            "chat_id": run.chat_id,
             "detail": run.detail,
         })),
         "working_directory": project.map(|p| p.path.as_str()),
@@ -370,9 +370,9 @@ pub(super) fn list(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
         return Err(format!("The states are: {}", STATES.join(", ")).into());
     }
     let agent = text(args, "agent").to_lowercase();
-    let chats: Vec<Thread> = core
+    let chats: Vec<Chat> = core
         .store
-        .threads()
+        .chats()
         .into_iter()
         .filter(|t| t.archived_at.is_none() && !core.is_dispatcher(&t.id))
         .collect();

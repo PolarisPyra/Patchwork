@@ -9,13 +9,13 @@ use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 
 use crate::provider;
-use crate::threads::Attachment;
+use crate::chats::Attachment;
 use crate::orchestration::turn::process::write_to;
 use crate::orchestration::Runner;
 
 /// A message sent during a turn, kept until the agent answers it or the turn ends.
 pub(in crate::orchestration) struct FollowUp {
-    /// The user message this is, so the thread can show it as queued or drop it.
+    /// The user message this is, so the chat can show it as queued or drop it.
     pub(in crate::orchestration) message_id: String,
     pub(in crate::orchestration) text: String,
     pub(in crate::orchestration) attachments: Vec<Attachment>,
@@ -51,13 +51,13 @@ pub(in crate::orchestration) type Steers = Arc<Mutex<VecDeque<FollowUp>>>;
 pub(in crate::orchestration) type Queue = Arc<Mutex<Vec<FollowUp>>>;
 
 impl Runner {
-    /// Holds a message for the next turn of the one running in `thread_id`, even when the agent
+    /// Holds a message for the next turn of the one running in `chat_id`, even when the agent
     /// could take it now. False when no turn is running there.
-    pub(crate) fn enqueue(&self, thread_id: &str, input: FollowUpInput<'_>) -> bool {
+    pub(crate) fn enqueue(&self, chat_id: &str, input: FollowUpInput<'_>) -> bool {
         let turns = self.turns.locked();
         // An idle agent is not replying, so there is nothing to wait for.
         let Some(turn) = turns
-            .get(thread_id)
+            .get(chat_id)
             .filter(|t| !t.idle.load(Ordering::SeqCst))
         else {
             return false;
@@ -76,9 +76,9 @@ impl Runner {
 
     /// Replaces the payload of a queued message in the active turn. False if it has already
     /// been promoted, withdrawn, or the turn ended.
-    pub fn edit_queued(&self, thread_id: &str, input: FollowUpInput<'_>) -> bool {
+    pub fn edit_queued(&self, chat_id: &str, input: FollowUpInput<'_>) -> bool {
         let turns = self.turns.locked();
-        let Some(turn) = turns.get(thread_id) else {
+        let Some(turn) = turns.get(chat_id) else {
             return false;
         };
         let mut queue = turn.queue.locked();
@@ -91,10 +91,10 @@ impl Runner {
         true
     }
 
-    /// Whether the message is waiting in the queue of the turn running in `thread_id`.
-    pub fn is_queued(&self, thread_id: &str, message_id: &str) -> bool {
+    /// Whether the message is waiting in the queue of the turn running in `chat_id`.
+    pub fn is_queued(&self, chat_id: &str, message_id: &str) -> bool {
         let turns = self.turns.locked();
-        turns.get(thread_id).is_some_and(|turn| {
+        turns.get(chat_id).is_some_and(|turn| {
             turn.queue
                 .locked()
                 .iter()
@@ -105,9 +105,9 @@ impl Runner {
     /// Takes a queued message back so it is not sent. False if the agent has already been handed
     /// it. A message this process never handed over was queued before a restart, so nothing
     /// holds it and it counts as taken back.
-    pub fn withdraw(&self, thread_id: &str, message_id: &str) -> bool {
+    pub fn withdraw(&self, chat_id: &str, message_id: &str) -> bool {
         let turns = self.turns.locked();
-        if let Some(turn) = turns.get(thread_id) {
+        if let Some(turn) = turns.get(chat_id) {
             let mut queue = turn.queue.locked();
             if let Some(index) = queue.iter().position(|f| f.message_id == message_id) {
                 queue.remove(index);
@@ -128,14 +128,14 @@ impl Runner {
     /// it. Returns false if the message is no longer queued or cannot be written to the agent.
     pub fn promote_queued(
         &self,
-        thread_id: &str,
+        chat_id: &str,
         message_id: &str,
         session_id: Option<&str>,
         subagents: &[String],
     ) -> bool {
-        self.background_subagents(thread_id, subagents);
+        self.background_subagents(chat_id, subagents);
         let turns = self.turns.locked();
-        let Some(turn) = turns.get(thread_id) else {
+        let Some(turn) = turns.get(chat_id) else {
             return false;
         };
         let mut queue = turn.queue.locked();

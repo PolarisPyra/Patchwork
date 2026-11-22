@@ -33,7 +33,7 @@ pub(in crate::canvas) fn parse(diff: &str) -> Parsed {
     let widest = rows
         .iter()
         .map(|r| {
-            let chars = r.text.chars().count() as f32 * super::view::CHAR_W;
+            let chars = r.text.chars().count() as f32 * super::hunks::CHAR_W;
             if r.kind == Kind::Hunk {
                 chars + 32. + 200.
             } else {

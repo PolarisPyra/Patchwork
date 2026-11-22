@@ -15,7 +15,7 @@ pub use input::{
     turn_args, agents_args, compact_args, turn_input, steer_input, interrupt, approval_reply,
 };
 use input::{
-    THREAD_REQUEST, thread_params, SKILLS_REQUEST, begin, STEER_REQUEST, INTERRUPT_REQUEST,
+    CHAT_REQUEST, chat_params, SKILLS_REQUEST, begin, STEER_REQUEST, INTERRUPT_REQUEST,
     GOAL_CLEAR_REQUEST,
 };
 #[doc(inline)]

@@ -118,7 +118,7 @@ impl Slack {
                 .as_str()
                 .or_else(|| event["ts"].as_str())
                 .map(str::to_string),
-            chat: event["channel"].as_str()?.to_string(),
+            conversation: event["channel"].as_str()?.to_string(),
             name: user.clone(),
             sender: user,
             text: text.trim().to_string(),
@@ -132,12 +132,12 @@ impl Slack {
             return None;
         }
         let reply = payload["actions"][0]["value"].as_str()?;
-        let chat = payload["channel"]["id"].as_str()?.to_string();
+        let conversation = payload["channel"]["id"].as_str()?.to_string();
         let message = &payload["message"];
         let _ = self.call(
             "chat.update",
             &self.bot,
-            &json!({"channel": chat, "ts": message["ts"], "text": message["text"], "blocks": []}),
+            &json!({"channel": conversation, "ts": message["ts"], "text": message["text"], "blocks": []}),
         );
         let user = &payload["user"];
         Some(Incoming {
@@ -145,7 +145,7 @@ impl Slack {
             id: payload["actions"][0]["action_ts"]
                 .as_str()
                 .map(str::to_string),
-            chat,
+            conversation,
             sender: user["id"].as_str()?.to_string(),
             name: user["username"].as_str().unwrap_or_default().to_string(),
             text: reply.to_string(),
@@ -180,8 +180,13 @@ impl Connector for Slack {
         Ok(())
     }
 
-    fn send(&self, chat: &str, text: &str, buttons: &[Button]) -> Result<Option<String>, Error> {
-        let mut body = json!({"channel": chat, "text": text});
+    fn send(
+        &self,
+        conversation: &str,
+        text: &str,
+        buttons: &[Button],
+    ) -> Result<Option<String>, Error> {
+        let mut body = json!({"channel": conversation, "text": text});
         if !buttons.is_empty() {
             let elements: Vec<Value> = buttons
                 .iter()
@@ -204,7 +209,13 @@ impl Connector for Slack {
         Ok(sent["ts"].as_str().map(str::to_string))
     }
 
-    fn send_file(&self, chat: &str, name: &str, bytes: &[u8], caption: &str) -> Result<(), Error> {
+    fn send_file(
+        &self,
+        conversation: &str,
+        name: &str,
+        bytes: &[u8],
+        caption: &str,
+    ) -> Result<(), Error> {
         let length = bytes.len().to_string();
         let upload = self.call_form(
             "files.getUploadURLExternal",
@@ -228,18 +239,27 @@ impl Connector for Slack {
             "files.completeUploadExternal",
             &[
                 ("files", &files),
-                ("channel_id", chat),
+                ("channel_id", conversation),
                 ("initial_comment", caption),
             ],
         )
         .map(drop)
     }
 
-    fn edit(&self, chat: &str, id: &str, text: &str) -> Result<(), Error> {
+    fn edit(&self, conversation: &str, id: &str, text: &str) -> Result<(), Error> {
         self.call(
             "chat.update",
             &self.bot,
-            &json!({"channel": chat, "ts": id, "text": text}),
+            &json!({"channel": conversation, "ts": id, "text": text}),
+        )
+        .map(drop)
+    }
+
+    fn remove(&self, conversation: &str, id: &str) -> Result<(), Error> {
+        self.call(
+            "chat.delete",
+            &self.bot,
+            &json!({"channel": conversation, "ts": id}),
         )
         .map(drop)
     }

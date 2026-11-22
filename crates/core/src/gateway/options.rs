@@ -6,7 +6,7 @@ use serde_json::json;
 
 use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::provider::AgentKind;
-use crate::threads::{AccessMode, Thread};
+use crate::chats::{AccessMode, Chat};
 use crate::{Core, Error};
 
 /// The access modes, by the names a chat app gives them.
@@ -18,7 +18,7 @@ pub(crate) const ACCESS: [(&str, AccessMode); 4] = [
 ];
 
 impl Core {
-    /// Sets what `thread` runs with: its `model`, `agent` (with a model after its name) or
+    /// Sets what `chat` runs with: its `model`, `agent` (with a model after its name) or
     /// `access`, as `word` says.
     ///
     /// # Errors
@@ -26,36 +26,36 @@ impl Core {
     /// Returns an error when `value` is not one the option takes, or the change cannot be saved.
     pub(crate) fn set_chat_option(
         &self,
-        thread: &Thread,
+        chat: &Chat,
         word: &str,
         value: &str,
     ) -> Result<(), Error> {
         match word {
             "model" => {
                 let model = Some(value.to_string()).filter(|m| !m.eq_ignore_ascii_case("default"));
-                self.set_thread_model(&thread.id, thread.agent, model)?;
+                self.set_chat_model(&chat.id, chat.agent, model)?;
             }
-            "agent" => self.switch_agent_named(thread, value)?,
+            "agent" => self.switch_agent_named(chat, value)?,
             "access" => {
                 let lower = value.to_lowercase();
                 let Some((_, mode)) = ACCESS.iter().find(|(name, _)| *name == lower) else {
                     let names: Vec<&str> = ACCESS.iter().map(|(name, _)| *name).collect();
                     return Err(format!("Access is one of: {}", names.join(", ")).into());
                 };
-                self.set_thread_access_mode(&thread.id, *mode)?;
+                self.set_chat_access_mode(&chat.id, *mode)?;
             }
             _ => return Err(format!("A chat has no option {word}").into()),
         }
         self.emit(AgentEventEnvelope {
-            thread_id: thread.id.clone(),
+            chat_id: chat.id.clone(),
             event: AgentEvent::OptionsChanged,
         });
         Ok(())
     }
 
-    /// Moves `thread` to the agent `rest` names, with the model after its name or the agent's
+    /// Moves `chat` to the agent `rest` names, with the model after its name or the agent's
     /// default model.
-    fn switch_agent_named(&self, thread: &Thread, rest: &str) -> Result<(), Error> {
+    fn switch_agent_named(&self, chat: &Chat, rest: &str) -> Result<(), Error> {
         let (name, model) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
         let agent = serde_json::from_value::<AgentKind>(json!(name.to_lowercase()))
             .map_err(|_unknown| format!("Patchwork has no agent {name}"))?;
@@ -69,20 +69,20 @@ impl Core {
                 .cloned(),
             model => Some(model.to_string()),
         };
-        self.set_thread_model(&thread.id, agent, model)
+        self.set_chat_model(&chat.id, agent, model)
     }
 }
 
-/// What `thread` runs with, as a chat app is shown it.
-pub(crate) fn options(thread: &Thread) -> String {
+/// What `chat` runs with, as a chat app is shown it.
+pub(crate) fn options(chat: &Chat) -> String {
     let access = ACCESS
         .iter()
-        .find(|(_, mode)| *mode == thread.access_mode)
+        .find(|(_, mode)| *mode == chat.access_mode)
         .map_or("full", |(name, _)| *name);
     format!(
         "{}: {:?}, model {}, access {access}.",
-        thread.title,
-        thread.agent,
-        thread.model.as_deref().unwrap_or("default"),
+        chat.title,
+        chat.agent,
+        chat.model.as_deref().unwrap_or("default"),
     )
 }

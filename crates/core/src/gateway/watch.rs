@@ -13,16 +13,16 @@ use crate::provider::clip;
 use super::platform::Platform;
 use super::types::Button;
 use crate::events::AgentEvent;
-use crate::threads::{Approval, ApprovalStatus, MessageStatus, Thread};
+use crate::chats::{Approval, ApprovalStatus, MessageStatus, Chat};
 use crate::{Core, Error};
 
 /// The most characters of a watched chat's reply a conversation is sent.
 const REPLY_LIMIT: usize = 300;
 
 impl Core {
-    /// Tells the conversations watching `thread_id` about `event`, and says whether any watch it,
+    /// Tells the conversations watching `chat_id` about `event`, and says whether any watch it,
     /// so the pairings are not told a second time.
-    pub(super) fn tell_watchers(&self, thread_id: &str, event: &AgentEvent) -> bool {
+    pub(super) fn tell_watchers(&self, chat_id: &str, event: &AgentEvent) -> bool {
         if !matches!(
             event,
             AgentEvent::ApprovalRequested { .. }
@@ -31,11 +31,11 @@ impl Core {
         ) {
             return false;
         }
-        let watchers = self.watchers(thread_id);
+        let watchers = self.watchers(chat_id);
         if watchers.is_empty() {
             return false;
         }
-        let Some(thread) = self.store.thread(thread_id) else {
+        let Some(chat) = self.store.chat(chat_id) else {
             return true;
         };
         match event {
@@ -43,7 +43,7 @@ impl Core {
                 if !approval.auto && approval.status == ApprovalStatus::Pending =>
             {
                 for w in &watchers {
-                    self.show_request(&thread, approval, w.platform, &w.chat);
+                    self.show_request(&chat, approval, w.platform, &w.conversation);
                 }
             }
             AgentEvent::ApprovalResolved {
@@ -58,8 +58,8 @@ impl Core {
                 status,
                 error,
             } => {
-                self.unwatch(thread_id);
-                let Some(reply) = self.reply(thread_id, message_id, *status, error.clone()) else {
+                self.unwatch(chat_id);
+                let Some(reply) = self.reply(chat_id, message_id, *status, error.clone()) else {
                     return true;
                 };
                 let how = if *status == MessageStatus::Complete {
@@ -69,11 +69,11 @@ impl Core {
                 };
                 let text = format!(
                     "{} {how}:\n\n{}",
-                    self.heading(&thread),
+                    self.heading(&chat),
                     clip(&reply, REPLY_LIMIT)
                 );
                 for w in &watchers {
-                    self.say(w.platform, &w.chat, &text);
+                    self.say(w.platform, &w.conversation, &text);
                 }
             }
             _ => {}
@@ -81,26 +81,23 @@ impl Core {
         true
     }
 
-    /// Shows the request of `thread`, which `chat` does not continue, in `chat` with buttons that
+    /// Shows the request of `chat`, which `chat` does not continue, in `chat` with buttons that
     /// answer it, once per request.
     pub(super) fn show_request(
         &self,
-        thread: &Thread,
+        chat: &Chat,
         approval: &Approval,
         platform: Platform,
-        chat: &str,
+        conversation: &str,
     ) {
-        let shown = self
-            .gateway
-            .lock()
-            .notices
-            .iter()
-            .any(|n| n.platform == platform && n.chat == chat && n.approval_id == approval.id);
+        let shown = self.gateway.lock().notices.iter().any(|n| {
+            n.platform == platform && n.conversation == conversation && n.approval_id == approval.id
+        });
         if shown {
             return;
         }
         let (text, buttons) = request(approval);
-        let text = format!("{} asks:\n\n{text}", self.heading(thread));
+        let text = format!("{} asks:\n\n{text}", self.heading(chat));
         let buttons: Vec<Button> = buttons
             .into_iter()
             .map(|b| Button {
@@ -108,18 +105,18 @@ impl Core {
                 reply: format!("/answer {} {}", approval.id, b.reply),
             })
             .collect();
-        self.say_with(platform, chat, &text, &buttons);
+        self.say_with(platform, conversation, &text, &buttons);
         if approval.secret.is_none() {
             self.gateway.lock().notices.push(Notice {
                 platform,
-                chat: chat.to_string(),
-                thread_id: thread.id.clone(),
+                conversation: conversation.to_string(),
+                chat_id: chat.id.clone(),
                 approval_id: approval.id.clone(),
             });
         }
     }
 
-    /// Passes `text` on as the answer to what `thread_id` waits for, for the dispatcher
+    /// Passes `text` on as the answer to what `chat_id` waits for, for the dispatcher
     /// `dispatcher`, and returns what to tell its agent.
     ///
     /// A question is answered. A request to run or change something can only be denied: to
@@ -132,11 +129,11 @@ impl Core {
     pub(crate) fn answer_for_dispatcher(
         self: &Arc<Self>,
         dispatcher: &str,
-        thread_id: &str,
+        chat_id: &str,
         text: &str,
     ) -> Result<String, Error> {
         let approval = self
-            .waiting_approval(thread_id)
+            .waiting_approval(chat_id)
             .ok_or("That chat is not waiting for an answer")?;
         if approval.secret.is_some() {
             return Err(
@@ -149,23 +146,23 @@ impl Core {
             if text.is_empty() || answers.is_empty() {
                 return Err("Give the person's answer".into());
             }
-            self.respond_approval(thread_id, &approval.id, true, answers, None)?;
+            self.respond_approval(chat_id, &approval.id, true, answers, None)?;
             return Ok("Answered. The chat carries on.".into());
         }
         if DENY.contains(&text.to_lowercase().as_str()) {
-            self.respond_approval(thread_id, &approval.id, false, HashMap::new(), None)?;
+            self.respond_approval(chat_id, &approval.id, false, HashMap::new(), None)?;
             return Ok("Denied.".into());
         }
-        let thread = self
+        let chat = self
             .store
-            .thread(thread_id)
+            .chat(chat_id)
             .ok_or("That chat is no longer here")?;
-        let chats = self.bound_chats(dispatcher);
-        if chats.is_empty() {
+        let conversations = self.bound_conversations(dispatcher);
+        if conversations.is_empty() {
             return Err("Only the person can allow that, in Patchwork on their computer".into());
         }
-        for b in &chats {
-            self.show_request(&thread, &approval, b.platform, &b.chat);
+        for b in &conversations {
+            self.show_request(&chat, &approval, b.platform, &b.conversation);
         }
         Ok(
             "Only the person can allow that. Patchwork has shown them the request with buttons \

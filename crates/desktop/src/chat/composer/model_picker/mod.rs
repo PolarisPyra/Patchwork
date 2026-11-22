@@ -5,7 +5,7 @@
 // Rust guideline compliant 2026-10-09
 
 mod rows;
-mod view;
+mod layout;
 mod open;
 
 pub use rows::{ModelPicker, ordered, read_favorites};

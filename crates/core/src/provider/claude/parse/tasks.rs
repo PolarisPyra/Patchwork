@@ -1,12 +1,12 @@
-//! Claude Code's background tasks and subagents: their status, and a subagent's own frames read for its thread.
+//! Claude Code's background tasks and subagents: their status, and a subagent's own frames read for its chat.
 
 // Rust guideline compliant 2026-10-09
 
 use serde_json::Value;
 use crate::events::AgentEvent;
 use crate::system::now_ms;
-use crate::threads::SubAgent;
-use crate::threads::TaskStatus;
+use crate::chats::SubAgent;
+use crate::chats::TaskStatus;
 use crate::provider::Parsed;
 use crate::provider::text_delta;
 use crate::provider::tool_finished;

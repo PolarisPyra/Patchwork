@@ -4528,15 +4528,17 @@ dependencies = [
  "log",
  "mimalloc",
  "patchwork-core",
- "patchwork-settings",
+ "patchwork-modals",
+ "patchwork-pages",
  "patchwork-sidecar",
  "patchwork-ui",
  "serde_json",
+ "vt100",
 ]
 
 [[package]]
 name = "patchwork-android"
-version = "26.11.133"
+version = "26.11.134"
 dependencies = [
  "futures",
  "http",
@@ -4596,21 +4598,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "patchwork-remote"
+name = "patchwork-modals"
 version = "26.11.134"
-dependencies = [
- "base64 0.22.1",
- "libc",
- "patchwork-core",
- "patchwork-system",
- "serde",
- "serde_json",
- "windows-sys 0.60.2",
-]
-
-[[package]]
-name = "patchwork-settings"
-version = "26.11.133"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4626,17 +4615,40 @@ dependencies = [
 ]
 
 [[package]]
-name = "patchwork-sidecar"
-version = "26.11.133"
+name = "patchwork-pages"
+version = "26.11.134"
 dependencies = [
  "futures",
  "gpui",
  "image",
  "log",
  "patchwork-core",
+ "patchwork-modals",
+ "patchwork-sidecar",
  "patchwork-ui",
+]
+
+[[package]]
+name = "patchwork-remote"
+version = "26.11.134"
+dependencies = [
+ "base64 0.22.1",
+ "libc",
+ "patchwork-core",
+ "patchwork-system",
+ "serde",
  "serde_json",
- "vt100",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
+name = "patchwork-sidecar"
+version = "26.11.134"
+dependencies = [
+ "gpui",
+ "image",
+ "patchwork-core",
+ "patchwork-ui",
 ]
 
 [[package]]
@@ -4664,7 +4676,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-ui"
-version = "26.11.133"
+version = "26.11.134"
 dependencies = [
  "base64 0.22.1",
  "chrono",

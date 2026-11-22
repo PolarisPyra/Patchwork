@@ -20,17 +20,17 @@ pub(crate) struct Presence {
     /// When a key or the mouse was last used in the window, in Unix milliseconds; 0 until the
     /// desktop reports.
     active: AtomicU64,
-    /// The start of the goal each chat was last told as met, by place and thread id, so a goal
+    /// The start of the goal each chat was last told as met, by place and chat id, so a goal
     /// reported again as met is told once.
     goals: Mutex<HashMap<(Place, String), u64>>,
 }
 
 impl Presence {
-    /// Records that `started_at`'s goal of `thread_id` was met, and says whether it is the first
+    /// Records that `started_at`'s goal of `chat_id` was met, and says whether it is the first
     /// time at `place`.
-    pub(crate) fn first_goal(&self, place: Place, thread_id: &str, started_at: u64) -> bool {
+    pub(crate) fn first_goal(&self, place: Place, chat_id: &str, started_at: u64) -> bool {
         let mut goals = self.goals.locked();
-        goals.insert((place, thread_id.to_string()), started_at) != Some(started_at)
+        goals.insert((place, chat_id.to_string()), started_at) != Some(started_at)
     }
 }
 

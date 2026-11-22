@@ -1,5 +1,5 @@
-//! What the task list shows of the chat apps on each thread now, and the
-//! conversations a thread's notices go to.
+//! What the task list shows of the chat apps on each chat now, and the
+//! conversations a chat's notices go to.
 
 // Rust guideline compliant 2026-10-09
 
@@ -10,8 +10,8 @@ use super::types::{ChatApps, ChatPlace, Status};
 use crate::Core;
 use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::system::now_ms;
-use crate::threads::chat_tools::last_active;
-use crate::threads::{Standing, Thread};
+use crate::chats::tools::last_active;
+use crate::chats::{Standing, Chat};
 
 /// The most chats a turn is told about.
 const RECENT: usize = 8;
@@ -24,12 +24,12 @@ const RECENT_MS: u64 = 24 * 60 * 60 * 1000;
 const SUBJECT_MS: u64 = 30 * 60 * 1000;
 
 impl Core {
-    /// The chat apps of every thread that has one on it, by thread id.
+    /// The chat apps of every chat that has one on it, by chat id.
     ///
-    /// A conversation is on the thread it talks to, or, while that thread's agent works with
+    /// A conversation is on the chat it talks to, or, while that chat's agent works with
     /// another chat, on that chat.
     #[must_use]
-    pub fn thread_chat_apps(&self) -> HashMap<String, ChatApps> {
+    pub fn chat_chat_apps(&self) -> HashMap<String, ChatApps> {
         let mut apps: HashMap<String, ChatApps> = HashMap::new();
         let (visiting, used) = {
             let state = self.gateway.lock();
@@ -37,12 +37,12 @@ impl Core {
         };
         for binding in self.bindings() {
             let shown = visiting
-                .get(&binding.thread_id)
-                .unwrap_or(&binding.thread_id)
+                .get(&binding.chat_id)
+                .unwrap_or(&binding.chat_id)
                 .clone();
             let apps = apps.entry(shown).or_default();
-            apps.used_at = apps.used_at.max(used.get(&binding.thread_id).copied());
-            apps.chats.push(binding);
+            apps.used_at = apps.used_at.max(used.get(&binding.chat_id).copied());
+            apps.conversations.push(binding);
         }
         apps
     }
@@ -50,7 +50,7 @@ impl Core {
     /// Notes that the agent of `caller` works with the chat `target`, so the task list shows
     /// the caller's chat apps on that chat until the turn ends.
     pub(crate) fn chat_app_visits(&self, caller: &str, target: &str) {
-        if self.bound_chats(caller).is_empty() {
+        if self.bound_conversations(caller).is_empty() {
             return;
         }
         let before = {
@@ -69,27 +69,27 @@ impl Core {
     }
 
     /// `text` with a note after it of what the other chats are doing now and which one this
-    /// thread's agent last worked with, for a thread a chat app talks to.
+    /// chat's agent last worked with, for a chat a chat app talks to.
     ///
     /// It goes with every message, so the agent picks a loosely named chat from what is there
     /// and knows what "it" means without being told a name.
-    pub(crate) fn chat_app_context(&self, thread_id: &str, text: String) -> String {
-        if self.bound_chats(thread_id).is_empty() {
+    pub(crate) fn chat_app_context(&self, chat_id: &str, text: String) -> String {
+        if self.bound_conversations(chat_id).is_empty() {
             return text;
         }
-        let busy = |t: &Thread| self.runner.is_starting(&t.id) || self.runner.is_running(&t.id);
-        let mut chats: Vec<Thread> = self
+        let busy = |t: &Chat| self.runner.is_starting(&t.id) || self.runner.is_running(&t.id);
+        let mut conversations: Vec<Chat> = self
             .store
-            .threads()
+            .chats()
             .into_iter()
-            .filter(|t| t.id != thread_id && t.parent.is_none() && t.archived_at.is_none())
+            .filter(|t| t.id != chat_id && t.parent.is_none() && t.archived_at.is_none())
             .collect();
-        if chats.is_empty() {
+        if conversations.is_empty() {
             return text;
         }
-        chats.sort_by_key(|t| std::cmp::Reverse((busy(t), last_active(t))));
+        conversations.sort_by_key(|t| std::cmp::Reverse((busy(t), last_active(t))));
         let now = now_ms();
-        let line = |t: &Thread| {
+        let line = |t: &Chat| {
             let state = match t.standing() {
                 Standing::Waiting => "waiting for an answer",
                 _ if busy(t) => "replying",
@@ -106,10 +106,10 @@ impl Core {
         };
         // A chat worked with a while ago is no longer what "it" means, so a late "stop that"
         // has to name its chat.
-        let subject = self.gateway.lock().subject.get(thread_id).cloned();
+        let subject = self.gateway.lock().subject.get(chat_id).cloned();
         let last = subject
             .filter(|(_, at)| now.saturating_sub(*at) < SUBJECT_MS)
-            .and_then(|(id, _)| chats.iter().find(|t| t.id == id))
+            .and_then(|(id, _)| conversations.iter().find(|t| t.id == id))
             .map(|t| {
                 format!(
                     "The chat you last worked with here: {}. A request that says it or that, \
@@ -118,7 +118,7 @@ impl Core {
                 )
             })
             .unwrap_or_default();
-        let rows: Vec<String> = chats
+        let rows: Vec<String> = conversations
             .iter()
             .filter(|t| {
                 busy(t)
@@ -146,20 +146,20 @@ impl Core {
         }
     }
 
-    /// Notes that the conversations of `thread_id` asked for a reply or got one just now.
-    pub(super) fn chat_app_used(&self, thread_id: &str) {
+    /// Notes that the conversations of `chat_id` asked for a reply or got one just now.
+    pub(super) fn chat_app_used(&self, chat_id: &str) {
         self.gateway
             .lock()
             .used
-            .insert(thread_id.to_string(), now_ms());
-        self.chat_apps_changed(&[Some(thread_id)]);
+            .insert(chat_id.to_string(), now_ms());
+        self.chat_apps_changed(&[Some(chat_id)]);
     }
 
-    /// Tells the window that the chat apps of `threads` changed.
-    fn chat_apps_changed(&self, threads: &[Option<&str>]) {
-        for thread_id in threads.iter().flatten() {
+    /// Tells the window that the chat apps of `chats` changed.
+    fn chat_apps_changed(&self, chats: &[Option<&str>]) {
+        for chat_id in chats.iter().flatten() {
             self.emit(AgentEventEnvelope {
-                thread_id: (*thread_id).to_string(),
+                chat_id: (*chat_id).to_string(),
                 event: AgentEvent::ChatAppsChanged,
             });
         }
@@ -179,14 +179,16 @@ impl Core {
             .collect();
         let mut places: Vec<ChatPlace> = Vec::new();
         for paired in self.pairings() {
-            let Some(chat) = paired.chat else { continue };
+            let Some(conversation) = paired.conversation else {
+                continue;
+            };
             let known = places
                 .iter()
-                .any(|p| p.platform == paired.platform && p.chat == chat);
+                .any(|p| p.platform == paired.platform && p.conversation == conversation);
             if connected.contains(&paired.platform) && !known {
                 places.push(ChatPlace {
                     platform: paired.platform,
-                    chat,
+                    conversation,
                     name: paired.name,
                 });
             }
@@ -195,17 +197,17 @@ impl Core {
         places
     }
 
-    /// Stops `chat` on `platform` talking to its thread, and tells it so.
-    pub fn stop_continuing_on_chat(&self, platform: Platform, chat: &str) {
+    /// Stops `chat` on `platform` talking to its chat, and tells it so.
+    pub fn stop_continuing_on_chat(&self, platform: Platform, conversation: &str) {
         let title = self
-            .bound_thread(platform, chat)
-            .and_then(|id| self.store.thread(&id))
+            .bound_chat(platform, conversation)
+            .and_then(|id| self.store.chat(&id))
             .map(|t| t.title);
-        self.bind_chat(platform, chat, None);
+        self.bind_conversation(platform, conversation, None);
         if let Some(title) = title {
             self.say(
                 platform,
-                chat,
+                conversation,
                 &format!(
                     "Stopped continuing \u{201c}{title}\u{201d} here. Send a message to start a new chat."
                 ),

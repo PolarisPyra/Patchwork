@@ -5,14 +5,14 @@
 use serde_json::Value;
 
 use crate::events::AgentEvent;
-use crate::threads::BackgroundTask;
+use crate::chats::BackgroundTask;
 use crate::system::now_ms;
-use crate::threads::PlanStep;
+use crate::chats::PlanStep;
 use crate::provider::ProviderSlashCommand;
 use crate::provider::step_status;
-use crate::threads::Refusal;
-use crate::threads::TaskStatus;
-use crate::threads::TokenUsage;
+use crate::chats::Refusal;
+use crate::chats::TaskStatus;
+use crate::chats::TokenUsage;
 use crate::provider::edit_lines;
 use crate::provider::file_touched;
 use crate::provider::without_attachments;

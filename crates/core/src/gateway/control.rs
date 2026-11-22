@@ -49,7 +49,8 @@ struct AfterUpdate {
     /// The version that was running.
     from: String,
     /// The conversations to tell.
-    chats: Vec<Binding>,
+    #[serde(rename = "chats")]
+    conversations: Vec<Binding>,
 }
 
 impl Core {
@@ -221,16 +222,16 @@ impl Core {
         self.tell_back_from_update();
     }
 
-    /// Notes the conversations of the chat `thread_id` to tell once Patchwork is back from the
+    /// Notes the conversations of the chat `chat_id` to tell once Patchwork is back from the
     /// update it is about to restart into.
     ///
     /// # Errors
     ///
     /// Returns an error when the note cannot be saved.
-    pub(crate) fn note_update_asked(&self, thread_id: &str) -> Result<(), Error> {
+    pub(crate) fn note_update_asked(&self, chat_id: &str) -> Result<(), Error> {
         let note = AfterUpdate {
             from: env!("CARGO_PKG_VERSION").to_string(),
-            chats: self.bound_chats(thread_id),
+            conversations: self.bound_conversations(chat_id),
         };
         let json = serde_json::to_string(&note).map_err(|e| e.to_string())?;
         self.store.set_state(AFTER_UPDATE, &json)
@@ -262,7 +263,7 @@ impl Core {
             .name("gateway-back".into())
             .spawn(move || {
                 let until = Instant::now() + BACK_WAIT;
-                let mut waiting = note.chats;
+                let mut waiting = note.conversations;
                 while !waiting.is_empty() && Instant::now() < until {
                     let connected: Vec<Platform> = core
                         .gateway_status()
@@ -270,18 +271,18 @@ impl Core {
                         .filter(|(_, status)| matches!(status, Status::Connected(_)))
                         .map(|(platform, _)| platform)
                         .collect();
-                    waiting.retain(|chat| {
-                        let ready = connected.contains(&chat.platform);
+                    waiting.retain(|conversation| {
+                        let ready = connected.contains(&conversation.platform);
                         if ready {
-                            core.say(chat.platform, &chat.chat, &text);
+                            core.say(conversation.platform, &conversation.conversation, &text);
                         }
                         !ready
                     });
                     std::thread::sleep(Duration::from_millis(500));
                 }
-                for chat in waiting {
+                for conversation in waiting {
                     log::warn!(
-                        platform = chat.platform.id();
+                        platform = conversation.platform.id();
                         "{{platform}} did not connect in time to say Patchwork is back"
                     );
                 }

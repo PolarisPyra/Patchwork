@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub enum AgentKind {
     Claude,
     Codex,
-    /// Saved as "gemini" before the rename; the alias keeps those threads and settings readable.
+    /// Saved as "gemini" before the rename; the alias keeps those chats and settings readable.
     #[serde(alias = "gemini")]
     Antigravity,
     OpenCode,
@@ -99,7 +99,7 @@ impl ModelOption {
     }
 }
 
-/// A slash command advertised by a provider CLI for this thread/workspace.
+/// A slash command advertised by a provider CLI for this chat/workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderSlashCommand {

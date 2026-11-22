@@ -188,7 +188,7 @@ fn run(mut cmd: Command) -> i32 {
 fn run(mut cmd: Command) -> i32 {
     // The helper joins a job of its own first, so the command and all it starts are in it, and
     // the job ends them all when the helper exits, however it does.
-    if let Some(job) = patchwork_system::contained::windows::Job::new()
+    if let Some(job) = patchwork_system::processes::contained::windows::Job::new()
         && job.assign_self()
     {
         // Closed by the helper's exit, not before.

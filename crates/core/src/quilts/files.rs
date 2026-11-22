@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use super::render::page;
 use super::types::Quilt;
 use crate::system::ssh;
-use crate::threads::worktree_home::{PROJECT_DIR, keep_out_of_git};
+use crate::worktree::{PROJECT_DIR, keep_out_of_git};
 use crate::{Core, Error};
 
 /// The folder in the project's `.patchwork` that holds quilts. A development build keeps its
@@ -45,7 +45,7 @@ impl Core {
             key
         };
         let name = format!("{key}-{short}");
-        let all = if let Some(project) = self.local_project(&quilt.thread_id) {
+        let all = if let Some(project) = self.local_project(&quilt.chat_id) {
             let home = Path::new(&project).join(PROJECT_DIR);
             move_old(&home.join(OLD_FOLDER), &home.join(FOLDER))
         } else {
@@ -71,7 +71,7 @@ impl Core {
         if !folder.is_dir() {
             std::fs::create_dir_all(&folder)
                 .map_err(|e| format!("Cannot create {}: {e}", folder.display()))?;
-            if let Some(project) = self.local_project(&quilt.thread_id) {
+            if let Some(project) = self.local_project(&quilt.chat_id) {
                 keep_out_of_git(&project, &format!("{PROJECT_DIR}/{FOLDER}"));
             }
         }
@@ -87,9 +87,9 @@ impl Core {
         Ok(file)
     }
 
-    /// The local folder of chat `thread_id`'s project, when it has one on this machine.
-    fn local_project(&self, thread_id: &str) -> Option<String> {
-        let project_id = self.store.thread(thread_id)?.project_id?;
+    /// The local folder of chat `chat_id`'s project, when it has one on this machine.
+    fn local_project(&self, chat_id: &str) -> Option<String> {
+        let project_id = self.store.chat(chat_id)?.project_id?;
         let path = self.project_root(&project_id).ok()?;
         (!ssh::is_remote(&path) && Path::new(&path).is_dir()).then_some(path)
     }

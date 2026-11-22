@@ -38,8 +38,8 @@ pub(super) fn run_hook_process(
     } else {
         Stdio::null()
     };
-    let (mut child, range) =
-        crate::system::contained::spawn(cmd, stdin).map_err(|e| format!("did not start: {e}"))?;
+    let (mut child, range) = crate::system::processes::contained::spawn(cmd, stdin)
+        .map_err(|e| format!("did not start: {e}"))?;
     let stdout = read(
         child
             .stdout

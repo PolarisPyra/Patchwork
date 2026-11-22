@@ -6,12 +6,12 @@
 //!
 //! | File | Holds |
 //! |---|---|
-//! | `view.rs` | The view's state: the session, the newest picture, and the input sent |
-//! | `render.rs` | The view drawn: the address bar, the page, the install prompt |
+//! | `headless_page.rs` | The view's state: the session, the newest picture, and the input sent |
+//! | `layout.rs` | The view drawn: the address bar, the page, the install prompt |
 
 // Rust guideline compliant 2026-10-09
 
-mod render;
-mod view;
+mod layout;
+mod headless_page;
 
-pub use view::{BrowserView, PageErrorsChanged};
+pub use headless_page::{BrowserView, PageErrorsChanged};

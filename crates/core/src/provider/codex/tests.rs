@@ -7,13 +7,13 @@ use std::collections::HashMap;
 
 use serde_json::{Value, json};
 
-use crate::threads::AccessMode;
+use crate::chats::AccessMode;
 use crate::events::AgentEvent;
 
-use crate::threads::TaskStatus;
-use crate::threads::ToolCall;
+use crate::chats::TaskStatus;
+use crate::chats::ToolCall;
 
-use crate::threads::StepStatus;
+use crate::chats::StepStatus;
 
 use crate::provider::Parsed;
 
@@ -23,7 +23,7 @@ fn spec(session_id: Option<&'static str>, mode: AccessMode) -> TurnSpec<'static>
     TurnSpec {
         root: "/abs",
         host: None,
-        thread_id: "thread",
+        chat_id: "thread",
         session_id,
         model: Some("gpt"),
         vision_model: None,
@@ -70,7 +70,7 @@ fn codex_starts_or_resumes_then_starts_the_turn() {
     assert_eq!(resume["method"], "thread/resume");
     assert_eq!(resume["params"]["threadId"], "sid");
 
-    let response = json!({"id": THREAD_REQUEST, "result": {"thread": {
+    let response = json!({"id": CHAT_REQUEST, "result": {"thread": {
         "id": "t1", "model": "codex-resolved-model"
     }}});
     let mut default_spec = spec(None, AccessMode::Supervised);
@@ -134,7 +134,7 @@ fn an_open_command_or_subagent_is_a_background_task_without_a_stop() {
     assert_eq!(task.status, TaskStatus::Running);
     assert_eq!(task.task_id, None);
 
-    // A subagent's thread is read when it starts, and the reply to that read is the call that
+    // A subagent's chat is read when it starts, and the reply to that read is the call that
     // shows it. This capture has no agentRole, so it is named after its path, /root/reply_ok.
     let started = parse(
         &serde_json::from_str(SUBAGENT_STARTED).unwrap(),
@@ -174,7 +174,7 @@ fn an_open_command_or_subagent_is_a_background_task_without_a_stop() {
         status: StepStatus::Running,
         subagent: None,
         parent: None,
-        child_thread_id: None,
+        child_chat_id: None,
         started_at: None,
         ended_at: None,
         output: None,
@@ -270,7 +270,7 @@ fn codex_turn_end_and_errors() {
 
 // Lines the app-server sent, captured from Codex 0.165.0 in three turns: a quick command and a
 // command the model left running when its turn completed; then a subagent that replied and was
-// waited for, with its thread read. Verbatim, but the capture folder in paths is shortened to
+// waited for, with its chat read. Verbatim, but the capture folder in paths is shortened to
 // /abs/work.
 pub const QUICK_STARTED: &str = r#"{"method":"item/started","params":{"item":{"type":"commandExecution","id":"exec-348cbccd-c6ef-4806-8a52-da299ad1e0c6","pluginId":null,"scriptPath":null,"command":"/usr/bin/zsh -lc 'echo quick'","cwd":"/abs/work","processId":"90211","source":"unifiedExecStartup","status":"inProgress","commandActions":[{"type":"unknown","command":"echo quick"}],"aggregatedOutput":null,"exitCode":null,"durationMs":null},"threadId":"01a18499-c0de-7941-9fa3-1d4e1ac33199","turnId":"01a18499-c2cd-75e1-96c9-3f1fcd924d6f","startedAtMs":1793226036711},"emittedAtMs":1793226036711}"#;
 pub const QUICK_COMPLETED: &str = r#"{"method":"item/completed","params":{"item":{"type":"commandExecution","id":"exec-348cbccd-c6ef-4806-8a52-da299ad1e0c6","pluginId":null,"scriptPath":null,"command":"/usr/bin/zsh -lc 'echo quick'","cwd":"/abs/work","processId":"90211","source":"unifiedExecStartup","status":"completed","commandActions":[{"type":"unknown","command":"echo quick"}],"aggregatedOutput":"quick\n","exitCode":0,"durationMs":0},"threadId":"01a18499-c0de-7941-9fa3-1d4e1ac33199","turnId":"01a18499-c2cd-75e1-96c9-3f1fcd924d6f","completedAtMs":1793226036711},"emittedAtMs":1793226036712}"#;

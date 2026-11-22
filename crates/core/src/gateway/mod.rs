@@ -1,5 +1,5 @@
-//! The gateway: chat apps that reach Patchwork's threads. A pairing's messages go to the
-//! thread their conversation is bound to, and the agent's requests and replies come back.
+//! The gateway: chat apps that reach Patchwork's chats. A pairing's messages go to the
+//! chat their conversation is bound to, and the agent's requests and replies come back.
 
 mod commands;
 mod control;

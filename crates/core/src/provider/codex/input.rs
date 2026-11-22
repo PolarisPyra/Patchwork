@@ -7,9 +7,9 @@ use std::collections::HashMap;
 
 use serde_json::{Value, json};
 
-use crate::threads::AccessMode;
-use crate::threads::Attachment;
-use crate::threads::AttachmentKind;
+use crate::chats::AccessMode;
+use crate::chats::Attachment;
+use crate::chats::AttachmentKind;
 use crate::provider::Parsed;
 use crate::provider::prompt;
 use crate::provider::TurnSpec;
@@ -90,29 +90,29 @@ pub fn agents_args(spec: &TurnSpec) -> Vec<String> {
     args
 }
 
-/// Request id of `thread/start` / `thread/resume`; its response carries the thread id.
-pub(super) const THREAD_REQUEST: u64 = 2;
+/// Request id of `chat/start` / `chat/resume`; its response carries the chat id.
+pub(super) const CHAT_REQUEST: u64 = 2;
 
-/// Parameters of `thread/start`, or of `thread/resume` when `resume` names the thread.
-pub(super) fn thread_params(spec: &TurnSpec, resume: Option<&str>) -> Value {
-    let mut thread = json!({"cwd": spec.root});
+/// Parameters of `chat/start`, or of `chat/resume` when `resume` names the chat.
+pub(super) fn chat_params(spec: &TurnSpec, resume: Option<&str>) -> Value {
+    let mut chat = json!({"cwd": spec.root});
     if let Some(m) = spec.model {
-        thread["model"] = json!(m);
+        chat["model"] = json!(m);
     }
     if let Some(text) = spec.instructions {
-        thread["developerInstructions"] = json!(text);
+        chat["developerInstructions"] = json!(text);
     }
     if let Some(id) = resume {
-        thread["threadId"] = json!(id);
-        thread["excludeTurns"] = json!(true);
+        chat["threadId"] = json!(id);
+        chat["excludeTurns"] = json!(true);
     }
-    thread
+    chat
 }
 
-/// Handshake, then start or resume the thread. `turn/start` follows once the thread id is known.
+/// Handshake, then start or resume the chat. `turn/start` follows once the chat id is known.
 #[must_use]
 pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
-    let thread = thread_params(spec, spec.session_id);
+    let chat = chat_params(spec, spec.session_id);
     let method = match spec.session_id {
         Some(_) => "thread/resume",
         None => "thread/start",
@@ -128,7 +128,7 @@ pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
         json!({"id": SKILLS_REQUEST, "method": "skills/extraRoots/set", "params": {
             "extraRoots": spec.skills_dir.into_iter().collect::<Vec<_>>(),
         }}),
-        json!({"id": THREAD_REQUEST, "method": method, "params": thread}),
+        json!({"id": CHAT_REQUEST, "method": method, "params": chat}),
     ]
     .map(|v| v.to_string())
     .into()
@@ -139,38 +139,33 @@ pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
 pub(super) const SKILLS_REQUEST: u64 = 12;
 
 /// Request id of `turn/start`.
-pub(super) const TURN_REQUEST: u64 = THREAD_REQUEST + 1;
+pub(super) const TURN_REQUEST: u64 = CHAT_REQUEST + 1;
 
-/// Request id of `thread/goal/clear`; its response needs nothing.
+/// Request id of `chat/goal/clear`; its response needs nothing.
 pub(super) const GOAL_CLEAR_REQUEST: u64 = 10;
 
-/// What the conversation's first request does once the thread id is known: start the turn.
-/// A resumed thread first drops any goal Codex kept from before Patchwork ran goals itself, so
+/// What the conversation's first request does once the chat id is known: start the turn.
+/// A resumed chat first drops any goal Codex kept from before Patchwork ran goals itself, so
 /// it does not pursue one of its own beside Patchwork's.
-pub(super) fn begin(spec: &TurnSpec, thread_id: &str, resolved_model: Option<&str>) -> Vec<Parsed> {
+pub(super) fn begin(spec: &TurnSpec, chat_id: &str, resolved_model: Option<&str>) -> Vec<Parsed> {
     let clear = spec.session_id.map(|_| {
         Parsed::Send(
-            json!({"id": GOAL_CLEAR_REQUEST, "method": "thread/goal/clear", "params": {"threadId": thread_id}})
+            json!({"id": GOAL_CLEAR_REQUEST, "method": "thread/goal/clear", "params": {"threadId": chat_id}})
                 .to_string(),
         )
     });
     // Codex compacts in a turn of its own, which it starts and reports like any other.
     let request = if spec.text.trim() == "/compact" && spec.attachments.is_empty() {
-        json!({"id": TURN_REQUEST, "method": "thread/compact/start", "params": {"threadId": thread_id}})
+        json!({"id": TURN_REQUEST, "method": "thread/compact/start", "params": {"threadId": chat_id}})
             .to_string()
     } else {
-        turn_start(spec, thread_id, &prompt(spec), resolved_model)
+        turn_start(spec, chat_id, &prompt(spec), resolved_model)
     };
     clear.into_iter().chain([Parsed::Send(request)]).collect()
 }
 
 /// The approval policy, reviewer, and sandbox for each access mode.
-fn turn_start(
-    spec: &TurnSpec,
-    thread_id: &str,
-    text: &str,
-    resolved_model: Option<&str>,
-) -> String {
+fn turn_start(spec: &TurnSpec, chat_id: &str, text: &str, resolved_model: Option<&str>) -> String {
     let (policy, reviewer, sandbox) = match spec.mode {
         AccessMode::Supervised => ("untrusted", "user", "readOnly"),
         AccessMode::AutoAcceptEdits => ("on-request", "user", "workspaceWrite"),
@@ -178,7 +173,7 @@ fn turn_start(
         AccessMode::FullAccess => ("never", "user", "dangerFullAccess"),
     };
     let mut params = json!({
-        "threadId": thread_id,
+        "threadId": chat_id,
         "cwd": spec.root,
         "input": if text.is_empty() { vec![] } else { input_items(text, spec.attachments, spec.skills_dir) },
         "approvalPolicy": policy,
@@ -233,14 +228,9 @@ pub(super) const STEER_REQUEST: u64 = 4;
 
 /// `turn/steer` adds input to the turn that is running now, identified by its native id.
 #[must_use]
-pub fn steer_input(
-    thread_id: &str,
-    turn_id: &str,
-    text: &str,
-    attachments: &[Attachment],
-) -> String {
+pub fn steer_input(chat_id: &str, turn_id: &str, text: &str, attachments: &[Attachment]) -> String {
     json!({"id": STEER_REQUEST, "method": "turn/steer", "params": {
-        "threadId": thread_id,
+        "threadId": chat_id,
         "expectedTurnId": turn_id,
         "input": input_items(text, attachments, None),
     }})
@@ -252,9 +242,9 @@ pub(super) const INTERRUPT_REQUEST: u64 = 13;
 /// `turn/interrupt` stops the turn running now; Codex ends it with `turn/completed` and the
 /// status `interrupted`.
 #[must_use]
-pub fn interrupt(thread_id: &str, turn_id: &str) -> String {
+pub fn interrupt(chat_id: &str, turn_id: &str) -> String {
     json!({"id": INTERRUPT_REQUEST, "method": "turn/interrupt", "params": {
-        "threadId": thread_id,
+        "threadId": chat_id,
         "turnId": turn_id,
     }})
     .to_string()

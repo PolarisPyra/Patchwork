@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::orchestration::{Delivery, FollowUpInput, TurnRequest};
 
 use crate::events::AgentEvent;
-use crate::threads::{Attachment, Message, StepStatus};
+use crate::chats::{Attachment, Message, StepStatus};
 use crate::{orchestration, provider};
 use crate::Core;
 
@@ -20,23 +20,23 @@ impl Core {
     ///
     /// Returns an error when the chat is unknown, when the message was already sent, or when the
     /// removal cannot be saved.
-    pub fn remove_queued(&self, thread_id: &str, message_id: &str) -> Result<(), Error> {
-        let thread = self.thread(thread_id)?;
-        let Some(message) = thread.messages.iter().find(|m| m.id == message_id) else {
+    pub fn remove_queued(&self, chat_id: &str, message_id: &str) -> Result<(), Error> {
+        let chat = self.chat(chat_id)?;
+        let Some(message) = chat.messages.iter().find(|m| m.id == message_id) else {
             // Makes startup cleanup safe to retry if an app refresh overlaps another cleanup.
             return Ok(());
         };
         if !message.queued {
             return Err("That message has already been sent".into());
         }
-        let running = self.runner.is_running(thread_id);
-        let withdrawn = self.runner.withdraw(thread_id, message_id);
+        let running = self.runner.is_running(chat_id);
+        let withdrawn = self.runner.withdraw(chat_id, message_id);
         if running && !withdrawn {
             return Err("That message has already been sent".into());
         }
         orchestration::publish(
             self,
-            thread_id,
+            chat_id,
             AgentEvent::MessageRemoved {
                 message_id: message_id.into(),
             },
@@ -52,23 +52,23 @@ impl Core {
     /// unknown, when the message is no longer queued, or when the edit cannot be saved.
     pub fn edit_queued(
         &self,
-        thread_id: &str,
+        chat_id: &str,
         message_id: &str,
         text: String,
         attachments: Vec<Attachment>,
     ) -> Result<(), Error> {
         let images = provider::load_images(&attachments)?;
-        let thread = self.thread(thread_id)?;
-        let original = thread
+        let chat = self.chat(chat_id)?;
+        let original = chat
             .messages
             .iter()
             .find(|m| m.id == message_id && m.queued)
             .ok_or("That message is no longer queued")?;
         // A message the running turn does not hold was queued before it started: after a Stop,
-        // or before a restart. It waits in the thread alone, so the edit below is all of it.
-        if self.runner.is_running(thread_id)
+        // or before a restart. It waits in the chat alone, so the edit below is all of it.
+        if self.runner.is_running(chat_id)
             && !self.runner.edit_queued(
-                thread_id,
+                chat_id,
                 FollowUpInput {
                     message_id,
                     text: &text,
@@ -84,7 +84,7 @@ impl Core {
         let mut edited = original.as_ref().clone();
         edited.text = text;
         edited.attachments = attachments;
-        self.store.update_thread(thread_id, |t| {
+        self.store.update_chat(chat_id, |t| {
             if let Some(m) = t
                 .messages
                 .iter_mut()
@@ -95,89 +95,75 @@ impl Core {
                 m.attachments.clone_from(&edited.attachments);
             }
         })?;
-        orchestration::publish(
-            self,
-            thread_id,
-            AgentEvent::MessageEdited { message: edited },
-        );
+        orchestration::publish(self, chat_id, AgentEvent::MessageEdited { message: edited });
         Ok(())
     }
 
-    /// Sends the thread's queued messages once its turn has ended, in the background.
-    pub(crate) fn send_queued_later(self: &Arc<Self>, thread_id: &str) {
+    /// Sends the chat's next queued message once its turn has ended, in the background.
+    pub(crate) fn send_queued_later(self: &Arc<Self>, chat_id: &str) {
         let core = Arc::clone(self);
-        let thread_id = thread_id.to_string();
+        let chat_id = chat_id.to_string();
         std::thread::spawn(move || {
             let queued = core
                 .store
-                .thread(&thread_id)
+                .chat(&chat_id)
                 .is_some_and(|t| t.messages.iter().any(|m| m.queued));
-            if queued && let Err(e) = core.resume_queued(&thread_id) {
+            if queued && let Err(e) = core.resume_queued(&chat_id) {
                 log::warn!(error:% = e; "failed to send queued messages: {{error}}");
             }
         });
     }
 
-    /// Sends persisted queued messages in their original order, as one message: to the idle
-    /// agent when one is up, as a normal message would go, otherwise in a new turn.
+    /// Sends the oldest queued message: to the idle agent when one is up, as a normal message
+    /// would go, otherwise in a new turn. The rest wait, and each turn's end sends the next.
     ///
     /// # Errors
     ///
     /// Returns an error when a turn is already running, when the chat is unknown or has no queued
     /// messages, when an attachment image cannot be read, or when the queue cannot be saved or the
     /// turn cannot be started.
-    pub fn resume_queued(self: &Arc<Self>, thread_id: &str) -> Result<(), Error> {
-        if self.runner.is_running(thread_id) {
+    pub fn resume_queued(self: &Arc<Self>, chat_id: &str) -> Result<(), Error> {
+        if self.runner.is_running(chat_id) {
             return Err("This turn is already running".into());
         }
-        let thread = self.thread(thread_id)?;
-        let queued: Vec<_> = thread.messages.into_iter().filter(|m| m.queued).collect();
-        if queued.is_empty() {
+        let chat = self.chat(chat_id)?;
+        let Some(next) = chat.messages.into_iter().find(|m| m.queued) else {
             return Err("There are no queued messages to resume".into());
-        }
+        };
+        let queued = [next];
+        let next = &queued[0];
         // A queued `/goal` reaches the agent as the goal's brief.
-        let text = queued
-            .iter()
-            .map(|m| orchestration::goal::agent_text(&self.store, thread_id, m.text.clone()))
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        let text = self.chat_app_context(thread_id, text);
-        let attachments: Vec<_> = queued.iter().flat_map(|m| m.attachments.clone()).collect();
+        let text = orchestration::goal::agent_text(&self.store, chat_id, next.text.clone());
+        let text = self.chat_app_context(chat_id, text);
+        let attachments = next.attachments.clone();
         let images = provider::load_images(&attachments)?;
-        self.set_queued(thread_id, &queued, false)?;
-        let first = &queued[0].id;
-        // Held with the first if the agent never answers, so none of them is left as sent.
-        let merged: Vec<String> = queued[1..].iter().map(|m| m.id.clone()).collect();
+        self.set_queued(chat_id, &queued, false)?;
         let input = FollowUpInput {
-            message_id: first,
+            message_id: &next.id,
             text: &text,
             attachments: &attachments,
             images: &images,
-            merged: &merged,
+            merged: &[],
         };
         if !matches!(
             self.runner
-                .steer(thread_id, input, thread.session_id.as_deref(), &[]),
+                .steer(chat_id, input, chat.session_id.as_deref(), &[]),
             Delivery::NotRunning
         ) {
-            // The reply answers the newest of the merged messages, which is the one a checkpoint
-            // is looked up under.
-            if let Some(last) = queued.last() {
-                self.capture_checkpoint(thread_id, &last.id);
-            }
+            self.capture_checkpoint(chat_id, &next.id);
             return Ok(());
         }
         if let Err(error) = self.runner.start_turn(
             self,
             TurnRequest {
-                thread_id: thread_id.into(),
+                chat_id: chat_id.into(),
                 text,
                 attachments,
                 images,
                 resumes: false,
             },
         ) {
-            self.set_queued(thread_id, &queued, true)?;
+            self.set_queued(chat_id, &queued, true)?;
             return Err(error);
         }
         Ok(())
@@ -189,12 +175,12 @@ impl Core {
     ///
     /// Returns an error when the chat or the message is unknown, or when the message is no longer
     /// queued or could not be sent to the running turn.
-    pub fn steer_queued(&self, thread_id: &str, message_id: &str) -> Result<(), Error> {
-        let thread = self.thread(thread_id)?;
-        let Some(message) = thread.messages.iter().find(|m| m.id == message_id) else {
+    pub fn steer_queued(&self, chat_id: &str, message_id: &str) -> Result<(), Error> {
+        let chat = self.chat(chat_id)?;
+        let Some(message) = chat.messages.iter().find(|m| m.id == message_id) else {
             return Err("Message not found".into());
         };
-        let subagents: Vec<String> = thread
+        let subagents: Vec<String> = chat
             .messages
             .iter()
             .flat_map(|m| &m.tools)
@@ -203,18 +189,15 @@ impl Core {
             })
             .map(|c| c.id.clone())
             .collect();
-        let promoted = self.runner.promote_queued(
-            thread_id,
-            message_id,
-            thread.session_id.as_deref(),
-            &subagents,
-        );
+        let promoted =
+            self.runner
+                .promote_queued(chat_id, message_id, chat.session_id.as_deref(), &subagents);
         // A message queued before the running turn started is not in its queue, so it goes to
         // the agent as a new steer would.
         let steered = promoted
             || (message.queued && !self.runner.is_handed_over(message_id) && {
                 let images = provider::load_images(&message.attachments)?;
-                let text = self.chat_app_context(thread_id, message.text.clone());
+                let text = self.chat_app_context(chat_id, message.text.clone());
                 let input = FollowUpInput {
                     message_id,
                     text: &text,
@@ -224,7 +207,7 @@ impl Core {
                 };
                 matches!(
                     self.runner
-                        .steer(thread_id, input, thread.session_id.as_deref(), &subagents),
+                        .steer(chat_id, input, chat.session_id.as_deref(), &subagents),
                     Delivery::Steered | Delivery::Resumed
                 )
             });
@@ -233,7 +216,7 @@ impl Core {
         }
         orchestration::publish(
             self,
-            thread_id,
+            chat_id,
             AgentEvent::MessageSteered {
                 message_id: message_id.into(),
             },
@@ -242,13 +225,8 @@ impl Core {
     }
 
     /// Marks the messages `queued` as waiting in the queue or not, and tells the window.
-    fn set_queued(
-        &self,
-        thread_id: &str,
-        queued: &[Arc<Message>],
-        value: bool,
-    ) -> Result<(), Error> {
-        self.store.update_thread(thread_id, |t| {
+    fn set_queued(&self, chat_id: &str, queued: &[Arc<Message>], value: bool) -> Result<(), Error> {
+        self.store.update_chat(chat_id, |t| {
             t.messages
                 .iter_mut()
                 .filter(|m| queued.iter().any(|q| q.id == m.id))
@@ -257,7 +235,7 @@ impl Core {
         for m in queued {
             orchestration::publish(
                 self,
-                thread_id,
+                chat_id,
                 AgentEvent::MessageQueued {
                     message_id: m.id.clone(),
                     queued: value,

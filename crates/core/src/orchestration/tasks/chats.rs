@@ -1,4 +1,4 @@
-//! Running the tools a chat's agent drives other chats with (see `crate::threads::chat_tools`):
+//! Running the tools a chat's agent drives other chats with (see `crate::chats::tools`):
 //! each acts on a chat in the caller's project as a person would from the chat list. A chat
 //! app's dispatcher reaches the chats of every project, and has the tools in `dispatch` too.
 
@@ -16,10 +16,10 @@ use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::orchestration::Runner;
 use crate::provider::{AgentKind, clip};
 use crate::system::now_ms;
-use crate::threads::chat_tools::{
+use crate::chats::tools::{
     self, ANSWER, LIST, NOTIFY, PROJECTS, READ, SEND, START, STOP, WAIT, fit, named,
 };
-use crate::threads::{MessageStatus, NewThread, Role, Standing, StepStatus, Thread};
+use crate::chats::{MessageStatus, NewChat, Role, Standing, StepStatus, Chat};
 use crate::{Error, Core};
 
 /// The longest `wait_for_chat` waits. Under the 65 minutes a CLI waits on one of Patchwork's own
@@ -56,12 +56,12 @@ pub(super) fn required<'a>(args: &'a Value, key: &str) -> Result<&'a str, Error>
 }
 
 /// Whether the chat is replying or about to.
-pub(super) fn busy(runner: &Runner, thread_id: &str) -> bool {
-    runner.is_starting(thread_id) || runner.is_running(thread_id)
+pub(super) fn busy(runner: &Runner, chat_id: &str) -> bool {
+    runner.is_starting(chat_id) || runner.is_running(chat_id)
 }
 
 impl Runner {
-    /// Runs the chat tool `tool` for the agent of `thread_id`.
+    /// Runs the chat tool `tool` for the agent of `chat_id`.
     ///
     /// # Errors
     ///
@@ -70,16 +70,16 @@ impl Runner {
     pub(crate) fn run_chat_tool(
         &self,
         core: &Arc<Core>,
-        thread_id: &str,
+        chat_id: &str,
         tool: &str,
         args: &Value,
         stopped: &dyn Fn() -> bool,
     ) -> Result<String, Error> {
         let caller = core
             .store
-            .thread(thread_id)
+            .chat(chat_id)
             .ok_or("This chat is no longer here")?;
-        if !chat_tools::offered(core, &caller) {
+        if !tools::offered(core, &caller) {
             return Err("This chat cannot drive other chats".into());
         }
         match tool {
@@ -136,10 +136,10 @@ impl Runner {
 
     /// The other chats in the caller's project, newest first. A chat run from a chat app sees
     /// every project's chats, each with its project.
-    fn list_chats(&self, core: &Core, caller: &Thread, args: &Value) -> Result<String, Error> {
-        let everywhere = chat_tools::sees_every_project(core, caller);
+    fn list_chats(&self, core: &Core, caller: &Chat, args: &Value) -> Result<String, Error> {
+        let everywhere = tools::sees_every_project(core, caller);
         let projects = core.store.settings().projects;
-        let project = |t: &Thread| {
+        let project = |t: &Chat| {
             t.project_id
                 .as_ref()
                 .and_then(|id| projects.iter().find(|p| &p.id == id))
@@ -148,7 +148,7 @@ impl Runner {
         let mut chats = readable(core, caller);
         let wanted = named(text(args, "project"));
         if everywhere && !wanted.is_empty() {
-            let score = |t: &Thread| fit(&wanted, &project(t).unwrap_or_default());
+            let score = |t: &Chat| fit(&wanted, &project(t).unwrap_or_default());
             let best = chats.iter().map(score).max().unwrap_or(0);
             if best == 0 {
                 let names: Vec<&str> = projects.iter().map(|p| p.name.as_str()).collect();
@@ -184,7 +184,7 @@ impl Runner {
 
     /// What `list_chats` tells of `chat`: where it stands, what it is doing, and the end of its
     /// latest reply.
-    fn overview(&self, chat: &Thread) -> Value {
+    fn overview(&self, chat: &Chat) -> Value {
         let replying = busy(self, &chat.id);
         let mut overview = json!({
             "chat_id": chat.id,
@@ -213,7 +213,7 @@ impl Runner {
     }
 
     /// Where `chat` stands, in a word or two.
-    fn state(&self, chat: &Thread) -> &'static str {
+    fn state(&self, chat: &Chat) -> &'static str {
         match chat.standing() {
             Standing::Waiting => "waiting for an answer",
             _ if busy(self, &chat.id) => "replying",
@@ -224,9 +224,9 @@ impl Runner {
     }
 
     /// How far the chat `args` names has got, or the chats its name fits equally well.
-    fn read_chat(&self, core: &Core, caller: &Thread, args: &Value) -> Result<String, Error> {
+    fn read_chat(&self, core: &Core, caller: &Chat, args: &Value) -> Result<String, Error> {
         let projects = core.store.settings().projects;
-        let project = |t: &Thread| {
+        let project = |t: &Chat| {
             t.project_id
                 .as_ref()
                 .and_then(|id| projects.iter().find(|p| &p.id == id))
@@ -239,7 +239,7 @@ impl Runner {
             if named(name).is_empty() {
                 return Err("Give the chat's title or project as the name".into());
             }
-            let best = chat_tools::matching(core, &chats, name);
+            let best = tools::matching(core, &chats, name);
             match best.as_slice() {
                 [] => {
                     return Err(
@@ -275,7 +275,7 @@ impl Runner {
     }
 
     /// What `read_chat` tells of `chat`: its task, where it stands, and what it has done.
-    fn progress(&self, chat: &Thread, project: Option<&str>) -> Value {
+    fn progress(&self, chat: &Chat, project: Option<&str>) -> Value {
         let replying = busy(self, &chat.id);
         let sent: Vec<_> = chat.messages.iter().filter(|m| !m.queued).collect();
         let task = sent
@@ -373,7 +373,7 @@ impl Runner {
     fn wait_for_chat(
         &self,
         core: &Arc<Core>,
-        caller: &Thread,
+        caller: &Chat,
         args: &Value,
         stopped: &dyn Fn() -> bool,
     ) -> Result<String, Error> {
@@ -409,10 +409,10 @@ impl Runner {
 
 /// The chats the caller can list and read: the others a person started and kept, in the caller's
 /// project, or in every project for a chat run from a chat app.
-fn readable(core: &Core, caller: &Thread) -> Vec<Thread> {
-    let everywhere = chat_tools::sees_every_project(core, caller);
+fn readable(core: &Core, caller: &Chat) -> Vec<Chat> {
+    let everywhere = tools::sees_every_project(core, caller);
     core.store
-        .threads()
+        .chats()
         .into_iter()
         .filter(|t| {
             t.id != caller.id
@@ -424,10 +424,10 @@ fn readable(core: &Core, caller: &Thread) -> Vec<Thread> {
         .collect()
 }
 
-/// Whether the caller may see and drive chat `t`: a bot's run reaches only its own bot's
-/// runs, so it can't hand work to a chat outside the bot.
-fn reachable(caller: &Thread, t: &Thread) -> bool {
-    caller.bot_id.is_none() || t.bot_id == caller.bot_id
+/// Whether the caller may see and drive chat `t`: an agent's run reaches only its own agent's
+/// runs, so it can't hand work to a chat outside the agent.
+fn reachable(caller: &Chat, t: &Chat) -> bool {
+    caller.agent_id.is_none() || t.agent_id == caller.agent_id
 }
 
 /// A step's status as `read_chat` words it.
@@ -452,7 +452,7 @@ fn clip_start(text: &str, limit: usize) -> String {
 
 /// The chat `args` names, which must be another chat a person started: in the caller's project,
 /// or in any for a dispatcher.
-fn target(core: &Core, caller: &Thread, args: &Value) -> Result<Thread, Error> {
+fn target(core: &Core, caller: &Chat, args: &Value) -> Result<Chat, Error> {
     let id = required(args, "chat_id")?;
     if id == caller.id {
         return Err("That is this chat".into());
@@ -460,7 +460,7 @@ fn target(core: &Core, caller: &Thread, args: &Value) -> Result<Thread, Error> {
     let everywhere = core.is_dispatcher(&caller.id);
     let chat = core
         .store
-        .thread(id)
+        .chat(id)
         .filter(|t| {
             t.parent.is_none()
                 && (everywhere || t.project_id == caller.project_id)
@@ -477,7 +477,7 @@ fn target(core: &Core, caller: &Thread, args: &Value) -> Result<Thread, Error> {
 
 /// Starts a chat with the caller's access and sends it the prompt: in the caller's project on
 /// the caller's agent, or for a dispatcher in the project named, on the person's usual agent.
-fn start_chat(core: &Arc<Core>, caller: &Thread, args: &Value) -> Result<String, Error> {
+fn start_chat(core: &Arc<Core>, caller: &Chat, args: &Value) -> Result<String, Error> {
     let prompt = required(args, "prompt")?.to_string();
     let dispatcher = core.is_dispatcher(&caller.id);
     let settings = core.store.settings();
@@ -496,7 +496,7 @@ fn start_chat(core: &Arc<Core>, caller: &Thread, args: &Value) -> Result<String,
     } else {
         (caller.project_id.clone(), given("model"))
     };
-    let thread = core.create_thread(NewThread {
+    let chat = core.create_chat(NewChat {
         id: None,
         project_id,
         agent,
@@ -505,31 +505,31 @@ fn start_chat(core: &Arc<Core>, caller: &Thread, args: &Value) -> Result<String,
         effort: given("effort"),
         compact_window: None,
     })?;
-    // A chat a bot's run starts is part of that run, under the same limits.
-    let bot_id = caller.bot_id.clone().or_else(|| {
+    // A chat an agent's run starts is part of that run, under the same limits.
+    let agent_id = caller.agent_id.clone().or_else(|| {
         let parent = caller.parent.as_ref()?;
-        core.store.thread(&parent.thread_id)?.bot_id
+        core.store.chat(&parent.chat_id)?.agent_id
     });
-    if let Some(bot_id) = bot_id
+    if let Some(agent_id) = agent_id
         && let Err(e) = core
             .store
-            .update_thread(&thread.id, |t| t.bot_id = Some(bot_id))
+            .update_chat(&chat.id, |t| t.agent_id = Some(agent_id))
     {
-        core.delete_thread(&thread.id);
+        core.delete_chat(&chat.id);
         return Err(e);
     }
-    let thread = core.store.thread(&thread.id).unwrap_or(thread);
-    let id = thread.id.clone();
+    let chat = core.store.chat(&chat.id).unwrap_or(chat);
+    let id = chat.id.clone();
     core.emit(AgentEventEnvelope {
-        thread_id: id.clone(),
-        event: AgentEvent::ThreadCreated { thread },
+        chat_id: id.clone(),
+        event: AgentEvent::ChatCreated { chat },
     });
     // A chat that cannot start leaves no empty chat behind.
     if let Err(e) = core.send_message(id.clone(), prompt, Vec::new(), false) {
-        core.delete_thread(&id);
+        core.delete_chat(&id);
         core.emit(AgentEventEnvelope {
-            thread_id: id,
-            event: AgentEvent::ThreadDeleted,
+            chat_id: id,
+            event: AgentEvent::ChatDeleted,
         });
         return Err(e);
     }

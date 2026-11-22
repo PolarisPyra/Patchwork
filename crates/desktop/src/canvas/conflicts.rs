@@ -4,9 +4,9 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Hsla, Role, ScrollStrategy, SharedString, div, prelude::*, px};
-use patchwork_core::workspace::{Conflict, Take, resolve_conflict};
+use patchwork_core::source_control::{Conflict, Take, resolve_conflict};
 
-use super::state::Canvas;
+use super::open_file::Canvas;
 use patchwork_ui::theme::{Theme, font_ui, fs_xs, radius_sm};
 use patchwork_ui::{button, icon_button, tooltip};
 

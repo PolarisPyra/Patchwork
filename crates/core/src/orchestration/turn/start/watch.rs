@@ -7,12 +7,12 @@ use super::running::Pending;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::atomic::Ordering;
-use crate::system::{processes, scope};
+use crate::system::processes::{running, scope};
 use crate::Core;
 use crate::events::{AgentEvent, AgentEventEnvelope};
-use crate::threads::MessageStatus;
+use crate::chats::MessageStatus;
 use crate::system::now_ms;
-use crate::threads::Role;
+use crate::chats::Role;
 use crate::orchestration::turn::process::IDLE_LIMIT;
 use crate::orchestration::turn::process::WATCH_EVERY;
 use crate::orchestration::turn::process::QUIET_AFTER;
@@ -20,7 +20,7 @@ use crate::orchestration::turn::process::QUIET_AFTER;
 /// What `watch` checks one agent process by.
 pub(super) struct Watched {
     pub(super) core: Arc<Core>,
-    pub(super) thread_id: String,
+    pub(super) chat_id: String,
     pub(super) pid: u32,
     pub(super) scope: Option<String>,
     pub(super) exited: Arc<AtomicBool>,
@@ -43,7 +43,7 @@ pub(super) fn watch(w: &Watched) {
             // The reader waits for the output to close, which a process the agent left behind
             // can hold open; stopping what is left closes it, and the turn ends with the exit.
             log::warn!(pid = w.pid; "agent exited with its output still open; stopping what it left");
-            processes::signal_process_group(w.pid, processes::SIGKILL);
+            running::signal_process_group(w.pid, running::SIGKILL);
             if let Some(unit) = &w.scope {
                 scope::stop(unit);
             }
@@ -54,7 +54,7 @@ pub(super) fn watch(w: &Watched) {
             continue;
         }
         // Idle time counts from the last reply, as idle compaction counts it.
-        let retire = w.core.store.thread(&w.thread_id).is_some_and(|t| {
+        let retire = w.core.store.chat(&w.chat_id).is_some_and(|t| {
             let finished = t.messages.last().and_then(|m| m.finished_at).unwrap_or(0);
             let idle_ms = u64::try_from(IDLE_LIMIT.as_millis()).unwrap_or(u64::MAX);
             now_ms().saturating_sub(finished) >= idle_ms
@@ -63,7 +63,7 @@ pub(super) fn watch(w: &Watched) {
                     .all(|m| m.background.iter().all(|task| !task.status.is_live()))
         });
         if retire {
-            w.core.runner.retire_idle(&w.thread_id);
+            w.core.runner.retire_idle(&w.chat_id);
             return;
         }
     }
@@ -77,10 +77,10 @@ fn tell_quiet(w: &Watched) {
     if now_ms().saturating_sub(since) < quiet_ms || !w.pending.locked().is_empty() {
         return;
     }
-    let Some(thread) = w.core.store.thread(&w.thread_id) else {
+    let Some(chat) = w.core.store.chat(&w.chat_id) else {
         return;
     };
-    let Some(reply) = thread
+    let Some(reply) = chat
         .messages
         .iter()
         .rev()
@@ -94,7 +94,7 @@ fn tell_quiet(w: &Watched) {
         return;
     }
     w.core.emit(AgentEventEnvelope {
-        thread_id: w.thread_id.clone(),
+        chat_id: w.chat_id.clone(),
         event: AgentEvent::Quiet {
             message_id: reply.id.clone(),
             since,

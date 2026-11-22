@@ -22,9 +22,9 @@ use crate::Core;
 use crate::harness::tools::{BASH_TIMEOUT, MAX_BASH_TIMEOUT, bash_command, outcome, shell_file};
 use crate::events::AgentEvent;
 use crate::orchestration::output::stream::publish;
-use crate::system::contained::{self, Range, STOP_GRACE};
+use crate::system::processes::contained::{self, Range, STOP_GRACE};
 use crate::system::now_ms;
-use crate::threads::{BackgroundTask, TaskStatus};
+use crate::chats::{BackgroundTask, TaskStatus};
 
 /// The tools of Patchwork's own agent that run here.
 pub(in crate::orchestration) const TOOLS: [&str; 4] =
@@ -52,7 +52,7 @@ pub struct Jobs {
 
 /// The call a tool runs for.
 pub(in crate::orchestration) struct Origin {
-    pub(in crate::orchestration) thread_id: String,
+    pub(in crate::orchestration) chat_id: String,
     /// The message the call is shown in, where a job it starts is listed.
     pub(in crate::orchestration) message_id: String,
     pub(in crate::orchestration) tool_id: String,
@@ -61,7 +61,7 @@ pub(in crate::orchestration) struct Origin {
 
 struct Job {
     id: String,
-    thread_id: String,
+    chat_id: String,
     tool_id: String,
     command: String,
     started_at: u64,
@@ -172,7 +172,7 @@ impl Job {
         let task = self.task(TaskStatus::Running, &state);
         publish(
             core,
-            &self.thread_id,
+            &self.chat_id,
             AgentEvent::BackgroundTaskStarted {
                 message_id: message_id.into(),
                 task,
@@ -204,7 +204,7 @@ impl Job {
         let task = self.task(TaskStatus::Running, state);
         publish(
             core,
-            &self.thread_id,
+            &self.chat_id,
             AgentEvent::BackgroundTaskUpdated { message_id, task },
         );
     }
@@ -223,7 +223,7 @@ impl Job {
         let task = self.task(status, state);
         publish(
             core,
-            &self.thread_id,
+            &self.chat_id,
             AgentEvent::BackgroundTaskEnded { message_id, task },
         );
     }
@@ -278,15 +278,15 @@ impl Job {
 }
 
 impl crate::orchestration::Runner {
-    /// Stops the thread's commands still running, in the background or not, with what each
+    /// Stops the chat's commands still running, in the background or not, with what each
     /// started. Their ends publish as stopped. A command the turn starts after this sees the
     /// turn stopped and stops itself.
-    pub(in crate::orchestration) fn stop_jobs(&self, thread_id: &str) {
+    pub(in crate::orchestration) fn stop_jobs(&self, chat_id: &str) {
         let jobs: Vec<Arc<Job>> = self
             .jobs
             .lock()
             .values()
-            .filter(|job| job.thread_id == thread_id)
+            .filter(|job| job.chat_id == chat_id)
             .cloned()
             .collect();
         // Off the caller's thread, which can be the UI's: a stop asks systemd.
@@ -299,13 +299,13 @@ impl crate::orchestration::Runner {
         });
     }
 
-    /// Drops the output kept for the thread's ended jobs, and its shell, as the thread is deleted.
-    pub(crate) fn forget_jobs(&self, thread_id: &str) {
-        self.jobs.forget(thread_id);
-        if let Err(e) = std::fs::remove_file(shell_file(thread_id))
+    /// Drops the output kept for the chat's ended jobs, and its shell, as the chat is deleted.
+    pub(crate) fn forget_jobs(&self, chat_id: &str) {
+        self.jobs.forget(chat_id);
+        if let Err(e) = std::fs::remove_file(shell_file(chat_id))
             && e.kind() != std::io::ErrorKind::NotFound
         {
-            log::warn!("Could not remove the thread's shell file: {e}");
+            log::warn!("Could not remove the chat's shell file: {e}");
         }
     }
 }
@@ -315,11 +315,11 @@ impl Jobs {
         self.jobs.locked()
     }
 
-    /// The thread's job `id`.
-    fn get(&self, thread_id: &str, id: &str) -> Option<Arc<Job>> {
+    /// The chat's job `id`.
+    fn get(&self, chat_id: &str, id: &str) -> Option<Arc<Job>> {
         self.lock()
             .get(id)
-            .filter(|job| job.thread_id == thread_id)
+            .filter(|job| job.chat_id == chat_id)
             .cloned()
     }
 
@@ -342,18 +342,18 @@ impl Jobs {
         }
     }
 
-    /// Drops the thread's jobs that have ended, as the thread is deleted.
-    fn forget(&self, thread_id: &str) {
+    /// Drops the chat's jobs that have ended, as the chat is deleted.
+    fn forget(&self, chat_id: &str) {
         self.lock()
-            .retain(|_, job| job.thread_id != thread_id || job.lock().exit.is_none());
+            .retain(|_, job| job.chat_id != chat_id || job.lock().exit.is_none());
     }
 
-    /// The thread's jobs in the background, one a line.
-    fn list(&self, thread_id: &str) -> String {
+    /// The chat's jobs in the background, one a line.
+    fn list(&self, chat_id: &str) -> String {
         let mut jobs: Vec<Arc<Job>> = self
             .lock()
             .values()
-            .filter(|job| job.thread_id == thread_id && job.lock().listed.is_some())
+            .filter(|job| job.chat_id == chat_id && job.lock().listed.is_some())
             .cloned()
             .collect();
         if jobs.is_empty() {
@@ -392,7 +392,7 @@ pub(in crate::orchestration) fn call(
             .map(String::from)
             .or_else(|| args["job_id"].as_u64().map(|n| n.to_string()))
             .ok_or_else(|| "job_id is required".to_string())?;
-        jobs.get(&from.thread_id, &id).ok_or_else(|| {
+        jobs.get(&from.chat_id, &id).ok_or_else(|| {
             format!(
                 "There is no job {id}: jobs end when Patchwork closes, so start it again if \
                      it was cut off"
@@ -437,7 +437,7 @@ pub(in crate::orchestration) fn call(
                 format!("Job {} had already finished", job.id)
             })
         }
-        "job_list" => Ok(jobs.list(&from.thread_id)),
+        "job_list" => Ok(jobs.list(&from.chat_id)),
         _ => Err(format!("Unknown tool {tool}").into()),
     }
 }
@@ -462,7 +462,7 @@ fn bash(
     let mut cmd = bash_command(
         command,
         Path::new(&from.root),
-        &shell_file(&from.thread_id),
+        &shell_file(&from.chat_id),
         keep,
     )?;
     cmd.envs(core.worktree_env(&from.root));
@@ -475,7 +475,7 @@ fn bash(
     let jobs = &core.runner.jobs;
     let job = Arc::new(Job {
         id: (jobs.next.fetch_add(1, Ordering::Relaxed) + 1).to_string(),
-        thread_id: from.thread_id.clone(),
+        chat_id: from.chat_id.clone(),
         tool_id: from.tool_id.clone(),
         command: command.into(),
         started_at: now_ms(),

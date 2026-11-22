@@ -4,7 +4,7 @@
 
 use super::request::slash_commands;
 use serde_json::{Value, json};
-use crate::threads::{Question, QuestionOption, TokenUsage};
+use crate::chats::{Question, QuestionOption, TokenUsage};
 use crate::permissions::Target;
 use crate::permissions::PermissionKind;
 use crate::provider::Parsed;

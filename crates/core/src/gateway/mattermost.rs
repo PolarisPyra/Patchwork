@@ -69,7 +69,7 @@ impl Mattermost {
         Some(Incoming {
             platform: Platform::Mattermost,
             id: post["id"].as_str().map(str::to_string),
-            chat: post["channel_id"].as_str()?.to_string(),
+            conversation: post["channel_id"].as_str()?.to_string(),
             sender: user.to_string(),
             name: data["sender_name"].as_str().unwrap_or(user).to_string(),
             text: text.trim().to_string(),
@@ -116,17 +116,28 @@ impl Connector for Mattermost {
         Ok(())
     }
 
-    fn send(&self, chat: &str, text: &str, _buttons: &[Button]) -> Result<Option<String>, Error> {
+    fn send(
+        &self,
+        conversation: &str,
+        text: &str,
+        _buttons: &[Button],
+    ) -> Result<Option<String>, Error> {
         let sent = self.call(
             "POST",
             "/posts",
-            Some(&json!({"channel_id": chat, "message": text})),
+            Some(&json!({"channel_id": conversation, "message": text})),
         )?;
         Ok(sent["id"].as_str().map(str::to_string))
     }
 
-    fn send_file(&self, chat: &str, name: &str, bytes: &[u8], caption: &str) -> Result<(), Error> {
-        let (kind, body) = multipart(&[("channel_id", chat)], "files", name, bytes);
+    fn send_file(
+        &self,
+        conversation: &str,
+        name: &str,
+        bytes: &[u8],
+        caption: &str,
+    ) -> Result<(), Error> {
+        let (kind, body) = multipart(&[("channel_id", conversation)], "files", name, bytes);
         let response = self
             .http
             .post(&format!("{}/api/v4/files", self.server))
@@ -141,12 +152,12 @@ impl Connector for Mattermost {
         self.call(
             "POST",
             "/posts",
-            Some(&json!({"channel_id": chat, "message": caption, "file_ids": [id]})),
+            Some(&json!({"channel_id": conversation, "message": caption, "file_ids": [id]})),
         )
         .map(drop)
     }
 
-    fn edit(&self, _chat: &str, id: &str, text: &str) -> Result<(), Error> {
+    fn edit(&self, _conversation: &str, id: &str, text: &str) -> Result<(), Error> {
         self.call(
             "PUT",
             &format!("/posts/{id}/patch"),

@@ -9,7 +9,7 @@ use crate::extensions::agents::{self, Agent};
 use crate::extensions::hooks::AgentHook;
 use crate::provider::AgentKind;
 use crate::settings::Settings;
-use crate::threads::ResumePoint;
+use crate::chats::ResumePoint;
 
 /// Builds the arguments that configure Claude's system prompt, skills, and hooks.
 ///
@@ -192,7 +192,7 @@ pub fn shell_env_file() -> Option<PathBuf> {
     }
     let file = crate::system::dirs().cache.join("shell-env.sh");
     if std::fs::read_to_string(&file).ok().as_deref() != Some(text.as_str()) {
-        crate::system::fs::write_private(&file, &text)
+        crate::system::files::paths::write_private(&file, &text)
             .inspect_err(|e| {
                 log::warn!(
                     error:% = e;

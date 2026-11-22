@@ -104,7 +104,7 @@ fn report(
             .merge(&one);
         by_project.entry(r.project.clone()).or_default().merge(&one);
         by_chat
-            .entry(r.thread_id.as_str())
+            .entry(r.chat_id.as_str())
             .or_insert_with(|| (r, Tally::default()))
             .1
             .merge(&one);
@@ -168,10 +168,10 @@ fn report(
     out.chats = by_chat
         .into_values()
         .map(|(r, tally)| ChatCost {
-            thread_id: r.thread_id.clone(),
+            chat_id: r.chat_id.clone(),
             title: r.title.clone(),
             project: r.project.clone(),
-            open: open.contains(&r.thread_id),
+            open: open.contains(&r.chat_id),
             tally,
         })
         .collect();

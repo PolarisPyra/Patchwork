@@ -1,5 +1,5 @@
 //! The `Store`: everything is also kept in memory. Reads come from the cache, and every
-//! change is written through to the database before it is visible. Writes for a thread only
+//! change is written through to the database before it is visible. Writes for a chat only
 //! touch its row and the messages that actually changed, since a streaming turn updates its
 //! message on every event.
 
@@ -20,11 +20,11 @@ use serde::de::DeserializeOwned;
 use super::migrations;
 use super::legacy;
 use super::settings::{load_settings, save_settings};
-use super::threads::{load_folders, load_threads, save_message, save_thread_row, thread_state_keys};
+use super::chats::{load_folders, load_chats, save_message, save_chat_row, chat_state_keys};
 use crate::projects::Folder;
 use crate::settings::Settings;
-use crate::system::instance;
-use crate::threads::{MessageStatus, Thread};
+use crate::system::processes::instance;
+use crate::chats::{MessageStatus, Chat};
 
 #[derive(Debug)]
 pub struct Store {
@@ -32,7 +32,7 @@ pub struct Store {
     /// The lock on the data folder, held while this is the first Patchwork using it. A second
     /// one running beside it holds none.
     owner: Option<std::fs::File>,
-    /// The threads whose goal was being pursued when the last session closed, and so was paused
+    /// The chats whose goal was being pursued when the last session closed, and so was paused
     /// as this one opened.
     goals_cut_off: Vec<String>,
 }
@@ -41,39 +41,39 @@ pub struct Store {
 pub(super) struct Inner {
     pub(super) conn: Connection,
     pub(super) settings: Settings,
-    pub(super) threads: Vec<Held>,
+    pub(super) chats: Vec<Held>,
     pub(super) folders: Vec<Folder>,
 }
 
-/// A thread in memory beside its entry in the thread list, which is made once and dropped
-/// whenever the thread is borrowed to be changed.
+/// A chat in memory beside its entry in the chat list, which is made once and dropped
+/// whenever the chat is borrowed to be changed.
 #[derive(Debug)]
 pub struct Held {
-    pub(super) thread: Thread,
-    summary: OnceCell<Arc<Thread>>,
+    pub(super) chat: Chat,
+    summary: OnceCell<Arc<Chat>>,
 }
 
 impl Held {
-    fn new(thread: Thread) -> Self {
+    fn new(chat: Chat) -> Self {
         Self {
-            thread,
+            chat,
             summary: OnceCell::new(),
         }
     }
 }
 
 impl Deref for Held {
-    type Target = Thread;
+    type Target = Chat;
 
-    fn deref(&self) -> &Thread {
-        &self.thread
+    fn deref(&self) -> &Chat {
+        &self.chat
     }
 }
 
 impl DerefMut for Held {
-    fn deref_mut(&mut self) -> &mut Thread {
+    fn deref_mut(&mut self) -> &mut Chat {
         self.summary.take();
-        &mut self.thread
+        &mut self.chat
     }
 }
 
@@ -83,7 +83,7 @@ impl Store {
     /// # Errors
     ///
     /// Returns an error when the data folder or database cannot be created, opened, or migrated,
-    /// or when stored settings, threads, or folders cannot be read or updated.
+    /// or when stored settings, chats, or folders cannot be read or updated.
     pub fn open(dir: &Path) -> Result<Self, Error> {
         std::fs::create_dir_all(dir).map_err(err)?;
         // The database holds what was said in chats, so its folder is the user's alone.
@@ -109,9 +109,9 @@ impl Store {
             .map_err(err)?;
         }
         let settings = load_settings(&conn).map_err(err)?;
-        let mut threads = load_threads(&conn).map_err(err)?;
+        let mut chats = load_chats(&conn).map_err(err)?;
         if owner.is_none() {
-            threads
+            chats
                 .iter_mut()
                 .flat_map(|t| &mut t.messages)
                 .filter(|m| m.status == MessageStatus::Streaming)
@@ -122,14 +122,14 @@ impl Store {
         // Beside a running Patchwork the goal is that one's live work, and stays as it is.
         let tx = conn.transaction().map_err(err)?;
         let mut goals_cut_off = Vec::new();
-        for t in threads.iter_mut().filter(|_| owner.is_some()) {
+        for t in chats.iter_mut().filter(|_| owner.is_some()) {
             if let Some(goal) = t
                 .goal
-                .take_if(|g| g.status == crate::threads::GoalStatus::Active)
+                .take_if(|g| g.status == crate::chats::GoalStatus::Active)
             {
-                let paused = crate::threads::GoalStatus::Paused;
+                let paused = crate::chats::GoalStatus::Paused;
                 t.goal = Some(goal.with_status(paused, crate::system::now_ms()));
-                save_thread_row(&tx, t).map_err(err)?;
+                save_chat_row(&tx, t).map_err(err)?;
                 goals_cut_off.push(t.id.clone());
             }
         }
@@ -139,7 +139,7 @@ impl Store {
             inner: Mutex::new(Inner {
                 conn,
                 settings,
-                threads: threads.into_iter().map(Held::new).collect(),
+                chats: chats.into_iter().map(Held::new).collect(),
                 folders,
             }),
             owner,
@@ -147,7 +147,7 @@ impl Store {
         })
     }
 
-    /// The threads whose goal was being pursued when the last session closed. Each was paused as
+    /// The chats whose goal was being pursued when the last session closed. Each was paused as
     /// this one opened, and goes on when its turn is resumed.
     #[must_use]
     pub fn goals_cut_off(&self) -> &[String] {
@@ -203,66 +203,62 @@ impl Store {
         Ok(r)
     }
 
-    pub fn threads(&self) -> Vec<Thread> {
+    pub fn chats(&self) -> Vec<Chat> {
+        self.lock().chats.iter().map(|t| t.chat.clone()).collect()
+    }
+
+    /// Every chat's entry in the chat list. `make` builds one the first time it is asked
+    /// for, and it is kept until its chat changes.
+    pub(crate) fn summaries(&self, make: impl Fn(&Chat) -> Chat) -> Vec<Arc<Chat>> {
         self.lock()
-            .threads
+            .chats
             .iter()
-            .map(|t| t.thread.clone())
+            .map(|t| Arc::clone(t.summary.get_or_init(|| Arc::new(make(&t.chat)))))
             .collect()
     }
 
-    /// Every thread's entry in the thread list. `make` builds one the first time it is asked
-    /// for, and it is kept until its thread changes.
-    pub(crate) fn summaries(&self, make: impl Fn(&Thread) -> Thread) -> Vec<Arc<Thread>> {
-        self.lock()
-            .threads
-            .iter()
-            .map(|t| Arc::clone(t.summary.get_or_init(|| Arc::new(make(&t.thread)))))
-            .collect()
+    /// Runs `f` over the chats without copying them.
+    pub fn with_chats<R>(&self, f: impl FnOnce(&[Held]) -> R) -> R {
+        f(&self.lock().chats)
     }
 
-    /// Runs `f` over the threads without copying them.
-    pub fn with_threads<R>(&self, f: impl FnOnce(&[Held]) -> R) -> R {
-        f(&self.lock().threads)
-    }
-
-    pub fn thread(&self, id: &str) -> Option<Thread> {
+    pub fn chat(&self, id: &str) -> Option<Chat> {
         self.lock()
-            .threads
+            .chats
             .iter()
             .find(|t| t.id == id)
-            .map(|t| t.thread.clone())
+            .map(|t| t.chat.clone())
     }
 
-    /// `(agent, session_id)` of every thread that has a session, for de-duplicating imports.
+    /// `(agent, session_id)` of every chat that has a session, for de-duplicating imports.
     pub fn session_keys(&self) -> Vec<(crate::provider::AgentKind, String)> {
         self.lock()
-            .threads
+            .chats
             .iter()
             .filter_map(|t| Some((t.agent, t.session_id.clone()?)))
             .collect()
     }
 
-    /// OpenCode sessions already imported as threads.
+    /// OpenCode sessions already imported as chats.
     pub fn imported_sources(&self) -> Vec<String> {
         self.lock()
-            .threads
+            .chats
             .iter()
             .filter_map(|t| t.imported_from.clone())
             .collect()
     }
 
-    pub(crate) fn insert_threads(&self, threads: Vec<Thread>) -> Result<(), Error> {
+    pub(crate) fn insert_chats(&self, chats: Vec<Chat>) -> Result<(), Error> {
         let mut inner = self.lock();
         let tx = inner.conn.transaction().map_err(err)?;
-        for t in &threads {
-            save_thread_row(&tx, t).map_err(err)?;
+        for t in &chats {
+            save_chat_row(&tx, t).map_err(err)?;
             for (i, m) in t.messages.iter().enumerate() {
                 save_message(&tx, &t.id, i, m).map_err(err)?;
             }
         }
         tx.commit().map_err(err)?;
-        inner.threads.extend(threads.into_iter().map(Held::new));
+        inner.chats.extend(chats.into_iter().map(Held::new));
         Ok(())
     }
 
@@ -270,10 +266,10 @@ impl Store {
     pub(crate) fn dismiss_goal(&self, id: &str, signature: &str) -> Result<(), Error> {
         let mut inner = self.lock();
         let index = inner
-            .threads
+            .chats
             .iter()
-            .position(|thread| thread.id == id)
-            .ok_or(crate::threads::NOT_FOUND)?;
+            .position(|chat| chat.id == id)
+            .ok_or(crate::chats::NOT_FOUND)?;
         let tx = inner.conn.transaction().map_err(err)?;
         tx.execute(
             "INSERT INTO app_state (key, value) VALUES (?1, ?2)
@@ -281,22 +277,22 @@ impl Store {
             params![format!("dismissed-goal:{id}"), signature],
         )
         .map_err(err)?;
-        tx.execute("UPDATE threads SET goal = NULL WHERE id = ?1", [id])
+        tx.execute("UPDATE chats SET goal = NULL WHERE id = ?1", [id])
             .map_err(err)?;
         tx.commit().map_err(err)?;
-        inner.threads[index].goal = None;
+        inner.chats[index].goal = None;
         Ok(())
     }
 
-    /// Mutate one thread (no-op if missing) and persist what changed.
-    pub(crate) fn update_thread(&self, id: &str, f: impl FnOnce(&mut Thread)) -> Result<(), Error> {
+    /// Mutate one chat (no-op if missing) and persist what changed.
+    pub(crate) fn update_chat(&self, id: &str, f: impl FnOnce(&mut Chat)) -> Result<(), Error> {
         let mut inner = self.lock();
-        let Some(index) = inner.threads.iter().position(|t| t.id == id) else {
+        let Some(index) = inner.chats.iter().position(|t| t.id == id) else {
             return Ok(());
         };
-        let mut next = inner.threads[index].thread.clone();
+        let mut next = inner.chats[index].chat.clone();
         f(&mut next);
-        let before = &inner.threads[index];
+        let before = &inner.chats[index];
         // A message `f` left alone is still the one allocation, which is told without reading it.
         let changed: Vec<usize> = (0..next.messages.len())
             .filter(|&i| {
@@ -315,10 +311,10 @@ impl Store {
             .map(|message| message.id.clone())
             .collect();
         let tx = inner.conn.transaction().map_err(err)?;
-        save_thread_row(&tx, &next).map_err(err)?;
+        save_chat_row(&tx, &next).map_err(err)?;
         for message_id in removed {
             tx.execute(
-                "DELETE FROM messages WHERE id = ?1 AND thread_id = ?2",
+                "DELETE FROM messages WHERE id = ?1 AND chat_id = ?2",
                 params![message_id, next.id],
             )
             .map_err(err)?;
@@ -327,57 +323,52 @@ impl Store {
             save_message(&tx, &next.id, i, &next.messages[i]).map_err(err)?;
         }
         tx.commit().map_err(err)?;
-        inner.threads[index] = Held::new(next);
+        inner.chats[index] = Held::new(next);
         Ok(())
     }
 
-    /// Mutates one thread in memory only (no-op if missing); the next save of it writes the change.
-    pub(crate) fn update_unsaved(&self, id: &str, f: impl FnOnce(&mut Thread)) {
-        if let Some(thread) = self.lock().threads.iter_mut().find(|t| t.id == id) {
-            f(thread);
+    /// Mutates one chat in memory only (no-op if missing); the next save of it writes the change.
+    pub(crate) fn update_unsaved(&self, id: &str, f: impl FnOnce(&mut Chat)) {
+        if let Some(chat) = self.lock().chats.iter_mut().find(|t| t.id == id) {
+            f(chat);
         }
     }
 
-    /// Mutates one thread in place (no-op if missing) and saves its row and the message
-    /// `message_id`, if given. Unlike `update_thread` it copies nothing, so it is for
-    /// changes confined to that message and the thread's own fields; removing or
-    /// reordering messages goes through `update_thread`.
+    /// Mutates one chat in place (no-op if missing) and saves its row and the message
+    /// `message_id`, if given. Unlike `update_chat` it copies nothing, so it is for
+    /// changes confined to that message and the chat's own fields; removing or
+    /// reordering messages goes through `update_chat`.
     pub(crate) fn update_message(
         &self,
         id: &str,
         message_id: Option<&str>,
-        f: impl FnOnce(&mut Thread),
+        f: impl FnOnce(&mut Chat),
     ) -> Result<(), Error> {
         let mut guard = self.lock();
         let inner = &mut *guard;
-        let Some(thread) = inner.threads.iter_mut().find(|t| t.id == id) else {
+        let Some(chat) = inner.chats.iter_mut().find(|t| t.id == id) else {
             return Ok(());
         };
-        f(thread);
+        f(chat);
         let conn = &mut inner.conn;
         let written = (|| {
             let tx = conn.transaction()?;
-            save_thread_row(&tx, thread)?;
-            let message = message_id.and_then(|mid| {
-                thread
-                    .messages
-                    .iter()
-                    .enumerate()
-                    .find(|(_, m)| m.id == mid)
-            });
+            save_chat_row(&tx, chat)?;
+            let message = message_id
+                .and_then(|mid| chat.messages.iter().enumerate().find(|(_, m)| m.id == mid));
             if let Some((i, m)) = message {
-                save_message(&tx, &thread.id, i, m)?;
+                save_message(&tx, &chat.id, i, m)?;
             }
             tx.commit()
         })();
         if let Err(e) = written {
-            // The thread goes back to what is stored, so memory never runs ahead of the disk.
+            // The chat goes back to what is stored, so memory never runs ahead of the disk.
             // Read back rather than copied first: this runs for every piece of a streamed reply.
-            let stored = load_threads(conn)
+            let stored = load_chats(conn)
                 .ok()
-                .and_then(|threads| threads.into_iter().find(|t| t.id == id));
+                .and_then(|chats| chats.into_iter().find(|t| t.id == id));
             if let Some(stored) = stored {
-                *thread = Held::new(stored);
+                *chat = Held::new(stored);
             }
             return Err(err(e).into());
         }
@@ -441,25 +432,25 @@ impl Store {
         Ok(())
     }
 
-    /// Deletes a thread's messages and its agent session, so its next turn starts a new
-    /// conversation. The thread itself stays.
+    /// Deletes a chat's messages and its agent session, so its next turn starts a new
+    /// conversation. The chat itself stays.
     ///
     /// # Errors
     ///
     /// Returns an error when the database cannot delete the chat's messages or reset its session
     /// and goal.
-    pub fn clear_thread(&self, id: &str) -> Result<(), Error> {
+    pub fn clear_chat(&self, id: &str) -> Result<(), Error> {
         let mut inner = self.lock();
         let tx = inner.conn.transaction().map_err(err)?;
-        tx.execute("DELETE FROM messages WHERE thread_id = ?1", [id])
+        tx.execute("DELETE FROM messages WHERE chat_id = ?1", [id])
             .map_err(err)?;
         tx.execute(
-            "UPDATE threads SET session_id = NULL, goal = NULL WHERE id = ?1",
+            "UPDATE chats SET session_id = NULL, goal = NULL WHERE id = ?1",
             [id],
         )
         .map_err(err)?;
         tx.commit().map_err(err)?;
-        if let Some(t) = inner.threads.iter_mut().find(|t| t.id == id) {
+        if let Some(t) = inner.chats.iter_mut().find(|t| t.id == id) {
             t.messages.clear();
             t.session_id = None;
             t.goal = None;
@@ -472,36 +463,36 @@ impl Store {
     /// # Errors
     ///
     /// Returns an error when the database cannot delete the chat or its saved state.
-    pub fn delete_thread(&self, id: &str) -> Result<(), Error> {
+    pub fn delete_chat(&self, id: &str) -> Result<(), Error> {
         let mut guard = self.lock();
         let inner = &mut *guard;
-        // All of it or none: a thread row gone with its state left would come back empty.
+        // All of it or none: a chat row gone with its state left would come back empty.
         let tx = inner.conn.transaction().map_err(err)?;
-        tx.execute("DELETE FROM threads WHERE id = ?1", [id])
+        tx.execute("DELETE FROM chats WHERE id = ?1", [id])
             .map_err(err)?;
-        for key in thread_state_keys(id) {
+        for key in chat_state_keys(id) {
             tx.execute("DELETE FROM app_state WHERE key = ?1", [key])
                 .map_err(err)?;
         }
         tx.commit().map_err(err)?;
-        inner.threads.retain(|t| t.id != id);
+        inner.chats.retain(|t| t.id != id);
         Ok(())
     }
 
     /// Deletes a project's tasks and folders.
-    pub(crate) fn delete_project_threads(&self, project_id: &str) -> Result<(), Error> {
+    pub(crate) fn delete_project_chats(&self, project_id: &str) -> Result<(), Error> {
         let mut guard = self.lock();
         let inner = &mut *guard;
         let tx = inner.conn.transaction().map_err(err)?;
-        tx.execute("DELETE FROM threads WHERE project_id = ?1", [project_id])
+        tx.execute("DELETE FROM chats WHERE project_id = ?1", [project_id])
             .map_err(err)?;
         let ids: Vec<String> = inner
-            .threads
+            .chats
             .iter()
             .filter(|t| t.project_id.as_deref() == Some(project_id))
             .map(|t| t.id.clone())
             .collect();
-        for key in ids.iter().flat_map(|id| thread_state_keys(id)) {
+        for key in ids.iter().flat_map(|id| chat_state_keys(id)) {
             tx.execute("DELETE FROM app_state WHERE key = ?1", [key])
                 .map_err(err)?;
         }
@@ -509,7 +500,7 @@ impl Store {
             .map_err(err)?;
         tx.commit().map_err(err)?;
         inner
-            .threads
+            .chats
             .retain(|t| t.project_id.as_deref() != Some(project_id));
         inner.folders.retain(|f| f.project_id != project_id);
         Ok(())
@@ -587,7 +578,7 @@ fn claim(dir: &Path) -> Option<std::fs::File> {
 }
 
 /// Opens the database in `dir`, creating it if need be, with the schema up to date. A new
-/// database takes in the settings and threads of the old JSON files, if they are there.
+/// database takes in the settings and chats of the old JSON files, if they are there.
 fn open(dir: &Path) -> Result<Connection, Error> {
     std::fs::create_dir_all(dir).map_err(err)?;
     let mut conn = Connection::open(dir.join(DB_FILE)).map_err(err)?;

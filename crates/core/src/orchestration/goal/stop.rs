@@ -12,7 +12,7 @@ use crate::orchestration;
 use crate::events::AgentEvent;
 use crate::provider::GoalCommand;
 use crate::system::now_ms;
-use crate::threads::GoalStatus;
+use crate::chats::GoalStatus;
 
 /// The messages the app also sends on its own rather than as work for the agent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,21 +51,21 @@ impl Core {
     /// # Errors
     ///
     /// Returns an error when the goal's dismissal cannot be saved.
-    pub fn stop_goal(self: &Arc<Self>, thread_id: &str) -> Result<(), Error> {
-        let Some(goal) = self.store.thread(thread_id).and_then(|t| t.goal) else {
+    pub fn stop_goal(self: &Arc<Self>, chat_id: &str) -> Result<(), Error> {
+        let Some(goal) = self.store.chat(chat_id).and_then(|t| t.goal) else {
             return Ok(());
         };
-        self.store.dismiss_goal(thread_id, &signature(&goal))?;
-        orchestration::publish(self, thread_id, AgentEvent::GoalUpdated { goal: None });
+        self.store.dismiss_goal(chat_id, &signature(&goal))?;
+        orchestration::publish(self, chat_id, AgentEvent::GoalUpdated { goal: None });
         Ok(())
     }
 
     /// Pauses the goal. A reply still running finishes, and nothing carries the goal on after it
     /// until it is resumed.
-    pub(crate) fn pause_goal(self: &Arc<Self>, thread_id: &str) {
+    pub(crate) fn pause_goal(self: &Arc<Self>, chat_id: &str) {
         let Some(goal) = self
             .store
-            .thread(thread_id)
+            .chat(chat_id)
             .and_then(|t| t.goal)
             .filter(|g| g.status == GoalStatus::Active)
         else {
@@ -73,7 +73,7 @@ impl Core {
         };
         orchestration::publish(
             self,
-            thread_id,
+            chat_id,
             AgentEvent::GoalUpdated {
                 goal: Some(goal.with_status(GoalStatus::Paused, now_ms())),
             },

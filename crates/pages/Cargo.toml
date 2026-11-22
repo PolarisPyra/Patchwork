@@ -1,0 +1,25 @@
+[package]
+name = "patchwork-pages"
+description = "Patchwork's pages: Quilts, Android and first-run setup"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-core.workspace = true
+patchwork-modals.workspace = true
+patchwork-sidecar.workspace = true
+patchwork-ui.workspace = true
+
+futures = { workspace = true, default-features = true }
+gpui = { workspace = true, default-features = true }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+log = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

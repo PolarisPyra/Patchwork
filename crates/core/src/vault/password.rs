@@ -158,7 +158,7 @@ pub(super) fn data_key_with(password: &str) -> Result<Zeroizing<[u8; KEY_LEN]>, 
         .optional()
     })?;
     let (nonce, wrapped, salt) = row.ok_or("The vault has no password")?;
-    // Derived without holding the vault, which other threads read meanwhile.
+    // Derived without holding the vault, which other chats read meanwhile.
     let wrapping = derive(password, &salt)?;
     let key = data_key(&wrapping, &nonce, &wrapped)
         .map_err(|_wrong_password| "That is not the vault's password")?;

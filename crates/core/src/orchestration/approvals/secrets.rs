@@ -1,5 +1,6 @@
-//! An agent's request for a secret (see `crate::secrets`): a private card in its reply, which the
-//! turn waits on until the user saves or declines it, the turn ends, or the agent's time runs out.
+//! An agent's request for a secret (see `crate::vault::requests`): a private card in its reply,
+//! which the turn waits on until the user saves or declines it, the turn ends, or the agent's time
+//! runs out.
 
 // Rust guideline compliant 2026-10-09
 
@@ -13,27 +14,27 @@ use serde_json::Value;
 use crate::Core;
 use crate::orchestration::{Runner, publish};
 use crate::events::AgentEvent;
-use crate::secrets::{Secret, SecretAsk, SecretStatus};
-use crate::threads::Approval;
+use crate::vault::requests::{Secret, SecretAsk, SecretStatus};
+use crate::chats::Approval;
 use super::hooks::reply_id;
 
 /// How often the wait checks whether its turn is still running.
 const POLL: Duration = Duration::from_millis(500);
 
 impl Runner {
-    /// Shows the agent's request for a secret in the thread's running turn and waits for the
+    /// Shows the agent's request for a secret in the chat's running turn and waits for the
     /// answer, or until the turn ends, `stopped`, or the time the agent gave runs out. Returns the
     /// tool's result for the agent, which holds where the secret is but never the secret.
     pub(crate) fn request_secret(
         &self,
         core: &Core,
-        thread_id: &str,
+        chat_id: &str,
         args: &Value,
         stopped: &dyn Fn() -> bool,
     ) -> Result<String, Error> {
         let ask = SecretAsk::parse(args)?;
-        let message_id = reply_id(core, thread_id).ok_or("This turn is no longer running")?;
-        let flags = self.turn_flags(thread_id)?;
+        let message_id = reply_id(core, chat_id).ok_or("This turn is no longer running")?;
+        let flags = self.turn_flags(chat_id)?;
         let approval = Approval {
             secret: Some(Secret {
                 placeholder: ask.placeholder,
@@ -42,10 +43,10 @@ impl Runner {
             ..Approval::pending(ask.label, ask.reason)
         };
         let id = approval.id.clone();
-        let answers = core.secrets.add(&id, thread_id);
+        let answers = core.secrets.add(&id, chat_id);
         publish(
             core,
-            thread_id,
+            chat_id,
             AgentEvent::ApprovalRequested {
                 message_id: message_id.clone(),
                 approval,
@@ -81,13 +82,13 @@ impl Runner {
         };
         publish(
             core,
-            thread_id,
+            chat_id,
             AgentEvent::SecretResolved {
                 message_id,
                 approval_id: id,
                 status,
             },
         );
-        Ok(crate::secrets::tool_result(status, file.as_deref()))
+        Ok(crate::vault::requests::tool_result(status, file.as_deref()))
     }
 }

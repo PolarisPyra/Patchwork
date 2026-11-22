@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use serde_json::{Value, json};
 use crate::provider::ProviderSlashCommand;
-use crate::threads::{AccessMode, Attachment, AttachmentKind};
+use crate::chats::{AccessMode, Attachment, AttachmentKind};
 use crate::permissions::PermissionKind;
 use crate::provider::TurnSpec;
 use crate::provider::prompt;

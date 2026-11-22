@@ -9,14 +9,14 @@
 
 // Rust guideline compliant 2026-10-09
 
-mod android;
-mod quilts;
-mod bots;
+mod agents;
 mod canvas;
 mod chat;
-mod onboarding;
+mod logs;
 mod orchestrator;
+mod screen;
 mod sidebar;
+mod terminal;
 mod workspace;
 
 use std::sync::Arc;
@@ -31,7 +31,10 @@ use gpui::{
 use patchwork_core::Core;
 use patchwork_core::system::Dirs;
 
-use patchwork_ui::{APP_TITLE, Quit, assets, prompt, sigils, theme};
+use patchwork_ui::brand::assets;
+use patchwork_ui::controls::confirm_dialog;
+use patchwork_ui::text::sigils;
+use patchwork_ui::{APP_TITLE, Quit, theme};
 use crate::workspace::Workspace;
 
 /// The app's allocator, which is faster than the system one when laying out and shaping text.
@@ -44,10 +47,10 @@ const SCHEDULED_TICK: Duration = Duration::from_secs(30);
 /// Runs the helper the first argument names and returns its exit code, or None to open the app.
 /// Without this, every hook or relay an agent starts would open another Patchwork window.
 fn run_helper() -> Option<i32> {
-    use patchwork_core::{harness, permissions, provider, workspace};
+    use patchwork_core::{harness, permissions, provider, source_control};
     // Git and ssh start this binary to ask a sign-in question, with the question alone.
-    if std::env::var_os(workspace::ASKPASS_ENV).is_some() && std::env::args().len() == 2 {
-        return Some(workspace::run_askpass());
+    if std::env::var_os(source_control::ASKPASS_ENV).is_some() && std::env::args().len() == 2 {
+        return Some(source_control::run_askpass());
     }
     let arg = std::env::args().nth(1)?;
     let run: fn() -> i32 = match arg.as_str() {
@@ -138,13 +141,13 @@ fn forward<T: 'static>(
 
 fn main() {
     // Before anything holds a key: the app, and the helpers that are handed one.
-    let dumps = patchwork_core::system::memory::deny_dumps();
+    let dumps = patchwork_core::system::machine::memory::deny_dumps();
     // Agents start this binary as a helper, without the window: a hook, a relay or a bridge.
     if let Some(code) = run_helper() {
         std::process::exit(code);
     }
     // Before the app's memory grows; the helpers above are left as they were.
-    let pages = patchwork_core::system::memory::small_pages();
+    let pages = patchwork_core::system::machine::memory::small_pages();
     // The platform's folders: the XDG ones on Linux, `Library` on macOS, and `AppData` on
     // Windows, the ones earlier versions of Patchwork used.
     let (Some(config), Some(data), Some(cache)) = (
@@ -157,7 +160,7 @@ fn main() {
     };
     let dirs = Dirs::new(&config, &data, &cache);
     // Opened a second time, the app shows the window it already has instead of another.
-    if patchwork_core::system::instance::raise_running(&dirs.data) {
+    if patchwork_core::system::processes::instance::raise_running(&dirs.data) {
         return;
     }
     patchwork_core::logging::start_main_log(&dirs.logs);
@@ -187,14 +190,14 @@ fn main() {
         }
     };
     start_scheduled_tasks(Arc::clone(&core));
-    // A second launch asks on the relay's thread; the window is shown on the app's.
+    // A second launch asks on the relay's chat; the window is shown on the app's.
     let (raise, raised) = mpsc::unbounded::<()>();
     patchwork_core::provider::mcp::set_raise_handler(Box::new(move || {
         let _ = raise.unbounded_send(());
     }));
     // Git asks for a sign-in on the thread that runs it; the question is shown on the app's.
     let (ask, asked) = mpsc::unbounded();
-    patchwork_core::workspace::set_credential_prompter(Box::new(move |request| {
+    patchwork_core::source_control::set_credential_prompter(Box::new(move |request| {
         // With no window left to ask in, the request drops and the command fails.
         let _ = ask.unbounded_send(request);
     }));
@@ -213,14 +216,14 @@ fn main() {
                 log::warn!(error:% = e; "could not load the fonts: {{error}}");
             }
             prewarm_fonts(cx);
-            cx.background_spawn(async { patchwork_ui::highlight::warm() })
+            cx.background_spawn(async { patchwork_ui::text::highlight::warm() })
                 .detach();
             // Grayscale text, which reads lighter than subpixel on the dark theme.
             cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
-            patchwork_settings::bind_keys(&core, cx);
+            patchwork_modals::settings::bind_keys(&core, cx);
             cx.set_global(sigils::load(&core));
-            patchwork_settings::show_app_icon(&core.settings(), cx);
-            cx.set_prompt_builder(prompt::build);
+            patchwork_modals::settings::show_app_icon(&core.settings(), cx);
+            cx.set_prompt_builder(confirm_dialog::build);
             cx.on_action(|_: &Quit, cx| cx.quit());
             let quitting = Arc::clone(&core);
             cx.on_app_quit(move |_| {
@@ -270,7 +273,8 @@ fn main() {
                 let waiting = waiting.await;
                 if waiting > 0 {
                     let _ = window.update(cx, |workspace, _, cx| {
-                        workspace.set_interrupted(waiting, cx);
+                        let card = workspace.interrupted.clone();
+                        card.update(cx, |card, cx| card.set(waiting, cx));
                     });
                 }
             })
@@ -292,7 +296,7 @@ fn main() {
             cx.intercept_keystrokes(move |_, _, _| typed.note_activity())
                 .detach();
             cx.on_system_notification_response(move |response, cx| {
-                let thread_id = response
+                let chat_id = response
                     .tag
                     .split_once('|')
                     .map_or(response.tag.as_ref(), |(id, _)| id)
@@ -300,7 +304,7 @@ fn main() {
                 let _ = window.update(cx, |workspace, window, cx| {
                     cx.activate(true);
                     window.activate_window();
-                    workspace.open_thread(&thread_id, cx);
+                    workspace.open_chat(&chat_id, cx);
                 });
             });
             forward(window, raised, cx, |_, (), window, cx| {
@@ -309,9 +313,10 @@ fn main() {
                 window.activate_window();
             });
             forward(window, asked, cx, |workspace, request, window, cx| {
-                workspace.ask_credential(request, window, cx);
+                let dialog = workspace.credentials.clone();
+                dialog.update(cx, |d, cx| d.ask(request, window, cx));
             });
-            // Agent events arrive on the core's threads and are applied here, in order.
+            // Agent events arrive on the core's chats and are applied here, in order.
             forward(window, received, cx, Workspace::on_event);
             forward(window, update_events, cx, |workspace, (), _, cx| {
                 workspace.on_update_change(cx);

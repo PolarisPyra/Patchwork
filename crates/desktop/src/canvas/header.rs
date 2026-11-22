@@ -3,12 +3,12 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{FontWeight, Role, SharedString, div, prelude::*, px};
-use patchwork_core::threads::Message;
-use patchwork_ui::highlight::file_label;
+use patchwork_core::chats::Message;
+use patchwork_ui::text::highlight::file_label;
 use patchwork_ui::theme::{fs_lg, fs_sm, radius, Theme};
 use patchwork_ui::{BtnKind, badge, base_name, btn, dir_name, icon, icon_button, tooltip};
 use super::diff::Review;
-use super::state::{Canvas, CanvasTab};
+use super::open_file::{Canvas, CanvasTab};
 
 impl Canvas {
     pub(super) fn header(&self, t: &Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -263,7 +263,7 @@ impl Canvas {
     pub(super) fn change(
         &self,
         cx: &Context<Self>,
-    ) -> Option<patchwork_core::workspace::FileChange> {
+    ) -> Option<patchwork_core::source_control::FileChange> {
         let path = self.path.as_ref()?;
         let w = self.workspace.upgrade()?;
         w.read(cx).changes.iter().find(|c| &c.path == path).cloned()

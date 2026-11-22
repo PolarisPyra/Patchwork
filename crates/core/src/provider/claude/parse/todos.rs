@@ -7,8 +7,8 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
-use crate::threads::PlanStep;
-use crate::threads::StepStatus;
+use crate::chats::PlanStep;
+use crate::chats::StepStatus;
 
 use crate::provider::step_status;
 

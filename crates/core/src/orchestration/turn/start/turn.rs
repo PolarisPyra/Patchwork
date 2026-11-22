@@ -14,13 +14,13 @@ use crate::orchestration::changes::attribution::{Reach, SharedAttribution};
 use crate::provider::TurnSpec;
 use crate::provider;
 use crate::Core;
-use crate::threads::AccessMode;
+use crate::chats::AccessMode;
 use crate::events::AgentEvent;
 use crate::provider::AgentKind;
-use crate::threads::Attachment;
-use crate::threads::Message;
-use crate::threads::MessageStatus;
-use crate::threads::Role;
+use crate::chats::Attachment;
+use crate::chats::Message;
+use crate::chats::MessageStatus;
+use crate::chats::Role;
 use crate::orchestration::turn::process::Interrupts;
 use crate::orchestration::turn::process::close_stdin_unless_steered;
 use crate::orchestration::turn::process::Stdin;
@@ -37,7 +37,7 @@ use crate::orchestration::tasks::subagents::Controls;
 )]
 pub(in crate::orchestration) struct Turn {
     pub(in crate::orchestration) core: Arc<Core>,
-    pub(in crate::orchestration) thread_id: String,
+    pub(in crate::orchestration) chat_id: String,
     pub(in crate::orchestration) message_id: String,
     pub(in crate::orchestration) agent: AgentKind,
     pub(in crate::orchestration) cancelled: Arc<AtomicBool>,
@@ -122,14 +122,14 @@ impl Turn {
             }
             _ => None,
         };
-        publish(&self.core, &self.thread_id, event);
+        publish(&self.core, &self.chat_id, event);
         if let Some((message_id, paths)) = covered {
             for path in paths {
                 let touched = AgentEvent::FileTouched {
                     message_id: message_id.clone(),
                     path,
                 };
-                publish(&self.core, &self.thread_id, touched);
+                publish(&self.core, &self.chat_id, touched);
             }
         }
     }
@@ -153,7 +153,7 @@ impl Turn {
         TurnSpec {
             root: crate::system::ssh::here(&self.root),
             host: crate::system::ssh::split(&self.root).map(|at| at.host),
-            thread_id: &self.thread_id,
+            chat_id: &self.chat_id,
             session_id: self.session_id.as_deref(),
             model: self.model.as_deref(),
             vision_model: self.vision_model.as_ref(),

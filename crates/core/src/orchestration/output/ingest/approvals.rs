@@ -20,7 +20,7 @@ use crate::orchestration::turn::start::{PendingApproval, Turn};
 use crate::orchestration::unasked;
 use crate::permissions;
 use crate::provider::{self, AgentKind, Parsed};
-use crate::threads::{Approval, ApprovalStatus, Question};
+use crate::chats::{Approval, ApprovalStatus, Question};
 
 /// A call the access mode runs without asking runs unless a rule refuses it or asks. Returns the
 /// item to handle: the approval to ask for in place of such a call, or None once it has run.
@@ -34,13 +34,13 @@ pub(super) fn screen(turn: &Turn, item: Parsed) -> Option<Parsed> {
     else {
         return Some(item);
     };
-    let asks = turn.mode != crate::threads::AccessMode::FullAccess;
-    // A tool the bot blocks goes on to be refused as an approval, where the chat shows why.
+    let asks = turn.mode != crate::chats::AccessMode::FullAccess;
+    // A tool the agent blocks goes on to be refused as an approval, where the chat shows why.
     let blocked = turn
         .core
-        .bot_refuses(&turn.thread_id, Path::new(&turn.root), &target);
+        .agent_refuses(&turn.chat_id, Path::new(&turn.root), &target);
     if !blocked
-        && unasked(&turn.core, &turn.thread_id, &turn.root, &target, asks)
+        && unasked(&turn.core, &turn.chat_id, &turn.root, &target, asks)
             == permissions::Unasked::Run
     {
         write_line(
@@ -62,7 +62,7 @@ pub(super) fn screen(turn: &Turn, item: Parsed) -> Option<Parsed> {
 pub(super) fn call_tool(turn: &Turn, id: Value, server: String, tool: String, arguments: Value) {
     let stdin = Arc::clone(&turn.stdin);
     let (cancelled, exited) = (Arc::clone(&turn.cancelled), Arc::clone(&turn.exited));
-    let thread_id = turn.thread_id.clone();
+    let chat_id = turn.chat_id.clone();
     // Patchwork's own agent has its commands run here, so they can outlive it.
     let job = (turn.agent == AgentKind::Api
         && server == provider::mcp::OWN_SERVER
@@ -71,7 +71,7 @@ pub(super) fn call_tool(turn: &Turn, id: Value, server: String, tool: String, ar
         (
             Arc::clone(&turn.core),
             jobs::Origin {
-                thread_id: turn.thread_id.clone(),
+                chat_id: turn.chat_id.clone(),
                 message_id: turn.message_id.clone(),
                 tool_id: id.as_str().unwrap_or_default().to_string(),
                 root: turn.root.clone(),
@@ -83,7 +83,7 @@ pub(super) fn call_tool(turn: &Turn, id: Value, server: String, tool: String, ar
         let result = if let Some((app, from)) = job {
             jobs::call(&app, &from, &tool, &arguments, &stopped)
         } else if server == provider::mcp::OWN_SERVER {
-            provider::mcp::call_own(&thread_id, &tool, &arguments, &stopped)
+            provider::mcp::call_own(&chat_id, &tool, &arguments, &stopped)
         } else {
             provider::mcp::call(&server, &tool, &arguments, &stopped)
         };
@@ -138,13 +138,13 @@ pub(super) fn request_approval(
             .unwrap_or_default(),
         ..Approval::pending(title, detail)
     };
-    // The bot blocks it, or a hook refuses it, whatever the rules and the user would say.
+    // The agent blocks it, or a hook refuses it, whatever the rules and the user would say.
     let refused = target.as_ref().and_then(|t| {
         if turn
             .core
-            .bot_refuses(&turn.thread_id, Path::new(&turn.root), t)
+            .agent_refuses(&turn.chat_id, Path::new(&turn.root), t)
         {
-            Some(crate::bots::BLOCKED_REASON.to_string())
+            Some(crate::agents::BLOCKED_REASON.to_string())
         } else {
             refused_by_hook(turn, t)
         }
@@ -170,7 +170,7 @@ pub(super) fn request_approval(
     if target.as_ref().is_some_and(|t| {
         turn.core
             .runner
-            .take_grant(&turn.thread_id, t, Path::new(&turn.root))
+            .take_grant(&turn.chat_id, t, Path::new(&turn.root))
     }) {
         write_line(
             &turn.stdin,
@@ -181,7 +181,7 @@ pub(super) fn request_approval(
     // A permission rule answers it without asking.
     if let Some(decision) = target
         .as_ref()
-        .and_then(|t| decide(&turn.core, &turn.thread_id, &turn.root, t))
+        .and_then(|t| decide(&turn.core, &turn.chat_id, &turn.root, t))
     {
         write_line(
             &turn.stdin,

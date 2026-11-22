@@ -14,7 +14,7 @@ use crate::events::AgentEvent;
 use crate::orchestration::turn::start::TurnRequest;
 use crate::orchestration::{self, goal};
 use crate::settings::ResumeAtLaunch;
-use crate::threads::{Goal, GoalStatus, MessageStatus, Role, Thread};
+use crate::chats::{Goal, GoalStatus, MessageStatus, Role, Chat};
 use crate::{Error, Core};
 
 /// What the agent is told in place of a message from the user, after `why` its reply ended.
@@ -37,9 +37,8 @@ fn note(cut_off: MessageStatus) -> String {
 /// Whether the cut-off reply was itself carrying on from a cut-off reply. Such a turn is not
 /// resumed without being asked: had it brought the app down, resuming it at every launch would
 /// bring the app down at every launch.
-fn interrupted_twice(thread: &Thread) -> bool {
-    thread
-        .messages
+fn interrupted_twice(chat: &Chat) -> bool {
+    chat.messages
         .iter()
         .rev()
         .filter(|m| !m.queued)
@@ -48,17 +47,17 @@ fn interrupted_twice(thread: &Thread) -> bool {
 }
 
 impl Core {
-    /// The threads whose cut-off turn can be resumed without asking about each.
+    /// The chats whose cut-off turn can be resumed without asking about each.
     ///
-    /// Left for the user to resume one by one: an archived thread, and a turn already resumed
+    /// Left for the user to resume one by one: an archived chat, and a turn already resumed
     /// once and cut off again. A Patchwork running beside another has none, since the turns may
     /// be live in that one.
     fn waiting(&self) -> Vec<String> {
         if !self.store.owns_data() {
             return Vec::new();
         }
-        self.store.with_threads(|threads| {
-            threads
+        self.store.with_chats(|chats| {
+            chats
                 .iter()
                 .filter(|t| t.archived_at.is_none() && t.parent.is_none())
                 .filter(|t| t.interrupted_reply().is_some() && !interrupted_twice(t))
@@ -92,8 +91,8 @@ impl Core {
                 Ok(()) => true,
                 Err(e) => {
                     log::warn!(
-                        thread = id.as_str(), error:% = e;
-                        "could not resume the turn of {{thread}}: {{error}}"
+                        chat = id.as_str(), error:% = e;
+                        "could not resume the turn of {{chat}}: {{error}}"
                     );
                     false
                 }
@@ -108,26 +107,26 @@ impl Core {
     ///
     /// Returns an error when the chat is unknown, when its last reply neither was cut off nor
     /// failed, when a turn is already running, or when the turn cannot be started.
-    pub fn resume_turn(self: &Arc<Self>, thread_id: &str) -> Result<(), Error> {
-        let thread = self.thread(thread_id)?;
-        let Some(cut_off) = thread.resumable_reply().map(|m| m.status) else {
+    pub fn resume_turn(self: &Arc<Self>, chat_id: &str) -> Result<(), Error> {
+        let chat = self.chat(chat_id)?;
+        let Some(cut_off) = chat.resumable_reply().map(|m| m.status) else {
             return Err("This reply ended as it should, so there is nothing to resume".into());
         };
-        if self.runner.is_running(thread_id) {
+        if self.runner.is_running(chat_id) {
             return Err("This chat already has a reply running".into());
         }
         // A goal the turn was pursuing goes on with it.
-        let goal = thread
+        let goal = chat
             .goal
-            .filter(|g| goal::take_cut_off(&self.store, thread_id, g));
+            .filter(|g| goal::take_cut_off(&self.store, chat_id, g));
         // The goal is active before the turn starts, so the turn's end carries it on.
         if let Some(goal) = &goal {
-            set_goal_status(self, thread_id, goal, GoalStatus::Active);
+            set_goal_status(self, chat_id, goal, GoalStatus::Active);
         }
         let started = self.runner.start_turn(
             self,
             TurnRequest {
-                thread_id: thread_id.into(),
+                chat_id: chat_id.into(),
                 text: note(cut_off),
                 attachments: Vec::new(),
                 images: Vec::new(),
@@ -137,8 +136,8 @@ impl Core {
         if let Err(e) = started {
             // The turn did not start, so the goal is still the one a later resume takes up.
             if let Some(goal) = &goal {
-                set_goal_status(self, thread_id, goal, GoalStatus::Paused);
-                goal::note_cut_off(&self.store, thread_id, goal, true);
+                set_goal_status(self, chat_id, goal, GoalStatus::Paused);
+                goal::note_cut_off(&self.store, chat_id, goal, true);
             }
             return Err(e);
         }
@@ -147,10 +146,10 @@ impl Core {
 }
 
 /// Publishes `goal` with `status`.
-fn set_goal_status(core: &Arc<Core>, thread_id: &str, goal: &Goal, status: GoalStatus) {
+fn set_goal_status(core: &Arc<Core>, chat_id: &str, goal: &Goal, status: GoalStatus) {
     orchestration::publish(
         core,
-        thread_id,
+        chat_id,
         AgentEvent::GoalUpdated {
             goal: Some(goal.clone().with_status(status, crate::system::now_ms())),
         },

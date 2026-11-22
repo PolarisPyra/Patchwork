@@ -10,7 +10,7 @@ use super::web::fetch_url;
 
 use serde_json::Value;
 
-use crate::system::fs::resolve;
+use crate::system::files::paths::resolve;
 use crate::computer;
 
 /// Longest tool result sent back to the model. The agent saves a longer one whole to a file, and

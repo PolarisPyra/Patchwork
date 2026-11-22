@@ -14,8 +14,8 @@ use crate::Error;
 use crate::events::{AgentEvent, AgentEventEnvelope, Place};
 use crate::import::ImportSource;
 use crate::projects::Project;
-use crate::threads::Role;
-use crate::workspace::read_file;
+use crate::chats::Role;
+use crate::projects::read_file;
 
 /// The most files offered when a name fits several.
 const CANDIDATES: usize = 8;
@@ -83,7 +83,7 @@ const SECRETS: &[&str] = &[
 /// Asks the window to show `place`.
 fn show(ctx: &Ctx<'_>, place: Place) {
     ctx.core.emit(AgentEventEnvelope {
-        thread_id: String::new(),
+        chat_id: String::new(),
         event: AgentEvent::Show { place },
     });
 }
@@ -227,31 +227,31 @@ pub(super) fn send_file(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
 
 /// Sends what a chat's latest reply changed to the conversation, as a patch.
 pub(super) fn send_changes(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    let thread = chat(ctx, args)?;
-    let chats = ctx.core.bound_chats(&ctx.caller.id);
+    let chat = chat(ctx, args)?;
+    let chats = ctx.core.bound_conversations(&ctx.caller.id);
     if chats.is_empty() {
         return Err("No chat app conversation talks to this chat".into());
     }
     for bound in &chats {
-        if let Some(nothing) = ctx
-            .core
-            .send_diff(bound.platform, &bound.chat, Some(&thread.id))
+        if let Some(nothing) =
+            ctx.core
+                .send_diff(bound.platform, &bound.conversation, Some(&chat.id))
         {
             return Err(nothing.into());
         }
     }
     Ok(format!(
         "Sent what the latest reply of \u{201c}{}\u{201d} changed.",
-        thread.title
+        chat.title
     ))
 }
 
 /// Sends a chat's whole conversation to the chat app, as a Markdown file.
 pub(super) fn export_chat(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    let thread = chat(ctx, args)?;
-    let mut page = format!("# {}\n", thread.title);
+    let chat = chat(ctx, args)?;
+    let mut page = format!("# {}\n", chat.title);
     let mut messages = 0;
-    for message in thread.messages.iter().filter(|m| !m.text.trim().is_empty()) {
+    for message in chat.messages.iter().filter(|m| !m.text.trim().is_empty()) {
         let who = if message.role == Role::User {
             "You"
         } else {
@@ -264,7 +264,7 @@ pub(super) fn export_chat(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> 
     if messages == 0 {
         return Err("That chat has nothing written in it yet".into());
     }
-    let name: String = thread
+    let name: String = chat
         .title
         .chars()
         .map(|c| {
@@ -281,7 +281,7 @@ pub(super) fn export_chat(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> 
         &ctx.caller.id,
         &name,
         page.as_bytes(),
-        &format!("{}: {messages} messages", thread.title),
+        &format!("{}: {messages} messages", chat.title),
     )?;
     Ok(json!({"sent": name, "messages": messages, "conversations": took}).to_string())
 }
@@ -329,7 +329,7 @@ pub(super) fn import_chats(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error>
             vec![one]
         }
     };
-    let imported = ctx.core.import_threads(&sources)?;
+    let imported = ctx.core.import_chats(&sources)?;
     changed(ctx);
     Ok(json!({"imported": imported}).to_string())
 }

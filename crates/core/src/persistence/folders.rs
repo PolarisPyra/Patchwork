@@ -1,4 +1,4 @@
-//! The sidebar's folders and the order of the threads in them, as the database keeps them.
+//! The sidebar's folders and the order of the chats in them, as the database keeps them.
 
 // Rust guideline compliant 2026-10-09
 
@@ -6,7 +6,7 @@ use crate::Error;
 use rusqlite::params;
 use super::store::{Store, enc, err};
 use crate::projects::Folder;
-use crate::threads::Thread;
+use crate::chats::Chat;
 
 impl Store {
     pub fn folders(&self) -> Vec<Folder> {
@@ -64,7 +64,7 @@ impl Store {
         let tx = inner.conn.transaction().map_err(err)?;
         // Back to the default order at the top level: newest first, as for a new task.
         tx.execute(
-            "UPDATE threads SET folder_id = NULL, position = -created_at WHERE folder_id = ?1",
+            "UPDATE chats SET folder_id = NULL, position = -created_at WHERE folder_id = ?1",
             [id],
         )
         .map_err(err)?;
@@ -72,7 +72,7 @@ impl Store {
             .map_err(err)?;
         tx.commit().map_err(err)?;
         inner.folders.retain(|f| f.id != id);
-        for t in &mut inner.threads {
+        for t in &mut inner.chats {
             if t.folder_id.as_deref() == Some(id) {
                 t.folder_id = None;
                 t.position = -(t.created_at as i64);
@@ -82,31 +82,31 @@ impl Store {
     }
 
     /// Puts `ids` in `folder_id` (None: the top level) in that order. The ids are the
-    /// whole destination list, so a thread that came from elsewhere joins it here.
-    /// Archived, pinned and favorite threads are not in `ids`; they keep their slots in the
+    /// whole destination list, so a chat that came from elsewhere joins it here.
+    /// Archived, pinned and favorite chats are not in `ids`; they keep their slots in the
     /// list, so restoring, unpinning or unfavoriting one puts it back where it was.
     ///
     /// # Errors
     ///
     /// Returns an error when the database cannot save the new order.
-    pub fn reorder_threads(&self, ids: &[String], folder_id: Option<&str>) -> Result<(), Error> {
+    pub fn reorder_chats(&self, ids: &[String], folder_id: Option<&str>) -> Result<(), Error> {
         let mut inner = self.lock();
         // Listed elsewhere in the sidebar, so not among the rows that were dragged.
-        let held = |t: &Thread| t.archived_at.is_some() || t.pinned || t.favorite;
+        let held = |t: &Chat| t.archived_at.is_some() || t.pinned || t.favorite;
         let ids = {
             let project_id = ids
                 .first()
-                .and_then(|id| inner.threads.iter().find(|t| t.id == *id))
+                .and_then(|id| inner.chats.iter().find(|t| t.id == *id))
                 .map(|t| t.project_id.clone());
-            let mut list: Vec<&Thread> = inner
-                .threads
+            let mut list: Vec<&Chat> = inner
+                .chats
                 .iter()
                 .filter(|t| {
                     Some(&t.project_id) == project_id.as_ref()
                         && t.folder_id.as_deref() == folder_id
                         && (held(t) || ids.contains(&t.id))
                 })
-                .map(|t| &t.thread)
+                .map(|t| &t.chat)
                 .collect();
             list.sort_by_key(|t| t.position);
             let mut moved = ids.iter();
@@ -126,13 +126,13 @@ impl Store {
         let tx = inner.conn.transaction().map_err(err)?;
         for (i, id) in ids.iter().enumerate() {
             tx.execute(
-                "UPDATE threads SET position = ?1, folder_id = ?2 WHERE id = ?3",
+                "UPDATE chats SET position = ?1, folder_id = ?2 WHERE id = ?3",
                 params![i as i64, folder_id, id],
             )
             .map_err(err)?;
         }
         tx.commit().map_err(err)?;
-        for t in &mut inner.threads {
+        for t in &mut inner.chats {
             if let Some(i) = ids.iter().position(|id| *id == t.id) {
                 t.position = i as i64;
                 t.folder_id = folder_id.map(String::from);

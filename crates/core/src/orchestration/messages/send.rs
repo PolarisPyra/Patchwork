@@ -1,4 +1,4 @@
-//! Sending messages and running turns: naming the thread, approvals, stopping.
+//! Sending messages and running turns: naming the chat, approvals, stopping.
 
 // Rust guideline compliant 2026-10-09
 
@@ -10,14 +10,14 @@ use crate::orchestration::turn::start::Starting;
 use crate::orchestration::{ApprovalDecision, Delivery, FollowUpInput, TurnRequest};
 
 use crate::events::{AgentEvent, AgentEventEnvelope};
-use crate::logging::{Data, Source, THREAD_LOG};
+use crate::logging::{Data, Source, CHAT_LOG};
 use crate::provider::AgentKind;
 use crate::settings::LogLevel;
-use crate::threads::{Role, MessageStatus, StepStatus, Attachment, Message, GoalStatus, BackgroundTask};
+use crate::chats::{Role, MessageStatus, StepStatus, Attachment, Message, GoalStatus, BackgroundTask};
 use crate::extensions::skills;
 use crate::{orchestration, provider};
-use crate::threads::title;
-use crate::threads::{title_from, without_leading_attachments};
+use crate::chats::title;
+use crate::chats::{title_from, without_leading_attachments};
 use crate::Core;
 use crate::gateway::Platform;
 
@@ -30,7 +30,7 @@ fn user_message(text: &str, attachments: Vec<Attachment>) -> Message {
 }
 
 impl Core {
-    /// How many threads have an agent replying now.
+    /// How many chats have an agent replying now.
     pub fn running_turns(&self) -> usize {
         self.runner.running().len()
     }
@@ -45,19 +45,19 @@ impl Core {
     }
 
     /// Replaces the `placeholder` title with one a model writes from `text`, in the background,
-    /// unless the thread has been renamed meanwhile. With titles switched off in Settings, a
+    /// unless the chat has been renamed meanwhile. With titles switched off in Settings, a
     /// slash command, or a message the model gives no title for, the first line names it. A
     /// message that is only attachments stays blank.
-    fn name_thread(
+    fn name_chat(
         self: &Arc<Self>,
-        thread_id: &str,
+        chat_id: &str,
         text: &str,
         placeholder: String,
         agent: AgentKind,
         model: Option<String>,
     ) {
         let core = Arc::downgrade(self);
-        let thread_id = thread_id.to_string();
+        let chat_id = chat_id.to_string();
         let text = text.to_string();
         let tokens = self.store.settings().tokens;
         let writer = title::Writer {
@@ -77,18 +77,18 @@ impl Core {
                 return;
             };
             let mut renamed = false;
-            let saved = core.store.update_thread(&thread_id, |t| {
+            let saved = core.store.update_chat(&chat_id, |t| {
                 if t.title == placeholder {
                     t.title.clone_from(&generated);
                     renamed = true;
                 }
             });
             if let Err(e) = &saved {
-                log::warn!(thread:% = thread_id, error:% = e; "could not save the title of {{thread}}: {{error}}");
+                log::warn!(chat:% = chat_id, error:% = e; "could not save the title of {{chat}}: {{error}}");
             }
             if renamed && saved.is_ok() {
                 core.emit(AgentEventEnvelope {
-                    thread_id,
+                    chat_id,
                     event: AgentEvent::TitleUpdated { title: generated },
                 });
             }
@@ -97,12 +97,12 @@ impl Core {
 
     /// Whether the chat has no reply running and is set to resume its last one when its agent's
     /// usage limit resets.
-    fn waits_to_resume(&self, thread_id: &str) -> bool {
-        !self.runner.is_running(thread_id)
-            && self.limit_resume_at(thread_id).is_some()
+    fn waits_to_resume(&self, chat_id: &str) -> bool {
+        !self.runner.is_running(chat_id)
+            && self.limit_resume_at(chat_id).is_some()
             && self
                 .store
-                .thread(thread_id)
+                .chat(chat_id)
                 .is_some_and(|t| t.resumable_reply().is_some())
     }
 
@@ -110,7 +110,7 @@ impl Core {
     /// waiting to resume has finished, or sooner when the user sends the queue.
     fn hold_for_resume(
         &self,
-        thread_id: &str,
+        chat_id: &str,
         text: &str,
         attachments: Vec<Attachment>,
         via: Option<Platform>,
@@ -120,14 +120,14 @@ impl Core {
         msg.queued = true;
         let held = msg.clone();
         self.store
-            .update_thread(thread_id, |t| t.messages.push(Arc::new(held)))?;
+            .update_chat(chat_id, |t| t.messages.push(Arc::new(held)))?;
         let source = Source {
-            thread: Some(thread_id.to_string()),
+            chat: Some(chat_id.to_string()),
             message: Some(msg.id.clone()),
             ..Source::default()
         };
         let note = "queued until the reply waiting on a usage limit resumes";
-        THREAD_LOG.write(
+        CHAT_LOG.write(
             LogLevel::Info,
             "message sent",
             &source,
@@ -146,39 +146,39 @@ impl Core {
     /// current turn, or when the message cannot be saved or the turn cannot be started.
     pub fn send_message(
         self: &Arc<Self>,
-        thread_id: String,
+        chat_id: String,
         text: String,
         attachments: Vec<Attachment>,
         queue: bool,
     ) -> Result<Message, Error> {
-        self.send_message_from(thread_id, text, attachments, queue, None)
+        self.send_message_from(chat_id, text, attachments, queue, None)
     }
 
     /// Sends the message as `send_message` does, from the chat app conversation `from` when it
-    /// came from one, and shows it in the other chat apps the thread is continued on.
+    /// came from one, and shows it in the other chat apps the chat is continued on.
     pub(crate) fn send_message_from(
         self: &Arc<Self>,
-        thread_id: String,
+        chat_id: String,
         text: String,
         attachments: Vec<Attachment>,
         queue: bool,
         from: Option<(Platform, &str)>,
     ) -> Result<Message, Error> {
         let msg = self.deliver(
-            thread_id.clone(),
+            chat_id.clone(),
             text,
             attachments,
             queue,
             from.map(|(platform, _)| platform),
         )?;
-        self.gateway.mirror(thread_id, &msg, from);
+        self.gateway.mirror(chat_id, &msg, from);
         Ok(msg)
     }
 
     /// Stores the user message and gives it to the agent; see `send_message`.
     fn deliver(
         self: &Arc<Self>,
-        thread_id: String,
+        chat_id: String,
         text: String,
         attachments: Vec<Attachment>,
         queue: bool,
@@ -186,14 +186,14 @@ impl Core {
     ) -> Result<Message, Error> {
         let images = provider::load_images(&attachments)?;
         // Refused before anything is stored: a turn still starting has no agent to write to.
-        if self.runner.is_starting(&thread_id) {
+        if self.runner.is_starting(&chat_id) {
             return Err(crate::orchestration::turn::start::STILL_STARTING.into());
         }
         // A chat waiting for its usage limit to reset holds the message for after the reply it
         // is waiting to resume. Sent now it would start a turn of its own, the chat would move
         // past that reply, and the wait would be dropped.
-        if !provider::is_goal_command(&text) && self.waits_to_resume(&thread_id) {
-            return self.hold_for_resume(&thread_id, &text, attachments, via);
+        if !provider::is_goal_command(&text) && self.waits_to_resume(&chat_id) {
+            return self.hold_for_resume(&chat_id, &text, attachments, via);
         }
         // Patchwork runs the goal itself, the same for every agent: a pause or a clear is
         // answered here, and a new goal or a resume is sent as the goal's brief.
@@ -201,9 +201,9 @@ impl Core {
             provider::GoalCommand::Show => Some(Err(Error::from(
                 "Name the goal after /goal, or pause, resume or clear it",
             ))),
-            provider::GoalCommand::Clear => Some(self.stop_goal(&thread_id)),
+            provider::GoalCommand::Clear => Some(self.stop_goal(&chat_id)),
             provider::GoalCommand::Pause => {
-                self.pause_goal(&thread_id);
+                self.pause_goal(&chat_id);
                 Some(Ok(()))
             }
             provider::GoalCommand::Set(_) | provider::GoalCommand::Resume => None,
@@ -213,9 +213,9 @@ impl Core {
             let msg = user_message(&text, Vec::new());
             let m = msg.clone();
             self.store
-                .update_thread(&thread_id, |t| t.messages.push(Arc::new(m)))?;
+                .update_chat(&chat_id, |t| t.messages.push(Arc::new(m)))?;
             self.emit(AgentEventEnvelope {
-                thread_id,
+                chat_id,
                 event: AgentEvent::MessageStarted {
                     message: msg.clone(),
                 },
@@ -225,7 +225,7 @@ impl Core {
         // A goal set or resumed while a turn runs is pursued from now: its brief steers the turn,
         // or waits in the queue, and the turn's end carries it on.
         if let Some(command) = provider::goal_command(&text) {
-            let current = self.store.thread(&thread_id).and_then(|t| t.goal);
+            let current = self.store.chat(&chat_id).and_then(|t| t.goal);
             let goal = if let provider::GoalCommand::Set(objective) = command {
                 orchestration::goal::new_goal(current.as_ref(), objective)
             } else {
@@ -233,23 +233,13 @@ impl Core {
                 goal.with_status(GoalStatus::Active, crate::system::now_ms())
             };
             // Only an explicit new goal or resume reopens a dismissed goal.
-            orchestration::goal::clear_dismissal(&self.store, &thread_id)?;
-            orchestration::publish(
-                self,
-                &thread_id,
-                AgentEvent::GoalUpdated { goal: Some(goal) },
-            );
+            orchestration::goal::clear_dismissal(&self.store, &chat_id)?;
+            orchestration::publish(self, &chat_id, AgentEvent::GoalUpdated { goal: Some(goal) });
         }
         // Antigravity has no setting for when it compacts, so a chat over its compact window
         // compacts first, and the message waits for it in the queue.
-        let queue = if self.compacts_first(&thread_id, &text) {
-            self.deliver(
-                thread_id.clone(),
-                "/compact".into(),
-                Vec::new(),
-                false,
-                None,
-            )?;
+        let queue = if self.compacts_first(&chat_id, &text) {
+            self.deliver(chat_id.clone(), "/compact".into(), Vec::new(), false, None)?;
             true
         } else {
             queue
@@ -262,7 +252,7 @@ impl Core {
         let mut session_id = None;
         let mut subagents = Vec::new();
         let mut first_title = None;
-        self.store.update_thread(&thread_id, |t| {
+        self.store.update_chat(&chat_id, |t| {
             // A sub agent's chat is named after what it was asked to do when it is made.
             if t.messages.is_empty() && t.parent.is_none() {
                 first_title = Some((
@@ -299,22 +289,22 @@ impl Core {
                 attachments.iter().any(|a| a.name == word)
                     || root.as_ref().is_some_and(|root| root.join(word).is_file())
             });
-            self.name_thread(&thread_id, subject, placeholder, agent, model);
+            self.name_chat(&chat_id, subject, placeholder, agent, model);
         }
         // A goal that has ended is over: the next message starts unrelated work, so its banner
         // goes. A new /goal replaces it instead.
         if !provider::is_goal_command(&text)
-            && let Some(goal) = self.store.thread(&thread_id).and_then(|t| t.goal)
+            && let Some(goal) = self.store.chat(&chat_id).and_then(|t| t.goal)
             && matches!(goal.status, GoalStatus::Complete | GoalStatus::Blocked)
         {
             self.store
-                .dismiss_goal(&thread_id, &orchestration::goal::signature(&goal))?;
-            orchestration::publish(self, &thread_id, AgentEvent::GoalUpdated { goal: None });
+                .dismiss_goal(&chat_id, &orchestration::goal::signature(&goal))?;
+            orchestration::publish(self, &chat_id, AgentEvent::GoalUpdated { goal: None });
         }
-        self.switch_to_agent_model(&thread_id, &text);
+        self.switch_to_agent_model(&chat_id, &text);
         // A /goal runs as a turn of its own, not in an idle agent's process.
         if provider::is_goal_command(&text) {
-            self.runner.retire_idle(&thread_id);
+            self.runner.retire_idle(&chat_id);
         }
         // A message that names a skill as "$name" or summons an agent as "&name" anywhere reaches
         // the agent in the form it runs, as `start_turn` sends it too. Only a steer sends it
@@ -322,25 +312,25 @@ impl Core {
         let mut switched = None;
         let mut steer_text = || {
             let skills = skills::enabled(&self.store.settings());
-            let agent = self.store.with_threads(|threads| {
-                threads.iter().find(|t| t.id == thread_id).map(|t| t.agent)
-            });
-            let text = orchestration::goal::agent_text(&self.store, &thread_id, text.clone());
+            let agent = self
+                .store
+                .with_chats(|chats| chats.iter().find(|t| t.id == chat_id).map(|t| t.agent));
+            let text = orchestration::goal::agent_text(&self.store, &chat_id, text.clone());
             let text = match (agent, skills::invoked(&text, &skills)) {
                 (Some(agent), Some((skill, rest))) => skills::invocation(agent, &skill, rest),
                 _ => text,
             };
-            let (text, role) = self.summon_agents(&thread_id, text, false);
+            let (text, role) = self.summon_agents(&chat_id, text, false);
             switched = Some(role);
-            self.chat_app_context(&thread_id, text)
+            self.chat_app_context(&chat_id, text)
         };
         // An idle agent this message resumes counts the files its reply changes from now.
-        self.runner.rebase_idle(&thread_id);
+        self.runner.rebase_idle(&chat_id);
         // While a turn runs, the message steers it, or waits for it to end when the
         // agent cannot take it now.
         let delivery = if queue
             && self.runner.enqueue(
-                &thread_id,
+                &chat_id,
                 FollowUpInput {
                     message_id: &msg.id,
                     text: &text,
@@ -352,7 +342,7 @@ impl Core {
             Delivery::Queued
         } else {
             self.runner.steer(
-                &thread_id,
+                &chat_id,
                 FollowUpInput {
                     message_id: &msg.id,
                     text: &steer_text(),
@@ -368,7 +358,7 @@ impl Core {
         if !matches!(delivery, Delivery::NotRunning)
             && let Some(switched) = switched
         {
-            self.told_role(&thread_id, switched);
+            self.told_role(&chat_id, switched);
         }
         let delivered = match delivery {
             Delivery::Steered => "steered into the running reply",
@@ -377,16 +367,16 @@ impl Core {
             Delivery::NotRunning => "starting a reply",
         };
         let source = Source {
-            thread: Some(thread_id.clone()),
+            chat: Some(chat_id.clone()),
             message: Some(msg.id.clone()),
             ..Source::default()
         };
         let note = format!("{delivered}, {} attachments", attachments.len());
-        THREAD_LOG.write(LogLevel::Info, "message sent", &source, Data::Text(note));
+        CHAT_LOG.write(LogLevel::Info, "message sent", &source, Data::Text(note));
         match delivery {
             Delivery::Steered => {
                 msg.steer = true;
-                self.store.update_thread(&thread_id, |t| {
+                self.store.update_chat(&chat_id, |t| {
                     if let Some(m) = t
                         .messages
                         .iter_mut()
@@ -400,26 +390,26 @@ impl Core {
             Delivery::Queued => {
                 // Only ever raised here: a turn that took the message from its queue meanwhile
                 // has flagged it itself, and whoever sends it lowers the flag.
-                self.store.update_thread(&thread_id, |t| {
+                self.store.update_chat(&chat_id, |t| {
                     if let Some(m) = t
                         .messages
                         .iter_mut()
                         .find(|m| m.id == msg.id)
                         .map(Arc::make_mut)
                     {
-                        m.queued |= self.runner.is_queued(&thread_id, &m.id);
+                        m.queued |= self.runner.is_queued(&chat_id, &m.id);
                         msg.queued = m.queued;
                     }
                 })?;
             }
-            Delivery::Resumed => self.capture_checkpoint(&thread_id, &msg.id),
+            Delivery::Resumed => self.capture_checkpoint(&chat_id, &msg.id),
             Delivery::NotRunning => {
                 // Another send may have started the turn since the check at the top. This one is
                 // refused then, and its message taken back out, so it leaves no trace.
-                let starting = match Starting::claim(&self.runner, &thread_id) {
+                let starting = match Starting::claim(&self.runner, &chat_id) {
                     Ok(starting) => starting,
                     Err(e) => {
-                        self.store.update_thread(&thread_id, |t| {
+                        self.store.update_chat(&chat_id, |t| {
                             t.messages.retain(|m| m.id != msg.id);
                         })?;
                         return Err(e);
@@ -428,7 +418,7 @@ impl Core {
                 // The app adds a message it sent once this returns, but not one the core sends
                 // itself (carrying a goal on), so the chat learns of it before the reply starts.
                 self.emit(AgentEventEnvelope {
-                    thread_id: thread_id.clone(),
+                    chat_id: chat_id.clone(),
                     event: AgentEvent::MessageStarted {
                         message: msg.clone(),
                     },
@@ -436,7 +426,7 @@ impl Core {
                 self.runner.start_claimed(
                     self,
                     TurnRequest {
-                        thread_id,
+                        chat_id,
                         text,
                         attachments,
                         images,
@@ -451,24 +441,24 @@ impl Core {
 
     /// Whether `text` should wait for an Antigravity chat to compact first: no turn is running,
     /// and the context its last reply reported, with no /compact since, reached the window.
-    fn compacts_first(&self, thread_id: &str, text: &str) -> bool {
-        let Some(thread) = self.store.thread(thread_id) else {
+    fn compacts_first(&self, chat_id: &str, text: &str) -> bool {
+        let Some(chat) = self.store.chat(chat_id) else {
             return false;
         };
-        if thread.agent != AgentKind::Antigravity
+        if chat.agent != AgentKind::Antigravity
             || orchestration::is_upkeep(text)
             || provider::is_goal_command(text)
-            || self.runner.is_running(thread_id)
+            || self.runner.is_running(chat_id)
         {
             return false;
         }
-        let window = thread
+        let window = chat
             .compact_window
-            .unwrap_or_else(|| self.store.settings().tokens.compact_window(thread.agent));
+            .unwrap_or_else(|| self.store.settings().tokens.compact_window(chat.agent));
         if window == 0 {
             return false;
         }
-        for m in thread.messages.iter().rev() {
+        for m in chat.messages.iter().rev() {
             if m.role == Role::User && m.text.trim() == "/compact" {
                 return false;
             }
@@ -481,39 +471,39 @@ impl Core {
 
     /// Stops the running turn by interrupting the agent, so its session records the stop and an
     /// agent that can stays up for the next message.
-    pub fn cancel_turn(&self, thread_id: &str) {
-        THREAD_LOG.text(
+    pub fn cancel_turn(&self, chat_id: &str) {
+        CHAT_LOG.text(
             LogLevel::Info,
-            thread_id,
+            chat_id,
             "chat",
             "stopped by the person".into(),
         );
-        self.stop_turn(thread_id, true);
+        self.stop_turn(chat_id, true);
     }
 
     /// Stops the running turn as `cancel_turn` does; without `interrupt`, the agent process ends
-    /// with it. The commands Patchwork runs for the thread's agent, which outlive its process as
+    /// with it. The commands Patchwork runs for the chat's agent, which outlive its process as
     /// background jobs, stop with it.
-    pub(crate) fn stop_turn(&self, thread_id: &str, interrupt: bool) {
-        let session_id = self.store.thread(thread_id).and_then(|t| t.session_id);
+    pub(crate) fn stop_turn(&self, chat_id: &str, interrupt: bool) {
+        let session_id = self.store.chat(chat_id).and_then(|t| t.session_id);
         if interrupt {
-            self.runner.interrupt(thread_id, session_id.as_deref());
+            self.runner.interrupt(chat_id, session_id.as_deref());
         } else {
-            self.runner.cancel(thread_id);
+            self.runner.cancel(chat_id);
         }
         // After the turn is marked stopped, so a command it starts meanwhile stops itself.
-        self.runner.stop_jobs(thread_id);
+        self.runner.stop_jobs(chat_id);
     }
 
-    /// Drops the note on chat `thread_id`'s background task `tool_id` that Patchwork closing ended
+    /// Drops the note on chat `chat_id`'s background task `tool_id` that Patchwork closing ended
     /// it, once the user has dismissed it or asked for it again.
     ///
     /// # Errors
     ///
     /// Returns an error when the change cannot be saved.
-    pub fn dismiss_cut_off_task(&self, thread_id: &str, tool_id: &str) -> Result<(), Error> {
+    pub fn dismiss_cut_off_task(&self, chat_id: &str, tool_id: &str) -> Result<(), Error> {
         let cut_off = |task: &BackgroundTask| task.cut_off && task.tool_id == tool_id;
-        self.store.update_thread(thread_id, |t| {
+        self.store.update_chat(chat_id, |t| {
             for message in &mut t.messages {
                 if message.background.iter().any(cut_off) {
                     for task in &mut Arc::make_mut(message).background {
@@ -526,7 +516,7 @@ impl Core {
         })
     }
 
-    /// Answers a pending approval in the thread's running turn.
+    /// Answers a pending approval in the chat's running turn.
     ///
     /// # Errors
     ///
@@ -534,7 +524,7 @@ impl Core {
     /// answered, or when sending the answer in a new turn fails.
     pub fn respond_approval(
         self: &Arc<Self>,
-        thread_id: &str,
+        chat_id: &str,
         approval_id: &str,
         allow: bool,
         answers: std::collections::HashMap<String, Vec<String>>,
@@ -542,7 +532,7 @@ impl Core {
     ) -> Result<(), Error> {
         self.runner.respond(
             self,
-            thread_id,
+            chat_id,
             ApprovalDecision {
                 approval_id,
                 allow,

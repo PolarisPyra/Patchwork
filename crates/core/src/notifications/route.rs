@@ -5,22 +5,22 @@
 use super::types::{DesktopNotice, Kind, Notices, Place};
 use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::system::now_ms;
-use crate::threads::{ApprovalStatus, GoalStatus, MessageStatus, Thread};
+use crate::chats::{ApprovalStatus, GoalStatus, MessageStatus, Chat};
 use crate::{Core, Error};
 
 /// The most characters of a reply or request a desktop notice shows.
 const BODY_LIMIT: usize = 200;
 
 impl Core {
-    /// The kind of notification `event` of `thread` makes at `place`, when it makes one there:
+    /// The kind of notification `event` of `chat` makes at `place`, when it makes one there:
     /// the chat is one a person started, and the settings ask for that kind there.
     pub(crate) fn notice_kind(
         &self,
         place: Place,
-        thread: &Thread,
+        chat: &Chat,
         event: &AgentEvent,
     ) -> Option<Kind> {
-        if thread.parent.is_some() {
+        if chat.parent.is_some() {
             return None;
         }
         let kind = match event {
@@ -32,19 +32,19 @@ impl Core {
             AgentEvent::TurnCompleted { status, .. } => match status {
                 // A goal still being worked toward runs another turn; it notifies once met.
                 MessageStatus::Complete
-                    if thread
+                    if chat
                         .goal
                         .as_ref()
                         .is_none_or(|g| g.status != GoalStatus::Active) =>
                 {
                     Kind::Finished
                 }
-                MessageStatus::Error if self.limit_reset(thread).is_some() => Kind::Usage,
+                MessageStatus::Error if self.limit_reset(chat).is_some() => Kind::Usage,
                 MessageStatus::Error => Kind::Failed,
                 _ => return None,
             },
             AgentEvent::GoalUpdated { goal: Some(goal) } if goal.status == GoalStatus::Complete => {
-                if !self.presence.first_goal(place, &thread.id, goal.started_at) {
+                if !self.presence.first_goal(place, &chat.id, goal.started_at) {
                     return None;
                 }
                 Kind::Goal
@@ -54,29 +54,29 @@ impl Core {
         self.store
             .settings()
             .notifications
-            .wants(place, kind, &thread.id, thread.project_id.as_deref())
+            .wants(place, kind, &chat.id, chat.project_id.as_deref())
             .then_some(kind)
     }
 
     /// Sends the desktop a notice of `event`, while Patchwork's window is out of focus and the
-    /// settings ask for one. A thread a chat app started tells only the chat app.
-    pub(crate) fn notify_desktop(&self, thread_id: &str, event: &AgentEvent) {
+    /// settings ask for one. A chat a chat app started tells only the chat app.
+    pub(crate) fn notify_desktop(&self, chat_id: &str, event: &AgentEvent) {
         let relevant = matches!(
             event,
             AgentEvent::ApprovalRequested { .. }
                 | AgentEvent::TurnCompleted { .. }
                 | AgentEvent::GoalUpdated { goal: Some(_) }
         );
-        if !relevant || self.window_focused() || self.in_background(thread_id) {
+        if !relevant || self.window_focused() || self.in_background(chat_id) {
             return;
         }
-        let Some(thread) = self.store.thread(thread_id) else {
+        let Some(chat) = self.store.chat(chat_id) else {
             return;
         };
-        let Some(kind) = self.notice_kind(Place::Desktop, &thread, event) else {
+        let Some(kind) = self.notice_kind(Place::Desktop, &chat, event) else {
             return;
         };
-        let title = &thread.title;
+        let title = &chat.title;
         let (tag, title, body) = match (kind, event) {
             (Kind::Asks, AgentEvent::ApprovalRequested { approval, .. }) => (
                 approval.id.clone(),
@@ -84,17 +84,17 @@ impl Core {
                 approval.title.clone(),
             ),
             (Kind::Goal, AgentEvent::GoalUpdated { goal: Some(goal) }) => (
-                format!("{thread_id}/goal"),
+                format!("{chat_id}/goal"),
                 format!("{title} met its goal"),
                 goal.objective.clone(),
             ),
             (Kind::Usage, AgentEvent::TurnCompleted { .. }) => {
                 let resets = self
-                    .limit_reset(&thread)
+                    .limit_reset(&chat)
                     .map(|at| format!("Usage resets {}.", resets_in(at, now_ms())))
                     .unwrap_or_default();
                 (
-                    format!("{thread_id}/turn"),
+                    format!("{chat_id}/turn"),
                     format!("{title} ran out of usage"),
                     resets,
                 )
@@ -105,7 +105,7 @@ impl Core {
                     message_id, error, ..
                 },
             ) => {
-                let message = thread.messages.iter().find(|m| &m.id == message_id);
+                let message = chat.messages.iter().find(|m| &m.id == message_id);
                 let body = if kind == Kind::Failed {
                     error
                         .clone()
@@ -121,12 +121,12 @@ impl Core {
                 } else {
                     "finished"
                 };
-                (format!("{thread_id}/turn"), format!("{title} {how}"), body)
+                (format!("{chat_id}/turn"), format!("{title} {how}"), body)
             }
             _ => return,
         };
         (self.sink)(AgentEventEnvelope {
-            thread_id: thread_id.to_string(),
+            chat_id: chat_id.to_string(),
             event: AgentEvent::Notice {
                 notice: DesktopNotice {
                     tag,
@@ -137,21 +137,17 @@ impl Core {
         });
     }
 
-    /// Gives the chat `thread_id` its own choice of notifications, or, with none, the one its
+    /// Gives the chat `chat_id` its own choice of notifications, or, with none, the one its
     /// project and Settings make.
     ///
     /// # Errors
     ///
     /// Returns an error when the settings cannot be saved.
-    pub fn set_thread_notices(
-        &self,
-        thread_id: &str,
-        notices: Option<Notices>,
-    ) -> Result<(), Error> {
-        let id = thread_id.to_string();
+    pub fn set_chat_notices(&self, chat_id: &str, notices: Option<Notices>) -> Result<(), Error> {
+        let id = chat_id.to_string();
         self.update_settings(move |s| match notices {
-            Some(notices) => _ = s.notifications.threads.insert(id, notices),
-            None => _ = s.notifications.threads.remove(&id),
+            Some(notices) => _ = s.notifications.chats.insert(id, notices),
+            None => _ = s.notifications.chats.remove(&id),
         })
     }
 
@@ -179,10 +175,10 @@ impl Core {
     pub fn unmute_all(&self) -> Result<usize, Error> {
         self.update_settings(|s| {
             let n = &mut s.notifications;
-            let before = n.threads.len() + n.muted_projects.len();
-            n.threads.retain(|_, own| *own != Notices::Off);
+            let before = n.chats.len() + n.muted_projects.len();
+            n.chats.retain(|_, own| *own != Notices::Off);
             n.muted_projects.clear();
-            before - n.threads.len()
+            before - n.chats.len()
         })
     }
 }

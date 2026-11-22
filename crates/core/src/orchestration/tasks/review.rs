@@ -12,8 +12,8 @@ use crate::events::AgentEvent;
 use crate::orchestration::changes::turn_files::turn_file_diff;
 use crate::orchestration::publish;
 use crate::system::now_ms;
-use crate::threads::{
-    AgentPick, MessageStatus, ReviewStatus, Role, Thread, ThreadParent, TurnReview, reviewer_of,
+use crate::chats::{
+    AgentPick, MessageStatus, ReviewStatus, Role, Chat, ChatParent, TurnReview, reviewer_of,
 };
 
 /// The longest a review runs before it is stopped.
@@ -31,25 +31,25 @@ const CONCERNS: &str = "CONCERNS";
 impl Core {
     /// Has the chat's reviewer look at what the reply `message_id` changed, on a thread of its
     /// own. Does nothing for a chat without a reviewer. Called once the turn's reply is saved.
-    pub(crate) fn review_after_turn(self: &Arc<Self>, thread_id: &str, message_id: &str) {
-        let Some(thread) = self.store.thread(thread_id) else {
+    pub(crate) fn review_after_turn(self: &Arc<Self>, chat_id: &str, message_id: &str) {
+        let Some(chat) = self.store.chat(chat_id) else {
             return;
         };
-        let Some(pick) = reviewer_of(&self.store, &self.store.settings(), &thread) else {
+        let Some(pick) = reviewer_of(&self.store, &self.store.settings(), &chat) else {
             return;
         };
         let (core, message) = (Arc::clone(self), message_id.to_string());
-        std::thread::spawn(move || review(&core, &thread, &pick, &message));
+        std::thread::spawn(move || review(&core, &chat, &pick, &message));
     }
 }
 
 /// Runs the review of the reply `message_id` in `parent` on `pick`, publishing it as it starts
 /// and again when it ends.
-fn review(core: &Arc<Core>, parent: &Thread, pick: &AgentPick, message_id: &str) {
+fn review(core: &Arc<Core>, parent: &Chat, pick: &AgentPick, message_id: &str) {
     let Some(prompt) = prompt(core, parent, message_id) else {
         return;
     };
-    let child = reviewer_thread(parent, pick);
+    let child = reviewer_chat(parent, pick);
     let child_id = child.id.clone();
     let at = now_ms();
     let emit = |status: ReviewStatus, text: String| {
@@ -62,20 +62,20 @@ fn review(core: &Arc<Core>, parent: &Thread, pick: &AgentPick, message_id: &str)
                     status,
                     agent: pick.agent,
                     model: pick.model.clone(),
-                    thread_id: child_id.clone(),
+                    chat_id: child_id.clone(),
                     text,
                     at,
                 },
             },
         );
     };
-    if let Err(e) = core.store.insert_threads(vec![child.clone()]) {
+    if let Err(e) = core.store.insert_chats(vec![child.clone()]) {
         log::warn!(error:% = e; "could not save the reviewer's chat: {{error}}");
         return;
     }
     core.emit(crate::events::AgentEventEnvelope {
-        thread_id: child_id.clone(),
-        event: AgentEvent::ThreadCreated { thread: child },
+        chat_id: child_id.clone(),
+        event: AgentEvent::ChatCreated { chat: child },
     });
     emit(ReviewStatus::Running, String::new());
     let sent = match core.send_message(child_id.clone(), prompt, Vec::new(), false) {
@@ -114,28 +114,28 @@ fn review(core: &Arc<Core>, parent: &Thread, pick: &AgentPick, message_id: &str)
 }
 
 /// The reviewer's own chat, under the one whose reply it reviews.
-fn reviewer_thread(parent: &Thread, pick: &AgentPick) -> Thread {
-    Thread {
+fn reviewer_chat(parent: &Chat, pick: &AgentPick) -> Chat {
+    Chat {
         project_id: parent.project_id.clone(),
         model: pick.model.clone(),
         effort: pick.effort.clone(),
         background: parent.background.clone(),
-        parent: Some(ThreadParent {
-            thread_id: parent.id.clone(),
+        parent: Some(ChatParent {
+            chat_id: parent.id.clone(),
             tool_id: String::new(),
         }),
-        ..Thread::new("Review".into(), pick.agent, parent.access_mode)
+        ..Chat::new("Review".into(), pick.agent, parent.access_mode)
     }
 }
 
 /// What the reviewer is asked: the request the reply answered and the diff of what it changed.
 /// None when the reply has no diff to review.
-fn prompt(core: &Core, parent: &Thread, message_id: &str) -> Option<String> {
+fn prompt(core: &Core, parent: &Chat, message_id: &str) -> Option<String> {
     let at = parent.messages.iter().position(|m| m.id == message_id)?;
     let reply = &parent.messages[at];
     let turn = reply.turn.as_ref()?;
     parent.project_id.as_ref()?;
-    let root = core.thread_root(&parent.id).ok()?;
+    let root = core.chat_root(&parent.id).ok()?;
     let request = parent.messages[..at]
         .iter()
         .rfind(|m| m.role == Role::User && !m.queued)

@@ -8,7 +8,7 @@ use crate::provider::clip;
 use super::platform::Platform;
 use crate::{Core, Error};
 use crate::orchestration::changes::turn_files::turn_file_diff;
-use crate::threads::Role;
+use crate::chats::Role;
 
 /// The most messages a reply is split into before it is sent as a file instead.
 pub(super) const MESSAGES: usize = 2;
@@ -22,37 +22,37 @@ const DIFF_TEXT_LIMIT: usize = 6000;
 impl Core {
     /// Sends `text` to `chat`, as the file `reply.md` with its opening beside it when it would
     /// take more than a couple of messages.
-    pub(super) fn say_long(&self, platform: Platform, chat: &str, text: &str) {
+    pub(super) fn say_long(&self, platform: Platform, conversation: &str, text: &str) {
         if chunks(text, platform.limit()).len() <= MESSAGES {
-            self.say(platform, chat, text);
+            self.say(platform, conversation, text);
             return;
         }
         let opening = text.trim().split("\n\n").next().unwrap_or_default();
         let caption = clip(opening, CAPTION_LIMIT);
-        if !self.say_file(platform, chat, "reply.md", text, &caption) {
-            self.say(platform, chat, text);
+        if !self.say_file(platform, conversation, "reply.md", text, &caption) {
+            self.say(platform, conversation, text);
         }
     }
 
-    /// Sends the diff of the files the latest reply of `thread_id` changed, as `changes.patch`,
+    /// Sends the diff of the files the latest reply of `chat_id` changed, as `changes.patch`,
     /// and returns what to tell the chat when there is none to send.
     pub(crate) fn send_diff(
         &self,
         platform: Platform,
-        chat: &str,
-        thread_id: Option<&str>,
+        conversation: &str,
+        chat_id: Option<&str>,
     ) -> Option<String> {
-        let Some(thread) = thread_id.and_then(|id| self.store.thread(id)) else {
+        let Some(chat) = chat_id.and_then(|id| self.store.chat(id)) else {
             return Some("No chat yet. Your next message starts one.".to_string());
         };
-        let Some(root) = thread
+        let Some(root) = chat
             .project_id
             .as_deref()
             .and_then(|id| self.project_root(id).ok())
         else {
             return Some("This chat is in no project, so it changes no files.".to_string());
         };
-        let Some((turn, files)) = thread
+        let Some((turn, files)) = chat
             .messages
             .iter()
             .rev()
@@ -78,39 +78,39 @@ impl Core {
         } else {
             format!("{} files", files.len())
         };
-        let caption = format!("{}: {count} changed", thread.title);
-        if !self.say_file(platform, chat, "changes.patch", &diff, &caption) {
+        let caption = format!("{}: {count} changed", chat.title);
+        if !self.say_file(platform, conversation, "changes.patch", &diff, &caption) {
             self.say(
                 platform,
-                chat,
+                conversation,
                 &format!("{caption}\n\n{}", clip(&diff, DIFF_TEXT_LIMIT)),
             );
         }
         None
     }
 
-    /// Sends the file `name` to every conversation that talks to `thread_id`, with `caption`
+    /// Sends the file `name` to every conversation that talks to `chat_id`, with `caption`
     /// beside it, and returns how many took it.
     ///
     /// # Errors
     ///
-    /// Returns an error when no conversation talks to the thread, or none of their chat apps
+    /// Returns an error when no conversation talks to the chat, or none of their chat apps
     /// took the file; the error is the last chat app's.
     pub(crate) fn send_file_to_chats(
         &self,
-        thread_id: &str,
+        chat_id: &str,
         name: &str,
         bytes: &[u8],
         caption: &str,
     ) -> Result<usize, Error> {
         let mut took = 0;
         let mut refused: Option<Error> = None;
-        for bound in self.bound_chats(thread_id) {
+        for bound in self.bound_conversations(chat_id) {
             let sent = self
                 .gateway
                 .connector(bound.platform)
                 .ok_or_else(|| Error::from("That chat app is not connected"))
-                .and_then(|c| c.send_file(&bound.chat, name, bytes, caption));
+                .and_then(|c| c.send_file(&bound.conversation, name, bytes, caption));
             match sent {
                 Ok(()) => took += 1,
                 Err(error) => refused = Some(error),
@@ -128,7 +128,7 @@ impl Core {
     fn say_file(
         &self,
         platform: Platform,
-        chat: &str,
+        conversation: &str,
         name: &str,
         text: &str,
         caption: &str,
@@ -136,7 +136,7 @@ impl Core {
         let Some(connector) = self.gateway.connector(platform) else {
             return false;
         };
-        match connector.send_file(chat, name, text.as_bytes(), caption) {
+        match connector.send_file(conversation, name, text.as_bytes(), caption) {
             Ok(()) => true,
             Err(error) => {
                 log::debug!(platform = platform.id(), error:% = error; "could not send a file to {{platform}}: {{error}}");

@@ -1,4 +1,4 @@
-//! Each event a chat streams, as a line in its own log (see `logging::THREAD_LOG`). Info has what a
+//! Each event a chat streams, as a line in its own log (see `logging::CHAT_LOG`). Info has what a
 //! reply did: its start and end, approvals, retries, goals, compactions, checks and background
 //! tasks; Warning, what went wrong in it; Debug adds each tool call, plan, file and token count;
 //! and Trace, the text the person and the agent wrote. Streamed text is left to the agent's own
@@ -7,32 +7,32 @@
 // Rust guideline compliant 2026-10-09
 
 use std::fmt::Write as _;
-use crate::logging::{Data, Source, THREAD_LOG};
+use crate::logging::{Data, Source, CHAT_LOG};
 use crate::settings::LogLevel;
-use crate::threads::{MessageStatus, Role, StepStatus};
+use crate::chats::{MessageStatus, Role, StepStatus};
 
 use crate::events::{AgentEvent, AgentEventEnvelope};
 
 /// Logs `envelope` to its chat's log.
 pub(crate) fn log_event(envelope: &AgentEventEnvelope) {
-    if !THREAD_LOG.logs(LogLevel::Error) {
+    if !CHAT_LOG.logs(LogLevel::Error) {
         return;
     }
     let Some((level, event, message, text)) = describe(&envelope.event) else {
         return;
     };
     let source = Source {
-        thread: Some(envelope.thread_id.clone()),
+        chat: Some(envelope.chat_id.clone()),
         message: message.map(String::from),
         ..Source::default()
     };
-    THREAD_LOG.write(level, event, &source, Data::Text(text));
+    CHAT_LOG.write(level, event, &source, Data::Text(text));
 }
 
 /// The level, name, reply and text of an event's line, or None for one the log leaves out.
 fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>, String)> {
     use LogLevel::{Debug, Error, Info, Warning};
-    let trace = THREAD_LOG.logs(LogLevel::Trace);
+    let trace = CHAT_LOG.logs(LogLevel::Trace);
     // The person's and the agent's own words are logged only at Trace.
     let words = |text: &str| {
         if trace {
@@ -294,12 +294,12 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
             }
             (level, "reply ended", Some(message_id), text)
         }
-        AgentEvent::ThreadCreated { thread } => {
+        AgentEvent::ChatCreated { chat } => {
             let text = format!(
                 "{:?}, model {}, {:?} access",
-                thread.agent,
-                thread.model.as_deref().unwrap_or("default"),
-                thread.access_mode
+                chat.agent,
+                chat.model.as_deref().unwrap_or("default"),
+                chat.access_mode
             );
             (Info, "chat created", None, text)
         }
@@ -312,6 +312,6 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
         AgentEvent::OpenChat => (Debug, "chat opened from a chat app", None, String::new()),
         AgentEvent::RestartToUpdate => (Info, "restart into the update", None, String::new()),
         AgentEvent::Show { .. } => (Debug, "shown from a chat app", None, String::new()),
-        AgentEvent::ThreadDeleted => (Info, "chat deleted", None, String::new()),
+        AgentEvent::ChatDeleted => (Info, "chat deleted", None, String::new()),
     })
 }

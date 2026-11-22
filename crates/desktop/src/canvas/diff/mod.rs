@@ -5,7 +5,7 @@
 
 mod parse;
 mod review;
-mod view;
+mod hunks;
 
 pub use review::{Review, review_message, Draft};
 pub(in crate::canvas) use parse::{Kind, Parsed, parse};

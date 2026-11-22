@@ -1,4 +1,4 @@
-//! Sessions found in another agent's files, and turning one into a thread.
+//! Sessions found in another agent's files, and turning one into a chat.
 
 // Rust guideline compliant 2026-10-09
 
@@ -20,7 +20,7 @@ use std::path::Path;
 use super::{ImportSource, antigravity, claude, codex, opencode, t3};
 
 use crate::provider::AgentKind;
-use crate::threads::{Role, MessageStatus, AccessMode, Message, Thread};
+use crate::chats::{Role, MessageStatus, AccessMode, Message, Chat};
 
 /// The longest transcript sent to an agent as context. The newest messages are kept.
 const MAX_CONTEXT_BYTES: usize = 200_000;
@@ -118,13 +118,13 @@ pub(super) fn push_merged(messages: &mut Vec<SessionMessage>, role: Role, text: 
 #[must_use]
 pub fn is_chat_folder(cwd: &Path) -> bool {
     !cwd.is_dir()
-        || crate::system::fs::home_dir()
+        || crate::system::files::paths::home_dir()
             .is_some_and(|home| cwd.starts_with(home.join(".t3/scratch")))
 }
 
-/// Converts an imported session into a stored thread.
+/// Converts an imported session into a stored chat.
 #[must_use]
-pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
+pub fn to_chat(session: Session, project_id: Option<String>) -> Chat {
     let title = session
         .title
         .filter(|t| !t.trim().is_empty())
@@ -134,7 +134,7 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
                 .iter()
                 .find(|m| m.role == Role::User)
                 .map(|m| {
-                    crate::threads::title_from(crate::threads::without_leading_attachments(
+                    crate::chats::title_from(crate::chats::without_leading_attachments(
                         &m.text,
                         |_| false,
                     ))
@@ -147,7 +147,7 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
     } else {
         (Some(session.session_id), None)
     };
-    Thread {
+    Chat {
         project_id,
         model: session.model,
         session_id,
@@ -164,7 +164,7 @@ pub fn to_thread(session: Session, project_id: Option<String>) -> Thread {
             })
             .map(Arc::new)
             .collect(),
-        ..Thread::new(title, session.agent, AccessMode::default())
+        ..Chat::new(title, session.agent, AccessMode::default())
     }
 }
 

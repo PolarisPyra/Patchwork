@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 
 use crate::events::AgentEvent;
 use crate::provider::{AgentKind, AgentStatus, ProviderSlashCommand};
-use crate::threads::{PlanStep, Question, QuestionOption, TokenUsage};
+use crate::chats::{PlanStep, Question, QuestionOption, TokenUsage};
 use crate::permissions::Target;
 use crate::provider::{Image, Parsed, ToolStart, TurnSpec};
 use crate::provider::{mcp, file_touched, prompt, text_delta, thinking, tool_finished, tool_started};
@@ -67,7 +67,7 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
     } else {
         mcp::turn_tools()
     };
-    tools.extend(mcp::own_turn_tools(spec.thread_id));
+    tools.extend(mcp::own_turn_tools(spec.chat_id));
     let command =
         (spec.attachments.is_empty() && spec.text.trim() == "/compact").then_some("compact");
     let fields = json!({
@@ -181,7 +181,7 @@ pub fn parse(v: &Value, message_id: &str) -> Vec<Parsed> {
                         v["lines"]
                             .as_u64()
                             .filter(|&n| n > 0)
-                            .map(|n| crate::threads::EditLines {
+                            .map(|n| crate::chats::EditLines {
                                 added: u32::try_from(n).unwrap_or(u32::MAX),
                                 removed: 0,
                             });

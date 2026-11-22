@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use crate::threads::ToolCall;
+use crate::chats::ToolCall;
 
 /// How many times in a row the same call may repeat before the turn is stopped.
 pub(in crate::orchestration) const LOOP_LIMIT: usize = 8;

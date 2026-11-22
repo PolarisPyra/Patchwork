@@ -84,7 +84,7 @@ fn handle(request: Request) -> Result<serde_json::Value, Error> {
                 return json(());
             }
             // A link is deleted itself, never what it leads to.
-            let path = patchwork_system::fs::entry_inside(Path::new(&dir), &rel)?;
+            let path = patchwork_system::files::paths::entry_inside(Path::new(&dir), &rel)?;
             match std::fs::remove_file(&path) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
                     Err(format!("Cannot delete {rel}: {e}").into())
@@ -119,7 +119,8 @@ fn json(value: impl Serialize) -> Result<serde_json::Value, Error> {
 pub(crate) fn portable(path: &Path) -> String {
     let text = path.to_string_lossy();
     if cfg!(windows) {
-        let text = patchwork_system::fs::without_verbatim(path).unwrap_or_else(|| text.to_string());
+        let text = patchwork_system::files::paths::without_verbatim(path)
+            .unwrap_or_else(|| text.to_string());
         text.replace('\\', "/")
     } else {
         text.into_owned()
@@ -134,10 +135,10 @@ pub(crate) fn base() -> Option<PathBuf> {
 
 /// `path`, taken from the home folder when it is relative or starts with `~`.
 fn home_path(path: &str) -> PathBuf {
-    let home = patchwork_system::fs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    let home = patchwork_system::files::paths::home_dir().unwrap_or_else(|| PathBuf::from("/"));
     match path.trim() {
         "" | "~" => home,
-        p => patchwork_system::fs::resolve(&home, p),
+        p => patchwork_system::files::paths::resolve(&home, p),
     }
 }
 
@@ -216,14 +217,14 @@ fn sizes(dir: &str, rels: &[String]) -> Vec<Option<u64>> {
 fn line_counts(dir: &str, rels: &[String]) -> Vec<u32> {
     rels.iter()
         .map(|rel| {
-            patchwork_system::fs::entry_inside(Path::new(dir), rel)
-                .map_or(0, |path| patchwork_system::fs::count_lines(&path))
+            patchwork_system::files::paths::entry_inside(Path::new(dir), rel)
+                .map_or(0, |path| patchwork_system::files::paths::count_lines(&path))
         })
         .collect()
 }
 
-fn browse(path: Option<&str>) -> Result<patchwork_system::browse::DirListing, Error> {
-    let mut listing = patchwork_system::browse::browse(path)?;
+fn browse(path: Option<&str>) -> Result<patchwork_system::files::browse::DirListing, Error> {
+    let mut listing = patchwork_system::files::browse::browse(path)?;
     let fix = |p: &mut String| *p = portable(Path::new(p.as_str()));
     fix(&mut listing.path);
     if let Some(parent) = &mut listing.parent {

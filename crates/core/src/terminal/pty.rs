@@ -1,5 +1,5 @@
 //! The pseudo-terminal a shell runs in: opening it at the view's size with the shell started in
-//! it, and the threads that carry the shell's output and its exit to the terminal.
+//! it, and the chats that carry the shell's output and its exit to the terminal.
 
 // Rust guideline compliant 2026-10-09
 

@@ -1,5 +1,5 @@
 //! The running gateway: a connection per enabled chat app, each on its own thread, and the queue
-//! of thread events that go back out to them.
+//! of chat events that go back out to them.
 
 // Rust guideline compliant 2026-10-09
 
@@ -15,7 +15,7 @@ use super::platform::Platform;
 use super::types::{Connector, Incoming, Listener, Status};
 use crate::Core;
 use crate::events::{AgentEvent, AgentEventEnvelope};
-use crate::threads::Message;
+use crate::chats::Message;
 
 /// How long a connection waits before its first retry; each failure doubles it.
 const FIRST_RETRY: Duration = Duration::from_secs(5);
@@ -33,7 +33,7 @@ const STOP_CHECK: Duration = Duration::from_millis(250);
 #[derive(Default)]
 pub struct Hub {
     state: Mutex<State>,
-    /// Feeds the thread that sends bound threads' events to their chats, once the gateway has
+    /// Feeds the thread that sends bound chats' events to their chats, once the gateway has
     /// started.
     events: Mutex<Option<Sender<Out>>>,
     /// Held while the pairings or bindings are read and written back.
@@ -59,7 +59,7 @@ pub(super) struct State {
     pub wrong_codes: u32,
     /// Senders already told how to pair, so a stranger hears it once.
     pub told: HashSet<(Platform, String)>,
-    pub chats: HashMap<(Platform, String), Chat>,
+    pub conversations: HashMap<(Platform, String), Conversation>,
     /// The conversation each request was answered from, by approval id, until the other chats
     /// are told.
     pub answered: HashMap<String, (Platform, String)>,
@@ -67,21 +67,21 @@ pub(super) struct State {
     pub notices: Vec<Notice>,
     /// The messages taken lately, oldest first, so one a chat app delivers twice is taken once.
     pub seen: VecDeque<Seen>,
-    /// The chat each thread's agent is working with this turn, by the thread's id, for the
-    /// threads a conversation talks to.
+    /// The chat each chat's agent is working with this turn, by the chat's id, for the
+    /// chats a conversation talks to.
     pub visiting: HashMap<String, String>,
-    /// When the conversations of each thread last asked for a reply or got one, by the
-    /// thread's id, in epoch milliseconds.
+    /// When the conversations of each chat last asked for a reply or got one, by the
+    /// chat's id, in epoch milliseconds.
     pub used: HashMap<String, u64>,
-    /// The chat each thread's agent last worked with and when, in epoch milliseconds, by the
-    /// thread's id. The next turn is told it so that "it" and "that" find it.
+    /// The chat each chat's agent last worked with and when, in epoch milliseconds, by the
+    /// chat's id. The next turn is told it so that "it" and "that" find it.
     pub subject: HashMap<String, (String, u64)>,
 }
 
 /// A message the gateway took.
 pub(super) struct Seen {
     pub platform: Platform,
-    pub chat: String,
+    pub conversation: String,
     /// The platform's id of the message, or its sender and text when the platform gives none.
     pub key: String,
     /// Whether `key` is the platform's id.
@@ -91,11 +91,11 @@ pub(super) struct Seen {
 
 /// What the forwarding thread sends out to chat apps.
 pub(super) enum Out {
-    /// A thread event a chat app may need to hear about.
+    /// A chat event a chat app may need to hear about.
     Event(AgentEventEnvelope),
-    /// A message the person sent to a thread, from the computer or from a chat app.
+    /// A message the person sent to a chat, from the computer or from a chat app.
     Sent {
-        thread_id: String,
+        chat_id: String,
         message: Message,
         /// The conversation it came from, which already shows it.
         from: Option<(Platform, String)>,
@@ -104,15 +104,15 @@ pub(super) enum Out {
 
 /// What a conversation on a chat app asked for that applies later.
 #[derive(Default)]
-pub(super) struct Chat {
-    /// Where its next new thread opens, chosen with `/new`; none opens it where the settings say.
+pub(super) struct Conversation {
+    /// Where its next new chat opens, chosen with `/new`; none opens it where the settings say.
     pub project: Option<Place>,
 }
 
-/// Where a new thread opens.
+/// Where a new chat opens.
 pub(crate) enum Place {
     /// Outside any project.
-    Chat,
+    Conversation,
     /// In the project with this id.
     Project(String),
 }
@@ -172,7 +172,7 @@ impl Hub {
                 | AgentEvent::ApprovalRequested { .. }
                 | AgentEvent::ApprovalResolved { .. }
                 | AgentEvent::TurnCompleted { .. }
-                | AgentEvent::ThreadDeleted
+                | AgentEvent::ChatDeleted
         );
         if !wanted {
             return;
@@ -180,11 +180,11 @@ impl Hub {
         self.send(Out::Event(event.clone()));
     }
 
-    /// Shows a message the person sent to `thread_id` in the chats that continue it, except the
+    /// Shows a message the person sent to `chat_id` in the chats that continue it, except the
     /// conversation `from` it came from.
     pub(crate) fn mirror(
         &self,
-        thread_id: String,
+        chat_id: String,
         message: &Message,
         from: Option<(Platform, &str)>,
     ) {
@@ -192,9 +192,9 @@ impl Hub {
             return;
         }
         self.send(Out::Sent {
-            thread_id,
+            chat_id,
             message: message.clone(),
-            from: from.map(|(platform, chat)| (platform, chat.to_string())),
+            from: from.map(|(platform, conversation)| (platform, conversation.to_string())),
         });
     }
 
@@ -288,7 +288,7 @@ impl Core {
     /// sidebar shows where each one stands.
     pub(super) fn connection_changed(&self) {
         self.emit(AgentEventEnvelope {
-            thread_id: String::new(),
+            chat_id: String::new(),
             event: AgentEvent::ChatAppsChanged,
         });
     }

@@ -1,0 +1,185 @@
+//! The cards that show how text reads: each code theme of Settings → Themes, and each size of
+//! a chat's text and whether anything moves of Settings → Interface.
+
+// Rust guideline compliant 2026-10-09
+
+use gpui::{AnyElement, Div, FontWeight, Hsla, SharedString, div, prelude::*, px, rgb};
+use patchwork_core::settings::{Settings, TextSize};
+use patchwork_core::themes::Scheme;
+
+use super::cards::{Extras, add_card, card, grid};
+use super::files::{Filed, file_tools};
+use crate::settings::SettingsDialog;
+use crate::settings::controls::{switch_row};
+use patchwork_ui::theme::{fs_xs, Theme as Colors, font_mono, theme};
+
+const SIZES: [(TextSize, &str); 3] = [
+    (TextSize::Small, "Small"),
+    (TextSize::Medium, "Medium"),
+    (TextSize::Large, "Large"),
+];
+
+/// The picture of a code theme on its card: a line of code in its colors.
+fn code_swatch(colors: [Hsla; 4], t: &Colors) -> Div {
+    let [keyword, function, string, comment] = colors;
+    let part = |text: &'static str, color: Hsla| div().text_color(color).child(text);
+    div()
+        .bg(t.bg_editor)
+        .px(px(10.))
+        .flex()
+        .flex_col()
+        .justify_center()
+        .font_family(font_mono())
+        .text_size(px(fs_xs()))
+        .child(part("// hello", comment))
+        .child(
+            div()
+                .flex()
+                .gap(px(4.))
+                .child(part("fn", keyword))
+                .child(part("main", function)),
+        )
+        .child(part("\"text\"", string))
+}
+
+/// The code themes made for light windows or for dark ones: the color scheme's own, then each
+/// file. The pane shows the ones for the kind of window that is showing.
+pub(super) fn code_theme_cards(
+    d: &SettingsDialog,
+    scheme: Scheme,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    let t = *theme(cx);
+    let (key, title, current, set): (_, _, _, fn(&mut Settings, Option<String>)) = match scheme {
+        Scheme::Light => (
+            "code-theme-light",
+            "Syntax theme",
+            d.settings.code_theme_light.clone(),
+            |s, id| s.code_theme_light = id,
+        ),
+        Scheme::Dark => (
+            "code-theme-dark",
+            "Syntax theme",
+            d.settings.code_theme_dark.clone(),
+            |s, id| s.code_theme_dark = id,
+        ),
+    };
+    let own = [t.syn_keyword, t.syn_function, t.syn_string, t.syn_comment];
+    let mut cards = vec![card(
+        format!("{key}-own"),
+        "Default",
+        code_swatch(own, &t),
+        current.is_none(),
+        Extras::default(),
+        move |d, cx| d.update(|s| set(s, None), cx),
+        cx,
+    )];
+    for code in d.themes.codes.iter().filter(|c| c.file.scheme == scheme) {
+        let colors = code.file.colors;
+        let inks = [
+            colors.keyword,
+            colors.function,
+            colors.string,
+            colors.comment,
+        ]
+        .map(|color| Hsla::from(rgb(color.0)));
+        let id = code.id.clone();
+        let card_key = format!("{key}-{id}");
+        let state = (code.custom, code.edited);
+        let tools = file_tools(&card_key, &code.file.name, Filed::Code, &id, state);
+        cards.push(card(
+            card_key,
+            code.file.name.clone(),
+            code_swatch(inks, &t),
+            current.as_deref() == Some(id.as_str()),
+            Extras { notes: &[], tools },
+            move |d, cx| {
+                let id = id.clone();
+                d.update(|s| set(s, Some(id)), cx);
+            },
+            cx,
+        ));
+    }
+    let add = add_card("import-code-theme", "Add code theme", &t)
+        .on_click(cx.listener(|d, _, _, cx| d.pick_themes(cx)))
+        .into_any_element();
+    // The row that writes a code theme comes right under the cards, with no line between.
+    div()
+        .pt(px(10.))
+        .child(grid(key, title, cards, Some(add)))
+        .into_any_element()
+}
+
+/// A titled grid of cards, as the chat background has.
+pub(super) fn titled(title: &'static str, cards: AnyElement, t: &Colors) -> AnyElement {
+    div()
+        .border_b_1()
+        .border_color(t.border)
+        .pt(px(10.))
+        .child(div().font_weight(FontWeight::SEMIBOLD).child(title))
+        .child(cards)
+        .into_any_element()
+}
+
+/// The picture on a card that shows text: `sample` in `font` at `scale` of the medium size.
+fn text_swatch(font: SharedString, scale: f32, sample: &'static str, t: &Colors) -> Div {
+    div()
+        .bg(t.bg_editor)
+        .px(px(10.))
+        .flex()
+        .flex_col()
+        .justify_center()
+        .font_family(font)
+        .child(
+            div()
+                .text_size(px(20. * scale))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(t.text)
+                .child("Aa"),
+        )
+        .child(
+            div()
+                .truncate()
+                .text_size(px(13. * scale))
+                .text_color(t.text_muted)
+                .child(sample),
+        )
+}
+
+/// How large the app's text is.
+pub(super) fn text_size_cards(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
+    let t = *theme(cx);
+    let font = patchwork_ui::theme::font_ui();
+    let cards = SIZES
+        .into_iter()
+        .map(|(size, name)| {
+            card(
+                format!("text-size-{name}"),
+                name,
+                text_swatch(font.clone(), size.scale(), "The quick brown fox", &t),
+                d.settings.text_size == size,
+                Extras {
+                    notes: &[],
+                    tools: Vec::new(),
+                },
+                move |d, cx| d.update(|s| s.text_size = size, cx),
+                cx,
+            )
+        })
+        .collect();
+    let cards = grid("text-size", "Text size", cards, None);
+    titled("Text size", cards, &t)
+}
+
+/// Whether animations and the Orchestrator's backdrop hold still.
+pub(super) fn motion_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
+    switch_row(
+        "reduce-motion",
+        "Reduce motion",
+        None,
+        d.settings.reduce_motion,
+        |d, on, cx| d.update(|s| s.reduce_motion = on, cx),
+        cx,
+    )
+    .into_any_element()
+}

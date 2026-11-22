@@ -189,7 +189,7 @@ fn save_cache(tools: &Listings) {
         })
         .collect();
     if let Ok(text) = serde_json::to_string(&ok)
-        && let Err(e) = crate::system::fs::write_private(&cache_file(), &text)
+        && let Err(e) = crate::system::files::paths::write_private(&cache_file(), &text)
     {
         log::warn!(error:% = e; "could not keep the MCP servers found: {{error}}");
     }

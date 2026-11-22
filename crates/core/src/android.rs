@@ -39,8 +39,8 @@ impl Host for Core {
         self.store.set_state(key, value)
     }
 
-    fn thread_project(&self, thread_id: &str) -> Option<(String, PathBuf)> {
-        let project_id = self.store.thread(thread_id)?.project_id?;
+    fn chat_project(&self, chat_id: &str) -> Option<(String, PathBuf)> {
+        let project_id = self.store.chat(chat_id)?.project_id?;
         let root = self.project_root(&project_id).ok()?;
         Some((project_id, PathBuf::from(root)))
     }
@@ -62,7 +62,7 @@ impl Core {
         let path = path.trim();
         let kept = (!path.is_empty()).then(|| path.to_string());
         if let Some(path) = &kept {
-            let home = crate::system::fs::home_dir().unwrap_or_default();
+            let home = crate::system::files::paths::home_dir().unwrap_or_default();
             let folder = match path.strip_prefix("~/") {
                 Some(rest) => home.join(rest),
                 None => path.into(),

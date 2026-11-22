@@ -13,7 +13,7 @@ use super::store::{Inner, Store};
 use crate::provider::AgentKind;
 use crate::scheduled::{RunOutcome, Schedule, Run, Task};
 use crate::system::now_ms;
-use crate::threads::AccessMode;
+use crate::chats::AccessMode;
 
 /// How many runs each task keeps.
 const RECENT_RUNS: i64 = 5;
@@ -31,7 +31,7 @@ struct Row {
     last_run_at: Option<i64>,
     next_run_at: Option<i64>,
     created_at: i64,
-    bot_id: Option<String>,
+    agent_id: Option<String>,
 }
 
 pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
@@ -39,7 +39,7 @@ pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
         .conn
         .prepare(
             "SELECT id, name, prompt, schedule, project_id, agent, model, access_mode, enabled,
-                    last_run_at, next_run_at, created_at, bot_id
+                    last_run_at, next_run_at, created_at, agent_id
              FROM scheduled_tasks ORDER BY created_at",
         )
         .map_err(err)?;
@@ -58,7 +58,7 @@ pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
                 last_run_at: row.get(9)?,
                 next_run_at: row.get(10)?,
                 created_at: row.get(11)?,
-                bot_id: row.get(12)?,
+                agent_id: row.get(12)?,
             })
         })
         .map_err(err)?;
@@ -83,7 +83,7 @@ pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
                 next_run_at: row.next_run_at,
                 created_at: row.created_at,
                 recent_runs,
-                bot_id: row.bot_id,
+                agent_id: row.agent_id,
             })
         })
         .collect()
@@ -94,7 +94,7 @@ fn recent_runs(inner: &Inner) -> Result<HashMap<String, Vec<Run>>, Error> {
     let mut stmt = inner
         .conn
         .prepare(
-            "SELECT task_id, started_at, thread_id, outcome, detail FROM (
+            "SELECT task_id, started_at, chat_id, outcome, detail FROM (
                  SELECT *, ROW_NUMBER() OVER (
                      PARTITION BY task_id ORDER BY started_at DESC, id DESC
                  ) AS n
@@ -110,7 +110,7 @@ fn recent_runs(inner: &Inner) -> Result<HashMap<String, Vec<Run>>, Error> {
                 row.get::<_, String>(0)?,
                 Run {
                     at: row.get(1)?,
-                    thread_id: row.get(2)?,
+                    chat_id: row.get(2)?,
                     outcome: dec(row.get::<_, String>(3)?)?,
                     detail: row.get(4)?,
                 },
@@ -130,15 +130,9 @@ fn record_run(inner: &Inner, task_id: &str, run: &Run) -> Result<(), Error> {
     inner
         .conn
         .execute(
-            "INSERT INTO scheduled_task_runs (task_id, started_at, thread_id, outcome, detail)
+            "INSERT INTO scheduled_task_runs (task_id, started_at, chat_id, outcome, detail)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![
-                task_id,
-                run.at,
-                run.thread_id,
-                enc(&run.outcome),
-                run.detail
-            ],
+            params![task_id, run.at, run.chat_id, enc(&run.outcome), run.detail],
         )
         .map_err(err)?;
     inner
@@ -160,14 +154,14 @@ fn save(inner: &Inner, task: &Task) -> Result<(), Error> {
         .execute(
             "INSERT INTO scheduled_tasks
                  (id, name, prompt, schedule, project_id, agent, model, access_mode, enabled,
-                  last_run_at, next_run_at, created_at, bot_id)
+                  last_run_at, next_run_at, created_at, agent_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
              ON CONFLICT (id) DO UPDATE SET name = excluded.name, prompt = excluded.prompt,
                  schedule = excluded.schedule, project_id = excluded.project_id,
                  agent = excluded.agent, model = excluded.model,
                  access_mode = excluded.access_mode, enabled = excluded.enabled,
                  last_run_at = excluded.last_run_at, next_run_at = excluded.next_run_at,
-                 bot_id = excluded.bot_id",
+                 agent_id = excluded.agent_id",
             params![
                 task.id,
                 task.name,
@@ -181,7 +175,7 @@ fn save(inner: &Inner, task: &Task) -> Result<(), Error> {
                 task.last_run_at,
                 task.next_run_at,
                 task.created_at,
-                task.bot_id,
+                task.agent_id,
             ],
         )
         .map_err(err)?;
@@ -231,7 +225,7 @@ impl Store {
     }
 
     /// Records that a task was started at `at`, and will next start at `next`. `started` is the
-    /// thread it started, or why it did not start one.
+    /// chat it started, or why it did not start one.
     pub(crate) fn scheduled_task_ran(
         &self,
         id: &str,
@@ -251,15 +245,15 @@ impl Store {
             return Err("The scheduled task no longer exists".into());
         }
         let run = match started {
-            Ok(thread_id) => Run {
+            Ok(chat_id) => Run {
                 at,
-                thread_id: Some(thread_id.to_string()),
+                chat_id: Some(chat_id.to_string()),
                 outcome: RunOutcome::Started,
                 detail: None,
             },
             Err(why) => Run {
                 at,
-                thread_id: None,
+                chat_id: None,
                 outcome: RunOutcome::Failed,
                 detail: Some(why.to_string()),
             },
@@ -295,7 +289,7 @@ impl Store {
             .map_err(err)?;
         let run = Run {
             at: missed.unwrap_or_else(|| now_ms() as i64),
-            thread_id: None,
+            chat_id: None,
             outcome: RunOutcome::Skipped,
             detail: Some(detail),
         };

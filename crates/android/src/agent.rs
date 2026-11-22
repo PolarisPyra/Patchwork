@@ -10,10 +10,15 @@
 
 use serde_json::{Value, json};
 
-use super::types::{
-    Boot, Device, DeviceState, MobileProject, RunMode, RunTarget, Sdk, Snapshot, Variant,
-};
-use super::{detect, device, gradle, logcat};
+use crate::sdk::detect::MobileProject;
+use crate::devices::connected::{Device, DeviceState};
+use super::emulator::Boot;
+use crate::sdk::gradle::Variant;
+use super::run::{RunMode, RunTarget, Snapshot};
+use crate::sdk::locate::Sdk;
+use super::devices::{adb, logcat};
+use super::sdk::detect::detect;
+use super::sdk::gradle;
 use patchwork_system::Error;
 
 use super::host::Android;
@@ -181,12 +186,12 @@ impl Android<'_> {
     /// The Android tools as Patchwork's own server lists them for the chat's agent. None unless
     /// the user lets agents use Android devices and the chat has a project.
     #[must_use]
-    pub fn tools(&self, thread_id: &str) -> Vec<Value> {
+    pub fn tools(&self, chat_id: &str) -> Vec<Value> {
         if !self.host.agents_allowed() {
             return Vec::new();
         }
         self.host
-            .thread_project(thread_id)
+            .chat_project(chat_id)
             .map(|(_, root)| tools(detect(&root).as_ref()))
             .unwrap_or_default()
     }
@@ -300,7 +305,7 @@ impl Android<'_> {
     /// project holds no app to build, an argument is wrong, or the device or the build fails.
     pub fn tool(
         &self,
-        thread_id: &str,
+        chat_id: &str,
         tool: &str,
         args: &Value,
         stopped: &dyn Fn() -> bool,
@@ -314,7 +319,7 @@ impl Android<'_> {
         }
         let (project_id, root) = self
             .host
-            .thread_project(thread_id)
+            .chat_project(chat_id)
             .ok_or("This chat has no project.")?;
         let found = detect(&root);
         let app = || found.as_ref().ok_or_else(|| Error::from(NO_APP));
@@ -367,7 +372,7 @@ impl Android<'_> {
             }
             "screenshot" => {
                 let device = device()?;
-                let png = device::screenshot(&sdk, &device.serial)?;
+                let png = adb::screenshot(&sdk, &device.serial)?;
                 let size = image::load_from_memory(&png)
                     .map(|picture| {
                         format!(" It is {}x{} pixels.", picture.width(), picture.height())
@@ -387,7 +392,7 @@ impl Android<'_> {
             "tap" => {
                 let (x, y) = (number(args, "x")?, number(args, "y")?);
                 let device = device()?;
-                device::tap(&sdk, &device.serial, x, y)?;
+                adb::tap(&sdk, &device.serial, x, y)?;
                 Ok(format!("Tapped {x}, {y} on {}.", device.serial))
             }
             "swipe" => {
@@ -396,7 +401,7 @@ impl Android<'_> {
                 let millis = args["duration_ms"].as_u64().unwrap_or(SWIPE_MILLIS);
                 let millis = u32::try_from(millis.clamp(1, 60_000)).unwrap_or(1);
                 let device = device()?;
-                device::swipe(&sdk, &device.serial, from, to, millis)?;
+                adb::swipe(&sdk, &device.serial, from, to, millis)?;
                 Ok(format!("Swiped on {}.", device.serial))
             }
             "type" => {
@@ -405,13 +410,13 @@ impl Android<'_> {
                     return Err("Give the text to type.".into());
                 }
                 let device = device()?;
-                device::type_text(&sdk, &device.serial, text)?;
+                adb::type_text(&sdk, &device.serial, text)?;
                 Ok(format!("Typed the text on {}.", device.serial))
             }
             "key" => {
                 let key = args["key"].as_str().unwrap_or_default();
                 let device = device()?;
-                device::key(&sdk, &device.serial, key)?;
+                adb::key(&sdk, &device.serial, key)?;
                 Ok(format!("Pressed {key} on {}.", device.serial))
             }
             "logcat" => {

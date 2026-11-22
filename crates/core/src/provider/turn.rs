@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use serde_json::Value;
 use crate::permissions::PermissionKind;
-use crate::threads::{AccessMode, AttachmentKind, Attachment, image_media_type};
+use crate::chats::{AccessMode, AttachmentKind, Attachment, image_media_type};
 use super::{antigravity, api, claude, codex, opencode, AgentKind};
 use super::Parsed;
 
@@ -18,8 +18,8 @@ pub struct TurnSpec<'a> {
     pub root: &'a str,
     /// The SSH host the project is on, for a remote project.
     pub host: Option<&'a str>,
-    /// The thread the turn runs in, which Patchwork's own tools act for.
-    pub thread_id: &'a str,
+    /// The chat the turn runs in, which Patchwork's own tools act for.
+    pub chat_id: &'a str,
     pub session_id: Option<&'a str>,
     pub model: Option<&'a str>,
     /// The model that reads images, when `model` cannot. Only Patchwork's own agent uses it.
@@ -42,14 +42,14 @@ pub struct TurnSpec<'a> {
     pub instructions: Option<&'a str>,
     /// Patchwork's skills folder, which the agent loads skills from.
     pub skills_dir: Option<&'a str>,
-    /// The kinds the thread's permission rules guard, for the one agent told at launch what to
+    /// The kinds the chat's permission rules guard, for the one agent told at launch what to
     /// ask about: `opencode run`. The rest ask Patchwork at each call (see `permissions::hook`).
     pub guarded: &'a [crate::permissions::Guarded],
     /// The custom agents the turn's CLI can start as its own subagents, by name.
     pub agents: &'a [crate::extensions::agents::Agent],
     /// The enabled hooks the agent runs on its own events.
     pub hooks: &'a [crate::extensions::hooks::AgentHook],
-    /// The thread is a chat app's dispatcher: its agent gets Patchwork's chat tools and nothing
+    /// The chat is a chat app's dispatcher: its agent gets Patchwork's chat tools and nothing
     /// of the computer, so no built-in tools, other servers, skills or hooks.
     pub dispatcher: bool,
 }
@@ -225,17 +225,17 @@ pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
     match agent {
         AgentKind::Claude if spec.dispatcher => [
             claude::turn_args(spec),
-            crate::provider::mcp::overrides::dispatcher_overrides(spec.thread_id),
+            crate::provider::mcp::overrides::dispatcher_overrides(spec.chat_id),
         ]
         .concat(),
         AgentKind::Claude => [
             claude::turn_args(spec),
-            crate::provider::mcp::overrides::overrides(agent, spec.root, spec.thread_id),
+            crate::provider::mcp::overrides::overrides(agent, spec.root, spec.chat_id),
         ]
         .concat(),
         AgentKind::Codex => [
             codex::turn_args(),
-            crate::provider::mcp::overrides::overrides(agent, spec.root, spec.thread_id),
+            crate::provider::mcp::overrides::overrides(agent, spec.root, spec.chat_id),
             crate::provider::hooks::codex_args(spec),
             codex::agents_args(spec),
             codex::compact_args(spec),
@@ -257,7 +257,7 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
             opencode::skills_config(spec),
             opencode::agents_config(spec),
             opencode::todo_config(),
-            crate::provider::mcp::overrides::opencode_config(spec.thread_id),
+            crate::provider::mcp::overrides::opencode_config(spec.chat_id),
         ])
         .map(|config| ("OPENCODE_CONFIG_CONTENT", config))
         .into_iter()
@@ -268,7 +268,7 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
                     opencode::permission_config(spec),
                     opencode::agents_config(spec),
                     opencode::instructions_config(spec),
-                    crate::provider::mcp::overrides::opencode_config(spec.thread_id),
+                    crate::provider::mcp::overrides::opencode_config(spec.chat_id),
                 ])
                 .map(|config| ("OPENCODE_CONFIG_CONTENT", config)),
             )
@@ -394,7 +394,7 @@ fn mode_asks(agent: AgentKind, spec: &TurnSpec, target: &crate::permissions::Tar
             !target
                 .resources
                 .iter()
-                .all(|r| crate::system::fs::is_inside(root, r))
+                .all(|r| crate::system::files::paths::is_inside(root, r))
         }
         (AgentKind::OpenCode, mode) => opencode::mode_asks(mode, target.kind),
         _ => true,

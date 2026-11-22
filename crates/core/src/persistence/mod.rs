@@ -3,13 +3,13 @@
 //!
 //! - `store`: the `Store` the rest of the app uses, with its in-memory cache.
 //! - `migrations`: the schema, as numbered SQL files, and the record of which have run.
-//! - `settings`, `threads`, `costs`, `quilts`: how each table's rows map to the app's types.
+//! - `settings`, `chats`, `costs`, `quilts`: how each table's rows map to the app's types.
 //! - `legacy`: data from before the database, or from before it moved.
 
 // Rust guideline compliant 2026-10-09
 
 mod quilts;
-mod bots;
+mod agents;
 mod costs;
 mod folders;
 mod legacy;
@@ -17,7 +17,7 @@ mod migrations;
 mod scheduled;
 mod settings;
 mod store;
-mod threads;
+mod chats;
 
 #[doc(inline)]
 pub(crate) use store::DB_FILE;

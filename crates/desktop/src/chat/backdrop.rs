@@ -1,5 +1,5 @@
-//! The chat's background, behind everything it draws: its own, else its bot's, else the one in
-//! Settings. A bot's page draws the bot's the same way.
+//! The chat's background, behind everything it draws: its own, else its agent's, else the one in
+//! Settings. An agent's page draws the agent's the same way.
 //!
 //! A preset or an animated backdrop is drawn as Settings previews it; a picture covers the chat,
 //! with the window's color laid over it.
@@ -17,7 +17,7 @@ use patchwork_ui::backdrop::{PreviewFlight, butterfly_backdrop, preset_fill, sce
 use patchwork_ui::theme::{InScheme, Theme, applied, theme};
 use crate::workspace::Workspace;
 
-use super::scheme::in_scheme;
+use super::text_colors::in_scheme;
 
 /// How much of the window color is laid over a chat's picture, as on the Orchestrator page.
 const PICTURE_DIM: f32 = 0.45;
@@ -69,14 +69,13 @@ impl Workspace {
     }
 }
 
-/// The chat's own background, else its bot's, else the one in Settings.
+/// The chat's own background, else its agent's, else the one in Settings.
 fn chat_background(w: &Workspace) -> ChatBackground {
-    let thread = w.thread.as_ref();
-    thread
-        .and_then(|t| t.background.clone())
+    let chat = w.chat.as_ref();
+    chat.and_then(|t| t.background.clone())
         .or_else(|| {
-            let bot = thread?.bot_id.as_ref()?;
-            w.bots.iter().find(|b| &b.id == bot)?.background.clone()
+            let agent = chat?.agent_id.as_ref()?;
+            w.agents.iter().find(|b| &b.id == agent)?.background.clone()
         })
         .unwrap_or_else(|| w.settings.chat_background.clone())
 }

@@ -9,12 +9,12 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
-use crate::threads::AccessMode;
+use crate::chats::AccessMode;
 use crate::events::AgentEvent;
 
-use crate::threads::StepStatus;
+use crate::chats::StepStatus;
 
-use crate::threads::TaskStatus;
+use crate::chats::TaskStatus;
 
 use crate::provider::Parsed;
 use crate::provider::TaskEvent;
@@ -157,7 +157,7 @@ fn claude_args_include_resume_model_and_mode() {
     let mut spec = TurnSpec {
         root: "/abs",
         host: None,
-        thread_id: "thread",
+        chat_id: "thread",
         session_id: Some("sid"),
         model: Some("opus"),
         vision_model: None,

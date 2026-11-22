@@ -6,9 +6,12 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use super::detect::{detect, is_marker};
-use super::sdk::{Host, Os, Tool, abi_for, avd_home, candidates, default_root, sdk_dir, tool_path};
-use super::types::{Framework, SdkSource};
+use crate::sdk::detect::{detect, is_marker};
+use crate::sdk::locate::{
+    Host, Os, Tool, abi_for, avd_home, candidates, default_root, sdk_dir, tool_path,
+};
+use crate::sdk::detect::Framework;
+use crate::sdk::locate::SdkSource;
 
 /// A project folder under the repository's git-ignored `research/`, removed when dropped.
 struct Fixture(PathBuf);

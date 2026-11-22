@@ -6,12 +6,12 @@
 use gpui::{AnyElement, ClickEvent, Window, div, prelude::*, px};
 use patchwork_core::provider::AgentKind;
 use patchwork_core::settings::Settings;
-use patchwork_core::threads::NewThread;
+use patchwork_core::chats::NewChat;
 
 use super::menus::{Menu, Pick, Row};
 use patchwork_ui::effort_label;
 use super::model_picker::ordered;
-use super::state::{Composer, LaunchProject};
+use super::draft::{Composer, LaunchProject};
 use patchwork_ui::icon;
 use patchwork_ui::theme::theme;
 
@@ -39,11 +39,11 @@ impl Composer {
             .unwrap_or_else(|| "Default".into())
     }
 
-    /// A new thread in `project` with the agent and model picked on the Orchestrator page.
+    /// A new chat in `project` with the agent and model picked on the Orchestrator page.
     #[must_use]
-    pub fn launch_thread(&self, project_id: Option<String>, settings: &Settings) -> NewThread {
+    pub fn launch_chat(&self, project_id: Option<String>, settings: &Settings) -> NewChat {
         let (agent, model) = self.launch_pick(settings);
-        let mut new = self.new_thread(project_id, settings);
+        let mut new = self.new_chat(project_id, settings);
         new.effort = self.launch_effort(settings);
         new.agent = agent;
         new.model = model;

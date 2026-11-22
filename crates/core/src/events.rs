@@ -8,8 +8,8 @@ use serde::Serialize;
 
 use crate::permissions::RuleRef;
 use crate::provider::ProviderSlashCommand;
-use crate::threads::{
-    Approval, BackgroundTask, Goal, Message, MessageStatus, PlanStep, Refusal, Thread, TokenUsage,
+use crate::chats::{
+    Approval, BackgroundTask, Goal, Message, MessageStatus, PlanStep, Refusal, Chat, TokenUsage,
     ToolCall, TurnChecks, TurnReview, TurnTrees,
 };
 
@@ -17,7 +17,8 @@ use crate::threads::{
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentEventEnvelope {
-    pub thread_id: String,
+    #[serde(alias = "threadId")]
+    pub chat_id: String,
     pub event: AgentEvent,
 }
 
@@ -90,13 +91,13 @@ pub enum AgentEvent {
     SecretResolved {
         message_id: String,
         approval_id: String,
-        status: crate::secrets::SecretStatus,
+        status: crate::vault::requests::SecretStatus,
     },
     /// A notification for the desktop to show while Patchwork is not the focused window.
     Notice {
         notice: crate::notifications::DesktopNotice,
     },
-    /// The thread's goal changed; None once it is cleared.
+    /// The chat's goal changed; None once it is cleared.
     GoalUpdated {
         goal: Option<Goal>,
     },
@@ -131,7 +132,7 @@ pub enum AgentEvent {
     SlashCommandsUpdated {
         commands: Vec<ProviderSlashCommand>,
     },
-    /// The chat's custom agent changed (see `Thread::role`).
+    /// The chat's custom agent changed (see `Chat::role`).
     RoleChanged {
         role: Option<String>,
     },
@@ -172,7 +173,7 @@ pub enum AgentEvent {
     MessageSteered {
         message_id: String,
     },
-    /// A queued message was taken back, so it leaves the thread.
+    /// A queued message was taken back, so it leaves the chat.
     MessageRemoved {
         message_id: String,
     },
@@ -216,32 +217,32 @@ pub enum AgentEvent {
         status: MessageStatus,
         error: Option<String>,
     },
-    /// A thread the core created, such as a subagent's.
-    ThreadCreated {
-        thread: Thread,
+    /// A chat the core created, such as a subagent's.
+    ChatCreated {
+        chat: Chat,
     },
-    /// A thread the core made and then took back, such as one a scheduled task could not start in.
-    ThreadDeleted,
-    /// The thread was named after what its first message is about.
+    /// A chat the core made and then took back, such as one a scheduled task could not start in.
+    ChatDeleted,
+    /// The chat was named after what its first message is about.
     TitleUpdated {
         title: String,
     },
-    /// The chat apps the thread is continued on changed.
+    /// The chat apps the chat is continued on changed.
     ChatAppsChanged,
-    /// The thread's agent, model or access was changed from a chat app, or it was set
+    /// The chat's agent, model or access was changed from a chat app, or it was set
     /// there to resume once its usage limit resets.
     OptionsChanged,
     /// The settings were changed from outside the window, as a chat app does: the window reads
-    /// them anew and applies the theme. Not about a thread.
+    /// them anew and applies the theme. Not about a chat.
     SettingsChanged,
-    /// A quilt of the thread was made or changed, so the Quilts page reads them anew.
+    /// A quilt of the chat was made or changed, so the Quilts page reads them anew.
     QuiltsChanged,
-    /// A chat app asked for the thread to be opened in the window.
+    /// A chat app asked for the chat to be opened in the window.
     OpenChat,
     /// A chat app had the downloaded update installed: the window restarts into it. Not about a
-    /// thread.
+    /// chat.
     RestartToUpdate,
-    /// A chat app asked the window to show something other than a chat. Not about a thread.
+    /// A chat app asked the window to show something other than a chat. Not about a chat.
     Show {
         place: Place,
     },

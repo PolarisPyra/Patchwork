@@ -8,7 +8,7 @@ use super::{Session, SessionMessage, ilog, push_merged};
 use crate::provider;
 use crate::system::time::parse_rfc3339_ms;
 use crate::provider::AgentKind;
-use crate::threads::Role;
+use crate::chats::Role;
 
 pub fn sessions() -> Vec<Session> {
     let Some(projects) = provider::claude::home().map(|h| h.join("projects")) else {

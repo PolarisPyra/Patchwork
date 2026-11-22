@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use super::platform::Platform;
 use crate::Error;
-use crate::threads::AccessMode;
+use crate::chats::AccessMode;
 
 /// Which chat apps Patchwork answers on, and what the chats it starts there may do.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,7 +76,7 @@ pub enum Status {
 }
 
 impl Status {
-    /// How a chat app's connection shows beside its bot: online while connected and `in_use`,
+    /// How a chat app's connection shows beside its agent: online while connected and `in_use`,
     /// away while connected but idle or still connecting, offline otherwise.
     #[must_use]
     pub fn presence(&self, in_use: bool) -> Presence {
@@ -88,7 +88,7 @@ impl Status {
     }
 }
 
-/// How a chat app shows beside its bot.
+/// How a chat app shows beside its agent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Presence {
     Online,
@@ -106,9 +106,9 @@ pub struct Pairing {
     pub name: String,
     /// Epoch milliseconds.
     pub paired_at: u64,
-    /// The conversation they last wrote from, where a thread can be continued for them.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub chat: Option<String>,
+    /// The conversation they last wrote from, where a chat can be continued for them.
+    #[serde(default, rename = "chat", skip_serializing_if = "Option::is_none")]
+    pub conversation: Option<String>,
 }
 
 /// Something a chat app had Patchwork do, for the list in Settings. What it was given stays out:
@@ -128,20 +128,22 @@ pub struct ChatAppCall {
     pub ok: bool,
 }
 
-/// A conversation on a chat app and the thread it talks to.
+/// A conversation on a chat app and the chat it talks to.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Binding {
     pub platform: Platform,
-    pub chat: String,
-    pub thread_id: String,
+    #[serde(rename = "chat")]
+    pub conversation: String,
+    #[serde(alias = "threadId")]
+    pub chat_id: String,
 }
 
-/// Where a thread stands with the chat apps, for the task list and the thread's menu.
+/// Where a chat stands with the chat apps, for the task list and the chat's menu.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ChatApps {
     /// The conversations on it now: those that talk to it, and those whose agent works with it.
-    pub chats: Vec<Binding>,
+    pub conversations: Vec<Binding>,
     /// When one of them last asked for a reply or got one, in epoch milliseconds.
     pub used_at: Option<u64>,
 }
@@ -162,7 +164,7 @@ impl ChatApps {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChatPlace {
     pub platform: Platform,
-    pub chat: String,
+    pub conversation: String,
     /// The pairing's name.
     pub name: String,
 }
@@ -175,7 +177,7 @@ pub struct Incoming {
     /// arrives again under the same id is taken once.
     pub id: Option<String>,
     /// The conversation it came in, which replies go to.
-    pub chat: String,
+    pub conversation: String,
     /// The sender's id on the platform.
     pub sender: String,
     /// The sender's name, for the list of pairings.
@@ -217,14 +219,19 @@ pub(crate) trait Connector: Send + Sync {
     /// # Errors
     ///
     /// Returns an error when the platform does not take the message.
-    fn send(&self, chat: &str, text: &str, buttons: &[Button]) -> Result<Option<String>, Error>;
+    fn send(
+        &self,
+        conversation: &str,
+        text: &str,
+        buttons: &[Button],
+    ) -> Result<Option<String>, Error>;
 
     /// Replaces the text of the message `id`, which `send` returned.
     ///
     /// # Errors
     ///
     /// Returns an error when the platform does not take the change.
-    fn edit(&self, chat: &str, id: &str, text: &str) -> Result<(), Error>;
+    fn edit(&self, conversation: &str, id: &str, text: &str) -> Result<(), Error>;
 
     /// Sends the file `name` holding `bytes` to `chat`, with `caption` beside it.
     ///
@@ -233,7 +240,7 @@ pub(crate) trait Connector: Send + Sync {
     /// Returns an error when the platform takes no files or does not take this one.
     fn send_file(
         &self,
-        _chat: &str,
+        _conversation: &str,
         _name: &str,
         _bytes: &[u8],
         _caption: &str,
@@ -247,12 +254,21 @@ pub(crate) trait Connector: Send + Sync {
     /// # Errors
     ///
     /// Returns an error when the platform deletes nothing for Patchwork or stops partway.
-    fn clear(&self, _chat: &str) -> Result<bool, Error> {
+    fn clear(&self, _conversation: &str) -> Result<bool, Error> {
+        Err("This chat app does not let Patchwork delete messages".into())
+    }
+
+    /// Deletes the message `id`, which `send` returned.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the platform does not delete it.
+    fn remove(&self, _conversation: &str, _id: &str) -> Result<(), Error> {
         Err("This chat app does not let Patchwork delete messages".into())
     }
 
     /// Shows that Patchwork is writing in `chat`, where the platform can.
-    fn typing(&self, _chat: &str) {}
+    fn typing(&self, _conversation: &str) {}
 
     /// Whether a reply is shown here while it is written, in a message of its own; where it is
     /// not, as where each message is mail or a paid text, the chat only shows typing.

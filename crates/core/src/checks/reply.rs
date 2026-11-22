@@ -13,7 +13,7 @@ use crate::orchestration::publish;
 use crate::events::AgentEvent;
 use crate::persistence::Store;
 use crate::system::now_ms;
-use crate::threads::{CheckStatus, MessageStatus, TurnChecks};
+use crate::chats::{CheckStatus, MessageStatus, TurnChecks};
 use crate::Core;
 
 use super::{KEEP, LIMIT, failures, run, tests_ran, Command};
@@ -22,22 +22,22 @@ use super::{KEEP, LIMIT, failures, run, tests_ran, Command};
 const MOST: usize = 12;
 
 impl Core {
-    /// Runs the project's check command for the reply `message_id` of `thread_id`, on a thread of
+    /// Runs the project's check command for the reply `message_id` of `chat_id`, on a thread of
     /// its own, publishing each change as it happens. The person's explicit request, so it runs
     /// even for a project whose checks are otherwise off.
     ///
     /// # Errors
     ///
     /// Returns an error when the checks are already running for this reply.
-    pub fn run_checks(self: &Arc<Self>, thread_id: &str, message_id: &str) -> Result<(), Error> {
+    pub fn run_checks(self: &Arc<Self>, chat_id: &str, message_id: &str) -> Result<(), Error> {
         let claim = claim(message_id).ok_or("The checks are still running for this reply.")?;
-        let (core, thread, message) = (
+        let (core, chat, message) = (
             Arc::clone(self),
-            thread_id.to_string(),
+            chat_id.to_string(),
             message_id.to_string(),
         );
         std::thread::spawn(move || {
-            check_turn(&core, &thread, &message, true);
+            check_turn(&core, &chat, &message, true);
             drop(claim);
         });
         Ok(())
@@ -45,10 +45,10 @@ impl Core {
 
     /// Runs the checks after a turn, unless the project's checks are off or it has nothing to run.
     /// Called once the turn's reply is saved, off the turn's thread.
-    pub fn check_after_turn(self: &Arc<Self>, thread_id: &str, message_id: &str) {
+    pub fn check_after_turn(self: &Arc<Self>, chat_id: &str, message_id: &str) {
         // Read here as well as in `check_project`, so a project with its checks off costs no
-        // thread at all, which is every project until one is turned on.
-        if let Some(project_id) = project_of(self, thread_id)
+        // chat at all, which is every project until one is turned on.
+        if let Some(project_id) = project_of(self, chat_id)
             && !enabled(&self.store, &project_id)
         {
             return;
@@ -56,13 +56,13 @@ impl Core {
         let Some(claim) = claim(message_id) else {
             return;
         };
-        let (core, thread, message) = (
+        let (core, chat, message) = (
             Arc::clone(self),
-            thread_id.to_string(),
+            chat_id.to_string(),
             message_id.to_string(),
         );
         std::thread::spawn(move || {
-            check_turn(&core, &thread, &message, false);
+            check_turn(&core, &chat, &message, false);
             drop(claim);
         });
     }
@@ -91,12 +91,12 @@ fn claim(message_id: &str) -> Option<Claim> {
     Some(Claim(message_id.to_string()))
 }
 
-/// Runs the project's check command for the reply `message_id` of `thread_id`, publishing the
+/// Runs the project's check command for the reply `message_id` of `chat_id`, publishing the
 /// result as it starts and again when it ends. Blocks for as long as the command runs, so it runs
 /// on a thread of its own. `asked` is a person's explicit request: it runs a project's checks even
 /// when they are off.
-fn check_turn(core: &Arc<Core>, thread_id: &str, message_id: &str, asked: bool) {
-    let Some(project_id) = project_of(core, thread_id) else {
+fn check_turn(core: &Arc<Core>, chat_id: &str, message_id: &str, asked: bool) {
+    let Some(project_id) = project_of(core, chat_id) else {
         return;
     };
     let root = match core.project_root(&project_id) {
@@ -109,7 +109,7 @@ fn check_turn(core: &Arc<Core>, thread_id: &str, message_id: &str, asked: bool) 
     let emit = |checks: TurnChecks| {
         publish(
             core,
-            thread_id,
+            chat_id,
             AgentEvent::ChecksRecorded {
                 message_id: message_id.to_string(),
                 checks,
@@ -241,31 +241,30 @@ pub(super) fn finish_within(
     }
 }
 
-/// The project a thread belongs to, or None for a chat without one.
-fn project_of(core: &Core, thread_id: &str) -> Option<String> {
-    core.store.thread(thread_id)?.project_id
+/// The project a chat belongs to, or None for a chat without one.
+fn project_of(core: &Core, chat_id: &str) -> Option<String> {
+    core.store.chat(chat_id)?.project_id
 }
 
 /// Whether a reply's turn is one to check: it finished, and it changed files.
 pub(crate) fn worth_checking(
     store: &Store,
-    thread_id: &str,
+    chat_id: &str,
     message_id: &str,
     status: MessageStatus,
 ) -> bool {
     if status != MessageStatus::Complete {
         return false;
     }
-    let Some(thread) = store.thread(thread_id) else {
+    let Some(chat) = store.chat(chat_id) else {
         return false;
     };
     // A subagent's own transcript is not a reply the person reads on its own, and its work is
     // part of the turn that started it: that turn checks, once.
-    if thread.project_id.is_none() || thread.parent.is_some() {
+    if chat.project_id.is_none() || chat.parent.is_some() {
         return false;
     }
-    thread
-        .messages
+    chat.messages
         .iter()
         .find(|m| m.id == message_id)
         .is_some_and(|m| !m.files.is_empty())

@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
 use super::connection::{failure_reason, ssh};
-use crate::device::Kind;
+use crate::machine::device::Kind;
 
 /// What Patchwork learned about each host, read from [`file`] on first use.
 static KNOWN: Mutex<Option<HashMap<String, Known>>> = Mutex::new(None);
@@ -182,7 +182,7 @@ pub fn kind(host: &str) -> Result<Kind, Error> {
 }
 
 fn ask_kind(host: &str) -> Result<Kind, Error> {
-    use crate::device;
+    use crate::machine::device;
     Ok(match probe(host)?.os {
         Os::Linux => device::from_linux(&say(
             host,

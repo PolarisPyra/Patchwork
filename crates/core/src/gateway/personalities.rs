@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::Core;
-use crate::system::dirs::dirs;
+use crate::system::files::dirs::dirs;
 
 /// The personalities the folder starts with, by name and text.
 const EXAMPLES: &[(&str, &str)] = &[

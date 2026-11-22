@@ -19,6 +19,8 @@
 //!
 //! A vault that cannot be unlocked is never replaced: it stays locked for the run, and nothing
 //! can be saved until the wrapping key is back.
+//!
+//! `requests` is the other way in: a secret an agent asks the user for, handed to it in a file.
 
 // Rust guideline compliant 2026-10-09
 
@@ -26,6 +28,7 @@ mod crypt;
 mod known;
 mod password;
 mod recovery;
+pub mod requests;
 mod secrets;
 mod state;
 mod timeout;

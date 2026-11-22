@@ -14,7 +14,7 @@ use zeroize::Zeroizing;
 
 use super::crypt::{DATA_KEY, KEY_LEN, cipher, data_key, seal};
 use super::password::{change_password, data_key_with, long_enough, open_with, with_conn};
-use crate::system::fs::write_private;
+use crate::system::files::paths::write_private;
 use crate::{Core, Error};
 
 /// The letters of a recovery key: none that reads as another, so it can be copied by hand.

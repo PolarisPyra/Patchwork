@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::provider::AgentKind;
-use crate::threads::TokenUsage;
+use crate::chats::TokenUsage;
 
 use super::types::Tally;
 

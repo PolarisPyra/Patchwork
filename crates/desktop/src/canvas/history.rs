@@ -6,10 +6,10 @@
 use std::rc::Rc;
 
 use gpui::{AnyElement, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
-use patchwork_core::workspace::{self as ws, BlameRange, FileRevision};
+use patchwork_core::source_control::{self as ws, BlameRange, FileRevision};
 
 use super::body::centered;
-use super::state::{Canvas, CanvasTab};
+use super::open_file::{Canvas, CanvasTab};
 use patchwork_ui::theme::{Theme, font_ui, fs_sm, radius};
 use patchwork_ui::{format_date, icon, icon_button, spinner, tooltip};
 

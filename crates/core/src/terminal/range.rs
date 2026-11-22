@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use super::activity::Activity;
 use super::session::Term;
 use crate::Error;
-use crate::system::processes::{self, Process, Snapshot};
+use crate::system::processes::running::{self, Process, Snapshot};
 
 /// How long a process gets to stop after each signal.
 const GRACE: Duration = Duration::from_secs(1);
@@ -213,7 +213,7 @@ enum Signal {
 #[cfg(unix)]
 fn signal_all(members: &[Process], signal: Signal) {
     for member in members {
-        crate::system::processes::signal(member, signal.number());
+        crate::system::processes::running::signal(member, signal.number());
     }
 }
 
@@ -225,7 +225,7 @@ fn signal_all(_members: &[Process], _signal: Signal) {}
 fn signal_shell(term: &Term, signal: Signal) {
     match &term.root {
         Some(root) => {
-            crate::system::processes::signal(root, signal.number());
+            crate::system::processes::running::signal(root, signal.number());
         }
         None => {
             let _ = term.killer.locked().kill();
@@ -268,7 +268,7 @@ fn instance() -> Option<&'static str> {
     static INSTANCE: OnceLock<Option<String>> = OnceLock::new();
     INSTANCE
         .get_or_init(|| {
-            let own = processes::find(std::process::id() as i32)?;
+            let own = running::find(std::process::id() as i32)?;
             Some(format!("{}-{}", own.pid, encode(&own.started)))
         })
         .as_deref()
@@ -327,7 +327,7 @@ pub fn sweep() {
         let Ok(pid) = pid.parse::<i32>() else {
             continue;
         };
-        let running = processes::find(pid).is_some_and(|p| encode(&p.started) == started);
+        let running = running::find(pid).is_some_and(|p| encode(&p.started) == started);
         if Some(name.as_str()) == instance() || running {
             continue;
         }
@@ -383,7 +383,7 @@ fn left_behind(shell: &Process) -> Vec<Process> {
         let mut members = table.tree(shell.pid);
         union(&mut members, table.session(shell.pid));
         members
-    } else if processes::find(shell.pid).is_none() {
+    } else if running::find(shell.pid).is_none() {
         table.session(shell.pid)
     } else {
         Vec::new()

@@ -1,5 +1,5 @@
 //! What Patchwork does with a message from a chat app: pairing a stranger, answering the
-//! agent's request, or sending it on to the chat's thread.
+//! agent's request, or sending it on to the chat's chat.
 
 // Rust guideline compliant 2026-10-09
 
@@ -11,12 +11,12 @@ use super::hub::{Place, Seen};
 use super::outbound::savable;
 use super::platform::Platform;
 use super::types::Incoming;
-use crate::bots::Bot;
+use crate::agents::Agent;
 use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::permissions::{Effect, PermissionRule, PermissionScope, RuleRef};
 use crate::provider::AgentKind;
 use crate::system::new_id;
-use crate::threads::{Approval, ApprovalStatus, NewThread, Part, Question, Role, Thread};
+use crate::chats::{Approval, ApprovalStatus, NewChat, Part, Question, Role, Chat};
 use crate::{Error, Core};
 
 /// How many taken messages the gateway remembers, to know one that arrives again.
@@ -63,14 +63,14 @@ impl Core {
     /// from a chat app that has no custom agent's role. It goes with the message that starts the
     /// agent's session, and again after the agent compacted its context on its own, since the
     /// summary it goes on from can leave it out.
-    pub(crate) fn chat_app_voice(&self, thread_id: &str, text: String, fresh: bool) -> String {
-        let (plain, compacted) = self.store.with_threads(|threads| {
-            threads
+    pub(crate) fn chat_app_voice(&self, chat_id: &str, text: String, fresh: bool) -> String {
+        let (plain, compacted) = self.store.with_chats(|chats| {
+            chats
                 .iter()
-                .find(|t| t.id == thread_id)
+                .find(|t| t.id == chat_id)
                 .map_or((false, false), |t| (t.role.is_none(), compacted(t)))
         });
-        if !(fresh || compacted) || !plain || self.bound_chats(thread_id).is_empty() {
+        if !(fresh || compacted) || !plain || self.bound_conversations(chat_id).is_empty() {
             return text;
         }
         let voice = self
@@ -85,7 +85,7 @@ impl Core {
         )
     }
 
-    /// Handles a message from a chat app, on the thread of its connection.
+    /// Handles a message from a chat app, on the chat of its connection.
     pub(super) fn gateway_incoming(self: &Arc<Self>, message: &Incoming) {
         if self.repeated(message) {
             log::info!(
@@ -98,31 +98,29 @@ impl Core {
             self.pair(message);
             return;
         }
-        let (platform, chat) = (message.platform, message.chat.as_str());
-        self.note_chat(platform, &message.sender, chat);
-        // An archived chat lets go of the conversation, which then goes to the platform's bot's
+        let (platform, conversation) = (message.platform, message.conversation.as_str());
+        self.note_conversation(platform, &message.sender, conversation);
+        // An archived chat lets go of the conversation, which then goes to the platform's agent's
         // chat, where it can be seen.
-        let thread = self.bound_thread(platform, chat).filter(|id| {
-            self.store
-                .thread(id)
-                .is_some_and(|t| t.archived_at.is_none())
-        });
+        let chat = self
+            .bound_chat(platform, conversation)
+            .filter(|id| self.store.chat(id).is_some_and(|t| t.archived_at.is_none()));
         let text = message.text.trim();
         let command = text.starts_with('/');
         if !command
-            && let Some(id) = &thread
+            && let Some(id) = &chat
             && let Some(approval) = self.waiting_approval(id)
         {
-            self.answer(platform, chat, id, &approval, text);
+            self.answer(platform, conversation, id, &approval, text);
             return;
         }
-        if !command && self.answer_notice(platform, chat, text) {
+        if !command && self.answer_notice(platform, conversation, text) {
             return;
         }
-        if command && self.gateway_command(message, thread.as_deref()) {
+        if command && self.gateway_command(message, chat.as_deref()) {
             return;
         }
-        self.pass_on(message, thread);
+        self.pass_on(message, chat);
     }
 
     /// Whether the gateway took this message already, and notes it when it did not.
@@ -138,7 +136,7 @@ impl Core {
         let mut state = self.gateway.lock();
         let again = state.seen.iter().any(|seen| {
             seen.platform == message.platform
-                && seen.chat == message.chat
+                && seen.conversation == message.conversation
                 && seen.by_id == by_id
                 && seen.key == key
                 && (by_id || now.duration_since(seen.at) < SAME_WORDS)
@@ -149,7 +147,7 @@ impl Core {
             }
             state.seen.push_back(Seen {
                 platform: message.platform,
-                chat: message.chat.clone(),
+                conversation: message.conversation.clone(),
                 key,
                 by_id,
                 at: now,
@@ -161,12 +159,12 @@ impl Core {
     /// Pairs the sender when the message is the pairing code, and otherwise tells them once how
     /// to pair.
     fn pair(&self, message: &Incoming) {
-        let (platform, chat) = (message.platform, message.chat.as_str());
+        let (platform, conversation) = (message.platform, message.conversation.as_str());
         if self.take_gateway_code(&message.text) {
-            match self.add_pairing(platform, &message.sender, &message.name, chat) {
+            match self.add_pairing(platform, &message.sender, &message.name, conversation) {
                 Ok(()) => self.say(
                     platform,
-                    chat,
+                    conversation,
                     "Paired. Send a message to start a chat in Patchwork, or /help for what else you can do.",
                 ),
                 Err(error) => {
@@ -183,19 +181,19 @@ impl Core {
         if first {
             self.say(
                 platform,
-                chat,
+                conversation,
                 "To use Patchwork here, make a pairing code in Settings → Gateway on your computer and send it here.",
             );
         }
     }
 
-    /// The request the agent in `thread_id` is waiting on the user to answer.
-    pub(super) fn waiting_approval(&self, thread_id: &str) -> Option<Approval> {
-        if !self.runner.is_running(thread_id) {
+    /// The request the agent in `chat_id` is waiting on the user to answer.
+    pub(super) fn waiting_approval(&self, chat_id: &str) -> Option<Approval> {
+        if !self.runner.is_running(chat_id) {
             return None;
         }
         self.store
-            .thread(thread_id)?
+            .chat(chat_id)?
             .messages
             .iter()
             .rev()
@@ -208,22 +206,22 @@ impl Core {
     pub(super) fn answer(
         self: &Arc<Self>,
         platform: Platform,
-        chat: &str,
-        thread_id: &str,
+        conversation: &str,
+        chat_id: &str,
         approval: &Approval,
         text: &str,
     ) {
         if approval.secret.is_some() {
             self.say(
                 platform,
-                chat,
+                conversation,
                 "Enter the secret in Patchwork on your computer. Chat apps never carry it.",
             );
             return;
         }
         let word = text.to_lowercase();
         if word == ALWAYS && savable(approval) {
-            self.allow_always(platform, chat, thread_id, approval);
+            self.allow_always(platform, conversation, chat_id, approval);
             return;
         }
         let decision = if DENY.contains(&word.as_str()) {
@@ -237,33 +235,33 @@ impl Core {
             (!answers.is_empty()).then_some((true, answers))
         };
         let Some((allow, answers)) = decision else {
-            self.say(platform, chat, "Reply allow or deny.");
+            self.say(platform, conversation, "Reply allow or deny.");
             return;
         };
         self.gateway
             .lock()
             .answered
-            .insert(approval.id.clone(), (platform, chat.to_string()));
-        if let Err(error) = self.respond_approval(thread_id, &approval.id, allow, answers, None) {
+            .insert(approval.id.clone(), (platform, conversation.to_string()));
+        if let Err(error) = self.respond_approval(chat_id, &approval.id, allow, answers, None) {
             self.gateway.lock().answered.remove(&approval.id);
             self.say(
                 platform,
-                chat,
+                conversation,
                 &format!("Patchwork could not answer: {error}"),
             );
         }
     }
 
     /// Allows the agent's request and saves rules that allow requests like it from now on, in
-    /// the thread's project or, outside one, in every chat.
+    /// the chat's project or, outside one, in every chat.
     fn allow_always(
         self: &Arc<Self>,
         platform: Platform,
-        chat: &str,
-        thread_id: &str,
+        conversation: &str,
+        chat_id: &str,
         approval: &Approval,
     ) {
-        let project = self.store.thread(thread_id).and_then(|t| t.project_id);
+        let project = self.store.chat(chat_id).and_then(|t| t.project_id);
         let name = project.as_ref().map_or_else(
             || "Chats".to_string(),
             |id| {
@@ -295,14 +293,13 @@ impl Core {
         self.gateway
             .lock()
             .answered
-            .insert(approval.id.clone(), (platform, chat.to_string()));
-        if let Err(error) =
-            self.respond_approval(thread_id, &approval.id, true, HashMap::new(), rule)
+            .insert(approval.id.clone(), (platform, conversation.to_string()));
+        if let Err(error) = self.respond_approval(chat_id, &approval.id, true, HashMap::new(), rule)
         {
             self.gateway.lock().answered.remove(&approval.id);
             self.say(
                 platform,
-                chat,
+                conversation,
                 &format!("Patchwork could not answer: {error}"),
             );
             return;
@@ -312,12 +309,12 @@ impl Core {
             Ok(()) => format!("Patchwork will allow this in {name} from now on."),
             Err(error) => format!("Allowed this once. Patchwork could not save the rule: {error}"),
         };
-        self.say(platform, chat, &saved);
+        self.say(platform, conversation, &saved);
     }
 
-    /// Sends the message to `thread`, or to a new thread when the chat has none.
-    fn pass_on(self: &Arc<Self>, message: &Incoming, thread: Option<String>) {
-        let (platform, chat) = (message.platform, message.chat.as_str());
+    /// Sends the message to `chat`, or to a new chat when the chat has none.
+    fn pass_on(self: &Arc<Self>, message: &Incoming, chat: Option<String>) {
+        let (platform, conversation) = (message.platform, message.conversation.as_str());
         let attachments: Vec<_> = message
             .files
             .iter()
@@ -327,14 +324,14 @@ impl Core {
         if text.is_empty() && attachments.is_empty() {
             return;
         }
-        let (id, new) = match thread {
+        let (id, new) = match chat {
             Some(id) => (id, false),
-            None => match self.open_gateway_thread(platform, chat) {
+            None => match self.open_gateway_chat(platform, conversation) {
                 Ok(opened) => opened,
                 Err(error) => {
                     self.say(
                         platform,
-                        chat,
+                        conversation,
                         &format!("Patchwork could not start a chat: {error}"),
                     );
                     return;
@@ -348,12 +345,12 @@ impl Core {
             && self.is_dispatcher(&id)
             && self
                 .store
-                .thread(&id)
+                .chat(&id)
                 .is_some_and(|t| t.access_mode != access)
         {
-            match self.set_thread_access_mode(&id, access) {
+            match self.set_chat_access_mode(&id, access) {
                 Ok(()) => self.emit(AgentEventEnvelope {
-                    thread_id: id.clone(),
+                    chat_id: id.clone(),
                     event: AgentEvent::OptionsChanged,
                 }),
                 Err(error) => {
@@ -370,59 +367,65 @@ impl Core {
             text
         };
         let queue = self.runner.is_running(&id) && !self.store.settings().steer_while_working;
-        match self.send_message_from(id.clone(), text, attachments, queue, Some((platform, chat))) {
+        match self.send_message_from(
+            id.clone(),
+            text,
+            attachments,
+            queue,
+            Some((platform, conversation)),
+        ) {
             Ok(_) => {
                 if let Some(connector) = self.gateway.connector(platform) {
-                    connector.typing(chat);
+                    connector.typing(conversation);
                 }
             }
             Err(error) => {
                 // A chat that could not take its first message leaves nothing behind.
                 if new {
-                    self.delete_thread(&id);
-                    self.unbind_thread(&id);
+                    self.delete_chat(&id);
+                    self.unbind_chat(&id);
                     self.emit(AgentEventEnvelope {
-                        thread_id: id,
-                        event: AgentEvent::ThreadDeleted,
+                        chat_id: id,
+                        event: AgentEvent::ChatDeleted,
                     });
                 }
                 self.say(
                     platform,
-                    chat,
+                    conversation,
                     &format!("Patchwork could not send that: {error}"),
                 );
             }
         }
     }
 
-    /// Binds a chat app conversation to the platform's bot's chat, and returns the chat's id
-    /// and whether it was made for this message. The bot is made the first time its platform
+    /// Binds a chat app conversation to the platform's agent's chat, and returns the chat's id
+    /// and whether it was made for this message. The agent is made the first time its platform
     /// sends a message, and its chat with the first conversation; `/new` starts a run of its own.
-    fn open_gateway_thread(
+    fn open_gateway_chat(
         self: &Arc<Self>,
         platform: Platform,
-        chat: &str,
+        conversation: &str,
     ) -> Result<(String, bool), Error> {
-        let bot = self.chat_app_bot(platform)?;
+        let profile = self.chat_app_agent(platform)?;
         let chosen = self
             .gateway
             .lock()
-            .chats
-            .get_mut(&(platform, chat.to_string()))
+            .conversations
+            .get_mut(&(platform, conversation.to_string()))
             .and_then(|c| c.project.take());
         if chosen.is_none()
-            && let Some(id) = self.bot_chat(&bot)
+            && let Some(id) = self.agent_chat(&profile)
         {
-            self.bind_chat(platform, chat, Some(&id));
+            self.bind_conversation(platform, conversation, Some(&id));
             return Ok((id, false));
         }
         let main = chosen.is_none();
-        let id = self.open_chat_app_run(&bot, chosen, main)?.id;
-        self.bind_chat(platform, chat, Some(&id));
+        let id = self.open_chat_app_run(&profile, chosen, main)?.id;
+        self.bind_conversation(platform, conversation, Some(&id));
         Ok((id, true))
     }
 
-    /// Starts a run of chat app `bot` in `chosen`, the place picked by `/new`, as its chat when
+    /// Starts a run of chat app agent `profile` in `chosen`, the place picked by `/new`, as its chat when
     /// `main`.
     ///
     /// Without a place, the run is a dispatcher: it has no project and its agent drives
@@ -431,46 +434,48 @@ impl Core {
     /// working chat with the gateway's access.
     pub(crate) fn open_chat_app_run(
         self: &Arc<Self>,
-        bot: &Bot,
+        profile: &Agent,
         chosen: Option<Place>,
         main: bool,
-    ) -> Result<Thread, Error> {
+    ) -> Result<Chat, Error> {
         let settings = self.store.settings();
         let dispatcher = if chosen.is_some() {
             None
         } else {
-            [bot.agent, AgentKind::Claude, AgentKind::Api]
+            [profile.agent, AgentKind::Claude, AgentKind::Api]
                 .into_iter()
                 .filter(|agent| matches!(agent, AgentKind::Claude | AgentKind::Api))
-                .find(|agent| *agent == bot.agent || settings.agents.contains(agent))
+                .find(|agent| *agent == profile.agent || settings.agents.contains(agent))
         };
         let project_id = match chosen {
-            Some(Place::Chat) => None,
+            Some(Place::Conversation) => None,
             Some(Place::Project(id)) => Some(id),
             None if dispatcher.is_some() => None,
             None => settings.gateway.project_id.clone(),
         }
         .filter(|id| settings.projects.iter().any(|p| &p.id == id));
-        let agent = dispatcher.unwrap_or(bot.agent);
-        let model = if agent == bot.agent {
-            bot.model.clone()
+        let agent = dispatcher.unwrap_or(profile.agent);
+        let model = if agent == profile.agent {
+            profile.model.clone()
         } else {
             settings.tokens.default_models.get(&agent).cloned()
         };
-        let thread = self.create_thread(NewThread {
+        let chat = self.create_chat(NewChat {
             id: None,
             project_id,
             agent,
             model,
             access_mode: settings.gateway.access,
-            effort: (agent == bot.agent).then(|| bot.effort.clone()).flatten(),
+            effort: (agent == profile.agent)
+                .then(|| profile.effort.clone())
+                .flatten(),
             compact_window: None,
         })?;
-        let id = thread.id.clone();
-        // Linked before the first turn, which reads it for the bot's instructions.
+        let id = chat.id.clone();
+        // Linked before the first turn, which reads it for the agent's instructions.
         let linked = self
             .store
-            .update_thread(&id, |t| t.bot_id = Some(bot.id.clone()));
+            .update_chat(&id, |t| t.agent_id = Some(profile.id.clone()));
         let marked = match linked {
             Ok(()) if dispatcher.is_some() => self.mark_dispatcher(&id),
             done => done,
@@ -478,23 +483,21 @@ impl Core {
         // Recorded before it is announced, so it is never listed as a run.
         .and_then(|()| {
             if main {
-                self.set_bot_chat(&bot.id, &id)
+                self.set_agent_chat(&profile.id, &id)
             } else {
                 Ok(())
             }
         });
         if let Err(error) = marked {
-            self.delete_thread(&id);
+            self.delete_chat(&id);
             return Err(error);
         }
-        let thread = self.store.thread(&id).unwrap_or(thread);
+        let chat = self.store.chat(&id).unwrap_or(chat);
         self.emit(AgentEventEnvelope {
-            thread_id: id,
-            event: AgentEvent::ThreadCreated {
-                thread: thread.clone(),
-            },
+            chat_id: id,
+            event: AgentEvent::ChatCreated { chat: chat.clone() },
         });
-        Ok(thread)
+        Ok(chat)
     }
 }
 
@@ -533,11 +536,10 @@ pub(super) fn answers(questions: &[Question], text: &str) -> HashMap<String, Vec
         .collect()
 }
 
-/// Whether the agent of `thread` compacted its context on its own in the replies to the message
+/// Whether the agent of `chat` compacted its context on its own in the replies to the message
 /// before the newest, so the summary it now goes on from may have left out how to talk.
-fn compacted(thread: &Thread) -> bool {
-    thread
-        .messages
+fn compacted(chat: &Chat) -> bool {
+    chat.messages
         .iter()
         .rev()
         .skip_while(|m| m.role == Role::User)

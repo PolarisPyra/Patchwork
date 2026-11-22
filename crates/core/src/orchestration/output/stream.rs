@@ -1,4 +1,4 @@
-//! Streaming agent output to the frontend, and saving events onto the stored thread.
+//! Streaming agent output to the frontend, and saving events onto the stored chat.
 
 // Rust guideline compliant 2026-10-09
 
@@ -7,25 +7,25 @@ use crate::Error;
 use crate::Core;
 use crate::events::AgentEvent;
 use crate::events::AgentEventEnvelope;
-use crate::secrets::SecretStatus;
-use crate::threads::ApprovalStatus;
-use crate::threads::Message;
-use crate::threads::MessageStatus;
+use crate::vault::requests::SecretStatus;
+use crate::chats::ApprovalStatus;
+use crate::chats::Message;
+use crate::chats::MessageStatus;
 use crate::system::now_ms;
-use crate::threads::Part;
-use crate::threads::StepStatus;
-use crate::threads::Thread;
+use crate::chats::Part;
+use crate::chats::StepStatus;
+use crate::chats::Chat;
 use crate::orchestration::turn::start::Turn;
 
 impl Turn {
-    /// Streams a text delta to the frontend and adds it to the thread in memory, so a reload
+    /// Streams a text delta to the frontend and adds it to the chat in memory, so a reload
     /// mid-reply shows all of it; `unsaved` marks it for one disk write later.
     pub(in crate::orchestration) fn stream_text(&self, event: AgentEvent, unsaved: &mut Unsaved) {
         self.save_thinking(unsaved);
         if let AgentEvent::TextDelta { .. } = &event {
             self.core
                 .store
-                .update_unsaved(&self.thread_id, |t| apply(t, &event));
+                .update_unsaved(&self.chat_id, |t| apply(t, &event));
             unsaved.text = true;
         }
         self.emit(event);
@@ -49,7 +49,7 @@ impl Turn {
 
     pub(in crate::orchestration) fn emit(&self, event: AgentEvent) {
         self.core.emit(AgentEventEnvelope {
-            thread_id: self.thread_id.clone(),
+            chat_id: self.chat_id.clone(),
             event,
         });
     }
@@ -67,7 +67,7 @@ impl Turn {
         let saved = self
             .core
             .store
-            .update_message(&self.thread_id, Some(&self.message_id), |_| {});
+            .update_message(&self.chat_id, Some(&self.message_id), |_| {});
         if let Err(e) = saved {
             log::warn!(error:% = e; "failed to save agent text: {{error}}");
         }
@@ -84,20 +84,20 @@ impl Turn {
             started_at: Some(unsaved.thinking_since),
             ended_at: Some(now_ms()),
         };
-        if let Err(e) = save_event(&self.core, &self.thread_id, &event) {
+        if let Err(e) = save_event(&self.core, &self.chat_id, &event) {
             log::warn!(error:% = e; "failed to save agent reasoning: {{error}}");
         }
     }
 }
 
 /// Saves `event` onto the stored message, then streams it to the frontend.
-pub(crate) fn publish(core: &Core, thread_id: &str, event: AgentEvent) {
-    let event = settle_late(core, thread_id, event);
-    if let Err(e) = save_event(core, thread_id, &event) {
+pub(crate) fn publish(core: &Core, chat_id: &str, event: AgentEvent) {
+    let event = settle_late(core, chat_id, event);
+    if let Err(e) = save_event(core, chat_id, &event) {
         log::warn!(error:% = e; "failed to save agent event: {{error}}");
     }
     core.emit(AgentEventEnvelope {
-        thread_id: thread_id.into(),
+        chat_id: chat_id.into(),
         event,
     });
 }
@@ -105,14 +105,14 @@ pub(crate) fn publish(core: &Core, thread_id: &str, event: AgentEvent) {
 /// A tool that starts after its reply has ended is settled as the end settles the others, rather
 /// than left running. A late question stays open: the agent is waiting on it, and it can still be
 /// answered.
-fn settle_late(core: &Core, thread_id: &str, mut event: AgentEvent) -> AgentEvent {
+fn settle_late(core: &Core, chat_id: &str, mut event: AgentEvent) -> AgentEvent {
     let AgentEvent::ToolStarted { message_id, tool } = &mut event else {
         return event;
     };
-    let ended = core.store.with_threads(|threads| {
-        threads
+    let ended = core.store.with_chats(|chats| {
+        chats
             .iter()
-            .find(|t| t.id == thread_id)
+            .find(|t| t.id == chat_id)
             .and_then(|t| t.messages.iter().find(|m| m.id == *message_id))
             .filter(|m| m.finished_at.is_some())
             .map(|m| m.status)
@@ -137,15 +137,15 @@ pub(in crate::orchestration) struct Unsaved {
     pub(in crate::orchestration) thinking_since: u64,
 }
 
-/// Applies `event` to the stored thread. Removing a message moves the ones after it, so
-/// that goes through `update_thread`; every other event changes at most one message in place.
+/// Applies `event` to the stored chat. Removing a message moves the ones after it, so
+/// that goes through `update_chat`; every other event changes at most one message in place.
 pub(in crate::orchestration) fn save_event(
     core: &Core,
-    thread_id: &str,
+    chat_id: &str,
     event: &AgentEvent,
 ) -> Result<(), Error> {
     if let AgentEvent::MessageRemoved { .. } = event {
-        return core.store.update_thread(thread_id, |t| apply(t, event));
+        return core.store.update_chat(chat_id, |t| apply(t, event));
     }
     let message_id = if let AgentEvent::MessageStarted { message } = event {
         Some(message.id.as_str())
@@ -153,7 +153,7 @@ pub(in crate::orchestration) fn save_event(
         event_message(event)
     };
     core.store
-        .update_message(thread_id, message_id, |t| apply(t, event))
+        .update_message(chat_id, message_id, |t| apply(t, event))
 }
 
 /// The existing message `event` changes, if it changes one.
@@ -164,8 +164,8 @@ pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str
         | AgentEvent::SlashCommandsUpdated { .. }
         | AgentEvent::RoleChanged { .. }
         | AgentEvent::ModelChanged { .. }
-        | AgentEvent::ThreadCreated { .. }
-        | AgentEvent::ThreadDeleted
+        | AgentEvent::ChatCreated { .. }
+        | AgentEvent::ChatDeleted
         | AgentEvent::TitleUpdated { .. }
         | AgentEvent::ChatAppsChanged
         | AgentEvent::Notice { .. }
@@ -214,40 +214,40 @@ pub(in crate::orchestration) fn end_thinking(msg: &mut Message) {
     }
 }
 
-pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
+pub(in crate::orchestration) fn apply(chat: &mut Chat, event: &AgentEvent) {
     match event {
         AgentEvent::MessageStarted { message } => {
-            if !thread.messages.iter().any(|m| m.id == message.id) {
-                thread.messages.push(Arc::new(message.clone()));
+            if !chat.messages.iter().any(|m| m.id == message.id) {
+                chat.messages.push(Arc::new(message.clone()));
             }
             return;
         }
         AgentEvent::GoalUpdated { goal } => {
-            thread.goal.clone_from(goal);
+            chat.goal.clone_from(goal);
             return;
         }
         AgentEvent::SlashCommandsUpdated { commands } => {
-            thread.slash_commands.clone_from(commands);
+            chat.slash_commands.clone_from(commands);
             return;
         }
         AgentEvent::RoleChanged { role } => {
-            thread.role.clone_from(role);
+            chat.role.clone_from(role);
             return;
         }
         AgentEvent::ModelChanged { model } => {
-            thread.model.clone_from(model);
+            chat.model.clone_from(model);
             return;
         }
         AgentEvent::TitleUpdated { title } => {
-            thread.title.clone_from(title);
+            chat.title.clone_from(title);
             return;
         }
         AgentEvent::MessageRemoved { message_id } => {
-            thread.messages.retain(|m| m.id != *message_id);
+            chat.messages.retain(|m| m.id != *message_id);
             return;
         }
         AgentEvent::MessageEdited { message } => {
-            if let Some(stored) = thread.messages.iter_mut().find(|m| m.id == message.id) {
+            if let Some(stored) = chat.messages.iter_mut().find(|m| m.id == message.id) {
                 *stored = Arc::new(message.clone());
             }
             return;
@@ -257,7 +257,7 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
     let Some(message_id) = event_message(event) else {
         return;
     };
-    let Some(msg) = thread
+    let Some(msg) = chat
         .messages
         .iter_mut()
         .find(|m| m.id == *message_id)
@@ -487,8 +487,8 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         | AgentEvent::SlashCommandsUpdated { .. }
         | AgentEvent::RoleChanged { .. }
         | AgentEvent::ModelChanged { .. }
-        | AgentEvent::ThreadCreated { .. }
-        | AgentEvent::ThreadDeleted
+        | AgentEvent::ChatCreated { .. }
+        | AgentEvent::ChatDeleted
         | AgentEvent::TitleUpdated { .. }
         | AgentEvent::ChatAppsChanged
         | AgentEvent::Notice { .. }

@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use crate::provider::AgentKind;
-use crate::threads::AccessMode;
+use crate::chats::AccessMode;
 
 /// A scheduled task: a prompt that starts a task at a fixed time.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -28,10 +28,10 @@ pub struct Task {
     /// The newest few runs, newest first.
     #[serde(default)]
     pub recent_runs: Vec<Run>,
-    /// The bot the task runs as, with its instructions and files; None for a plain
+    /// The agent the task runs as, with its instructions and files; None for a plain
     /// agent.
     #[serde(default)]
-    pub bot_id: Option<String>,
+    pub agent_id: Option<String>,
 }
 
 /// One time a scheduled task's slot came round.
@@ -40,7 +40,8 @@ pub struct Task {
 pub struct Run {
     /// When it started, or for a skipped run the slot it missed, in Unix milliseconds.
     pub at: i64,
-    pub thread_id: Option<String>,
+    #[serde(alias = "threadId")]
+    pub chat_id: Option<String>,
     pub outcome: RunOutcome,
     pub detail: Option<String>,
 }

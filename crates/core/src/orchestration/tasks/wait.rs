@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use crate::Core;
 use crate::orchestration::Runner;
-use crate::threads::{Message, MessageStatus, Role};
+use crate::chats::{Message, MessageStatus, Role};
 
 /// How often the wait looks at the turn, and at whether its caller still waits.
 const POLL: Duration = Duration::from_millis(500);
@@ -28,13 +28,13 @@ pub(in crate::orchestration) enum Unanswered {
 }
 
 impl Runner {
-    /// Waits until the turn in `thread_id` ends, and returns the reply it ended with: the last
+    /// Waits until the turn in `chat_id` ends, and returns the reply it ended with: the last
     /// one after the message `after`, or in the whole chat without it. Gives up when `gone` says
     /// the caller stopped waiting, or after `limit`. The turn itself is left running either way.
     pub(in crate::orchestration) fn wait_for_reply(
         &self,
         core: &Arc<Core>,
-        thread_id: &str,
+        chat_id: &str,
         after: Option<&str>,
         gone: &dyn Fn() -> bool,
         limit: Duration,
@@ -51,11 +51,11 @@ impl Runner {
             if started.elapsed() >= limit {
                 return Err(Unanswered::TimedOut);
             }
-            if self.is_starting(thread_id) || self.is_running(thread_id) {
+            if self.is_starting(chat_id) || self.is_running(chat_id) {
                 ended = false;
                 continue;
             }
-            let reply = core.store.thread(thread_id).and_then(|t| {
+            let reply = core.store.chat(chat_id).and_then(|t| {
                 let from = after
                     .and_then(|id| t.messages.iter().position(|m| m.id == id))
                     .map_or(0, |at| at + 1);

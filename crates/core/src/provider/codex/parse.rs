@@ -7,12 +7,12 @@ use super::subagents::{SUBAGENT_READ, subagent_started};
 
 use crate::permissions::Target;
 use crate::events::AgentEvent;
-use crate::threads::TokenUsage;
-use crate::threads::PlanStep;
+use crate::chats::TokenUsage;
+use crate::chats::PlanStep;
 use crate::permissions::PermissionKind;
-use crate::threads::Question;
-use crate::threads::QuestionOption;
-use crate::threads::Refusal;
+use crate::chats::Question;
+use crate::chats::QuestionOption;
+use crate::chats::Refusal;
 use crate::provider::file_touched;
 use crate::provider::one_line;
 use crate::provider::Parsed;
@@ -25,8 +25,8 @@ use crate::provider::ToolStart;
 use crate::provider::TurnSpec;
 
 use super::{
-    begin, GOAL_CLEAR_REQUEST, INTERRUPT_REQUEST, SKILLS_REQUEST, STEER_REQUEST, thread_params,
-    THREAD_REQUEST,
+    begin, GOAL_CLEAR_REQUEST, INTERRUPT_REQUEST, SKILLS_REQUEST, STEER_REQUEST, chat_params,
+    CHAT_REQUEST,
 };
 
 /// Maps `item/started` / `item/completed`.
@@ -41,11 +41,11 @@ pub(super) fn codex_item(
     let id = item["id"].as_str().unwrap_or_default();
     let failed = matches!(item["status"].as_str(), Some("failed" | "declined"));
     match item["type"].as_str() {
-        // A subagent starting or ending. Its own frames come under its thread, `agentThreadId`,
+        // A subagent starting or ending. Its own frames come under its chat, `agentThreadId`,
         // which is also the id of the call that shows it. Its path ends in the name the model
-        // gave it; the agent it runs as is on its thread, so the call shows once that is read.
+        // gave it; the agent it runs as is on its chat, so the call shows once that is read.
         Some("subAgentActivity") => {
-            let Some(thread) = item["agentThreadId"].as_str() else {
+            let Some(chat) = item["agentThreadId"].as_str() else {
                 return;
             };
             match item["kind"].as_str() {
@@ -53,13 +53,13 @@ pub(super) fn codex_item(
                     let name = item["agentPath"].as_str().unwrap_or_default();
                     let name = name.rsplit('/').next().unwrap_or_default();
                     out.push(Parsed::Send(
-                        json!({"id": format!("{SUBAGENT_READ} {thread} {name}"), "method": "thread/read",
-                            "params": {"threadId": thread}})
+                        json!({"id": format!("{SUBAGENT_READ} {chat} {name}"), "method": "thread/read",
+                            "params": {"threadId": chat}})
                         .to_string(),
                     ));
                 }
                 Some("completed") if completed => {
-                    out.push(tool_finished(message_id, thread, false, ""));
+                    out.push(tool_finished(message_id, chat, false, ""));
                 }
                 _ => {}
             }
@@ -296,36 +296,36 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
             let subagent = id
                 .as_str()
                 .and_then(|id| id.strip_prefix(SUBAGENT_READ)?.trim_start().split_once(' '));
-            if let Some((thread, name)) = subagent {
-                out.push(subagent_started(thread, name, v, spec, message_id));
+            if let Some((chat, name)) = subagent {
+                out.push(subagent_started(chat, name, v, spec, message_id));
             } else if id == SKILLS_REQUEST || id == INTERRUPT_REQUEST || id == GOAL_CLEAR_REQUEST {
                 // Nothing to do: the skills folder is only an addition, Stop sends SIGTERM to an
-                // agent that does not end its turn when interrupted, and a thread with no goal of
+                // agent that does not end its turn when interrupted, and a chat with no goal of
                 // Codex's own has nothing to clear.
             } else if id == STEER_REQUEST {
                 out.push(match error {
                     Some(message) => Parsed::SteerRejected(message.into()),
                     None => Parsed::Steered,
                 });
-            } else if id == THREAD_REQUEST
+            } else if id == CHAT_REQUEST
                 && spec.session_id.is_some()
                 && error.is_some_and(|m| m.starts_with("no rollout found"))
             {
-                // Codex saves a thread with its first turn, so one whose first turn failed cannot
-                // be resumed. It holds nothing, so a new thread takes its place.
+                // Codex saves a chat with its first turn, so one whose first turn failed cannot
+                // be resumed. It holds nothing, so a new chat takes its place.
                 out.push(Parsed::Send(
-                    json!({"id": THREAD_REQUEST, "method": "thread/start", "params": thread_params(spec, None)})
+                    json!({"id": CHAT_REQUEST, "method": "thread/start", "params": chat_params(spec, None)})
                         .to_string(),
                 ));
             } else if let Some(message) = error {
                 out.extend([Parsed::Error(message.into()), Parsed::Finished]);
-            } else if id == THREAD_REQUEST
-                && let Some(thread_id) = v["result"]["thread"]["id"].as_str()
+            } else if id == CHAT_REQUEST
+                && let Some(chat_id) = v["result"]["thread"]["id"].as_str()
             {
-                out.push(Parsed::SessionId(thread_id.into()));
+                out.push(Parsed::SessionId(chat_id.into()));
                 out.extend(begin(
                     spec,
-                    thread_id,
+                    chat_id,
                     v["result"]["thread"]["model"].as_str(),
                 ));
             }

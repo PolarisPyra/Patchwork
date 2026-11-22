@@ -23,8 +23,8 @@ All three pass, with no warnings left behind. If one fails, report its output. N
 ## Where code goes
 
 - **Logic lives in `crates/core`.** The app draws state and calls `Core` operations. If the server could decide it, the app does not.
-- **A server folder is a domain** (`threads`, `updates`, `workspace`), holding its types, its `impl Core` operations and its logic. A desktop folder is one piece of UI.
-- **A file is named for its one concern**: `threads/lifecycle.rs`, `updates/check.rs`, `git/remote.rs`. Never a catch-all such as `ops.rs`, `utils.rs` or `helpers.rs`. If you cannot name a file, it holds more than one thing.
+- **A server folder is a domain** (`chats`, `updates`, `source_control`), holding its types, its `impl Core` operations and its logic. A desktop folder is one piece of UI.
+- **A file is named for its one concern**: `chats/lifecycle.rs`, `updates/check.rs`, `git/remote.rs`. Never a catch-all such as `ops.rs`, `utils.rs` or `helpers.rs`. If you cannot name a file, it holds more than one thing.
 - **Split at about 600 lines or two clear concerns**, into `name/mod.rs` plus one file per concern. Don't create a file under about 40 lines; put the code in its only user.
 - **The top of `crates/desktop/src` is `main.rs` and folders**, never loose files. A server domain small enough for one file stays one file, such as `projects.rs`.
 
@@ -33,7 +33,7 @@ All three pass, with no warnings left behind. If one fails, report its output. N
 It registers the folder's files and chooses what the rest of the crate sees. It never holds code.
 
 ```rust
-// src/workspace/git/mod.rs
+// src/source_control/git/mod.rs
 //! Git reads and writes for a project folder. All functions are blocking.
 
 mod changes;

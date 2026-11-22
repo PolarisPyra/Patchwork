@@ -131,7 +131,7 @@ impl Qq {
     /// says where the answer goes.
     fn incoming(&self, event: &str, data: &Value) -> Option<Incoming> {
         let author = &data["author"];
-        let (chat, user) = match event {
+        let (conversation, user) = match event {
             "C2C_MESSAGE_CREATE" => {
                 let user = author["user_openid"].as_str()?;
                 (format!("c2c:{user}"), user)
@@ -154,7 +154,9 @@ impl Qq {
             return None;
         }
         if let Some(id) = data["id"].as_str() {
-            self.last.locked().insert(chat.clone(), id.to_string());
+            self.last
+                .locked()
+                .insert(conversation.clone(), id.to_string());
         }
         let content = data["content"].as_str().unwrap_or_default().trim();
         // A message that mentions the bot starts with the mention.
@@ -176,7 +178,7 @@ impl Qq {
         Some(Incoming {
             platform: Platform::Qq,
             id: data["id"].as_str().map(str::to_string),
-            chat,
+            conversation,
             sender: user.to_string(),
             name: author["username"].as_str().unwrap_or(user).to_string(),
             text: text.to_string(),
@@ -245,8 +247,15 @@ impl Connector for Qq {
         Ok(())
     }
 
-    fn send(&self, chat: &str, text: &str, _buttons: &[Button]) -> Result<Option<String>, Error> {
-        let (kind, id) = chat.split_once(':').ok_or("This QQ chat is not known")?;
+    fn send(
+        &self,
+        conversation: &str,
+        text: &str,
+        _buttons: &[Button],
+    ) -> Result<Option<String>, Error> {
+        let (kind, id) = conversation
+            .split_once(':')
+            .ok_or("This QQ chat is not known")?;
         let path = match kind {
             "c2c" => format!("/v2/users/{id}/messages"),
             "group" => format!("/v2/groups/{id}/messages"),
@@ -255,7 +264,7 @@ impl Connector for Qq {
             _ => return Err("This QQ chat is not known".into()),
         };
         let mut body = json!({"content": text, "msg_type": 0});
-        if let Some(quoted) = self.last.locked().get(chat) {
+        if let Some(quoted) = self.last.locked().get(conversation) {
             body["msg_id"] = json!(quoted);
         }
         if matches!(kind, "c2c" | "group") {
@@ -265,7 +274,7 @@ impl Connector for Qq {
         Ok(None)
     }
 
-    fn edit(&self, _chat: &str, _id: &str, _text: &str) -> Result<(), Error> {
+    fn edit(&self, _conversation: &str, _id: &str, _text: &str) -> Result<(), Error> {
         Err("QQ messages cannot be edited".into())
     }
 }

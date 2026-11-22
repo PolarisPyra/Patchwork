@@ -4,11 +4,11 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{App, ClickEvent, FontWeight, Pixels, Point, Role, Window, div, point, prelude::*, px};
-use patchwork_core::system::device::Kind;
-use patchwork_core::threads::{MessageStatus, Role as MessageRole};
+use patchwork_core::system::machine::device::Kind;
+use patchwork_core::chats::{MessageStatus, Role as MessageRole};
 
-use super::{Page, View, Workspace, is_busy};
-use patchwork_ui::menu::{Dismissed, Menu, MenuItem};
+use crate::workspace::{Page, View, Workspace, is_busy};
+use patchwork_ui::controls::menu::{Dismissed, Menu, MenuItem};
 use patchwork_ui::theme::{
     ACTIVITY_BAR_W, fs_xs, radius, radius_sm, STATUSBAR_H, TOOLBAR_H, Theme, theme,
 };
@@ -22,7 +22,7 @@ const MACHINE_BUTTON: f32 = 28.;
 const TOOLBAR_PL: f32 = (ACTIVITY_BAR_W - 1. - MACHINE_BUTTON) / 2.;
 
 /// Where the machine menu opens: 4px under the machine button.
-pub(super) fn machine_menu_at() -> Point<Pixels> {
+pub(crate) fn machine_menu_at() -> Point<Pixels> {
     point(
         px(TOOLBAR_PL),
         px(f32::midpoint(TOOLBAR_H, MACHINE_BUTTON) + 4.),
@@ -126,7 +126,7 @@ impl Workspace {
         cx.notify();
     }
 
-    pub(super) fn toolbar(
+    pub(crate) fn toolbar(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -167,7 +167,7 @@ impl Workspace {
                     .text_color(t.text_muted)
                     .hover(move |s| s.bg(hover).text_color(fg))
                     .aria_expanded(self.machine_menu.is_some())
-                    .on_click(cx.listener(super::state::Workspace::toggle_machine_menu))
+                    .on_click(cx.listener(super::window::Workspace::toggle_machine_menu))
                     .child(
                         div()
                             .size(px(20.))
@@ -221,7 +221,7 @@ impl Workspace {
         cx.notify();
     }
 
-    pub(super) fn activity_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(crate) fn activity_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let t = *theme(cx);
         let entry =
             |view: View, label: &'static str, name: &'static str, cx: &mut Context<Self>| {
@@ -315,18 +315,18 @@ impl Workspace {
             )
     }
 
-    pub(super) fn status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    pub(crate) fn status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let t = theme(cx);
         let project = self
             .project()
             .map_or_else(|| "No project".into(), |p| p.name.clone());
-        let thread = self.thread.as_ref();
-        let last = thread.and_then(|t| t.messages.last());
-        let working = thread.is_some_and(is_busy);
+        let chat = self.chat.as_ref();
+        let last = chat.and_then(|t| t.messages.last());
+        let working = chat.is_some_and(is_busy);
         let done = last.is_some_and(|m| {
             m.status == MessageStatus::Complete && m.role == MessageRole::Assistant
         });
-        let agent = thread.map_or_else(|| self.settings.default_agent(), |t| t.agent);
+        let agent = chat.map_or_else(|| self.settings.default_agent(), |t| t.agent);
         let state = if working {
             div()
                 .flex()

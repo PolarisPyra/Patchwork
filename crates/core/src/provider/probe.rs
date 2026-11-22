@@ -11,7 +11,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
-use crate::system::processes::{SIGKILL, signal_process_group};
+use crate::system::processes::running::{SIGKILL, signal_process_group};
 use super::{antigravity, api, claude, codex, opencode, AgentKind, AgentStatus, ModelOption};
 use super::{agent_command, command_at, located};
 

@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
-use crate::system::fs::home_dir;
+use crate::system::files::paths::home_dir;
 use super::{antigravity, opencode, AgentKind};
 
 /// Agent CLIs the user located by hand, mirrored from the settings.

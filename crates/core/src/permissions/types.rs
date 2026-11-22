@@ -33,7 +33,7 @@ pub struct PermissionRule {
     pub id: String,
     pub kind: PermissionKind,
     /// A folder, a command's leading words, a web host, or an MCP server; `*` is anything, and
-    /// `.` is the thread's own folder.
+    /// `.` is the chat's own folder.
     pub pattern: String,
     pub effect: Effect,
 }

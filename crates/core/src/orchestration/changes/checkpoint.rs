@@ -15,25 +15,25 @@ use std::process::Output;
 use crate::Core;
 use crate::system::new_id;
 use crate::provider::AgentKind;
-use crate::threads::{ResumePoint, Thread, TurnTrees};
+use crate::chats::{ResumePoint, Chat, TurnTrees};
 
 const REFS: &str = "refs/patchwork/checkpoints";
 /// Snapshots from the end of a turn, one ref per reply the turn wrote.
 const END_REFS: &str = "refs/patchwork/turn-ends";
-/// The project as it was just before a checkpoint was restored, one ref per thread, so a restore
+/// The project as it was just before a checkpoint was restored, one ref per chat, so a restore
 /// can be taken back with git.
 const PRE_RESTORE_REFS: &str = "refs/patchwork/pre-restore";
 
-fn thread_refs(thread_id: &str) -> String {
-    format!("{REFS}/{thread_id}/")
+fn chat_refs(chat_id: &str) -> String {
+    format!("{REFS}/{chat_id}/")
 }
 
-fn ref_name(thread_id: &str, message_id: &str) -> String {
-    format!("{}{message_id}", thread_refs(thread_id))
+fn ref_name(chat_id: &str, message_id: &str) -> String {
+    format!("{}{message_id}", chat_refs(chat_id))
 }
 
-fn end_ref(thread_id: &str, message_id: &str) -> String {
-    format!("{END_REFS}/{thread_id}/{message_id}")
+fn end_ref(chat_id: &str, message_id: &str) -> String {
+    format!("{END_REFS}/{chat_id}/{message_id}")
 }
 
 /// Runs git in `root`, reading the index from `index` when given, and writing `input` to its stdin.
@@ -123,16 +123,12 @@ fn remote_snapshot(root: &str) -> Result<String, Error> {
 
 /// Snapshots the project before the turn for `message_id` changes it. Nothing is taken outside
 /// a git repository.
-pub(in crate::orchestration) fn capture(root: &str, thread_id: &str, message_id: &str) {
+pub(in crate::orchestration) fn capture(root: &str, chat_id: &str, message_id: &str) {
     if git(root, &["rev-parse", "--git-dir"]).is_err() {
         return;
     }
-    let taken = snapshot(root).and_then(|tree| {
-        git(
-            root,
-            &["update-ref", &ref_name(thread_id, message_id), &tree],
-        )
-    });
+    let taken = snapshot(root)
+        .and_then(|tree| git(root, &["update-ref", &ref_name(chat_id, message_id), &tree]));
     if let Err(e) = taken {
         log::warn!(error:% = e; "failed to take a checkpoint: {{error}}");
     }
@@ -143,7 +139,7 @@ pub(in crate::orchestration) fn capture(root: &str, thread_id: &str, message_id:
 /// no snapshot before it.
 pub(in crate::orchestration) fn record_end(
     root: &str,
-    thread_id: &str,
+    chat_id: &str,
     user_message_id: &str,
     replies: &[String],
 ) -> Option<TurnTrees> {
@@ -153,7 +149,7 @@ pub(in crate::orchestration) fn record_end(
             "rev-parse",
             "--verify",
             "-q",
-            &ref_name(thread_id, user_message_id),
+            &ref_name(chat_id, user_message_id),
         ],
     )
     .ok()?;
@@ -161,7 +157,7 @@ pub(in crate::orchestration) fn record_end(
         .map_err(|e| log::warn!(error:% = e; "failed to snapshot a turn's end: {{error}}"))
         .ok()?;
     for id in replies {
-        if let Err(e) = git(root, &["update-ref", &end_ref(thread_id, id), &after]) {
+        if let Err(e) = git(root, &["update-ref", &end_ref(chat_id, id), &after]) {
             log::warn!(error:% = e; "failed to record a turn's end: {{error}}");
         }
     }
@@ -176,7 +172,7 @@ pub(in crate::orchestration) fn record_end(
 #[must_use]
 pub fn turn_so_far(
     root: &str,
-    thread_id: &str,
+    chat_id: &str,
     user_message_id: &str,
     paths: &[String],
 ) -> Option<TurnTrees> {
@@ -186,7 +182,7 @@ pub fn turn_so_far(
             "rev-parse",
             "--verify",
             "-q",
-            &ref_name(thread_id, user_message_id),
+            &ref_name(chat_id, user_message_id),
         ],
     )
     .ok()?;
@@ -246,9 +242,9 @@ fn git_with_index(root: &str, index: &Path, args: &[&str]) -> Result<String, Err
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// The messages of the thread that have a snapshot from before their turn.
-pub fn list(root: &str, thread_id: &str) -> Vec<String> {
-    let prefix = thread_refs(thread_id);
+/// The messages of the chat that have a snapshot from before their turn.
+pub fn list(root: &str, chat_id: &str) -> Vec<String> {
+    let prefix = chat_refs(chat_id);
     git(root, &["for-each-ref", "--format=%(refname)", &prefix])
         .unwrap_or_default()
         .lines()
@@ -284,31 +280,27 @@ fn remove_added(root: &str, rel: &str) -> Result<(), Error> {
 ///
 /// Files changed or deleted since are rewritten, and files created since are deleted. Ignored
 /// files are left alone, judged by the ignore rules as they were at the checkpoint, so a folder
-/// ignored then and not since stays. The project as it was is kept at `refs/patchwork/pre-restore/<thread>` first.
+/// ignored then and not since stays. The project as it was is kept at `refs/patchwork/pre-restore/<chat>` first.
 ///
 /// # Errors
 ///
 /// Returns an error when the message has no checkpoint, when `git` fails to snapshot or compare the
 /// project, or when a file cannot be removed or restored.
-pub fn restore(root: &str, thread_id: &str, message_id: &str) -> Result<(), Error> {
+pub fn restore(root: &str, chat_id: &str, message_id: &str) -> Result<(), Error> {
     let saved = git(
         root,
         &[
             "rev-parse",
             "--verify",
             "-q",
-            &ref_name(thread_id, message_id),
+            &ref_name(chat_id, message_id),
         ],
     )
     .map_err(|_discarded| "This message has no checkpoint to restore")?;
     let now = snapshot(root)?;
     git(
         root,
-        &[
-            "update-ref",
-            &format!("{PRE_RESTORE_REFS}/{thread_id}"),
-            &now,
-        ],
+        &["update-ref", &format!("{PRE_RESTORE_REFS}/{chat_id}"), &now],
     )
     .map_err(|e| format!("Could not keep the files as they are before restoring: {e}"))?;
     let diff = run(
@@ -418,15 +410,15 @@ pub fn undo(root: &str, turn: &TurnTrees, files: &[String]) -> Result<(), Error>
     Ok(())
 }
 
-/// Drops the snapshots of the given messages, or of the whole thread when `message_ids` is None.
-pub fn remove(root: &str, thread_id: &str, message_ids: Option<&[String]>) {
+/// Drops the snapshots of the given messages, or of the whole chat when `message_ids` is None.
+pub fn remove(root: &str, chat_id: &str, message_ids: Option<&[String]>) {
     let ids = match message_ids {
         Some(ids) => ids.to_vec(),
-        None => list(root, thread_id),
+        None => list(root, chat_id),
     };
     for id in ids {
-        delete_ref(root, &ref_name(thread_id, &id));
-        delete_ref(root, &end_ref(thread_id, &id));
+        delete_ref(root, &ref_name(chat_id, &id));
+        delete_ref(root, &end_ref(chat_id, &id));
     }
     // Replies have end snapshots but no snapshot of their own, so they are not in `list`.
     if message_ids.is_none() {
@@ -435,13 +427,13 @@ pub fn remove(root: &str, thread_id: &str, message_ids: Option<&[String]>) {
             &[
                 "for-each-ref",
                 "--format=%(refname)",
-                &format!("{END_REFS}/{thread_id}/"),
+                &format!("{END_REFS}/{chat_id}/"),
             ],
         );
         for name in ends.unwrap_or_default().lines() {
             delete_ref(root, name);
         }
-        delete_ref(root, &format!("{PRE_RESTORE_REFS}/{thread_id}"));
+        delete_ref(root, &format!("{PRE_RESTORE_REFS}/{chat_id}"));
     }
 }
 
@@ -453,30 +445,30 @@ fn delete_ref(root: &str, name: &str) {
 }
 
 impl Core {
-    /// The folder a thread that belongs to a project works in: its worktree or the project's.
-    fn checkpoint_root(&self, thread_id: &str) -> Option<String> {
-        self.store.thread(thread_id)?.project_id?;
-        self.thread_root(thread_id).ok()
+    /// The folder a chat that belongs to a project works in: its worktree or the project's.
+    fn checkpoint_root(&self, chat_id: &str) -> Option<String> {
+        self.store.chat(chat_id)?.project_id?;
+        self.chat_root(chat_id).ok()
     }
 
     /// Snapshots the project before the reply to `message_id`, for a message that an idle
     /// agent takes rather than a new turn.
-    pub(crate) fn capture_checkpoint(&self, thread_id: &str, message_id: &str) {
-        if let Some(root) = self.checkpoint_root(thread_id) {
-            capture(&root, thread_id, message_id);
+    pub(crate) fn capture_checkpoint(&self, chat_id: &str, message_id: &str) {
+        if let Some(root) = self.checkpoint_root(chat_id) {
+            capture(&root, chat_id, message_id);
         }
     }
 
-    /// The user messages of the thread whose turn can be undone with `restore_checkpoint`.
-    pub fn checkpoints(&self, thread_id: &str) -> Vec<String> {
-        self.checkpoint_root(thread_id)
-            .map(|root| list(&root, thread_id))
+    /// The user messages of the chat whose turn can be undone with `restore_checkpoint`.
+    pub fn checkpoints(&self, chat_id: &str) -> Vec<String> {
+        self.checkpoint_root(chat_id)
+            .map(|root| list(&root, chat_id))
             .unwrap_or_default()
     }
 
     /// Undoes the turn of the user message `message_id` and everything after it: the project's
     /// files go back to how they were before that turn, and the message and the ones after it
-    /// leave the thread. Claude picks its session up next turn from the reply now last, which
+    /// leave the chat. Claude picks its session up next turn from the reply now last, which
     /// drops the undone turns and keeps the rest cached. Other agents, and Claude when that reply
     /// has no cursor, start a new session given the remaining messages as a transcript, since
     /// their own session still holds the undone turns.
@@ -485,54 +477,54 @@ impl Core {
     ///
     /// Returns an error when a turn is running, when the chat is not a project task or is unknown,
     /// when the message is not found, or when restoring the checkpoint or saving the chat fails.
-    pub fn restore_checkpoint(&self, thread_id: &str, message_id: &str) -> Result<Thread, Error> {
-        if self.runner.is_running(thread_id) || self.runner.is_starting(thread_id) {
+    pub fn restore_checkpoint(&self, chat_id: &str, message_id: &str) -> Result<Chat, Error> {
+        if self.runner.is_running(chat_id) || self.runner.is_starting(chat_id) {
             return Err("Stop the running turn before restoring a checkpoint".into());
         }
         // Its task and subagents share the worktree whose files are restored.
         let _step = self.hold_turn_folder(
-            thread_id,
+            chat_id,
             "Stop the task and its subagents before restoring a checkpoint",
         )?;
         self.store
-            .thread(thread_id)
+            .chat(chat_id)
             .and_then(|t| t.project_id)
             .ok_or("Only project tasks have checkpoints")?;
         // Not the project's own folder for a task whose worktree isn't there now.
-        let root = self.thread_root(thread_id)?;
+        let root = self.chat_root(chat_id)?;
         // Another task editing the same folder, such as one more task in the project's own folder,
         // would lose what it wrote since the checkpoint.
-        let other_running = self.store.threads().iter().any(|t| {
-            t.id != thread_id
+        let other_running = self.store.chats().iter().any(|t| {
+            t.id != chat_id
                 && (self.runner.is_running(&t.id) || self.runner.is_starting(&t.id))
-                && self.thread_root(&t.id).is_ok_and(|r| r == root)
+                && self.chat_root(&t.id).is_ok_and(|r| r == root)
         });
         if other_running {
             return Err("Another task is working in this folder. Stop it before restoring".into());
         }
         // An idle agent still holds the session being undone.
-        self.runner.retire_idle(thread_id);
-        let thread = self.thread(thread_id)?;
-        let start = thread
+        self.runner.retire_idle(chat_id);
+        let chat = self.chat(chat_id)?;
+        let start = chat
             .messages
             .iter()
             .position(|m| m.id == message_id)
             .ok_or("Message not found")?;
-        restore(&root, thread_id, message_id)?;
-        let undone: Vec<String> = thread.messages[start..]
+        restore(&root, chat_id, message_id)?;
+        let undone: Vec<String> = chat.messages[start..]
             .iter()
             .map(|m| m.id.clone())
             .collect();
-        remove(&root, thread_id, Some(&undone));
+        remove(&root, chat_id, Some(&undone));
         let kept = start
             .checked_sub(1)
-            .and_then(|last| thread.messages[last].cursor.clone())
-            .filter(|_| thread.agent == AgentKind::Claude && thread.session_id.is_some());
+            .and_then(|last| chat.messages[last].cursor.clone())
+            .filter(|_| chat.agent == AgentKind::Claude && chat.session_id.is_some());
         let point = kept.map(|at| ResumePoint { at, fork: false });
         let resumes = point.is_some();
-        self.set_resume_point(thread_id, point.as_ref())?;
-        self.keep_reply_costs(thread_id, start);
-        self.store.update_thread(thread_id, |t| {
+        self.set_resume_point(chat_id, point.as_ref())?;
+        self.keep_reply_costs(chat_id, start);
+        self.store.update_chat(chat_id, |t| {
             t.messages.truncate(start);
             if !resumes {
                 t.session_id = None;
@@ -540,32 +532,32 @@ impl Core {
             t.goal = None;
             t.context_pending = !t.messages.is_empty();
         })?;
-        self.thread(thread_id)
+        self.chat(chat_id)
     }
 
-    /// Takes back the files one reply changed, as `undo` does, while the thread and its other
+    /// Takes back the files one reply changed, as `undo` does, while the chat and its other
     /// replies stay as they are. The changes it undoes show up as uncommitted ones.
     ///
     /// # Errors
     ///
     /// Returns an error when a turn is running, when the chat is not a project task or is unknown,
     /// when the reply is not found or has no snapshot, or when `git` cannot reverse its changes.
-    pub fn undo_reply(&self, thread_id: &str, message_id: &str) -> Result<(), Error> {
-        if self.runner.is_running(thread_id) || self.runner.is_starting(thread_id) {
+    pub fn undo_reply(&self, chat_id: &str, message_id: &str) -> Result<(), Error> {
+        if self.runner.is_running(chat_id) || self.runner.is_starting(chat_id) {
             return Err("Stop the running turn before undoing a reply".into());
         }
         let _step = self.hold_turn_folder(
-            thread_id,
+            chat_id,
             "Stop the task and its subagents before undoing a reply",
         )?;
         self.store
-            .thread(thread_id)
+            .chat(chat_id)
             .and_then(|t| t.project_id)
             .ok_or("Only project tasks have replies to undo")?;
         // Not the project's own folder for a task whose worktree isn't there now.
-        let root = self.thread_root(thread_id)?;
-        let thread = self.thread(thread_id)?;
-        let reply = thread
+        let root = self.chat_root(chat_id)?;
+        let chat = self.chat(chat_id)?;
+        let reply = chat
             .messages
             .iter()
             .find(|m| m.id == message_id)
@@ -577,16 +569,16 @@ impl Core {
         undo(&root, turn, &reply.files)
     }
 
-    /// Drops the thread's checkpoints, once its messages are gone.
-    pub(crate) fn remove_checkpoints(&self, thread_id: &str) {
+    /// Drops the chat's checkpoints, once its messages are gone.
+    pub(crate) fn remove_checkpoints(&self, chat_id: &str) {
         // Its snapshots are refs of the repository, which the project's folder reaches too when
         // the task's worktree isn't there; only deleting them happens there.
-        let root = self.checkpoint_root(thread_id).or_else(|| {
-            let project = self.store.thread(thread_id)?.project_id?;
+        let root = self.checkpoint_root(chat_id).or_else(|| {
+            let project = self.store.chat(chat_id)?.project_id?;
             self.project_root(&project).ok()
         });
         if let Some(root) = root {
-            remove(&root, thread_id, None);
+            remove(&root, chat_id, None);
         }
     }
 }

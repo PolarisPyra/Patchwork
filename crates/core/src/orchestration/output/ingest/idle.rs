@@ -9,10 +9,10 @@ use std::sync::Arc;
 use crate::extensions::hooks::HookEvent;
 use crate::events::AgentEvent;
 use crate::provider::AgentKind;
-use crate::threads::Goal;
-use crate::threads::GoalStatus;
-use crate::threads::MessageStatus;
-use crate::workspace;
+use crate::chats::Goal;
+use crate::chats::GoalStatus;
+use crate::chats::MessageStatus;
+use crate::source_control;
 
 use crate::orchestration::output::stream::Unsaved;
 use crate::orchestration::messages::queue::FollowUp;
@@ -44,7 +44,7 @@ pub(super) fn go_idle(
     error: Option<&str>,
 ) {
     turn.save_text(unsaved);
-    let after = workspace::git_changes(&turn.root).unwrap_or_default();
+    let after = source_control::git_changes(&turn.root).unwrap_or_default();
     let changed = turn.attribution.locked().settle(&turn.root, after);
     for path in changed {
         turn.publish(AgentEvent::FileTouched {
@@ -93,22 +93,15 @@ pub(super) fn go_idle(
             .flat_map(|f| f.ids().collect::<Vec<_>>())
             .collect();
         hold_unanswered(turn, &unanswered);
-        let (core, thread_id, root, agent) = (
+        let (core, chat_id, root, agent) = (
             Arc::clone(&turn.core),
-            turn.thread_id.clone(),
+            turn.chat_id.clone(),
             turn.root.clone(),
             turn.agent,
         );
         std::thread::spawn(move || {
             let status = Some(MessageStatus::Cancelled);
-            turn_hooks(
-                &core,
-                HookEvent::Interrupt,
-                &thread_id,
-                &root,
-                agent,
-                status,
-            );
+            turn_hooks(&core, HookEvent::Interrupt, &chat_id, &root, agent, status);
         });
     }
     // Under the turns lock, where `steer` reads these flags: a message sent while the reply was
@@ -121,7 +114,7 @@ pub(super) fn go_idle(
     }
     drop(handed_over);
     // A call the user allowed through a hook was allowed for this reply only.
-    turn.core.runner.grants.locked().remove(&turn.thread_id);
+    turn.core.runner.grants.locked().remove(&turn.chat_id);
     if stopped {
         // The agent takes the next message again.
         turn.cancelled.store(false, Ordering::SeqCst);
@@ -135,6 +128,6 @@ pub(super) fn go_idle(
         &queued.iter().flat_map(FollowUp::ids).collect::<Vec<_>>(),
     );
     if !stopped {
-        turn.core.send_queued_later(&turn.thread_id);
+        turn.core.send_queued_later(&turn.chat_id);
     }
 }

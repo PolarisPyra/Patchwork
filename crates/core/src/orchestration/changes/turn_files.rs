@@ -6,7 +6,7 @@ use crate::Error;
 use std::fmt::Write as _;
 use serde::Serialize;
 use super::checkpoint::{files_on_disk, git, run};
-use crate::threads::TurnTrees;
+use crate::chats::TurnTrees;
 
 /// Where a file a turn changed stands now.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
