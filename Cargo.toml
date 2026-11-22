@@ -105,10 +105,9 @@ debug = false
 [profile.dev]
 debug = "line-tables-only"
 
-# The app that ships: one codegen unit and thin LTO let the optimizer see across crates.
+# The app that ships: thin LTO optimizes across crates while keeping codegen parallel.
 [profile.release]
 lto = "thin"
-codegen-units = 1
 
 [workspace.lints.rust]
 ambiguous_negative_literals = "warn"

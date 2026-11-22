@@ -284,6 +284,9 @@ jobs:
     env:
       # appimagetool is itself an AppImage; this lets it run without FUSE.
       APPIMAGE_EXTRACT_AND_RUN: 1
+      # Scoped to the host Linux binary so cross-compiled zigbuild helpers keep zig's linker.
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -300,8 +303,12 @@ jobs:
             -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15)
           sudo apt-get "${apt_options[@]}" update
           sudo apt-get "${apt_options[@]}" install -y --no-install-recommends \
-            libdbus-1-dev libfontconfig-dev \
+            clang libdbus-1-dev libfontconfig-dev \
             libfreetype-dev libwayland-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
+
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
+        with:
+          tool: cargo-zigbuild@0.23.4,mold@3.0.0
 
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
@@ -316,10 +323,8 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # zig compiles the helpers' C (SQLite, ring) for both Linux architectures and Windows.
-      - name: Install zig and cargo-zigbuild
-        run: |
-          pip install ziglang==0.15.2
-          cargo install --locked cargo-zigbuild --version 0.23.4
+      - name: Install zig
+        run: pip install ziglang==0.15.2
 
       - name: Build the AppImage
         run: scripts/build.sh
