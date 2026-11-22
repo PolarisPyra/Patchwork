@@ -36,33 +36,29 @@ prompt and its rules are in the workflow's "Write the highlights" step.
 
 ## Cutting one
 
-1. Merge the PRs the release should have. A release is whatever is on `origin/main` when it is
-   tagged; a PR still waiting on its checks is not in it.
-2. Find the latest version and pick the next: the next N this month, or 0 in a new month.
+1. Merge the PRs the release should have. A release ships whatever is on `origin/main` when it
+   starts; a PR still waiting on its checks is not in it.
+2. Start the Release workflow on `main`. It picks the next `YY.M.N` version this month (or `0` in a
+   new month), writes the notes, builds all three platforms, signs and publishes the release,
+   creates the git tag on that commit, and commits `Release YY.M.N` to `main`:
 
    ```sh
-   git fetch origin --tags
-   git tag -l '26.11.*' --sort=-v:refname | head -1   # the latest, e.g. 26.11.124
+   gh workflow run release.yml
    ```
 
-3. Tag `origin/main` and push the tag. Tag `origin/main`, not local `main`, which may hold a
-   commit whose PR has not merged.
+   To pass a specific version, add `-f version=26.12.0`. Manual tagging (`git fetch origin --tags`,
+   `git tag <YY.M.N> origin/main`, `git push origin <YY.M.N>`) also starts the same workflow.
 
-   ```sh
-   git tag 26.11.125 origin/main
-   git push origin 26.11.125
-   ```
-
-4. A "Release 26.11.125" run starts in Actions → Release and takes about 10 to 15 minutes, longer
-   when the Mac waits for a runner. Nothing else needs doing while it runs.
+3. The run takes about 10 to 15 minutes, longer when the Mac waits for a runner. Nothing else needs
+   doing while it runs:
 
    ```sh
    gh run list --workflow release.yml --limit 3
    ```
 
-5. When it has finished, the release is on GitHub with all its files, the website's download
-   links and the app's update check point at it, Discord has the post, and `main` has a
-   "Release 26.11.125" commit. Pull it before the next push:
+4. When it has finished, the release is on GitHub with all its files, the website's download links
+   and the app's update check point at it, Discord has the post, and `main` has a `Release YY.M.N`
+   commit. Pull it before the next push:
 
    ```sh
    git pull --rebase origin main
@@ -109,7 +105,7 @@ release build before a tag does ([CI and deploys](ci.md#caches)). A release neve
 first. To run one now, for example after changing a dependency or the workflow:
 
 ```sh
-gh workflow run release.yml --ref main
+gh workflow run release.yml -f mode=check --ref main
 ```
 
 Pushes to `main` do not start the Release workflow.
