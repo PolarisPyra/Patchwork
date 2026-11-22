@@ -3,6 +3,14 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.136] - 2026-11-22
+
+## What's Changed
+* feat(antigravity): connect over ACP with Google sign-in, dynamic models, and swarm support by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/293
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.135...26.11.136
+
 ## [26.11.135] - 2026-11-22
 
 ## What's Changed
