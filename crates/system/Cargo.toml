@@ -11,6 +11,8 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+# RFC 3339 timestamps, as agent CLIs record them.
+chrono = { workspace = true, features = ["alloc"] }
 base64 = { workspace = true, default-features = true }
 libc = { workspace = true, default-features = true }
 log = { workspace = true, default-features = true }
@@ -23,8 +25,6 @@ sha2 = { workspace = true, default-features = true }
 thiserror = { workspace = true, default-features = true }
 # A discarded file git never had goes to the Trash, where it can be got back.
 trash = { workspace = true, features = ["coinit_apartmentthreaded", "freedesktop", "jiff"] }
-# RFC 3339 timestamps, as agent CLIs record them.
-time = { workspace = true, features = ["std", "formatting", "parsing"] }
 uuid = { workspace = true, default-features = true, features = ["v4"] }
 which = { workspace = true, default-features = true }
 

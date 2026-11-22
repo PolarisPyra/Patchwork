@@ -2,38 +2,34 @@
 
 // Rust guideline compliant 2026-10-09
 
-use time::OffsetDateTime;
-use time::format_description::well_known::Rfc3339;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-const NANOS_PER_MS: i128 = 1_000_000;
+use chrono::{DateTime, Datelike, SecondsFormat, Utc};
 
-/// The time now, in epoch milliseconds.
+/// The time now, in epoch milliseconds. 0 for a clock set before 1970.
 #[must_use]
 pub fn now_ms() -> u64 {
-    epoch_ms(OffsetDateTime::now_utc()).unwrap_or(0)
-}
-
-/// `time` as epoch milliseconds. None for a time before 1970.
-fn epoch_ms(time: OffsetDateTime) -> Option<u64> {
-    u64::try_from(time.unix_timestamp_nanos() / NANOS_PER_MS).ok()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| {
+            u64::try_from(since.as_millis()).unwrap_or(u64::MAX)
+        })
 }
 
 /// Parses an RFC 3339 timestamp such as `2026-10-20T00:49:59.687+00:00` into epoch milliseconds.
+/// None for a time before 1970.
 #[must_use]
 pub fn parse_rfc3339_ms(timestamp: &str) -> Option<u64> {
-    OffsetDateTime::parse(timestamp, &Rfc3339)
-        .ok()
-        .and_then(epoch_ms)
+    let time = DateTime::parse_from_rfc3339(timestamp).ok()?;
+    u64::try_from(time.timestamp_millis()).ok()
 }
 
 /// Formats epoch milliseconds as an RFC 3339 UTC timestamp such as `2026-10-20T00:49:59.687Z`.
 /// None for a time past the year 9999, which RFC 3339 cannot write.
 #[must_use]
 pub fn format_rfc3339_ms(ms: u64) -> Option<String> {
-    OffsetDateTime::from_unix_timestamp_nanos(i128::from(ms) * NANOS_PER_MS)
-        .ok()?
-        .format(&Rfc3339)
-        .ok()
+    let time = DateTime::<Utc>::from_timestamp_millis(i64::try_from(ms).ok()?)?;
+    (time.year() <= 9999).then(|| time.to_rfc3339_opts(SecondsFormat::AutoSi, true))
 }
 
 /// An id for a record Patchwork creates.
