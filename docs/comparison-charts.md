@@ -19,7 +19,7 @@ go where the person asked for them, usually the Desktop.
 ## Numbers
 
 - Every figure comes from a measurement made in this repo, before and after the change the chart
-  is about (see "Performance checks" in the root `CLAUDE.md`).
+  is about (see "Running the app & performance checks" in the root `AGENTS.md`).
 - Write each time in ms with two significant figures at most, both in the same unit: "24 ms",
   "0.34 ms". Round the way the measurement supports, never to flatter it.
 - Say how it was measured when handing the chart over, not on the chart. A debug build is slower
