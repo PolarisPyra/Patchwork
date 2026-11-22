@@ -83,13 +83,29 @@ impl Workspace {
         let name = slug_file_name(&display_title(&chat.title), "chat");
         let picked = cx.prompt_for_new_path(&home, Some(&name));
         let core = Arc::clone(&self.core);
-        cx.background_spawn(async move {
-            let Ok(Ok(Some(path))) = picked.await else {
-                return;
+        cx.spawn(async move |this, cx| {
+            let path = match picked.await {
+                Ok(Ok(Some(path))) => path,
+                Ok(Ok(None)) | Err(_) => return,
+                Ok(Err(e)) => {
+                    log::warn!(error:% = e; "could not open the save dialog: {{error}}");
+                    let _ = this.update(cx, |this, cx| {
+                        this.error = Some(e.to_string());
+                        cx.notify();
+                    });
+                    return;
+                }
             };
             let path = path.to_string_lossy().into_owned();
-            if let Err(e) = core.save_text_file(&path, &chat_markdown(&chat)) {
+            let saved = cx
+                .background_spawn(async move { core.save_text_file(&path, &chat_markdown(&chat)) })
+                .await;
+            if let Err(e) = saved {
                 log::warn!(error:% = e; "could not export the chat: {{error}}");
+                let _ = this.update(cx, |this, cx| {
+                    this.error = Some(e.to_string());
+                    cx.notify();
+                });
             }
         })
         .detach();
