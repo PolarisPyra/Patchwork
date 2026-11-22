@@ -4,7 +4,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use crate::system::Locked;
+use crate::system::{Locked, keychain};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
@@ -25,10 +25,10 @@ fn keys() -> std::sync::MutexGuard<'static, HashMap<String, String>> {
     KEYS.get_or_init(Default::default).locked()
 }
 
-/// A secret's entry in the credential store. A provider's key is named by the provider's id,
+/// A secret's name in the credential store. A provider's key is named by the provider's id,
 /// and its header values by `headers_secret`.
-fn entry(name: &str) -> keyring::Result<keyring::Entry> {
-    keyring::Entry::new(SERVICE, &format!("api-provider:{name}"))
+fn entry(name: &str) -> String {
+    format!("api-provider:{name}")
 }
 
 pub(super) fn headers_secret(id: &str) -> String {
@@ -44,14 +44,12 @@ fn imports(name: &str) -> bool {
 
 /// The secret in the credential store, where an earlier version kept it.
 fn legacy(name: &str) -> Option<String> {
-    entry(name).and_then(|e| e.get_password()).ok()
+    keychain::get(SERVICE, &entry(name)).ok().flatten()
 }
 
 /// Removes the secret from the credential store.
 fn delete_legacy(name: &str) {
-    if let Ok(entry) = entry(name) {
-        let _ = entry.delete_credential();
-    }
+    let _ = keychain::delete(SERVICE, &entry(name));
 }
 
 /// Saves a secret in the vault, saying what keeps the vault's key. A process that is not the
@@ -78,8 +76,7 @@ pub(crate) fn store_secret(name: &str, value: &str) -> Result<KeyStore, Error> {
         }
         vault::Status::Closed => {}
     }
-    entry(name)
-        .and_then(|e| e.set_password(value))
+    keychain::set(SERVICE, &entry(name), value)
         .map_err(|e| format!("This system has no keychain to save the secret in: {e}"))?;
     keys().insert(name.to_string(), value.to_string());
     Ok(KeyStore::Keychain)
@@ -112,7 +109,7 @@ pub(crate) fn forget_secrets() {
 pub(crate) fn old_copies(names: &[String]) -> usize {
     names
         .iter()
-        .filter(|name| entry(name).and_then(|e| e.get_password()).is_ok())
+        .filter(|name| matches!(keychain::get(SERVICE, &entry(name)), Ok(Some(_))))
         .count()
 }
 
@@ -128,11 +125,8 @@ pub(crate) fn remove_old_copies(names: &[String]) -> Result<usize, Error> {
     }
     let mut removed = 0;
     for name in names {
-        if let Ok(entry) = entry(name)
-            && entry.get_password().is_ok()
-        {
-            entry
-                .delete_credential()
+        if let Ok(Some(_)) = keychain::get(SERVICE, &entry(name)) {
+            keychain::delete(SERVICE, &entry(name))
                 .map_err(|e| format!("The system keychain kept an old copy: {e}"))?;
             removed += 1;
         }

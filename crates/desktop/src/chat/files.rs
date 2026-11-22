@@ -13,8 +13,8 @@ use patchwork_core::threads::{Message, MessageStatus, Role as MessageRole};
 use patchwork_core::workspace::{FileChange, FileMedia, PreviewKind, file_media, missing_files};
 
 use crate::canvas::CanvasTab;
-use crate::ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
-use crate::ui::{BtnKind, base_name, btn, button, dir_name, icon, tooltip};
+use patchwork_ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
+use patchwork_ui::{BtnKind, base_name, btn, button, dir_name, icon, tooltip};
 use crate::workspace::{View, Workspace};
 
 /// Most files the summary lists; the rest are in the Changes view.

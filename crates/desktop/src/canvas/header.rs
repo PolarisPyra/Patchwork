@@ -4,9 +4,9 @@
 
 use gpui::{FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_core::threads::Message;
-use crate::ui::highlight::file_label;
-use crate::ui::theme::{fs_lg, fs_sm, radius, Theme};
-use crate::ui::{BtnKind, badge, base_name, btn, dir_name, icon, icon_button, tooltip};
+use patchwork_ui::highlight::file_label;
+use patchwork_ui::theme::{fs_lg, fs_sm, radius, Theme};
+use patchwork_ui::{BtnKind, badge, base_name, btn, dir_name, icon, icon_button, tooltip};
 use super::diff::Review;
 use super::state::{Canvas, CanvasTab};
 

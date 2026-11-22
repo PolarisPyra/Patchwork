@@ -7,8 +7,8 @@ use gpui::{Div, Role, SharedString, div, prelude::*, px};
 use patchwork_core::threads::{Message, MessageStatus, StepStatus, ToolCall};
 
 use crate::chat::timeline::{PATCHWORK_TOOL, is_running};
-use crate::ui::theme::{Theme, fs_xs};
-use crate::ui::{icon, spinner};
+use patchwork_ui::theme::{Theme, fs_xs};
+use patchwork_ui::{icon, spinner};
 
 /// The icon and the words a Patchwork tool's pill shows.
 fn note_of(tool: &ToolCall) -> (&'static str, String) {

@@ -11,8 +11,8 @@ use patchwork_core::settings::Settings;
 use patchwork_core::system::ssh::is_remote;
 
 use super::Workspace;
-use crate::panel::{Panel, PanelEvent, PanelTab};
-use crate::ui::theme::{STATUSBAR_H, TOOLBAR_H};
+use patchwork_sidecar::panel::{Panel, PanelEvent, PanelTab};
+use patchwork_ui::theme::{STATUSBAR_H, TOOLBAR_H};
 
 const PANEL_MIN: f32 = 120.;
 const PANEL_MAX_FRACTION: f32 = 0.8;
@@ -93,7 +93,7 @@ impl Workspace {
         }
         let had_focus = self.panel.read(cx).contains_focus(window, cx);
         self.panel_open = false;
-        self.panel.update(cx, crate::panel::Panel::hide);
+        self.panel.update(cx, patchwork_sidecar::panel::Panel::hide);
         if had_focus {
             window.focus(&self.focus, cx);
         }

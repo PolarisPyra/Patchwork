@@ -8,8 +8,8 @@ use gpui::{
 };
 use patchwork_core::threads::{Message, MessageStatus, TurnTrees};
 use patchwork_core::workspace::{FileMedia, PreviewKind};
-use crate::ui::text_area::{Submitted, TextArea};
-use crate::ui::highlight::{MAX_HIGHLIGHT_LINES, Run, highlight_file, split_lines};
+use patchwork_ui::text_area::{Submitted, TextArea};
+use patchwork_ui::highlight::{MAX_HIGHLIGHT_LINES, Run, highlight_file, split_lines};
 use crate::workspace::Workspace;
 use super::diff;
 

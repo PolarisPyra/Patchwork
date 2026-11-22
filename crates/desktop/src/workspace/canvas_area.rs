@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::quilts::QuiltsPage;
 use crate::canvas::{CANVAS_MAX_FRACTION, CANVAS_MIN, Canvas, CanvasTab};
-use crate::ui::theme::{ACTIVITY_BAR_W, theme};
+use patchwork_ui::theme::{ACTIVITY_BAR_W, theme};
 use super::state::Workspace;
 
 impl Workspace {
@@ -161,7 +161,7 @@ impl Workspace {
             return;
         };
         let (id, root) = (project.id.clone(), std::path::PathBuf::from(&project.path));
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || patchwork_core::android::detect(&root),
             move |this, found, cx| {

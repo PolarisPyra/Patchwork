@@ -12,8 +12,8 @@ use super::{
     IMPORTS_STEP, LAST_STEP, LOGO_BLUE, LOGO_PINK, LOGO_VIOLET, Onboarding, OnboardingEvent,
     PROJECTS_STEP, STEPS, agent_step, imports_step, projects_step, ready_step,
 };
-use crate::ui::theme::{fs_lg, fs_sm, fs_xl, fs_xxl, radius_lg, radius_sm, Theme, theme};
-use crate::ui::{BtnKind, btn, icon, icon_button, spinner, tooltip};
+use patchwork_ui::theme::{fs_lg, fs_sm, fs_xl, fs_xxl, radius_lg, radius_sm, Theme, theme};
+use patchwork_ui::{BtnKind, btn, icon, icon_button, spinner, tooltip};
 
 /// The logo's colours as a fill, from `a` to `b`.
 fn logo_fill(angle: f32, a: u32, b: u32) -> gpui::Background {

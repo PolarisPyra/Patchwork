@@ -7,13 +7,14 @@ use gpui::{
     ExternalPaths, Focusable, KeyDownEvent, MouseButton, Role, SharedString, Window, div,
     prelude::*, px,
 };
-use crate::ui::text_area::Paste;
+use patchwork_ui::text_area::Paste;
 use crate::chat::user::attachment_chip;
-use crate::ui::pill::{PILL_PAD, SEND, pill, send_button};
-use crate::ui::theme::{fs_md, fs_xs, theme};
-use crate::ui::{agent_logo, button, format_tokens, icon, tooltip};
+use patchwork_ui::pill::{PILL_PAD, SEND, pill, send_button};
+use patchwork_ui::theme::{fs_md, fs_xs, theme};
+use patchwork_ui::{agent_logo, button, format_tokens, icon, tooltip};
 use crate::workspace::{Workspace, is_busy, is_working};
-use super::menus::{Menu, access_of, compact_label, effort_label, efforts};
+use super::menus::{Menu, access_of, compact_label};
+use patchwork_ui::effort_label;
 use super::chips::{chip, context_of, fill_ring};
 use super::send::queue_by_default;
 use super::state::Composer;
@@ -73,7 +74,7 @@ impl Render for Composer {
             .map(|m| m.label.clone())
             .or_else(|| picks.model.clone())
             .unwrap_or_else(|| "Default".into());
-        let levels = efforts(agent, picks.model.as_deref(), self.models_of(agent));
+        let levels = agent.model_efforts(picks.model.as_deref(), self.models_of(agent));
         let effort = picks
             .effort
             .as_ref()
@@ -518,7 +519,7 @@ impl Render for Composer {
                         .flex()
                         .min_w_0()
                         // In line with where the pill under it stops being round.
-                        .px(px(crate::ui::pill::PILL_RADIUS))
+                        .px(px(patchwork_ui::pill::PILL_RADIUS))
                         .text_size(px(fs_xs()))
                         .line_height(px(16.))
                         .children(usage),

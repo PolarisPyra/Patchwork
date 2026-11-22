@@ -11,9 +11,9 @@ use patchwork_core::threads::AttachmentKind;
 
 use super::Composer;
 use super::menus::{Menu, Pick};
-use crate::ui::pill::pill;
-use crate::ui::theme::{fs_sm, Theme};
-use crate::ui::{BtnKind, btn, icon, spinner};
+use patchwork_ui::pill::pill;
+use patchwork_ui::theme::{fs_sm, Theme};
+use patchwork_ui::{BtnKind, btn, icon, spinner};
 
 /// The most other models offered when the server stopped serving the chat's.
 const MAX_OFFERED: usize = 3;
@@ -50,7 +50,7 @@ impl Composer {
         let model = model.to_string();
         self.health.checked = Some((model.clone(), None));
         let provider = model.split('/').next().unwrap_or_default().to_string();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || {
                 let found = config::provider(&provider).filter(|p| p.local)?;
@@ -76,7 +76,7 @@ impl Composer {
     fn find_server(&mut self, provider: String, cx: &mut Context<Self>) {
         self.health.finding = true;
         self.health.error = None;
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || servers::relocate(&provider),
             move |this, found, cx| {

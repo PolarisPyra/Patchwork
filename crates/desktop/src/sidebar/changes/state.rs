@@ -12,8 +12,8 @@ use patchwork_core::workspace::{
     CommitDetail, CommitOptions, GitCommit, GitSyncState, Operation, PullRequest,
 };
 
-use crate::ui::text_area::{Changed, Submitted, TextArea};
-use crate::ui::menu::Menu;
+use patchwork_ui::text_area::{Changed, Submitted, TextArea};
+use patchwork_ui::menu::Menu;
 use crate::workspace::Workspace;
 use super::repo::Asking;
 use super::rows::reply_files;
@@ -439,7 +439,7 @@ impl ChangesView {
             self.compare = None;
             return;
         };
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.branch_compare(&thread),
             move |this, compare, cx| {
@@ -476,7 +476,7 @@ impl ChangesView {
             return;
         }
         let focus = w.change_focus.clone();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || {
                 let root = core.thread_root(&thread)?;
@@ -526,7 +526,7 @@ impl ChangesView {
         self.result = result;
         self.result_seq += 1;
         let seq = self.result_seq;
-        crate::ui::after(cx, RESULT_FOR, move |this, cx| {
+        patchwork_ui::after(cx, RESULT_FOR, move |this, cx| {
             if this.result_seq == seq {
                 this.result = None;
                 cx.notify();

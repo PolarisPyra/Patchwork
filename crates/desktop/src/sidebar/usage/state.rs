@@ -8,7 +8,7 @@ use std::time::Duration;
 use gpui::{App, FocusHandle, KeyDownEvent, Pixels, Point, Window, prelude::*};
 use patchwork_core::provider::{AgentKind, AgentStatus, detect_agent};
 use patchwork_core::usage::ProviderUsage;
-use crate::ui::now_ms;
+use patchwork_ui::now_ms;
 use crate::workspace::Workspace;
 
 /// Every agent the popover can show: the ones with plan limits (Claude, Codex, Antigravity), then
@@ -176,7 +176,7 @@ impl Workspace {
                 continue;
             }
             let core = Arc::clone(&self.core);
-            crate::ui::off_thread(
+            patchwork_ui::off_thread(
                 cx,
                 move || {
                     let status = detect_agent(kind);
@@ -199,7 +199,7 @@ impl Workspace {
                     let limited = limited_until(Some(&entry), now_ms()).is_some();
                     if refresh && !limited && before.is_some() && after == before {
                         this.usage.up_to_date = Some(kind);
-                        crate::ui::after(cx, UP_TO_DATE, move |this, cx| {
+                        patchwork_ui::after(cx, UP_TO_DATE, move |this, cx| {
                             if this.usage.up_to_date == Some(kind) {
                                 this.usage.up_to_date = None;
                                 cx.notify();

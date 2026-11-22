@@ -6,9 +6,9 @@
 use gpui::{Div, FontWeight, KeyDownEvent, Role, SharedString, Stateful, Window, div, prelude::*, px};
 use patchwork_core::bots::STARTING_POINTS;
 use crate::chat::backdrop::{backdrop_for, chat_backdrop, chat_scheme, scheme_for};
-use crate::ui::avatar::{Mood, avatar};
-use crate::ui::theme::{InScheme, Theme, fs_lg, fs_md, fs_sm, radius, radius_lg, radius_sm, theme};
-use crate::ui::{button, icon, icon_button, spinner, tooltip};
+use patchwork_ui::avatar::{Mood, avatar};
+use patchwork_ui::theme::{InScheme, Theme, fs_lg, fs_md, fs_sm, radius, radius_lg, radius_sm, theme};
+use patchwork_ui::{button, icon, icon_button, spinner, tooltip};
 use super::details::{radio, radio_group};
 use super::state::{BotPage, Layout};
 

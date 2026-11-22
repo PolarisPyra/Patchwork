@@ -13,9 +13,9 @@ use patchwork_core::Core;
 
 use super::{Onboarding, OnboardingEvent};
 use super::rows::picked;
-use crate::ui::input_box;
-use crate::ui::theme::{font_mono, fs_lg, fs_sm, radius, radius_lg, radius_sm, Theme};
-use crate::ui::{BtnKind, btn, button, icon};
+use patchwork_ui::input_box;
+use patchwork_ui::theme::{font_mono, fs_lg, fs_sm, radius, radius_lg, radius_sm, Theme};
+use patchwork_ui::{BtnKind, btn, button, icon};
 
 impl Onboarding {
     /// Runs a project change in the background, then reads the projects again.
@@ -28,7 +28,7 @@ impl Onboarding {
         self.busy = true;
         self.project_error = None;
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || task(&core),
             move |this, out, cx| {

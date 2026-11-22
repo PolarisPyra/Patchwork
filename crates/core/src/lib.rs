@@ -204,7 +204,7 @@ impl Core {
                 .run_chat_tool(&core, thread_id, tool, args, stopped),
             Some(core) if tool == quilts::TOOL => core.run_quilt_tool(thread_id, args),
             Some(core) if tool.starts_with(android::TOOL_PREFIX) => {
-                core.android_tool(thread_id, tool, args, stopped)
+                core.android().tool(thread_id, tool, args, stopped)
             }
             Some(_) => Err(format!("Patchwork has no tool {tool}").into()),
             None => Err("Patchwork is closing".into()),
@@ -224,7 +224,7 @@ impl Core {
                     })];
                     tools.extend(core.chat_tools(thread_id));
                     tools.extend(core.delegate_tools(thread_id));
-                    tools.extend(core.android_tools(thread_id));
+                    tools.extend(core.android().tools(thread_id));
                     tools.extend(core.quilt_tools(thread_id));
                     tools
                 })

@@ -13,8 +13,8 @@ use gpui::{AnyElement, ObjectFit, div, img, prelude::*};
 use patchwork_core::backgrounds::{BackgroundImage, ChatBackground};
 use patchwork_core::themes::{SavedScene, Scheme};
 
-use crate::ui::backdrop::{PreviewFlight, butterfly_backdrop, preset_fill, scene_backdrop};
-use crate::ui::theme::{InScheme, Theme, applied, theme};
+use patchwork_ui::backdrop::{PreviewFlight, butterfly_backdrop, preset_fill, scene_backdrop};
+use patchwork_ui::theme::{InScheme, Theme, applied, theme};
 use crate::workspace::Workspace;
 
 use super::scheme::in_scheme;

@@ -11,8 +11,8 @@ use gpui::{
 };
 use patchwork_core::threads::{ApprovalStatus, MessageStatus, Role as MessageRole};
 
-use crate::ui::theme::{fs_md, fs_sm, fs_xs, radius, radius_sm, Theme};
-use crate::ui::button;
+use patchwork_ui::theme::{fs_md, fs_sm, fs_xs, radius, radius_sm, Theme};
+use patchwork_ui::button;
 use crate::workspace::{Workspace, is_working};
 
 /// Most options a ```choices``` fence offers.

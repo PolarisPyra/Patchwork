@@ -11,8 +11,8 @@ use patchwork_core::system::ssh::is_remote;
 use patchwork_core::projects::Project;
 
 use crate::chat::goal::strip_action;
-use crate::ui::theme::{Theme, fs_sm, radius_sm};
-use crate::ui::{button, icon, icon_button, tooltip};
+use patchwork_ui::theme::{Theme, fs_sm, radius_sm};
+use patchwork_ui::{button, icon, icon_button, tooltip};
 use crate::workspace::Workspace;
 
 impl Workspace {

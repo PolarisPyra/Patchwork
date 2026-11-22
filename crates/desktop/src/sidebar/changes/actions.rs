@@ -7,8 +7,8 @@ use std::sync::Arc;
 use gpui::{ClickEvent, Pixels, Point, PromptLevel, WeakEntity, Window, prelude::*};
 use patchwork_core::workspace::{CommitOptions, PullRequest, RepoAction};
 
-use crate::ui::menu::{Dismissed, Menu, MenuItem};
-use crate::ui::base_name;
+use patchwork_ui::menu::{Dismissed, Menu, MenuItem};
+use patchwork_ui::base_name;
 use crate::workspace::Workspace;
 use super::state::{ChangesView, GitAction, PANE_MIN};
 
@@ -292,7 +292,7 @@ impl ChangesView {
         let thread = self.thread_id(cx);
         self.error = None;
         let shown = self.root.clone();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || {
                 let root = core.source_root(&id, thread.as_deref())?;
@@ -434,7 +434,7 @@ impl ChangesView {
         cx.notify();
         let shown = self.root.clone();
         let thread = self.thread_id(cx);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.conflict_prompt(&id, thread.as_deref()),
             move |this, prompt, cx| {

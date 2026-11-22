@@ -8,9 +8,11 @@ use patchwork_core::system::device::Kind;
 use patchwork_core::threads::{MessageStatus, Role as MessageRole};
 
 use super::{Page, View, Workspace, is_busy};
-use crate::ui::menu::{Dismissed, Menu, MenuItem};
-use crate::ui::theme::{ACTIVITY_BAR_W, fs_xs, radius, radius_sm, STATUSBAR_H, TOOLBAR_H, Theme, theme};
-use crate::ui::{agent_label, button, icon, kind_icon, spinner};
+use patchwork_ui::menu::{Dismissed, Menu, MenuItem};
+use patchwork_ui::theme::{
+    ACTIVITY_BAR_W, fs_xs, radius, radius_sm, STATUSBAR_H, TOOLBAR_H, Theme, theme,
+};
+use patchwork_ui::{agent_label, button, icon, kind_icon, spinner};
 
 /// The machine button's size, the same as the activity bar's buttons.
 const MACHINE_BUTTON: f32 = 28.;
@@ -234,7 +236,7 @@ impl Workspace {
                         .rounded_full()
                         .bg(t.accent)
                         .px(px(4.))
-                        .text_size(px(crate::ui::theme::fs(10.)))
+                        .text_size(px(patchwork_ui::theme::fs(10.)))
                         .line_height(px(16.))
                         .text_color(t.text_on_accent)
                         .flex()

@@ -18,10 +18,10 @@ use patchwork_core::themes::{Applied, Scene, Scheme, Shown};
 use patchwork_core::threads::AskKind;
 
 use super::state::Orchestrator;
-use crate::ui::backdrop::{Fallback, butterfly_field, preset_fill, scene_field};
-use crate::ui::theme::{applied, font_ui, fs_lg, fs_sm, glass_over, ink_over, radius_lg, theme};
-use crate::ui::pill::{PILL_PAD, SEND, pill, send_button};
-use crate::ui::{button, display_title, icon};
+use patchwork_ui::backdrop::{Fallback, butterfly_field, preset_fill, scene_field};
+use patchwork_ui::theme::{applied, font_ui, fs_lg, fs_sm, glass_over, ink_over, radius_lg, theme};
+use patchwork_ui::pill::{PILL_PAD, SEND, pill, send_button};
+use patchwork_ui::{button, display_title, icon};
 
 /// The pill: its size, the room kept at its sides, and how far down the page its top is.
 pub(super) const PILL_W: f32 = 640.;

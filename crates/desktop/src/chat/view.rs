@@ -4,8 +4,8 @@
 
 use gpui::{Div, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_core::threads::{MessageStatus, Thread};
-use crate::ui::theme::{InScheme, Theme, fs_sm, fs_xl, fs_xs, radius_sm, theme};
-use crate::ui::{agent_logo, button, display_title, format_tokens, icon, icon_button, tooltip};
+use patchwork_ui::theme::{InScheme, Theme, fs_sm, fs_xl, fs_xs, radius_sm, theme};
+use patchwork_ui::{agent_logo, button, display_title, format_tokens, icon, icon_button, tooltip};
 use crate::workspace::Workspace;
 use super::transcript::{follow_width, sync_transcript, transcript};
 use super::backdrop;
@@ -29,7 +29,7 @@ pub fn render(
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) -> impl IntoElement + use<> {
-    crate::ui::selection::begin_frame(cx);
+    patchwork_ui::selection::begin_frame(cx);
     w.load_reply_files(cx);
     w.sync_secret_fields(cx);
     w.load_checkpoints(cx);

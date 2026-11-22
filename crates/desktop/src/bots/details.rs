@@ -7,9 +7,9 @@ use gpui::{
     AnyElement, Div, Focusable, FontWeight, KeyDownEvent, Role, SharedString, Stateful, Window,
     div, prelude::*, px,
 };
-use crate::ui::avatar::{Mood, avatar};
-use crate::ui::theme::{Theme, fs_md, fs_sm, fs_xl, radius_sm, theme};
-use crate::ui::{
+use patchwork_ui::avatar::{Mood, avatar};
+use patchwork_ui::theme::{Theme, fs_md, fs_sm, fs_xl, radius_sm, theme};
+use patchwork_ui::{
     BtnKind, btn, button, checkbox, display_title, focus_ring, format_relative, format_tokens,
     icon, icon_button, input_box, spinner,
 };

@@ -8,7 +8,7 @@ use gpui::{Entity, FocusHandle, Focusable, PathPromptOptions, WeakEntity, Window
 use patchwork_core::Core;
 use patchwork_core::bots::{BlockedTools, Bot, BotUsage, KnowledgeFile, STARTING_POINTS};
 use patchwork_core::permissions::PermissionKind;
-use crate::ui::text_area::{Submitted, TextArea};
+use patchwork_ui::text_area::{Submitted, TextArea};
 use crate::workspace::Workspace;
 use super::sections::Drill;
 
@@ -85,7 +85,7 @@ impl BotPage {
             cx.new(|cx| {
                 let mut area = TextArea::new(String::new(), label, cx);
                 area.single_line = single;
-                area.placeholder_color = Some(crate::ui::theme::input_placeholder());
+                area.placeholder_color = Some(patchwork_ui::theme::input_placeholder());
                 area.set_text(&text, cx);
                 area
             })
@@ -151,7 +151,7 @@ impl BotPage {
     /// Saves `bot` off the UI thread, and shows it as saved, or the error and the bot as it was.
     fn save(&mut self, bot: Bot, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.save_bot(bot),
             move |this, saved, cx| {
@@ -250,7 +250,7 @@ impl BotPage {
     /// Saves the blocked tools off the UI thread, and shows the bot as saved.
     fn save_blocked(&mut self, blocked: BlockedTools, cx: &mut Context<Self>) {
         let (core, id) = (Arc::clone(&self.core), self.bot.id.clone());
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.set_bot_blocked(&id, blocked),
             move |this, saved, cx| match saved {
@@ -263,7 +263,7 @@ impl BotPage {
     /// Reads the MCP servers the bot could block, off the UI thread.
     fn load_servers(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.mcp_server_names(),
             move |this, names, cx| {
@@ -309,7 +309,7 @@ impl BotPage {
     pub(super) fn add_files(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
         let id = self.bot.id.clone();
-        crate::ui::pick_paths(
+        patchwork_ui::pick_paths(
             cx,
             PathPromptOptions {
                 files: true,
@@ -318,7 +318,7 @@ impl BotPage {
                 prompt: None,
             },
             move |_, paths, cx| {
-                crate::ui::off_thread(
+                patchwork_ui::off_thread(
                     cx,
                     move || {
                         let errors: Vec<String> = paths
@@ -364,7 +364,7 @@ impl BotPage {
     fn load_knowledge(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
         let id = self.bot.id.clone();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.knowledge_files(&id),
             move |this, files, cx| {
@@ -377,7 +377,7 @@ impl BotPage {
     pub fn load_usage(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
         let id = self.bot.id.clone();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.bot_usage(&id),
             move |this, usage, cx| {

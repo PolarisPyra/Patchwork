@@ -7,7 +7,7 @@ use std::sync::Arc;
 use gpui::{prelude::*};
 use patchwork_core::threads::{Message, Part, Role, Thread};
 
-use crate::ui::{agent_label, display_title, slug_file_name};
+use patchwork_ui::{agent_label, display_title, slug_file_name};
 use crate::workspace::Workspace;
 
 /// A reply as Markdown: its text and plans, with each tool call as a list line.

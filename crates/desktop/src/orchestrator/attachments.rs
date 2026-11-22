@@ -14,11 +14,11 @@ use gpui::{
 use super::render::{glass, ink};
 use super::state::Orchestrator;
 use crate::chat::user::attachment_chip;
-use crate::ui::menu::{Menu, MenuItem};
-use crate::ui::pill::pill;
-use crate::ui::pill::SEND;
-use crate::ui::theme::theme;
-use crate::ui::{button, icon};
+use patchwork_ui::menu::{Menu, MenuItem};
+use patchwork_ui::pill::pill;
+use patchwork_ui::pill::SEND;
+use patchwork_ui::theme::theme;
+use patchwork_ui::{button, icon};
 
 impl Orchestrator {
     /// The plus button at the start of the pill, which opens a menu to attach files or a folder.
@@ -87,7 +87,7 @@ impl Orchestrator {
 
     /// Asks for files, or for folders, and attaches what is picked.
     fn pick_attachments(&mut self, folders: bool, cx: &mut Context<Self>) {
-        crate::ui::pick_paths(
+        patchwork_ui::pick_paths(
             cx,
             PathPromptOptions {
                 files: !folders,

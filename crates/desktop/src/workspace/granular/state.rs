@@ -9,7 +9,7 @@ use gpui::{Entity, FocusHandle, Focusable, SharedString, Window, prelude::*};
 use patchwork_core::provider::AgentKind;
 use patchwork_core::threads::{AgentPick, Attachment, Granular, NewThread, Reserves};
 
-use crate::ui::menu::Menu;
+use patchwork_ui::menu::Menu;
 use crate::workspace::Workspace;
 
 /// Whose settings the card holds.

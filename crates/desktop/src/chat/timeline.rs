@@ -5,7 +5,7 @@
 
 use patchwork_core::threads::{Message, MessageStatus, Part, StepStatus, ToolCall};
 
-use crate::ui::full_elapsed;
+use patchwork_ui::full_elapsed;
 
 /// A call or a block of reasoning: the smallest thing a row shows.
 pub enum Entry<'a> {

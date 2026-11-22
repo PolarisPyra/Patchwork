@@ -9,7 +9,7 @@ use futures::StreamExt;
 use gpui::{Window, prelude::*};
 use patchwork_core::permissions::PermissionScope;
 use crate::workspace::palette::{Action, Closed, Palette};
-use crate::ui::theme::theme;
+use patchwork_ui::theme::theme;
 use super::state::Workspace;
 
 impl Workspace {
@@ -59,11 +59,12 @@ impl Workspace {
             return;
         }
         let core = Arc::clone(&self.core);
-        let dialog = cx.new(|cx| crate::settings::SettingsDialog::new(core, section, window, cx));
+        let dialog =
+            cx.new(|cx| patchwork_settings::SettingsDialog::new(core, section, window, cx));
         let open = self.thread.as_ref().map(|t| t.id.clone());
         dialog.update(cx, |d, _| d.set_open_thread(open));
         cx.subscribe_in(&dialog, window, |this, _, event, window, cx| match event {
-            crate::settings::SettingsEvent::Changed => {
+            patchwork_settings::SettingsEvent::Changed => {
                 this.settings = this.core.settings();
                 // "Run setup again" leaves Settings for the setup.
                 if !this.settings.onboarded {
@@ -75,20 +76,20 @@ impl Workspace {
                 this.sync_panel(cx);
                 this.apply_theme(window, cx);
             }
-            crate::settings::SettingsEvent::ThreadsChanged => this.reload(cx),
-            crate::settings::SettingsEvent::GenerateTheme(prompt, pick) => {
+            patchwork_settings::SettingsEvent::ThreadsChanged => this.reload(cx),
+            patchwork_settings::SettingsEvent::GenerateTheme(prompt, pick) => {
                 this.generate_theme(prompt.clone(), pick.as_ref(), cx);
             }
-            crate::settings::SettingsEvent::OpenChat(id) => {
+            patchwork_settings::SettingsEvent::OpenChat(id) => {
                 this.settings_dialog = None;
                 this.open_thread(id, cx);
                 window.focus(&this.focus, cx);
                 cx.notify();
             }
-            crate::settings::SettingsEvent::RestartToUpdate => {
+            patchwork_settings::SettingsEvent::RestartToUpdate => {
                 super::updates::restart_to_update(&this.core, window, cx);
             }
-            crate::settings::SettingsEvent::Closed => {
+            patchwork_settings::SettingsEvent::Closed => {
                 this.settings_dialog = None;
                 window.focus(&this.focus, cx);
                 cx.notify();
@@ -201,7 +202,7 @@ impl Workspace {
                 let applied = this.update_in(cx, |this, window, cx| {
                     this.apply_theme(window, cx);
                     if let Some(dialog) = &this.settings_dialog {
-                        dialog.update(cx, crate::settings::SettingsDialog::themes_changed);
+                        dialog.update(cx, patchwork_settings::SettingsDialog::themes_changed);
                     }
                 });
                 if applied.is_err() {
@@ -221,9 +222,9 @@ impl Workspace {
                 .background_spawn(async move { core.applied_theme() })
                 .await;
             let _ = this.update_in(cx, |this, window, cx| {
-                let was = crate::ui::theme::applied(cx);
+                let was = patchwork_ui::theme::applied(cx);
                 let reset = was.text_size != applied.text_size || was.ui_font != applied.ui_font;
-                crate::ui::theme::apply(applied, window.appearance(), cx);
+                patchwork_ui::theme::apply(applied, window.appearance(), cx);
                 if reset {
                     // Every row of the transcript is another height in another font or size.
                     this.transcript_list.remeasure();
@@ -238,7 +239,7 @@ impl Workspace {
     /// Draws the theme anew when the clock or the sun next changes it. The wait is cut into
     /// short ones, so a computer that slept still switches soon after it wakes.
     pub(super) fn await_theme_switch(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(wait) = crate::ui::theme::applied(cx).switch_in else {
+        let Some(wait) = patchwork_ui::theme::applied(cx).switch_in else {
             self.theme_switch = None;
             return;
         };

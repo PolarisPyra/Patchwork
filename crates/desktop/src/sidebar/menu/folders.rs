@@ -8,7 +8,7 @@ use std::sync::Arc;
 use gpui::{Window, prelude::*};
 use patchwork_core::provider::AgentKind;
 use patchwork_core::threads::Thread;
-use crate::ui::{AGENT_KINDS, agent_label};
+use patchwork_ui::{AGENT_KINDS, agent_label};
 use crate::workspace::Workspace;
 
 impl Workspace {

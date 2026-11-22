@@ -12,8 +12,10 @@ categories.workspace = true
 
 [dependencies]
 patchwork-core.workspace = true
+patchwork-settings.workspace = true
+patchwork-sidecar.workspace = true
+patchwork-ui.workspace = true
 
-base64 = { workspace = true, default-features = true }
 chrono = { workspace = true, features = ["clock"] }
 dirs.workspace = true
 futures = { workspace = true, default-features = true }
@@ -24,15 +26,7 @@ log = { workspace = true, default-features = true }
 # The global allocator: it is faster than the system one on the allocation-heavy paths of
 # layout and text shaping.
 mimalloc = { workspace = true, default-features = true }
-pulldown-cmark.workspace = true
-rust-embed = { workspace = true, default-features = true, features = ["include-exclude"] }
 serde_json = { workspace = true, default-features = true }
-syntect.workspace = true
-# Syntax definitions for syntect beyond its own set, such as TypeScript and TOML.
-two-face = { workspace = true, features = ["syntect-onig"] }
-unicode-segmentation = { workspace = true, default-features = true }
-vt100 = { workspace = true, default-features = true }
-zeroize = { workspace = true, default-features = true }
 
 [build-dependencies]
 # Embeds the Windows icon in the exe.

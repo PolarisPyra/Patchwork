@@ -11,8 +11,8 @@ use gpui::{AnyElement, Entity, KeyDownEvent, Role, Window, div, prelude::*, px, 
 use crate::quilts::QuiltsPage;
 
 use super::state::{Page, Place, Workspace};
-use crate::ui::theme::{Theme, fs_md, radius_lg};
-use crate::ui::{display_title, icon_button, popup_shadow, tooltip};
+use patchwork_ui::theme::{Theme, fs_md, radius_lg};
+use patchwork_ui::{display_title, icon_button, popup_shadow, tooltip};
 
 /// The card's widest and tallest; a smaller window gets a smaller card.
 const SIZE: (f32, f32) = (440., 640.);
@@ -100,7 +100,7 @@ impl Workspace {
     /// Reads every quilt again, for the chats' quilt cards.
     pub(super) fn load_quilt_list(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.quilts(),
             |this, list, cx| {

@@ -18,8 +18,8 @@ use patchwork_core::quilts::{Quilt, QuiltKind};
 use super::patch::{Act, patch};
 use super::render::kind_icon;
 use super::state::{QuiltsPage, Place};
-use crate::ui::theme::{Theme, fs_lg, fs_md, fs_sm, fs_xxl, radius, radius_sm};
-use crate::ui::{
+use patchwork_ui::theme::{Theme, fs_lg, fs_md, fs_sm, fs_xxl, radius, radius_sm};
+use patchwork_ui::{
     button, focus_ring, format_relative, icon, icon_button, input_box, scrollbar, spinner, tooltip,
 };
 

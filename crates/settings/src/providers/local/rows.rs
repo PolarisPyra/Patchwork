@@ -1,0 +1,227 @@
+//! A local server drawn as a row, with its address field and its repair row.
+
+// Rust guideline compliant 2026-10-09
+
+use super::state::health_line;
+use super::state::ADDRESS_FIELD;
+use gpui::{AnyElement, Div, Focusable, SharedString, Window, div, prelude::*, px};
+use patchwork_core::provider::api::config::{self, ApiProvider, KeyChange, ProviderView};
+use patchwork_core::provider::api::servers;
+use crate::providers::PromptOf;
+use crate::providers::rows::{provider_actions, provider_title, status_badge};
+use crate::SettingsDialog;
+use crate::controls::{FieldKind, alert};
+use patchwork_ui::theme::{font_mono, radius_sm, theme};
+use patchwork_ui::{BtnKind, btn, icon, provider_logo, spinner};
+
+impl SettingsDialog {
+    /// Under a server that stopped answering: look for where it moved, or type its new address.
+    fn repair_row(
+        &mut self,
+        view: &ProviderView,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let t = *theme(cx);
+        let p = &view.provider;
+        let busy = self.providers.local.repairing;
+        let error = self.providers.local.repair_error.clone();
+        let body = if self.providers.local.address.is_none() {
+            let (find_id, base) = (p.id.clone(), p.base_url.clone());
+            div()
+                .flex()
+                .gap(px(8.))
+                .child(
+                    btn(
+                        "find-server",
+                        format!("Find where {} moved", p.name),
+                        BtnKind::Plain,
+                        busy,
+                        &t,
+                    )
+                    .child(if busy {
+                        spinner(13., t.text_muted).into_any_element()
+                    } else {
+                        icon("magnifying-glass", 13.).into_any_element()
+                    })
+                    .child("Find server")
+                    .when(!busy, |b| {
+                        b.on_click(cx.listener(move |d, _, _, cx| {
+                            let id = find_id.clone();
+                            d.repair(id.clone(), move || servers::relocate(&id).map(|_| ()), cx);
+                        }))
+                    }),
+                )
+                .child(
+                    btn("change-address", "Change address", BtnKind::Plain, busy, &t)
+                        .child("Change address")
+                        .when(!busy, |b| {
+                            b.on_click(cx.listener(move |d, _, window, cx| {
+                                d.providers.local.address = Some(base.clone());
+                                let _ = d.address_field(window, cx);
+                                if let Some(area) = d.field_area(ADDRESS_FIELD) {
+                                    area.read(cx).focus_handle(cx).focus(window, cx);
+                                }
+                                cx.notify();
+                            }))
+                        }),
+                )
+        } else {
+            let field = self.address_field(window, cx);
+            let provider = p.clone();
+            let save = move |d: &mut Self, cx: &mut Context<Self>| {
+                let Some(address) = d.providers.local.address.clone() else {
+                    return;
+                };
+                let provider = ApiProvider {
+                    base_url: address,
+                    ..provider.clone()
+                };
+                let id = provider.id.clone();
+                d.repair(
+                    id,
+                    move || config::save(provider, KeyChange::Keep).map(|_| ()),
+                    cx,
+                );
+            };
+            let submit = save.clone();
+            self.on_submit(ADDRESS_FIELD, move |d, _, cx| submit(d, cx));
+            div()
+                .flex()
+                .gap(px(8.))
+                .child(field.flex_1())
+                .child(
+                    btn("address-save", "Save", BtnKind::Plain, busy, &t)
+                        .when(busy, |b| b.child(spinner(13., t.text_muted)))
+                        .child("Save")
+                        .when(!busy, |b| {
+                            b.on_click(cx.listener(move |d, _, _, cx| save(d, cx)))
+                        }),
+                )
+                .child(
+                    btn("address-cancel", "Cancel", BtnKind::Plain, false, &t)
+                        .child("Cancel")
+                        .on_click(cx.listener(|d, _, _, cx| {
+                            d.close_address();
+                            cx.notify();
+                        })),
+                )
+        };
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(6.))
+            .border_b_1()
+            .border_color(t.border)
+            .py(px(8.))
+            .child(body)
+            .children(error.map(|e| alert("repair-error", e, t.danger).pt(px(0.))))
+    }
+
+    fn address_field(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let name = self
+            .selected_local()
+            .map(|v| v.provider.name.clone())
+            .unwrap_or_default();
+        let value = self.providers.local.address.clone().unwrap_or_default();
+        self.field(
+            ADDRESS_FIELD,
+            format!("{name} address"),
+            &value,
+            "",
+            FieldKind {
+                live: true,
+                mono: true,
+                ..Default::default()
+            },
+            |d, text, _| d.providers.local.address = Some(text),
+            window,
+            cx,
+        )
+        .font_family(font_mono())
+    }
+
+    fn selected_local(&self) -> Option<&ProviderView> {
+        let id = self.providers.local.selected.as_ref()?;
+        self.providers
+            .providers
+            .iter()
+            .find(|p| p.provider.local && &p.provider.id == id)
+    }
+
+    /// The open server's row: its status, Recheck, Edit, its system prompt, and the use switch
+    /// (`ServerRow`).
+    pub(super) fn server_row(
+        &mut self,
+        view: &ProviderView,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let t = *theme(cx);
+        let p = &view.provider;
+        let id = p.id.clone();
+        let health = self.providers.local.health.get(&id);
+        let checking = health.is_none();
+        let reachable = health.is_some_and(|h| h.reachable);
+        let line = health_line(p, health);
+        let prompting = self
+            .providers
+            .prompt
+            .as_ref()
+            .is_some_and(|x| x.of == PromptOf::Api(id.clone()));
+        let (hover, fg) = (t.bg_hover, t.text);
+        let recheck = id.clone();
+        let row = div()
+            .flex()
+            .items_center()
+            .gap(px(12.))
+            .border_b_1()
+            .border_color(t.border)
+            .py(px(10.))
+            .child(provider_logo(&p.preset, p.logo.as_deref(), 20.))
+            .child(provider_title(view, "local-", line, &t, cx))
+            .child(status_badge(
+                if checking {
+                    "Checking…"
+                } else if reachable {
+                    "Ready"
+                } else {
+                    "Unreachable"
+                },
+                reachable,
+                !checking && !reachable,
+                &t,
+            ))
+            .child(
+                patchwork_ui::button(
+                    SharedString::from(format!("recheck-{id}")),
+                    format!("Recheck {}", p.name),
+                )
+                .size(px(28.))
+                .justify_center()
+                .rounded(px(radius_sm()))
+                .text_color(t.text_muted)
+                .hover(move |s| s.bg(hover).text_color(fg))
+                .tooltip(patchwork_ui::tooltip("Recheck"))
+                .child(if checking {
+                    spinner(13., t.text_muted).into_any_element()
+                } else {
+                    icon("arrows-clockwise", 15.).into_any_element()
+                })
+                .on_click(cx.listener(move |d, _, _, cx| {
+                    d.providers.local.health.remove(&recheck);
+                    d.probe_one(recheck.clone(), cx);
+                    cx.notify();
+                })),
+            )
+            .children(provider_actions(view, "local-", prompting, &t, cx));
+        let mut rows = vec![row.into_any_element()];
+        if !checking && !reachable {
+            rows.push(self.repair_row(view, window, cx).into_any_element());
+        }
+        if prompting {
+            rows.push(self.prompt_editor(window, cx).into_any_element());
+        }
+        rows
+    }
+}

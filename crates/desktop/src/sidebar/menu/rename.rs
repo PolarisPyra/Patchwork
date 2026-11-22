@@ -5,8 +5,8 @@
 use super::types::Renaming;
 use super::types::Target;
 use gpui::{AnyElement, Focusable, KeyDownEvent, Window, div, prelude::*, px};
-use crate::ui::text_area::{Changed, Submitted, TextArea};
-use crate::ui::theme::{radius_sm, theme};
+use patchwork_ui::text_area::{Changed, Submitted, TextArea};
+use patchwork_ui::theme::{radius_sm, theme};
 use crate::workspace::Workspace;
 
 impl Workspace {

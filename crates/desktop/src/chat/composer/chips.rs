@@ -9,9 +9,9 @@ use gpui::{
     prelude::*, px,
 };
 use patchwork_core::threads::Thread;
-use crate::ui::pill::pill_chip;
-use crate::ui::theme::Theme;
-use crate::ui::{above, icon};
+use patchwork_ui::pill::pill_chip;
+use patchwork_ui::theme::Theme;
+use patchwork_ui::{above, icon};
 use super::menus::{Menu, Pick};
 use super::state::{Composer, LaunchProject, Picks, offered};
 

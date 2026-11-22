@@ -12,9 +12,9 @@ use gpui::{AnyElement, FontWeight, Role, SharedString, deferred, div, prelude::*
 use patchwork_core::provider::{AgentKind, ProviderSlashCommand};
 use crate::chat::composer::Composer;
 use crate::chat::composer::menus::Roles;
-use crate::ui::sigils::{SigilKind, Sigils};
-use crate::ui::theme::{font_mono, fs_sm, radius, Theme};
-use crate::ui::{button, icon, popup_shadow};
+use patchwork_ui::sigils::{SigilKind, Sigils};
+use patchwork_ui::theme::{font_mono, fs_sm, radius, Theme};
+use patchwork_ui::{button, icon, popup_shadow};
 
 impl Composer {
     /// Works out the menu for the word before the caret, reading its list when it opens, and

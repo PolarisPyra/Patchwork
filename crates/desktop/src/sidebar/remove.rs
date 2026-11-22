@@ -9,7 +9,7 @@ use gpui::{AppContext as _, Context, PromptButton, PromptLevel, Window};
 use patchwork_core::threads::Thread;
 
 use super::menu::Target;
-use crate::ui::display_title;
+use patchwork_ui::display_title;
 use crate::workspace::Workspace;
 
 impl Workspace {

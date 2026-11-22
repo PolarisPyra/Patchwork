@@ -8,12 +8,12 @@ use gpui::{
     prelude::*, px,
 };
 use patchwork_core::extensions::agents::Agent;
-use patchwork_core::provider::{AgentKind, ModelOption};
+use patchwork_core::provider::AgentKind;
 use patchwork_core::threads::AccessMode;
 
 use super::{Composer, Picks};
-use crate::ui::theme::{fs_sm, fs_xs, Theme};
-use crate::ui::{button, format_tokens, icon, menu_item, popup};
+use patchwork_ui::theme::{fs_sm, fs_xs, Theme};
+use patchwork_ui::{button, effort_label, format_tokens, icon, menu_item, popup};
 
 /// The chips that open a menu.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -97,44 +97,6 @@ const ACCESS_MODES: [(AccessMode, &str, &str, &str); 4] = [
     ),
 ];
 
-/// The levels each CLI takes on every model it has, for a model whose own it does not report.
-fn agent_efforts(agent: AgentKind) -> &'static [&'static str] {
-    match agent {
-        AgentKind::Claude | AgentKind::Antigravity => &["low", "medium", "high", "xhigh", "max"],
-        AgentKind::Codex => &["low", "medium", "high", "xhigh"],
-        AgentKind::OpenCode | AgentKind::Api => &["low", "medium", "high"],
-    }
-}
-
-/// The levels the picked model takes: its own, else its agent's.
-pub fn efforts(
-    agent: AgentKind,
-    model: Option<&str>,
-    models: Option<&[ModelOption]>,
-) -> Vec<String> {
-    model
-        .and_then(|id| models?.iter().find(|m| m.id.as_deref() == Some(id)))
-        .and_then(|m| m.efforts.clone())
-        .unwrap_or_else(|| {
-            agent_efforts(agent)
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect()
-        })
-}
-
-pub fn effort_label(effort: &str) -> String {
-    match effort {
-        "low" => "Low".into(),
-        "medium" => "Medium".into(),
-        "high" => "High".into(),
-        "xhigh" => "Extra high".into(),
-        "max" => "Max".into(),
-        "ultra" => "Ultra".into(),
-        other => crate::ui::display_title(other),
-    }
-}
-
 pub fn access_of(mode: AccessMode) -> (&'static str, &'static str) {
     ACCESS_MODES
         .iter()
@@ -205,11 +167,9 @@ impl Composer {
                 })
                 .collect(),
             Menu::Effort => {
-                let levels = efforts(
-                    picks.agent,
-                    picks.model.as_deref(),
-                    self.models_of(picks.agent),
-                );
+                let levels = picks
+                    .agent
+                    .model_efforts(picks.model.as_deref(), self.models_of(picks.agent));
                 let current = picks.effort.as_ref().filter(|e| levels.contains(e));
                 std::iter::once(row(Pick::Effort(None), "Default".into(), current.is_none()))
                     .chain(levels.iter().map(|e| {
@@ -437,12 +397,16 @@ impl Composer {
             .when(menu == Menu::Agent, |p| p.w(px(300.)))
             .on_key_down(cx.listener(Self::menu_key))
             // Tab leaves a menu the way Escape does, rather than moving on with it still open.
-            .on_action(cx.listener(|this, _: &crate::FocusNext, window, cx| {
-                this.close_menu(window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &crate::FocusPrev, window, cx| {
-                this.close_menu(window, cx);
-            }))
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::FocusNext, window, cx| {
+                    this.close_menu(window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::FocusPrev, window, cx| {
+                    this.close_menu(window, cx);
+                }),
+            )
             .on_mouse_down_out(cx.listener(|this, e: &MouseDownEvent, window, cx| {
                 this.dismissed = this.menu.take().map(|m| (m, e.position));
                 this.restore_focus(window, cx);

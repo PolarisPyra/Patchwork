@@ -4,7 +4,7 @@
 
 use std::f32::consts::TAU;
 use gpui::{Hsla, PathBuilder, Window, canvas, div, point, prelude::*, px};
-use crate::ui::theme::Theme;
+use patchwork_ui::theme::Theme;
 
 /// A circular gauge filled to `percent` from the top, clockwise, with `child` in its middle.
 pub(super) fn ring(

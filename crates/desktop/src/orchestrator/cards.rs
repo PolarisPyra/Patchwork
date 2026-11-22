@@ -12,8 +12,8 @@ use patchwork_core::threads::{Standing, Thread};
 
 use super::render::{glass, ink, warm};
 use super::state::{Orchestrator, Outcome, Request};
-use crate::ui::theme::{fs_sm, fs_xs, radius_lg};
-use crate::ui::{button, display_title, icon, spinner};
+use patchwork_ui::theme::{fs_sm, fs_xs, radius_lg};
+use patchwork_ui::{button, display_title, icon, spinner};
 
 /// A chat as a card shows it.
 struct Chat {

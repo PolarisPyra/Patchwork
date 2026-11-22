@@ -8,9 +8,9 @@ use gpui::{
     FocusHandle, Focusable, FontWeight, MouseButton, Role, SharedString, Window, div, point,
     prelude::*, px,
 };
-use crate::ui::dialog;
-use crate::ui::theme::{font_mono, fs_md, fs_sm, fs_xs, radius, theme};
-use crate::ui::{BtnKind, btn, icon, icon_button, spinner, tooltip};
+use patchwork_ui::dialog;
+use patchwork_ui::theme::{font_mono, fs_md, fs_sm, fs_xs, radius, theme};
+use patchwork_ui::{BtnKind, btn, icon, icon_button, spinner, tooltip};
 
 impl Focusable for AddProject {
     fn focus_handle(&self, _: &gpui::App) -> FocusHandle {
@@ -254,7 +254,7 @@ impl Render for AddProject {
                         .px(px(20.))
                         .border_b_1()
                         .border_color(t.border)
-                        .text_size(px(crate::ui::theme::fs_lg()))
+                        .text_size(px(patchwork_ui::theme::fs_lg()))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child("Add a project"),
                 )

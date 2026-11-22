@@ -9,9 +9,9 @@ use patchwork_core::bots::Bot;
 use patchwork_core::provider::{AgentKind, ModelOption};
 use patchwork_core::settings::Settings;
 use patchwork_core::threads::{AccessMode, Attachment, NewThread};
-use crate::ui::text_area::{Arrow, Changed, Edge, Submitted, Tabbed, TextArea};
+use patchwork_ui::text_area::{Arrow, Changed, Edge, Submitted, Tabbed, TextArea};
 use crate::workspace::Workspace;
-use super::menus::{Menu, Pick, Roles, efforts};
+use super::menus::{Menu, Pick, Roles};
 use super::model_picker::{ModelPicker, ordered};
 use super::model_notice;
 use super::sigil_menu;
@@ -146,7 +146,7 @@ impl Composer {
         // The caret moving changes the word a menu is for.
         cx.observe(&editor, |_, _, cx| cx.notify()).detach();
         // Each agent's list arrives on its own, so a slow CLI holds up only its own label.
-        for kind in crate::ui::AGENT_KINDS {
+        for kind in patchwork_ui::AGENT_KINDS {
             let task =
                 cx.background_spawn(async move { patchwork_core::provider::list_models(kind) });
             cx.spawn(async move |this, cx| {
@@ -236,7 +236,7 @@ impl Composer {
             .draft
             .effort
             .clone()
-            .filter(|e| efforts(agent, None, self.models_of(agent)).contains(e));
+            .filter(|e| agent.model_efforts(None, self.models_of(agent)).contains(e));
         NewThread {
             id: None,
             project_id,
@@ -272,7 +272,7 @@ impl Composer {
             self.roles = Roles::Loading;
             self.roles_project.clone_from(&project);
         }
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.project_agents(project.as_deref()),
             move |this, agents, cx| {

@@ -17,8 +17,8 @@ use gpui::{
 };
 use patchwork_core::workspace::HunkAction;
 use crate::canvas::Canvas;
-use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme, theme};
-use crate::ui::{BtnKind, btn, button, icon, tooltip};
+use patchwork_ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme, theme};
+use patchwork_ui::{BtnKind, btn, button, icon, tooltip};
 
 /// A monospace character's width at `--fs-md`, for the widest line's floor.
 pub(super) const CHAR_W: f32 = 7.8;
@@ -77,7 +77,7 @@ impl Canvas {
             // The list scrolls down on its own; without this the wheel also scrolls this sideways.
             .restrict_scroll_to_axis()
             .font_family(font_mono())
-            .text_size(px(crate::ui::theme::fs_md()))
+            .text_size(px(patchwork_ui::theme::fs_md()))
             .line_height(relative(1.65))
             .text_color(t.text)
             .child(rows)
@@ -270,7 +270,7 @@ impl Canvas {
                         .gap(px(4.))
                         .pr(px(12.))
                         .pl(px(8.))
-                        .font_family(crate::ui::theme::font_ui())
+                        .font_family(patchwork_ui::theme::font_ui())
                         .text_size(px(fs_xs()))
                         .child(
                             hunk_button(
@@ -378,7 +378,7 @@ impl Canvas {
             .border_color(t.border)
             .bg(t.bg_panel)
             .p(px(8.))
-            .font_family(crate::ui::theme::font_ui())
+            .font_family(patchwork_ui::theme::font_ui())
             .text_size(px(fs_sm()))
             .line_height(relative(1.5))
             .child(
@@ -440,7 +440,7 @@ impl Canvas {
                 .opacity(0.)
                 .group_hover(group.clone(), |s| s.opacity(1.))
                 .focus(|s| s.opacity(1.))
-                .child(crate::ui::icon(name, 13.))
+                .child(patchwork_ui::icon(name, 13.))
         };
         let (id, text) = (note.id, note.text.clone());
         let project = self.project_id.clone();
@@ -461,7 +461,7 @@ impl Canvas {
             .bg(t.bg_panel)
             .px(px(12.))
             .py(px(8.))
-            .font_family(crate::ui::theme::font_ui())
+            .font_family(patchwork_ui::theme::font_ui())
             .text_size(px(fs_sm()))
             .line_height(relative(1.5))
             .child(icon("chat-text", 14.).mt(px(2.)).text_color(t.accent_text))

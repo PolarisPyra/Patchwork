@@ -5,9 +5,9 @@
 use gpui::{ClickEvent, Div, Focusable, Role, SharedString, Stateful, Window, div, prelude::*, px};
 use patchwork_core::workspace::{CommitOptions, PullRequest, RepoAction};
 
-use crate::ui::menu::MenuItem;
-use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme};
-use crate::ui::{button, icon, spinner, tooltip};
+use patchwork_ui::menu::MenuItem;
+use patchwork_ui::theme::{fs_md, fs_sm, radius_sm, Theme};
+use patchwork_ui::{button, icon, spinner, tooltip};
 use super::rows::group_button;
 use super::state::{ChangesView, GitAction, git_actions, operation_title};
 

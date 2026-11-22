@@ -9,8 +9,8 @@ use gpui::{
     Anchor, Div, FontWeight, MouseButton, Role, SharedString, anchored, deferred, div, point,
     prelude::*, px,
 };
-use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, theme};
-use crate::ui::{button, icon, popup};
+use patchwork_ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, theme};
+use patchwork_ui::{button, icon, popup};
 use crate::workspace::Workspace;
 
 impl Workspace {
@@ -60,7 +60,7 @@ impl Workspace {
                 .justify_center()
                 .rounded(px(radius_sm()))
                 .border_1()
-                .text_size(px(crate::ui::theme::fs_md()))
+                .text_size(px(patchwork_ui::theme::fs_md()))
                 .child(label)
         };
         let (hover, accent_hover) = (t.bg_hover, t.accent_hover);
@@ -90,7 +90,7 @@ impl Workspace {
                         .role(Role::MenuItem)
                         .aria_label(label.clone())
                         .tab_index(0)
-                        .focus_visible(crate::ui::focus_ring)
+                        .focus_visible(patchwork_ui::focus_ring)
                         .min_w(px(260.))
                         .flex()
                         .flex_col()

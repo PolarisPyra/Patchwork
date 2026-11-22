@@ -6,8 +6,8 @@
 use std::sync::Arc;
 use gpui::{AnyElement, Div, PromptLevel, Role, SharedString, Stateful, Window, div, prelude::*, px};
 use patchwork_core::threads::TokenUsage;
-use crate::ui::theme::{Theme, font_mono, fs_md, fs_sm, fs_xs, radius_sm};
-use crate::ui::{button, display_title, format_relative, format_tokens, icon, icon_button, spinner};
+use patchwork_ui::theme::{Theme, font_mono, fs_md, fs_sm, fs_xs, radius_sm};
+use patchwork_ui::{button, display_title, format_relative, format_tokens, icon, icon_button, spinner};
 use super::details::heading;
 use super::state::BotPage;
 

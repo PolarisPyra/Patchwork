@@ -14,8 +14,8 @@ use gpui::{
 use patchwork_core::provider::AgentKind;
 use crate::chat::composer::Composer;
 use crate::chat::composer::menus::Pick;
-use crate::ui::theme::{fs_sm, Theme};
-use crate::ui::{agent_label, agent_logo, button, icon, popup_shadow};
+use patchwork_ui::theme::{fs_sm, Theme};
+use patchwork_ui::{agent_label, agent_logo, button, icon, popup_shadow};
 
 impl Composer {
     /// The picker over the window, its rows already in `self.menu_picks` for the keyboard.
@@ -280,7 +280,7 @@ impl Composer {
             div()
                 .p(px(8.))
                 .text_center()
-                .text_size(px(crate::ui::theme::fs(14.)))
+                .text_size(px(patchwork_ui::theme::fs(14.)))
                 .text_color(t.text_subtle)
                 .child("No models found")
         });
@@ -329,12 +329,16 @@ impl Composer {
                 self.picker.as_ref().map(|p| p.dialog.clone()),
                 |d, dialog| d.track_focus(&dialog),
             )
-            .on_action(cx.listener(|this, _: &crate::FocusNext, window, cx| {
-                this.picker_tab(true, window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &crate::FocusPrev, window, cx| {
-                this.picker_tab(false, window, cx);
-            }))
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::FocusNext, window, cx| {
+                    this.picker_tab(true, window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::FocusPrev, window, cx| {
+                    this.picker_tab(false, window, cx);
+                }),
+            )
             .flex()
             .gap(px(6.))
             .h(px(HEIGHT))
@@ -388,7 +392,7 @@ impl Composer {
                                         div()
                                             .flex_1()
                                             .min_w_0()
-                                            .text_size(px(crate::ui::theme::fs(14.)))
+                                            .text_size(px(patchwork_ui::theme::fs(14.)))
                                             .line_height(px(20.))
                                             .child(search),
                                     ),

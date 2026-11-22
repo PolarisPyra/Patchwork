@@ -14,9 +14,9 @@ use gpui::{
 use patchwork_core::android::{LogLevel, LogLine, Logcat};
 
 use super::state::AndroidPanel;
-use crate::ui::menu::MenuItem;
-use crate::ui::theme::{font_mono, fs_sm, fs_xs, Theme};
-use crate::ui::{dropdown_chip, icon_button, tooltip};
+use patchwork_ui::menu::MenuItem;
+use patchwork_ui::theme::{font_mono, fs_sm, fs_xs, Theme};
+use patchwork_ui::{dropdown_chip, icon_button, tooltip};
 
 /// How often the log is read again: often enough to look live, seldom enough to stay cheap
 /// while an app writes thousands of lines.
@@ -80,7 +80,7 @@ impl AndroidPanel {
         let (project, variant) = (self.project.clone(), self.variant.clone());
         let task = cx.background_spawn({
             let serial = serial.clone();
-            async move { core.android_logcat(&project, &serial, &variant) }
+            async move { core.android().logcat(&project, &serial, &variant) }
         });
         cx.spawn(async move |this, cx| {
             let opened = task.await;

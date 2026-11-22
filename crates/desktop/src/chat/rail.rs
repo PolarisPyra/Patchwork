@@ -18,8 +18,8 @@ use gpui::{
 use patchwork_core::orchestration::{Upkeep, is_goal_continuation, upkeep};
 use patchwork_core::threads::{Message, Role as MessageRole};
 
-use crate::ui::theme::{fs_lg, fs_md, radius_lg, Theme};
-use crate::ui::{button, popup_shadow};
+use patchwork_ui::theme::{fs_lg, fs_md, radius_lg, Theme};
+use patchwork_ui::{button, popup_shadow};
 use crate::workspace::Workspace;
 
 /// Pixels between two strips, until the rail would pass its maximum height.

@@ -1,0 +1,25 @@
+[package]
+name = "patchwork-sidecar"
+description = "Patchwork's side windows: the terminal and output panel, and the browser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-core.workspace = true
+patchwork-ui.workspace = true
+
+futures = { workspace = true, default-features = true }
+gpui = { workspace = true, default-features = true }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+log = { workspace = true, default-features = true }
+serde_json = { workspace = true, default-features = true }
+vt100 = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

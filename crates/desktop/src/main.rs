@@ -12,15 +12,11 @@
 mod android;
 mod quilts;
 mod bots;
-mod browser;
 mod canvas;
 mod chat;
 mod onboarding;
 mod orchestrator;
-mod panel;
-mod settings;
 mod sidebar;
-mod ui;
 mod workspace;
 
 use std::sync::Arc;
@@ -30,52 +26,20 @@ use futures::StreamExt;
 use futures::channel::mpsc;
 use gpui::{
     App, Bounds, Window, WindowHandle, Font, FontStyle, FontWeight, TextRenderingMode,
-    TitlebarOptions, WindowBounds, WindowOptions, actions, font, prelude::*, px, size,
+    TitlebarOptions, WindowBounds, WindowOptions, font, prelude::*, px, size,
 };
 use patchwork_core::Core;
 use patchwork_core::system::Dirs;
 
-use crate::ui::{assets, prompt, sigils, theme};
+use patchwork_ui::{APP_TITLE, Quit, assets, prompt, sigils, theme};
 use crate::workspace::Workspace;
 
 /// The app's allocator, which is faster than the system one when laying out and shaping text.
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-actions!(
-    patchwork,
-    [
-        FocusNext,
-        FocusPrev,
-        Quit,
-        TogglePalette,
-        NewChat,
-        FindInChat,
-        OpenSettings,
-        ShowOrchestrator,
-        ShowTasks,
-        ShowChanges,
-        ShowQuilts,
-        ShowArchived,
-        ToggleTerminal,
-        NewTerminal,
-        TogglePanel,
-        ToggleOutput,
-        DeleteChat,
-        GoBack,
-        GoForward
-    ]
-);
-
 /// How often a scheduled task is looked for. A tick that finds nothing to start does no work.
 const SCHEDULED_TICK: Duration = Duration::from_secs(30);
-
-/// The window's title, marked on debug builds so they are not mistaken for the installed app.
-pub const APP_TITLE: &str = if cfg!(debug_assertions) {
-    "Patchwork (dev)"
-} else {
-    "Patchwork"
-};
 
 /// Runs the helper the first argument names and returns its exit code, or None to open the app.
 /// Without this, every hook or relay an agent starts would open another Patchwork window.
@@ -249,13 +213,13 @@ fn main() {
                 log::warn!(error:% = e; "could not load the fonts: {{error}}");
             }
             prewarm_fonts(cx);
-            cx.background_spawn(async { ui::highlight::warm() })
+            cx.background_spawn(async { patchwork_ui::highlight::warm() })
                 .detach();
             // Grayscale text, which reads lighter than subpixel on the dark theme.
             cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
-            settings::shortcuts::bind_keys(&core, cx);
+            patchwork_settings::bind_keys(&core, cx);
             cx.set_global(sigils::load(&core));
-            settings::show_app_icon(&core.settings(), cx);
+            patchwork_settings::show_app_icon(&core.settings(), cx);
             cx.set_prompt_builder(prompt::build);
             cx.on_action(|_: &Quit, cx| cx.quit());
             let quitting = Arc::clone(&core);

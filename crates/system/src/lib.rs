@@ -3,7 +3,8 @@
 //! The programs Patchwork starts and the environment they run with, the
 //! environment the user's shell sets up, the shells commands and the terminal run in, opening
 //! files and links on the desktop, the systemd scope agents run in, the range a command runs in,
-//! the process table, Patchwork's own folders, its icon on the desktop, and time.
+//! the process table, Patchwork's own folders, its icon on the desktop, the credential store,
+//! and time.
 
 // Rust guideline compliant 2026-10-09
 
@@ -13,6 +14,7 @@ pub mod dirs;
 mod environment;
 mod host;
 pub mod instance;
+pub mod keychain;
 mod launcher;
 pub mod memory;
 pub mod fs;

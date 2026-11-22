@@ -7,8 +7,8 @@ use std::time::Duration;
 use gpui::{Div, FontWeight, Role, div, prelude::*, px, relative};
 use patchwork_core::threads::{MessageStatus, PlanStep, Role as MessageRole, StepStatus};
 
-use crate::ui::theme::{fs_sm, radius, Theme};
-use crate::ui::{button, icon, mix, spinner};
+use patchwork_ui::theme::{fs_sm, radius, Theme};
+use patchwork_ui::{button, icon, mix, spinner};
 use crate::workspace::{Workspace, is_working};
 
 /// How long a finished list stays before it folds away.
@@ -82,7 +82,7 @@ impl Workspace {
         if over && self.plan_fold_queued.as_deref() != Some(key.as_str()) {
             self.plan_fold_queued = Some(key.clone());
             let id = last.id.clone();
-            crate::ui::after(cx, Duration::from_millis(FOLD_MS), move |this, cx| {
+            patchwork_ui::after(cx, Duration::from_millis(FOLD_MS), move |this, cx| {
                 if this.plan_fold_queued.as_deref() == Some(key.as_str())
                     && let Some(shown) = this.shown_plan.as_mut().filter(|s| s.id == id)
                 {

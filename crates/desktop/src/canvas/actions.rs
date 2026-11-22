@@ -5,7 +5,7 @@
 use std::time::Duration;
 use gpui::{ClipboardItem, PromptLevel, Window, prelude::*, px};
 use patchwork_core::workspace::HunkAction;
-use crate::ui::base_name;
+use patchwork_ui::base_name;
 use super::diff::{Review, review_message};
 use super::state::Canvas;
 
@@ -19,7 +19,7 @@ impl Canvas {
         self.busy = true;
         self.action_error = None;
         let root = self.root.clone();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || action(&root),
             move |this, done, cx| {
@@ -146,7 +146,7 @@ impl Canvas {
         self.copied_seq += 1;
         let seq = self.copied_seq;
         // How long "Copied" shows before the button goes back to its icon.
-        crate::ui::after(cx, Duration::from_millis(1500), move |this, cx| {
+        patchwork_ui::after(cx, Duration::from_millis(1500), move |this, cx| {
             if this.copied_seq == seq {
                 this.copied = false;
                 cx.notify();

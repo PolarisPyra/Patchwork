@@ -25,6 +25,33 @@ impl AgentKind {
         AgentKind::OpenCode,
         AgentKind::Api,
     ];
+
+    /// The thinking levels the agent's CLI takes on every model, for a model whose own it does
+    /// not report.
+    #[must_use]
+    pub fn efforts(self) -> &'static [&'static str] {
+        match self {
+            AgentKind::Claude | AgentKind::Antigravity => {
+                &["low", "medium", "high", "xhigh", "max"]
+            }
+            AgentKind::Codex => &["low", "medium", "high", "xhigh"],
+            AgentKind::OpenCode | AgentKind::Api => &["low", "medium", "high"],
+        }
+    }
+
+    /// The thinking levels `model` takes: its own, as `models` lists them, else the agent's.
+    #[must_use]
+    pub fn model_efforts(self, model: Option<&str>, models: Option<&[ModelOption]>) -> Vec<String> {
+        model
+            .and_then(|id| models?.iter().find(|m| m.id.as_deref() == Some(id)))
+            .and_then(|m| m.efforts.clone())
+            .unwrap_or_else(|| {
+                self.efforts()
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect()
+            })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

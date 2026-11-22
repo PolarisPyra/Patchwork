@@ -9,9 +9,9 @@ use patchwork_core::android::{self, Avd, Boot, Device, DeviceState};
 
 use super::state::{AndroidPanel, Busy, Confirm, Run, device_key};
 use super::tools::device_menu;
-use crate::ui::menu::{Menu, MenuItem};
-use crate::ui::theme::{fs_sm, radius, Theme, theme};
-use crate::ui::{BtnKind, btn, button, icon, icon_button, spinner, tooltip};
+use patchwork_ui::menu::{Menu, MenuItem};
+use patchwork_ui::theme::{fs_sm, radius, Theme, theme};
+use patchwork_ui::{BtnKind, btn, button, icon, icon_button, spinner, tooltip};
 
 /// A row that is one of several choices: a dot, filled when it is the one picked, then what its
 /// owner adds.

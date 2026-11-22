@@ -16,7 +16,7 @@ use gpui::{
     px, rgb, size,
 };
 
-use crate::ui::redraw_after;
+use patchwork_ui::redraw_after;
 
 /// A point in Patch's units.
 type Spot = [f32; 2];

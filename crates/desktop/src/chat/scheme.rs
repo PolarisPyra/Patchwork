@@ -10,7 +10,7 @@ use gpui::{
 };
 use patchwork_core::themes::Scheme;
 
-use crate::ui::theme::InScheme;
+use patchwork_ui::theme::InScheme;
 
 /// Its child, laid out, prepainted and painted in `scheme`'s theme. The views it holds, such as
 /// the composer, draw while it does, so they take that theme too.

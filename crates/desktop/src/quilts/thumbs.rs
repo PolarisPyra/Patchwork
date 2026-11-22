@@ -10,7 +10,7 @@ use std::sync::Arc;
 use gpui::prelude::*;
 use patchwork_core::Core;
 
-use crate::ui::off_thread;
+use patchwork_ui::off_thread;
 
 /// A version, by its quilt's id and its number, drawn dark or light.
 type Key = (String, u32, bool);

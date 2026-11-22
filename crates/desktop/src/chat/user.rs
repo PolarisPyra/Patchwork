@@ -14,9 +14,9 @@ use gpui::{
 };
 use patchwork_core::threads::{Attachment, AttachmentKind, Message};
 
-use crate::ui::markdown::{FindIn, markdown_found};
-use crate::ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
-use crate::ui::{button, format_clock, icon, platform_logo, tooltip};
+use patchwork_ui::markdown::{FindIn, markdown_found};
+use patchwork_ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
+use patchwork_ui::{button, format_clock, icon, platform_logo, tooltip};
 use crate::workspace::{Workspace, is_working};
 
 /// User messages longer than this show their first lines until expanded: laying out all of one
@@ -211,7 +211,7 @@ impl Workspace {
         if paths.is_empty() {
             return;
         }
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || {
                 paths
@@ -272,7 +272,7 @@ impl Workspace {
         }
         let core = Arc::clone(&self.core);
         let id = key.0.clone();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.checkpoints(&id),
             move |this, ids, cx| {

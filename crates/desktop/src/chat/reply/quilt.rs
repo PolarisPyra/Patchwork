@@ -16,9 +16,9 @@ use patchwork_core::threads::{Message, MessageStatus, StepStatus, ToolCall};
 
 use crate::quilts::kind_icon;
 use crate::chat::timeline::is_running;
-use crate::ui::theme::{Theme, fs_md, fs_xs, radius_lg, radius_sm};
+use patchwork_ui::theme::{Theme, fs_md, fs_xs, radius_lg, radius_sm};
 
-use crate::ui::{button, icon, next_step};
+use patchwork_ui::{button, icon, next_step};
 use crate::workspace::Workspace;
 
 /// The card's height, fixed so the transcript never measures it again.

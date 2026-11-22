@@ -11,9 +11,9 @@ use patchwork_core::android::{self, Device, DeviceState, Framework, Reload, Vari
 use patchwork_core::{Error, Core};
 
 use super::state::{AndroidPanel, Run};
-use crate::ui::menu::{Menu, MenuItem};
-use crate::ui::theme::{fs_sm, Theme};
-use crate::ui::{dropdown_chip, icon_button, spinner, tooltip};
+use patchwork_ui::menu::{Menu, MenuItem};
+use patchwork_ui::theme::{fs_sm, Theme};
+use patchwork_ui::{dropdown_chip, icon_button, spinner, tooltip};
 
 /// What stops a command in a terminal: the interrupt key.
 const INTERRUPT: &str = "\u{3}";
@@ -30,7 +30,7 @@ impl AndroidPanel {
         let task = cx.background_spawn(async move {
             (
                 android::variants(&project),
-                core.android_variant(&id, &project),
+                core.android().variant(&id, &project),
             )
         });
         cx.spawn(async move |this, cx| {
@@ -56,7 +56,7 @@ impl AndroidPanel {
         }
         let (core, id) = (Arc::clone(&self.core), self.project_id.clone());
         cx.background_spawn(async move {
-            if let Err(e) = core.set_android_variant(&id, &variant) {
+            if let Err(e) = core.android().set_variant(&id, &variant) {
                 log::warn!(error:% = e; "could not remember the build variant: {{error}}");
             }
         })
@@ -142,7 +142,7 @@ impl AndroidPanel {
 
     /// Rebuilds after [`SETTLE`], unless another save came since save number `saves`.
     fn rebuild_after(&self, saves: u64, cx: &mut Context<Self>) {
-        crate::ui::after(cx, SETTLE, move |this, cx| {
+        patchwork_ui::after(cx, SETTLE, move |this, cx| {
             if this.saves == saves {
                 this.rebuild(saves, cx);
             }
@@ -183,7 +183,7 @@ impl AndroidPanel {
                     };
                     let root = self.project.root.clone();
                     return self.device_action("Reloading the app", None, cx, move |core| {
-                        core.android_reload(&root, &serial)
+                        core.android().reload(&root, &serial)
                     });
                 }
                 None => None,
@@ -222,7 +222,7 @@ impl AndroidPanel {
         self.failure = None;
         self.notice = None;
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || act(&core),
             move |this, result, cx| {
@@ -270,14 +270,14 @@ impl AndroidPanel {
             cx,
             move |core| {
                 apks.iter()
-                    .try_for_each(|apk| core.android_install(&root, &serial, apk))
+                    .try_for_each(|apk| core.android().install(&root, &serial, apk))
             },
         );
     }
 
     /// Asks for APK files, then installs them on the device picked.
     pub(super) fn choose_apk(&mut self, cx: &mut Context<Self>) {
-        crate::ui::pick_paths(
+        patchwork_ui::pick_paths(
             cx,
             gpui::PathPromptOptions {
                 files: true,

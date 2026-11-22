@@ -6,8 +6,8 @@ use std::sync::Arc;
 use gpui::{FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
 use patchwork_core::threads::{Goal, GoalStatus};
 
-use crate::ui::theme::{fs_sm, fs_xs, radius_sm, Theme};
-use crate::ui::{button, full_elapsed, icon, now_ms, tooltip};
+use patchwork_ui::theme::{fs_sm, fs_xs, radius_sm, Theme};
+use patchwork_ui::{button, full_elapsed, icon, now_ms, tooltip};
 use crate::workspace::{Workspace, is_working};
 
 /// A goal clear that failed, for the goal `key` names.
@@ -83,7 +83,7 @@ impl Workspace {
         let key = goal_key(&id, &goal);
         self.goal_clear = None;
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.stop_goal(&id),
             move |this, result, cx| {

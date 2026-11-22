@@ -11,9 +11,9 @@ use gpui::{
 use patchwork_core::workspace::{CredentialKind, CredentialRequest};
 
 use super::Workspace;
-use crate::ui::text_area::{Changed, Submitted, TextArea};
-use crate::ui::theme::{font_mono, fs_md, radius_sm, theme};
-use crate::ui::{BtnKind, btn, dialog, icon_button};
+use patchwork_ui::text_area::{Changed, Submitted, TextArea};
+use patchwork_ui::theme::{font_mono, fs_md, radius_sm, theme};
+use patchwork_ui::{BtnKind, btn, dialog, icon_button};
 
 /// How wide the dialog is.
 const WIDTH: f32 = 420.;

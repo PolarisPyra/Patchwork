@@ -7,7 +7,7 @@ use super::commands::Token;
 use std::sync::Arc;
 use gpui::{ScrollHandle, prelude::*};
 use crate::chat::composer::Composer;
-use crate::ui::sigils::SigilKind;
+use patchwork_ui::sigils::SigilKind;
 
 #[derive(Default)]
 pub struct SigilMenu {
@@ -43,7 +43,7 @@ impl Composer {
         };
         let core = Arc::clone(&w.core);
         let listed = project.clone();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.list_files(&project),
             move |this, files, cx| {

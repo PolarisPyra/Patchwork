@@ -147,7 +147,7 @@ impl Composer {
     }
 
     pub(super) fn attach(&mut self, folders: bool, cx: &mut Context<Self>) {
-        crate::ui::pick_paths(
+        patchwork_ui::pick_paths(
             cx,
             PathPromptOptions {
                 files: !folders,

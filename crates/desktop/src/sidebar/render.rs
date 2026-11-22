@@ -7,8 +7,8 @@ use gpui::{
     AnyElement, Div, ExternalPaths, FontWeight, MouseButton, MouseDownEvent, Role, div, prelude::*,
     px,
 };
-use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme, theme};
-use crate::ui::{button, icon};
+use patchwork_ui::theme::{fs_md, fs_sm, radius_sm, Theme, theme};
+use patchwork_ui::{button, icon};
 use crate::workspace::{SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
 use super::tasks::tasks_view;
 use super::usage;
@@ -45,7 +45,7 @@ pub fn render(
         .border_r_1()
         .border_color(t.border)
         .bg(t.bg_panel)
-        .text_size(px(crate::ui::theme::fs(13.)))
+        .text_size(px(patchwork_ui::theme::fs(13.)))
         // Folders held over the project list light it up; dropped, each becomes a project.
         .when(view == View::Tasks, |s| {
             s.drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(t.bg_hover))
@@ -126,7 +126,7 @@ pub fn render(
                             .rounded(px(4.))
                             .bg(t.bg_selected_muted)
                             .text_color(t.text_muted)
-                            .text_size(px(crate::ui::theme::fs(11.)))
+                            .text_size(px(patchwork_ui::theme::fs(11.)))
                             .font_weight(FontWeight::MEDIUM)
                             .child("Ctrl K"),
                     )
@@ -140,7 +140,7 @@ pub fn render(
 
 pub(super) fn empty_row(text: &'static str, t: &Theme) -> Div {
     div()
-        .h(px(crate::ui::theme::roomy(28.)))
+        .h(px(patchwork_ui::theme::roomy(28.)))
         .flex_none()
         .flex()
         .items_center()

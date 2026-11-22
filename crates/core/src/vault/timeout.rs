@@ -7,7 +7,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use crate::system::Locked;
+use crate::system::{Locked, keychain};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
@@ -83,10 +83,6 @@ static KEEP: AtomicBool = AtomicBool::new(false);
 /// The wrapping key the password gave this run, while the vault is open with it.
 static HELD: Mutex<Option<Zeroizing<[u8; KEY_LEN]>>> = Mutex::new(None);
 
-fn entry() -> keyring::Result<keyring::Entry> {
-    keyring::Entry::new(SERVICE, ENTRY)
-}
-
 /// Says whether the vault never locks, as Patchwork starts and before the vault opens.
 pub(super) fn start(keep: bool) {
     KEEP.store(keep, Ordering::Relaxed);
@@ -123,20 +119,19 @@ pub(super) fn kept() -> Option<Zeroizing<[u8; KEY_LEN]>> {
     if !KEEP.load(Ordering::Relaxed) {
         return None;
     }
-    let text = Zeroizing::new(entry().and_then(|e| e.get_password()).ok()?);
+    let text = Zeroizing::new(keychain::get(SERVICE, ENTRY).ok()??);
     decode_key(&text).ok()
 }
 
 fn save(wrapping: &[u8; KEY_LEN]) {
     let text = Zeroizing::new(STANDARD.encode(wrapping));
-    if let Err(e) = entry().and_then(|e| e.set_password(&text)) {
+    if let Err(e) = keychain::set(SERVICE, ENTRY, &text) {
         log::warn!(error:% = e; "the vault will ask for its password next time: {{error}}");
     }
 }
 
 fn forget() {
-    match entry().and_then(|e| e.delete_credential()) {
-        Ok(()) | Err(keyring::Error::NoEntry) => {}
-        Err(e) => log::warn!(error:% = e; "could not drop the vault's kept key: {{error}}"),
+    if let Err(e) = keychain::delete(SERVICE, ENTRY) {
+        log::warn!(error:% = e; "could not drop the vault's kept key: {{error}}");
     }
 }

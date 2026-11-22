@@ -13,8 +13,8 @@ use patchwork_core::workspace::{DiffSide, FileChange};
 
 use super::rows::{group_button, group_header, row_action};
 use super::state::ChangesView;
-use crate::ui::theme::{fs_md, fs_sm, radius_sm, theme};
-use crate::ui::{base_name, button, icon, spinner, tooltip};
+use patchwork_ui::theme::{fs_md, fs_sm, radius_sm, theme};
+use patchwork_ui::{base_name, button, icon, spinner, tooltip};
 
 /// A group of changes, which decides the buttons on its header.
 #[derive(Clone)]

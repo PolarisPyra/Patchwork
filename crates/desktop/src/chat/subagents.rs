@@ -10,8 +10,8 @@ use patchwork_core::threads::{Message, StepStatus, ToolCall};
 
 use crate::chat::lineage::{is_active, status_label, title_of};
 use crate::chat::timeline::tool_label;
-use crate::ui::theme::{fs_xs, radius, radius_sm, Theme};
-use crate::ui::{agent_logo, button, full_elapsed, icon, now_ms};
+use patchwork_ui::theme::{fs_xs, radius, radius_sm, Theme};
+use patchwork_ui::{agent_logo, button, full_elapsed, icon, now_ms};
 use crate::workspace::Workspace;
 
 /// The span the subagents ran in, or none while one is still going.
@@ -135,7 +135,7 @@ fn card(
                                     d.child(
                                         div()
                                             .flex_none()
-                                            .text_size(px(crate::ui::theme::fs(10.)))
+                                            .text_size(px(patchwork_ui::theme::fs(10.)))
                                             .text_color(if tool.status == StepStatus::Error {
                                                 t.danger
                                             } else {
@@ -150,7 +150,7 @@ fn card(
                         div()
                             .min_w_0()
                             .truncate()
-                            .text_size(px(crate::ui::theme::fs(11.)))
+                            .text_size(px(patchwork_ui::theme::fs(11.)))
                             .text_color(t.text_muted)
                             .child(detail.clone().unwrap_or_else(|| label.to_string())),
                     ),
@@ -263,7 +263,7 @@ pub fn subagents(
                             .justify_center()
                             .rounded_full()
                             .bg(t.bg_panel)
-                            .text_size(px(crate::ui::theme::fs(10.)))
+                            .text_size(px(patchwork_ui::theme::fs(10.)))
                             .text_color(t.text_muted)
                             .child(format!("+{}", count - 3)),
                     ),

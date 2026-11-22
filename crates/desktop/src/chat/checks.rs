@@ -10,8 +10,8 @@ use std::sync::Arc;
 use gpui::{AnyElement, Div, Hsla, Role, SharedString, div, prelude::*, px};
 use patchwork_core::threads::{CheckStatus, Message, TurnChecks};
 
-use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
-use crate::ui::{BtnKind, btn, button, full_elapsed, icon, spinner, tooltip};
+use patchwork_ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
+use patchwork_ui::{BtnKind, btn, button, full_elapsed, icon, spinner, tooltip};
 use crate::workspace::Workspace;
 
 /// The cards' open details and output, and the runs asked for, by reply.
@@ -34,7 +34,7 @@ impl Workspace {
         self.checks.open.insert(message_id.clone());
         let core = Arc::clone(&self.core);
         let id = message_id.clone();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.run_checks(&thread_id, &id),
             move |this, started, cx| {

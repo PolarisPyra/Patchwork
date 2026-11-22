@@ -14,9 +14,9 @@ use patchwork_core::threads::Thread;
 use patchwork_core::workspace::GitCommit;
 
 use super::changes::ChangesView;
-use crate::ui::menu::MenuItem;
-use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme};
-use crate::ui::{agent_logo, button, mix, tooltip};
+use patchwork_ui::menu::MenuItem;
+use patchwork_ui::theme::{fs_md, fs_sm, radius_sm, Theme};
+use patchwork_ui::{agent_logo, button, mix, tooltip};
 
 /// Row height, lane width, and the radius of the bends where a lane shifts over.
 const ROW: f32 = 22.;
@@ -382,7 +382,7 @@ pub fn section(
             "{}\n{}, {}\n{}{}",
             commit.subject,
             commit.author,
-            crate::ui::format_date(commit.time),
+            patchwork_ui::format_date(commit.time),
             commit.hash.chars().take(8).collect::<String>(),
             if commit.pushed { "" } else { "\nNot pushed" }
         );
@@ -442,7 +442,7 @@ pub fn section(
                         .group_hover(group.clone(), |s| s.opacity(1.))
                         .focus(|s| s.opacity(1.))
                 })
-                .child(crate::ui::icon("arrow-u-up-left", 12.))
+                .child(patchwork_ui::icon("arrow-u-up-left", 12.))
                 .on_click(cx.listener(move |v, e: &gpui::ClickEvent, window, cx| {
                     cx.stop_propagation();
                     if v.just_dismissed(e) {
@@ -488,7 +488,7 @@ pub fn section(
                     .group_hover(group.clone(), |s| s.opacity(1.))
                     .focus(|s| s.opacity(1.))
             })
-            .child(crate::ui::icon("dots-three", 12.))
+            .child(patchwork_ui::icon("dots-three", 12.))
             .on_click(cx.listener(move |v, e: &gpui::ClickEvent, window, cx| {
                 cx.stop_propagation();
                 if v.just_dismissed(e) {

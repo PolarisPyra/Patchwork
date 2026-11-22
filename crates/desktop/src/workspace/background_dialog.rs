@@ -9,10 +9,10 @@ use gpui::{AnyElement, Entity, FocusHandle, MouseButton, Window, deferred, prelu
 use patchwork_core::backgrounds::ChatBackground;
 
 use super::Workspace;
-use crate::ui::background_picker::{BackgroundPicker, PickerEvent};
-use crate::ui::dialog;
-use crate::ui::theme::theme;
-use crate::ui::{display_title, icon_button};
+use patchwork_ui::background_picker::{BackgroundPicker, PickerEvent};
+use patchwork_ui::dialog;
+use patchwork_ui::theme::theme;
+use patchwork_ui::{display_title, icon_button};
 
 /// Whose background the dialog picks.
 #[derive(Clone)]

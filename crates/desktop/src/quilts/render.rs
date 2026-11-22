@@ -10,9 +10,9 @@ use gpui::{
 use patchwork_core::quilts::{Quilt, QuiltKind, ChangeRow};
 
 use super::state::{QuiltsPage, Show};
-use crate::ui::theme::{Theme, font_mono, fs_md, fs_sm, radius_sm, theme};
-use crate::ui::menu::Menu;
-use crate::ui::{button, focus_ring, format_relative, icon_button, input_box, scrollbar, tooltip};
+use patchwork_ui::theme::{Theme, font_mono, fs_md, fs_sm, radius_sm, theme};
+use patchwork_ui::menu::Menu;
+use patchwork_ui::{button, focus_ring, format_relative, icon_button, input_box, scrollbar, tooltip};
 
 /// The height of a line of the changes.
 const CHANGE_LINE: f32 = 20.;
@@ -182,10 +182,10 @@ impl QuiltsPage {
             ))
             .when(after.is_some(), |d| {
                 d.child(
-                    crate::ui::btn(
+                    patchwork_ui::btn(
                         "quilt-restore",
                         "Restore",
-                        crate::ui::BtnKind::Plain,
+                        patchwork_ui::BtnKind::Plain,
                         false,
                         t,
                     )
@@ -362,7 +362,7 @@ impl QuiltsPage {
             .map(|v| v.content.clone())
             .unwrap_or_default()
             .into();
-        let runs = crate::ui::highlight::highlight_code(&code, language(quilt));
+        let runs = patchwork_ui::highlight::highlight_code(&code, language(quilt));
         let text = StyledText::new(code).with_highlights(
             runs.iter()
                 .map(|(range, token)| (range.clone(), token.style(t))),

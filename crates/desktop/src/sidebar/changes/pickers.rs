@@ -8,7 +8,7 @@ use patchwork_core::workspace::{GitBranch, RepoAction};
 
 use super::repo::item;
 use super::state::ChangesView;
-use crate::ui::menu::MenuItem;
+use patchwork_ui::menu::MenuItem;
 
 /// What a branch or tag picked from a list is for.
 #[derive(Clone, Copy, PartialEq, Eq)]
