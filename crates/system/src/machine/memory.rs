@@ -2,21 +2,30 @@
 
 // Rust guideline compliant 2026-10-09
 
-/// Keeps this process's memory out of core dumps and away from debuggers.
+/// Keeps this process's memory out of core dumps.
 ///
-/// A crash then writes no core file, and another program of the same user cannot attach to
-/// Patchwork or read its memory. The programs Patchwork starts are not affected: the mark ends
-/// when one of them begins. On Linux only; elsewhere this does nothing.
+/// Sets `RLIMIT_CORE` to zero instead of clearing `PR_SET_DUMPABLE`: on Linux, clearing
+/// `PR_SET_DUMPABLE` hides `/proc/<pid>/root` from `xdg-desktop-portal`, which rejects file
+/// dialogs and other portal requests with `AccessDenied`. On Unix only; elsewhere this does
+/// nothing.
 ///
 /// # Errors
 ///
-/// Returns the system's error when the process cannot be marked.
+/// Returns the system's error when the core-dump limit cannot be read or lowered.
 pub fn deny_dumps() -> std::io::Result<()> {
-    #[cfg(target_os = "linux")]
+    #[cfg(unix)]
     {
-        // SAFETY: `PR_SET_DUMPABLE` takes one number and reads no memory of ours.
-        let marked = unsafe { libc::prctl(libc::PR_SET_DUMPABLE, libc::c_ulong::from(0_u8)) };
-        if marked != 0 {
+        let mut limit = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        // SAFETY: `limit` is a valid, aligned `rlimit` struct written by `getrlimit`.
+        if unsafe { libc::getrlimit(libc::RLIMIT_CORE, &raw mut limit) } != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        limit.rlim_cur = 0;
+        // SAFETY: `limit` is a valid `rlimit` struct read by `setrlimit`.
+        if unsafe { libc::setrlimit(libc::RLIMIT_CORE, &raw const limit) } != 0 {
             return Err(std::io::Error::last_os_error());
         }
     }
