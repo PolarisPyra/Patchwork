@@ -3,6 +3,17 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.134] - 2026-11-22
+
+## What's Changed
+* feat(quilts): Artifacts is now Quilts, a themed page with Patch the mascot by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/287
+* perf(build): debug builds of the app rebuild faster after an edit by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/288
+* refactor(app): the app is split into ui, settings, sidecar and android crates by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/289
+* perf(build): the released app is smaller and built with cross-crate optimization by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/290
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.133...26.11.134
+
 ## [26.11.133] - 2026-11-21
 
 **v26.11.133** · 2 changes from 1 contributor
