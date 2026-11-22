@@ -206,7 +206,7 @@ jobs:
             section.md CHANGELOG.md > "$RUNNER_TEMP/changelog"
           mv "$RUNNER_TEMP/changelog" CHANGELOG.md
           sed -i "/^\[workspace.package\]/,/^\[/s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
-          sed -i -E "/^name = \"patchwork(-core|-system|-remote)?\"$/{n;s/^version = \".*\"/version = \"$VERSION\"/}" Cargo.lock
+          sed -i -E "/^name = \"patchwork(-[a-z0-9_-]+)?\"$/{n;s/^version = \".*\"/version = \"$VERSION\"/}" Cargo.lock
           cat notes.md >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -551,7 +551,7 @@ jobs:
             "$RUNNER_TEMP/notes/section.md" CHANGELOG.md > "$RUNNER_TEMP/changelog"
           mv "$RUNNER_TEMP/changelog" CHANGELOG.md
           sed -i "/^\[workspace.package\]/,/^\[/s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
-          sed -i -E "/^name = \"patchwork(-core|-system|-remote)?\"$/{n;s/^version = \".*\"/version = \"$VERSION\"/}" Cargo.lock
+          sed -i -E "/^name = \"patchwork(-[a-z0-9_-]+)?\"$/{n;s/^version = \".*\"/version = \"$VERSION\"/}" Cargo.lock
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -q -m "Release $TAG" -- CHANGELOG.md Cargo.toml Cargo.lock
