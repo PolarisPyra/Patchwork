@@ -15,7 +15,7 @@ use super::net::{client, failed, json, mime, stream_client};
 use super::platform::Platform;
 use super::types::{Button, Connector, Incoming, Listener};
 use crate::Error;
-use crate::system::fs::home_dir;
+use crate::system::files::paths::home_dir;
 
 /// How long the event stream stays open before it is opened again.
 const STREAM_FOR: Duration = Duration::from_secs(15 * 60);
@@ -67,10 +67,10 @@ impl Signal {
     }
 
     /// Who a message to `chat` goes to, as the daemon's parameters.
-    fn to(chat: &str) -> Value {
-        match chat.strip_prefix(GROUP) {
+    fn to(conversation: &str) -> Value {
+        match conversation.strip_prefix(GROUP) {
             Some(group) => json!({"groupId": group}),
-            None => json!({"recipient": [chat]}),
+            None => json!({"recipient": [conversation]}),
         }
     }
 }
@@ -113,15 +113,26 @@ impl Connector for Signal {
         Ok(())
     }
 
-    fn send(&self, chat: &str, text: &str, _buttons: &[Button]) -> Result<Option<String>, Error> {
-        let mut params = Self::to(chat);
+    fn send(
+        &self,
+        conversation: &str,
+        text: &str,
+        _buttons: &[Button],
+    ) -> Result<Option<String>, Error> {
+        let mut params = Self::to(conversation);
         params["message"] = json!(text);
         self.call("send", params)?;
         Ok(None)
     }
 
-    fn send_file(&self, chat: &str, name: &str, bytes: &[u8], caption: &str) -> Result<(), Error> {
-        let mut params = Self::to(chat);
+    fn send_file(
+        &self,
+        conversation: &str,
+        name: &str,
+        bytes: &[u8],
+        caption: &str,
+    ) -> Result<(), Error> {
+        let mut params = Self::to(conversation);
         params["message"] = json!(caption);
         params["attachments"] = json!([format!(
             "data:{};filename={name};base64,{}",
@@ -135,12 +146,12 @@ impl Connector for Signal {
         self.call("send", params).map(drop)
     }
 
-    fn edit(&self, _chat: &str, _id: &str, _text: &str) -> Result<(), Error> {
+    fn edit(&self, _conversation: &str, _id: &str, _text: &str) -> Result<(), Error> {
         Err("Signal messages cannot be edited".into())
     }
 
-    fn typing(&self, chat: &str) {
-        let _ = self.call("sendTyping", Self::to(chat));
+    fn typing(&self, conversation: &str) {
+        let _ = self.call("sendTyping", Self::to(conversation));
     }
 }
 
@@ -159,7 +170,7 @@ fn incoming(event: &Value) -> Option<Incoming> {
         .as_str()
         .or_else(|| envelope["sourceUuid"].as_str())
         .or_else(|| envelope["source"].as_str())?;
-    let chat = match data["groupInfo"]["groupId"].as_str() {
+    let conversation = match data["groupInfo"]["groupId"].as_str() {
         Some(group) => format!("{GROUP}{group}"),
         None => user.to_string(),
     };
@@ -190,7 +201,7 @@ fn incoming(event: &Value) -> Option<Incoming> {
         id: envelope["timestamp"]
             .as_u64()
             .map(|at| format!("{user}:{at}")),
-        chat,
+        conversation,
         sender: user.to_string(),
         name: envelope["sourceName"].as_str().unwrap_or(user).to_string(),
         text,

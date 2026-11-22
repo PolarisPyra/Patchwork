@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use crate::threads::{AccessMode};
+use crate::chats::{AccessMode};
 use crate::provider::TurnSpec;
 
 use super::request::serve_permissions;
@@ -11,7 +11,7 @@ fn spec(mode: AccessMode) -> TurnSpec<'static> {
     TurnSpec {
         root: "/w",
         host: None,
-        thread_id: "thread",
+        chat_id: "thread",
         session_id: None,
         model: None,
         vision_model: None,
@@ -86,15 +86,15 @@ mod dump_rules {
     #[test]
     fn print_rules() {
         for mode in [
-            crate::threads::AccessMode::Supervised,
-            crate::threads::AccessMode::AutoAcceptEdits,
-            crate::threads::AccessMode::Auto,
-            crate::threads::AccessMode::FullAccess,
+            crate::chats::AccessMode::Supervised,
+            crate::chats::AccessMode::AutoAcceptEdits,
+            crate::chats::AccessMode::Auto,
+            crate::chats::AccessMode::FullAccess,
         ] {
             let spec = crate::provider::TurnSpec {
                 root: "/w",
                 host: None,
-                thread_id: "thread",
+                chat_id: "thread",
                 session_id: None,
                 model: None,
                 vision_model: None,

@@ -1,22 +1,15 @@
-//! The sidebar (`features/sidebar`): the search button, the task tree, and the usage button, with
-//! the edge that resizes it.
+//! The sidebar: the search button, its views (tasks, changes and archived), and the usage button,
+//! with the edge that resizes it.
 
 // Rust guideline compliant 2026-10-09
 
-mod archived;
-mod bots;
-pub mod changes;
-pub mod devices;
-mod export;
-mod graph;
-pub mod menu;
-pub mod pick;
-mod remove;
-mod render;
-mod tasks;
-mod tree;
+mod archived_list;
+pub mod projects;
+mod sections;
+pub mod source_control;
+pub mod tasks;
 pub mod usage;
 
-use render::{empty_row, twistie};
-pub use export::thread_markdown;
-pub use render::render;
+use sections::{empty_row, twistie};
+pub use sections::render;
+pub use tasks::chat_markdown;

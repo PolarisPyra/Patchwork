@@ -5,7 +5,7 @@
 use serde_json::Value;
 use crate::events::AgentEvent;
 use crate::system::now_ms;
-use crate::threads::{
+use crate::chats::{
     StepStatus, ToolCall, tool_output, SubAgent, Question, TokenUsage, BackgroundTask, TaskStatus,
     EditLines,
 };
@@ -17,7 +17,7 @@ use super::ProviderSlashCommand;
 #[derive(Debug)]
 pub enum TaskEvent {
     /// A task began. `top_level` is false for one a subagent started, which is listed under that
-    /// subagent's thread instead. `backgrounded` is set when it was started to run in the background.
+    /// subagent's chat instead. `backgrounded` is set when it was started to run in the background.
     Started {
         task: BackgroundTask,
         task_id: String,
@@ -204,7 +204,7 @@ pub(super) fn tool_started(message_id: &str, start: ToolStart<'_>) -> Parsed {
             started_at: Some(now_ms()),
             ended_at: None,
             output: None,
-            child_thread_id: None,
+            child_chat_id: None,
             lines: None,
             title: None,
             kind: None,

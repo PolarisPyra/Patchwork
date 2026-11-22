@@ -12,7 +12,7 @@ use std::sync::OnceLock;
 
 use notify::RecursiveMode;
 
-use crate::workspace::watch::settled;
+use crate::projects::watch::settled;
 use serde::Serialize;
 
 use crate::provider::AgentKind;
@@ -273,7 +273,7 @@ pub fn folders(settings: &Settings) -> Vec<PathBuf> {
             .iter()
             .map(|cli| cli_dir(cli).join("skills")),
     );
-    if let Some(home) = crate::system::fs::home_dir() {
+    if let Some(home) = crate::system::files::paths::home_dir() {
         out.extend(AGENT_SKILLS.iter().map(|folder| home.join(folder)));
     }
     out
@@ -290,7 +290,7 @@ pub struct Watcher {
 ///
 /// # Errors
 ///
-/// Returns an error when the watcher cannot be created, cannot watch `dir`, or its thread cannot be
+/// Returns an error when the watcher cannot be created, cannot watch `dir`, or its chat cannot be
 /// started.
 pub fn watch(dir: &Path, on_change: impl Fn() + Send + 'static) -> Result<Watcher, Error> {
     let watcher = settled(

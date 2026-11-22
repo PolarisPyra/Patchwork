@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::events::AgentEvent;
-use crate::threads::TaskStatus;
+use crate::chats::TaskStatus;
 
 use super::tracker::*;
 use crate::provider::Parsed;
@@ -11,7 +11,7 @@ use crate::provider::TurnSpec;
 use crate::provider::claude;
 use crate::provider::codex;
 use crate::provider::codex::tests as codex_fixtures;
-use crate::threads::AccessMode;
+use crate::chats::AccessMode;
 use crate::provider::claude::tests::AGENT_LAUNCHED;
 use crate::provider::claude::tests::AGENT_NOTIFIED;
 use crate::provider::claude::tests::AGENT_STARTED;
@@ -233,7 +233,7 @@ fn a_codex_command_open_at_turn_end_is_listed_and_holds_no_stdin() {
     let spec = TurnSpec {
         root: "/abs/work",
         host: None,
-        thread_id: "thread",
+        chat_id: "thread",
         session_id: None,
         model: None,
         vision_model: None,

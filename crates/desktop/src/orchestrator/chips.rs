@@ -4,10 +4,10 @@
 
 use gpui::{AnyElement, Window, div, point, prelude::*, px};
 use gpui::{Anchor, anchored, deferred};
-use super::render::{PILL_W, ink};
-use super::state::Orchestrator;
+use super::layout::{PILL_W, ink};
+use super::requests::Orchestrator;
 use crate::chat::composer::Composer;
-use patchwork_ui::pill::pill_chip;
+use patchwork_ui::controls::pill::pill_chip;
 use patchwork_ui::{agent_logo, icon};
 
 /// A chip under the pill that opens a menu.

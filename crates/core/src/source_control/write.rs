@@ -4,8 +4,8 @@
 
 use serde_json::Value;
 
-use crate::threads::title::{self, Request, Writer};
-use crate::workspace::{self, PullRequest};
+use crate::chats::title::{self, Request, Writer};
+use crate::source_control::{self, PullRequest};
 use crate::{Core, Error};
 
 impl Core {
@@ -19,20 +19,20 @@ impl Core {
     pub fn write_commit_message(
         &self,
         project_id: &str,
-        thread_id: Option<&str>,
+        chat_id: Option<&str>,
     ) -> Result<String, Error> {
-        let root = self.source_root(project_id, thread_id)?;
-        workspace::stage_for_commit(&root, false)?;
-        self.staged_message(&root, thread_id)
+        let root = self.source_root(project_id, chat_id)?;
+        source_control::stage_for_commit(&root, false)?;
+        self.staged_message(&root, chat_id)
     }
 
     pub(super) fn staged_message(
         &self,
         root: &str,
-        thread_id: Option<&str>,
+        chat_id: Option<&str>,
     ) -> Result<String, Error> {
-        let summary = workspace::staged_summary(root)?;
-        self.write(thread_id, COMMIT_PROMPT, COMMIT_SCHEMA, &summary)
+        let summary = source_control::staged_summary(root)?;
+        self.write(chat_id, COMMIT_PROMPT, COMMIT_SCHEMA, &summary)
             .and_then(|answer| commit_message(&answer))
             .ok_or_else(|| "No model wrote a commit message. Type one to commit.".into())
     }
@@ -48,21 +48,21 @@ impl Core {
     pub fn open_pull_request(
         &self,
         project_id: &str,
-        thread_id: Option<&str>,
+        chat_id: Option<&str>,
     ) -> Result<PullRequest, Error> {
-        let root = self.source_root(project_id, thread_id)?;
-        let (base, summary) = workspace::branch_summary(&root)?;
+        let root = self.source_root(project_id, chat_id)?;
+        let (base, summary) = source_control::branch_summary(&root)?;
         let text = self
-            .write(thread_id, PR_PROMPT, PR_SCHEMA, &summary)
+            .write(chat_id, PR_PROMPT, PR_SCHEMA, &summary)
             .and_then(|answer| pull_request_text(&answer));
         let text = text.as_ref().map(|(t, b)| (t.as_str(), b.as_str()));
-        workspace::create_pull_request(&root, &base, text)
+        source_control::create_pull_request(&root, &base, text)
     }
 
-    /// Asks the title writer from Settings, else the open thread's provider and model.
+    /// Asks the title writer from Settings, else the open chat's provider and model.
     fn write(
         &self,
-        thread_id: Option<&str>,
+        chat_id: Option<&str>,
         prompt: &str,
         schema: &str,
         input: &str,
@@ -72,7 +72,7 @@ impl Core {
             model: tokens.title_model,
             local_only: tokens.titles_local_only,
         };
-        let thread = thread_id.and_then(|id| self.store.thread(id));
+        let chat = chat_id.and_then(|id| self.store.chat(id));
         let request = Request {
             prompt,
             schema,
@@ -81,8 +81,8 @@ impl Core {
         };
         title::ask(
             &request,
-            thread.as_ref().map(|t| t.agent),
-            thread.as_ref().and_then(|t| t.model.as_deref()),
+            chat.as_ref().map(|t| t.agent),
+            chat.as_ref().and_then(|t| t.model.as_deref()),
             &writer,
         )
     }

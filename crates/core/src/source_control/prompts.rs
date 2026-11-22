@@ -7,7 +7,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::workspace::{self, CheckState};
+use crate::source_control::{self, CheckState};
 use crate::{Core, Error};
 
 /// Failed jobs whose logs a pull request's feedback quotes, and how much of each log's end.
@@ -19,7 +19,7 @@ const ALL_CONFLICTS: usize = 24_000;
 
 impl Core {
     /// A prompt with what the branch's open pull request needs: its failed checks with the end
-    /// of each failed job's log, and its reviews and comments. Returned with the thread that
+    /// of each failed job's log, and its reviews and comments. Returned with the chat that
     /// made the branch's newest commit Patchwork recorded, to send it to.
     ///
     /// # Errors
@@ -29,15 +29,15 @@ impl Core {
     pub fn pull_request_feedback(
         &self,
         project_id: &str,
-        thread_id: Option<&str>,
+        chat_id: Option<&str>,
     ) -> Result<(Option<String>, String), Error> {
-        let root = self.source_root(project_id, thread_id)?;
-        let pr = workspace::pull_request_view(&root)?;
+        let root = self.source_root(project_id, chat_id)?;
+        let pr = source_control::pull_request_view(&root)?;
         let number = pr["number"].as_u64().unwrap_or_default();
         let mut sections = Vec::new();
 
-        let failed: Vec<&Value> = workspace::pull_request_checks(&pr)
-            .filter(|c| workspace::check_state(c) == CheckState::Failed)
+        let failed: Vec<&Value> = source_control::pull_request_checks(&pr)
+            .filter(|c| source_control::check_state(c) == CheckState::Failed)
             .collect();
         if !failed.is_empty() {
             let mut text = String::from("## Failed checks\n");
@@ -48,7 +48,8 @@ impl Core {
                 let log = url
                     .and_then(job_id)
                     .and_then(|job| {
-                        workspace::gh(&root, &["run", "view", "--job", job, "--log-failed"]).ok()
+                        source_control::gh(&root, &["run", "view", "--job", job, "--log-failed"])
+                            .ok()
                     })
                     .filter(|log| !log.trim().is_empty());
                 match (log, url) {
@@ -77,7 +78,7 @@ impl Core {
             }
         }
         let inline = format!("repos/{{owner}}/{{repo}}/pulls/{number}/comments?per_page=100");
-        let inline = workspace::gh(&root, &["api", &inline])
+        let inline = source_control::gh(&root, &["api", &inline])
             .ok()
             .and_then(|text| serde_json::from_str::<Value>(&text).ok());
         for comment in inline
@@ -116,17 +117,17 @@ impl Core {
              changing it.\n\n{}",
             sections.join("\n\n")
         );
-        let thread = workspace::base_ref(&root)
+        let chat = source_control::base_ref(&root)
             .and_then(|base| {
-                workspace::run_git(&root, &["rev-list", &format!("{base}..HEAD")]).ok()
+                source_control::run_git(&root, &["rev-list", &format!("{base}..HEAD")]).ok()
             })
             .and_then(|hashes| {
                 hashes
                     .lines()
                     .find_map(|hash| self.commit_record(hash))
-                    .map(|record| record.thread)
+                    .map(|record| record.chat)
             });
-        Ok((thread, workspace::truncated(&prompt, 40_000)))
+        Ok((chat, source_control::truncated(&prompt, 40_000)))
     }
 
     /// A prompt for an agent to resolve the project's merge conflicts: what git stopped in, the
@@ -139,10 +140,10 @@ impl Core {
     pub fn conflict_prompt(
         &self,
         project_id: &str,
-        thread_id: Option<&str>,
+        chat_id: Option<&str>,
     ) -> Result<String, Error> {
-        let root = self.source_root(project_id, thread_id)?;
-        let files = workspace::run_git(
+        let root = self.source_root(project_id, chat_id)?;
+        let files = source_control::run_git(
             &root,
             &["diff", "--name-only", "--relative", "--diff-filter=U"],
         )?;
@@ -151,11 +152,12 @@ impl Core {
             return Err("No file has a conflict to resolve".into());
         }
         let describe = |rev: &str| {
-            workspace::run_git(&root, &["log", "-1", "--format=%h %s", rev])
+            source_control::run_git(&root, &["log", "-1", "--format=%h %s", rev])
                 .map_or_else(|_| rev.to_string(), |s| s.trim().to_string())
         };
-        let has =
-            |rev: &str| workspace::run_git(&root, &["rev-parse", "--verify", "-q", rev]).is_ok();
+        let has = |rev: &str| {
+            source_control::run_git(&root, &["rev-parse", "--verify", "-q", rev]).is_ok()
+        };
         let (operation, theirs) = [
             ("MERGE_HEAD", "a merge"),
             ("REBASE_HEAD", "a rebase"),
@@ -168,7 +170,7 @@ impl Core {
             || ("applying changes".to_string(), None),
             |(rev, what)| (what.to_string(), Some(describe(rev))),
         );
-        let branch = workspace::git_branch(&root).unwrap_or_else(|| "HEAD".into());
+        let branch = source_control::git_branch(&root).unwrap_or_else(|| "HEAD".into());
         let mut sides = format!("- Ours: {branch} at {}", describe("HEAD"));
         if let Some(theirs) = theirs {
             let _ = write!(sides, "\n- Theirs: {theirs}");
@@ -189,7 +191,10 @@ impl Core {
             let body = if hunks.is_empty() {
                 "No conflict markers: one side deleted or renamed it.".to_string()
             } else {
-                format!("```\n{}\n```", workspace::truncated(&hunks, FILE_CONFLICTS))
+                format!(
+                    "```\n{}\n```",
+                    source_control::truncated(&hunks, FILE_CONFLICTS)
+                )
             };
             let _ = write!(conflicts, "\n### {file}\n{body}\n");
         }
@@ -202,7 +207,7 @@ impl Core {
              ## Conflicts\n{}",
             files.len(),
             operation.trim_start_matches("a "),
-            workspace::truncated(&conflicts, ALL_CONFLICTS)
+            source_control::truncated(&conflicts, ALL_CONFLICTS)
         );
         Ok(prompt)
     }

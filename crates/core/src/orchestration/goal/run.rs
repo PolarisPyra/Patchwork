@@ -12,7 +12,7 @@ use crate::persistence::Store;
 use super::state::stalled;
 use crate::system::now_ms;
 use crate::provider::{GoalCommand, goal_command};
-use crate::threads::{Goal, GoalStatus, MessageStatus};
+use crate::chats::{Goal, GoalStatus, MessageStatus};
 
 /// The line a reply ends with once the goal is met.
 const MET: &str = "GOAL MET";
@@ -49,11 +49,11 @@ pub fn is_goal_continuation(text: &str) -> bool {
 
 /// The text the agent gets for `text`: a `/goal` that sets or resumes the goal becomes its brief,
 /// and any other message is unchanged.
-pub(crate) fn agent_text(store: &Store, thread_id: &str, text: String) -> String {
+pub(crate) fn agent_text(store: &Store, chat_id: &str, text: String) -> String {
     match goal_command(&text) {
         Some(GoalCommand::Set(objective)) => brief(objective),
         Some(GoalCommand::Resume) => store
-            .thread(thread_id)
+            .chat(chat_id)
             .and_then(|t| t.goal)
             .map_or(text, |g| brief(&g.objective)),
         _ => text,
@@ -90,8 +90,8 @@ pub(in crate::orchestration) fn settle(
     replies: &[String],
 ) -> bool {
     // The stored goal is read again, since the user may have paused or cleared it meanwhile.
-    let thread = turn.core.store.thread(&turn.thread_id);
-    let Some(goal) = thread
+    let chat = turn.core.store.chat(&turn.chat_id);
+    let Some(goal) = chat
         .as_ref()
         .and_then(|t| t.goal.clone())
         .filter(|g| g.status == GoalStatus::Active)
@@ -102,7 +102,7 @@ pub(in crate::orchestration) fn settle(
         // Stopped, failed or killed: nothing pursues the goal, so it waits to be resumed.
         GoalStatus::Paused
     } else {
-        let replies: Vec<_> = thread
+        let replies: Vec<_> = chat
             .as_ref()
             .map(|t| {
                 t.messages
@@ -115,7 +115,7 @@ pub(in crate::orchestration) fn settle(
         let last = replies.last().map(|m| m.text.as_str()).unwrap_or_default();
         let idle = replies.iter().all(|m| m.tools.is_empty());
         match verdict(last) {
-            GoalStatus::Active if stalled(&turn.core.store, &turn.thread_id, &goal, idle) => {
+            GoalStatus::Active if stalled(&turn.core.store, &turn.chat_id, &goal, idle) => {
                 GoalStatus::Stalled
             }
             verdict => verdict,
@@ -131,17 +131,17 @@ pub(in crate::orchestration) fn settle(
 
 /// Once the turn has ended, sends the messages queued meanwhile or, with none queued, the one
 /// that carries the goal on.
-pub(in crate::orchestration) fn carry_on_later(core: &Arc<Core>, thread_id: &str) {
+pub(in crate::orchestration) fn carry_on_later(core: &Arc<Core>, chat_id: &str) {
     let core = Arc::clone(core);
-    let thread_id = thread_id.to_string();
+    let chat_id = chat_id.to_string();
     std::thread::spawn(move || {
-        let Some(thread) = core.store.thread(&thread_id) else {
+        let Some(chat) = core.store.chat(&chat_id) else {
             return;
         };
-        let sent = if thread.messages.iter().any(|m| m.queued) {
-            core.resume_queued(&thread_id)
-        } else if let Some(goal) = thread.goal.filter(|g| g.status == GoalStatus::Active) {
-            core.send_message(thread_id, carry_on(&goal.objective), vec![], false)
+        let sent = if chat.messages.iter().any(|m| m.queued) {
+            core.resume_queued(&chat_id)
+        } else if let Some(goal) = chat.goal.filter(|g| g.status == GoalStatus::Active) {
+            core.send_message(chat_id, carry_on(&goal.objective), vec![], false)
                 .map(|_| ())
         } else {
             Ok(())

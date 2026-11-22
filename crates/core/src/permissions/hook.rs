@@ -20,17 +20,17 @@ use crate::provider::AgentKind;
 
 /// The argument that starts Patchwork's binary as an agent's permission hook.
 pub const HOOK_ARG: &str = "--permission-hook";
-/// Where the hook finds the relay and the thread it works for.
+/// Where the hook finds the relay and the chat it works for.
 const ENV: &str = "PATCHWORK_PERMISSION_HOOK";
 
-/// The environment that tells a permission hook which thread it serves.
+/// The environment that tells a permission hook which chat it serves.
 ///
-/// Environment that tells the hook which thread it works for, for the agents that run one:
+/// Environment that tells the hook which chat it works for, for the agents that run one:
 /// Codex, Claude, and Antigravity. The relay's port and token are copied in: a hook that read
 /// them from the file could reach another copy of Patchwork that shares the state folder and
 /// wrote that file since.
 #[must_use]
-pub fn env(agent: AgentKind, thread_id: &str, root: &str) -> Vec<(&'static str, String)> {
+pub fn env(agent: AgentKind, chat_id: &str, root: &str) -> Vec<(&'static str, String)> {
     // The agents that run Patchwork's permission hook.
     if !matches!(
         agent,
@@ -44,7 +44,7 @@ pub fn env(agent: AgentKind, thread_id: &str, root: &str) -> Vec<(&'static str, 
     let context = json!({
         "port": endpoint["port"],
         "token": endpoint["token"],
-        "thread": thread_id,
+        "chat": chat_id,
         "root": root,
     });
     vec![(ENV, context.to_string())]
@@ -107,7 +107,7 @@ fn ask(title: &str, detail: &str, target: &Target) -> Result<Option<String>, Err
         .map_err(|_discarded| UNREACHABLE)?;
     let mut stream = connect(port).map_err(|_discarded| UNREACHABLE)?;
     let hello = json!({"token": relay["token"], "hook": {
-        "thread": context["thread"], "root": context["root"],
+        "chat": context["chat"], "root": context["root"],
         "title": title, "detail": detail, "kind": target.kind, "resources": target.resources,
     }});
     writeln!(stream, "{hello}").map_err(|_| UNREACHABLE)?;
@@ -330,7 +330,7 @@ mod claude_tests {
             let env = super::env(agent, "t", "/w");
             assert_eq!(env.len(), 1, "{agent:?}");
             assert!(
-                env[0].1.contains("\"thread\":\"t\""),
+                env[0].1.contains("\"chat\":\"t\""),
                 "{agent:?}: {}",
                 env[0].1
             );

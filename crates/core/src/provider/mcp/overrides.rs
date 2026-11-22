@@ -12,22 +12,22 @@ use crate::provider::AgentKind;
 /// How long an agent waits on one of Patchwork's own tools, which may wait an hour for the user.
 const OWN_TIMEOUT_SECS: u64 = 65 * 60;
 
-/// The command and arguments that reach Patchwork's own server for the agent of `thread_id`.
-pub fn own_server(thread_id: &str) -> Option<(String, Vec<String>)> {
+/// The command and arguments that reach Patchwork's own server for the agent of `chat_id`.
+pub fn own_server(chat_id: &str) -> Option<(String, Vec<String>)> {
     let (relay, exe) = (mcp::own_relay_file()?, std::env::current_exe().ok()?);
     let args = [
         mcp::PROXY_ARG,
         &relay.display().to_string(),
         mcp::OWN_SERVER,
-        thread_id,
+        chat_id,
     ];
     Some((exe.display().to_string(), args.map(String::from).into()))
 }
 
-/// OpenCode's config for Patchwork's own server, for the agent of `thread_id`.
+/// OpenCode's config for Patchwork's own server, for the agent of `chat_id`.
 #[must_use]
-pub fn opencode_config(thread_id: &str) -> Option<Value> {
-    let (exe, args) = own_server(thread_id)?;
+pub fn opencode_config(chat_id: &str) -> Option<Value> {
+    let (exe, args) = own_server(chat_id)?;
     let command: Vec<String> = std::iter::once(exe).chain(args).collect();
     Some(serde_json::json!({"mcp": {mcp::OWN_SERVER: {
         "type": "local",
@@ -43,13 +43,13 @@ pub fn opencode_config(thread_id: &str) -> Option<Value> {
 /// each server it shares, so the two do not each start one: `--mcp-config` replaces a Claude
 /// Code server of the same name, and `-c` a Codex one.
 #[must_use]
-pub fn overrides(agent: AgentKind, root: &str, thread_id: &str) -> Vec<String> {
-    let Some((exe, own)) = own_server(thread_id) else {
+pub fn overrides(agent: AgentKind, root: &str, chat_id: &str) -> Vec<String> {
+    let Some((exe, own)) = own_server(chat_id) else {
         return Vec::new();
     };
     let mut relays = shared_relays(agent, root);
     relays.insert(mcp::OWN_SERVER.to_string(), own);
-    let tool = crate::secrets::TOOL;
+    let tool = crate::vault::requests::TOOL;
     match agent {
         AgentKind::Claude => {
             let servers: serde_json::Map<String, Value> = relays
@@ -72,7 +72,7 @@ pub fn overrides(agent: AgentKind, root: &str, thread_id: &str) -> Vec<String> {
                 "--allowedTools".into(),
                 [
                     tool.to_string(),
-                    crate::threads::delegate::TOOL.to_string(),
+                    crate::chats::delegate::TOOL.to_string(),
                     crate::quilts::TOOL.to_string(),
                 ]
                 .into_iter()
@@ -118,20 +118,20 @@ pub fn overrides(agent: AgentKind, root: &str, thread_id: &str) -> Vec<String> {
 
 /// Builds the arguments that give a dispatcher's Claude turn Patchwork's server and no other.
 ///
-/// Every tool the server lists for the thread is allowed up front: they act inside Patchwork,
+/// Every tool the server lists for the chat is allowed up front: they act inside Patchwork,
 /// which asks the person itself where a tool needs their word.
 #[must_use]
-pub fn dispatcher_overrides(thread_id: &str) -> Vec<String> {
-    let Some((exe, args)) = own_server(thread_id) else {
+pub fn dispatcher_overrides(chat_id: &str) -> Vec<String> {
+    let Some((exe, args)) = own_server(chat_id) else {
         return Vec::new();
     };
     let server = serde_json::json!({
         "command": exe, "args": args, "timeout": OWN_TIMEOUT_SECS * 1000,
     });
-    let tools: Vec<String> = mcp::own_turn_tools(thread_id)
+    let tools: Vec<String> = mcp::own_turn_tools(chat_id)
         .into_iter()
         .map(|tool| tool.tool)
-        .chain([crate::secrets::TOOL.to_string()])
+        .chain([crate::vault::requests::TOOL.to_string()])
         .map(|tool| format!("mcp__{}__{tool}", mcp::OWN_SERVER))
         .collect();
     vec![

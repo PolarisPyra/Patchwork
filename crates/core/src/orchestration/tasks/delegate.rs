@@ -1,5 +1,5 @@
 //! Sub agents on another agent than the chat's: the chat's agent calls Patchwork's
-//! `run_sub_agent` tool (see `crate::threads::delegate`), and the work runs as a turn in a chat of
+//! `run_sub_agent` tool (see `crate::chats::delegate`), and the work runs as a turn in a chat of
 //! the other agent's, whose last reply is the tool's result.
 
 // Rust guideline compliant 2026-10-09
@@ -17,9 +17,9 @@ use super::wait::Unanswered;
 use crate::orchestration::turn::start::Turn;
 use crate::system::new_id;
 use crate::provider::AgentKind;
-use crate::threads::delegate::{self, Ask, RESULT};
-use crate::threads::{
-    AgentPick, Message, MessageStatus, SubAgent, Thread, ThreadParent, ToolCall, sub_agent_of,
+use crate::chats::delegate::{self, Ask, RESULT};
+use crate::chats::{
+    AgentPick, Message, MessageStatus, SubAgent, Chat, ChatParent, ToolCall, sub_agent_of,
 };
 use crate::{Error, Core};
 
@@ -37,12 +37,12 @@ const MAX_RUN: Duration = Duration::from_secs(60 * 60);
 /// A call to the tool as the caller's reply shows it, until the sub agent it starts takes it up.
 pub(in crate::orchestration) struct Called {
     tool_id: String,
-    /// The thread the call's card opens, which the sub agent is then made as.
+    /// The chat the call's card opens, which the sub agent is then made as.
     child_id: String,
     summary: String,
 }
 
-/// Makes a call to the tool a sub agent's card as it is first shown, opening a thread that the
+/// Makes a call to the tool a sub agent's card as it is first shown, opening a chat that the
 /// sub agent is about to be made as.
 pub(in crate::orchestration) fn mark_call(turn: &Turn, tool: &mut ToolCall) {
     if tool.parent.is_some() || !delegate::is_call(&tool.name, &tool.summary) {
@@ -50,8 +50,8 @@ pub(in crate::orchestration) fn mark_call(turn: &Turn, tool: &mut ToolCall) {
     }
     let store = &turn.core.store;
     let Some(pick) = store
-        .thread(&turn.thread_id)
-        .and_then(|thread| sub_agent_of(&thread))
+        .chat(&turn.chat_id)
+        .and_then(|chat| sub_agent_of(&chat))
     else {
         return;
     };
@@ -62,12 +62,12 @@ pub(in crate::orchestration) fn mark_call(turn: &Turn, tool: &mut ToolCall) {
         model: pick.model,
         prompt: None,
     });
-    tool.child_thread_id = Some(child_id.clone());
+    tool.child_chat_id = Some(child_id.clone());
     turn.core
         .runner
         .delegated
         .locked()
-        .entry(turn.thread_id.clone())
+        .entry(turn.chat_id.clone())
         .or_default()
         .push(Called {
             tool_id: tool.id.clone(),
@@ -77,7 +77,7 @@ pub(in crate::orchestration) fn mark_call(turn: &Turn, tool: &mut ToolCall) {
 }
 
 /// The sub agent's own thread: read-only, and opened from the call that started it.
-fn child_thread(parent: Thread, pick: AgentPick, ask: &Ask, call: Option<Called>) -> Thread {
+fn child_chat(parent: Chat, pick: AgentPick, ask: &Ask, call: Option<Called>) -> Chat {
     let (tool_id, id) = call.map_or_else(
         || (String::new(), new_id()),
         |call| (call.tool_id, call.child_id),
@@ -87,17 +87,17 @@ fn child_thread(parent: Thread, pick: AgentPick, ask: &Ask, call: Option<Called>
     } else {
         ask.description.clone()
     };
-    Thread {
+    Chat {
         id,
         project_id: parent.project_id,
         model: pick.model,
         effort: pick.effort,
         background: parent.background,
-        parent: Some(ThreadParent {
-            thread_id: parent.id,
+        parent: Some(ChatParent {
+            chat_id: parent.id,
             tool_id,
         }),
-        ..Thread::new(title, pick.agent, parent.access_mode)
+        ..Chat::new(title, pick.agent, parent.access_mode)
     }
 }
 
@@ -122,7 +122,7 @@ impl Runner {
     /// `description`, else the oldest waiting. None when none shows within `LINK_WAIT`.
     fn claim_call(
         &self,
-        thread_id: &str,
+        chat_id: &str,
         description: &str,
         stopped: &dyn Fn() -> bool,
     ) -> Option<Called> {
@@ -130,14 +130,14 @@ impl Runner {
         loop {
             {
                 let mut waiting = self.delegated.locked();
-                if let Some(calls) = waiting.get_mut(thread_id).filter(|c| !c.is_empty()) {
+                if let Some(calls) = waiting.get_mut(chat_id).filter(|c| !c.is_empty()) {
                     let at = calls
                         .iter()
                         .position(|c| !description.is_empty() && c.summary.contains(description))
                         .unwrap_or(0);
                     let call = calls.remove(at);
                     if calls.is_empty() {
-                        waiting.remove(thread_id);
+                        waiting.remove(chat_id);
                     }
                     return Some(call);
                 }
@@ -149,7 +149,7 @@ impl Runner {
         }
     }
 
-    /// Runs a sub agent for the thread's agent on the agent its chat names for them, and waits
+    /// Runs a sub agent for the chat's agent on the agent its chat names for them, and waits
     /// for its answer: until its turn ends, the caller's turn ends or `stopped`, or `MAX_RUN`.
     ///
     /// # Errors
@@ -159,7 +159,7 @@ impl Runner {
     pub(crate) fn run_sub_agent(
         &self,
         core: &Arc<Core>,
-        thread_id: &str,
+        chat_id: &str,
         args: &Value,
         stopped: &dyn Fn() -> bool,
     ) -> Result<String, Error> {
@@ -167,27 +167,27 @@ impl Runner {
             Ok(ask) => ask,
             Err(e) => {
                 // Its card is taken all the same, or the next call would be shown as this one.
-                self.claim_call(thread_id, "", stopped);
+                self.claim_call(chat_id, "", stopped);
                 return Err(e);
             }
         };
         let parent = core
             .store
-            .thread(thread_id)
+            .chat(chat_id)
             .ok_or("This chat is no longer here")?;
         let pick = sub_agent_of(&parent)
             .ok_or("This chat's sub agents run on its own agent; start one with your own tool")?;
         // Only Patchwork's own agent is offered the background, and the tool that ends it.
         let background = ask.background && parent.agent == AgentKind::Api;
-        let flags = self.turn_flags(thread_id)?;
+        let flags = self.turn_flags(chat_id)?;
         let gone = || stopped() || flags.iter().any(|f| f.load(Ordering::SeqCst));
-        let call = self.claim_call(thread_id, &ask.description, &gone);
-        let thread = child_thread(parent, pick, &ask, call);
-        let child_id = thread.id.clone();
-        core.store.insert_threads(vec![thread.clone()])?;
+        let call = self.claim_call(chat_id, &ask.description, &gone);
+        let chat = child_chat(parent, pick, &ask, call);
+        let child_id = chat.id.clone();
+        core.store.insert_chats(vec![chat.clone()])?;
         core.emit(AgentEventEnvelope {
-            thread_id: child_id.clone(),
-            event: AgentEvent::ThreadCreated { thread },
+            chat_id: child_id.clone(),
+            event: AgentEvent::ChatCreated { chat },
         });
         let sent = core.send_message(child_id.clone(), ask.prompt, Vec::new(), false)?;
         if !background {
@@ -205,7 +205,7 @@ impl Runner {
         ))
     }
 
-    /// Waits for the answer of a sub agent the thread's agent started in the background, while
+    /// Waits for the answer of a sub agent the chat's agent started in the background, while
     /// the caller's turn runs. The sub agent is left running when the caller stops waiting.
     ///
     /// # Errors
@@ -215,7 +215,7 @@ impl Runner {
     pub(crate) fn sub_agent_result(
         &self,
         core: &Arc<Core>,
-        thread_id: &str,
+        chat_id: &str,
         args: &Value,
         stopped: &dyn Fn() -> bool,
     ) -> Result<String, Error> {
@@ -225,10 +225,10 @@ impl Runner {
             .unwrap_or_default();
         let child = core
             .store
-            .thread(id)
-            .filter(|t| t.parent.as_ref().is_some_and(|p| p.thread_id == thread_id))
+            .chat(id)
+            .filter(|t| t.parent.as_ref().is_some_and(|p| p.chat_id == chat_id))
             .ok_or("No sub agent with that id in this chat")?;
-        let flags = self.turn_flags(thread_id)?;
+        let flags = self.turn_flags(chat_id)?;
         let gone = || stopped() || flags.iter().any(|f| f.load(Ordering::SeqCst));
         self.wait_for_reply(core, &child.id, None, &gone, MAX_RUN)
             .map_err(|why| {
@@ -241,15 +241,13 @@ impl Runner {
             .and_then(result)
     }
 
-    /// The flags of the turn running in the thread: stopped by the user, and its agent exited.
+    /// The flags of the turn running in the chat: stopped by the user, and its agent exited.
     pub(in crate::orchestration) fn turn_flags(
         &self,
-        thread_id: &str,
+        chat_id: &str,
     ) -> Result<[Arc<AtomicBool>; 2], Error> {
         let turns = self.turns.locked();
-        let turn = turns
-            .get(thread_id)
-            .ok_or("This turn is no longer running")?;
+        let turn = turns.get(chat_id).ok_or("This turn is no longer running")?;
         Ok([Arc::clone(&turn.cancelled), Arc::clone(&turn.exited)])
     }
 

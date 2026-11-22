@@ -7,11 +7,11 @@
 use gpui::{AnyElement, Div, Role, Stateful, div, prelude::*, px};
 use patchwork_core::provider::AgentKind;
 use patchwork_core::provider::api::{config, servers};
-use patchwork_core::threads::AttachmentKind;
+use patchwork_core::chats::AttachmentKind;
 
 use super::Composer;
 use super::menus::{Menu, Pick};
-use patchwork_ui::pill::pill;
+use patchwork_ui::controls::pill::pill;
 use patchwork_ui::theme::{fs_sm, Theme};
 use patchwork_ui::{BtnKind, btn, icon, spinner};
 

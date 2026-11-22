@@ -4,9 +4,9 @@
 
 // Rust guideline compliant 2026-10-09
 
-mod state;
+mod limits;
 mod ring;
 mod popover;
 
-pub use state::{UsageState};
+pub use limits::{UsageState};
 pub use popover::{footer};

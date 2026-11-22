@@ -8,45 +8,36 @@
 
 // Rust guideline compliant 2026-10-09
 
-pub mod browse;
 mod error;
-pub mod dirs;
-mod environment;
-mod host;
-pub mod instance;
+pub mod files;
 pub mod keychain;
-mod launcher;
-pub mod memory;
-pub mod fs;
-pub mod contained;
-pub mod device;
+pub mod machine;
 pub mod processes;
 pub mod ssh;
-pub mod scope;
-mod shells;
 pub mod time;
 
-/// This build's version, which names the helper a host runs and the release it comes from.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[doc(inline)]
 pub use error::Error;
 #[doc(inline)]
-pub use host::{hide_console, host_command, host_env};
-pub(crate) use host::path_var;
-pub use host::{Locked, blocked, lossy_lines, unreachable};
+pub use processes::programs::{hide_console, host_command, host_env};
+pub(crate) use processes::programs::path_var;
+pub use processes::programs::{Locked, blocked, lossy_lines, unreachable};
 #[cfg(windows)]
-pub use host::expand_windows_vars;
+pub use processes::programs::expand_windows_vars;
 #[doc(inline)]
-pub use dirs::{Dirs, dirs};
+pub use files::dirs::{Dirs, dirs};
 #[doc(inline)]
-pub use launcher::set_launcher_icon;
+pub use machine::launcher::set_launcher_icon;
+#[doc(inline)]
+pub use files::editor::open_in_editor;
 #[doc(inline)]
 pub use time::{new_id, now_ms};
 #[doc(inline)]
-pub use environment::{ENV_READ, find_program, login_env, login_var, search_path};
+pub use processes::environment::{ENV_READ, find_program, login_env, login_var, search_path};
 #[doc(inline)]
-pub use shells::{
+pub use processes::shells::{
     available_shells, command_shell, effective_shell, find_shell, is_posix, login_shell,
     shell_args, shell_command, shell_name,
 };

@@ -13,7 +13,7 @@ use crate::orchestration::changes::attribution::SharedAttribution;
 use crate::permissions::Target;
 use crate::provider;
 use crate::provider::AgentKind;
-use crate::threads::Attachment;
+use crate::chats::Attachment;
 use crate::orchestration::turn::process::Interrupts;
 use crate::orchestration::turn::process::Stdin;
 use crate::orchestration::messages::queue::Queue;
@@ -27,7 +27,7 @@ pub(in crate::orchestration) struct PendingApproval {
     pub(in crate::orchestration) reply: Value,
     /// What it asks to do, for the permission rules.
     pub(in crate::orchestration) target: Option<Target>,
-    /// The folder the thread works in.
+    /// The folder the chat works in.
     pub(in crate::orchestration) root: String,
 }
 
@@ -54,9 +54,9 @@ pub(in crate::orchestration) struct RunningTurn {
     pub(in crate::orchestration) queue: Queue,
     pub(in crate::orchestration) controls: Controls,
     /// The agent has finished its reply and stays up only for shell commands it left running;
-    /// the thread counts as idle, and the next message starts a new reply in this process.
+    /// the chat counts as idle, and the next message starts a new reply in this process.
     pub(in crate::orchestration) idle: Arc<AtomicBool>,
-    /// The thread's settings changed while the agent was replying, so it is not used again once
+    /// The chat's settings changed while the agent was replying, so it is not used again once
     /// idle: the next message starts a new process with the settings as they are now.
     pub(in crate::orchestration) stale: AtomicBool,
     /// The folder the agent works in.
@@ -65,10 +65,10 @@ pub(in crate::orchestration) struct RunningTurn {
     pub(in crate::orchestration) attribution: SharedAttribution,
 }
 
-/// What a new turn sends to the agent, and the thread it belongs to.
+/// What a new turn sends to the agent, and the chat it belongs to.
 #[derive(Debug)]
 pub struct TurnRequest {
-    pub thread_id: String,
+    pub chat_id: String,
     pub text: String,
     pub attachments: Vec<Attachment>,
     pub images: Vec<provider::Image>,

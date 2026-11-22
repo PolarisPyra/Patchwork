@@ -1,4 +1,4 @@
-//! What goes back out to chat apps: a thread's reply as it is written, the agent's requests, and
+//! What goes back out to chat apps: a chat's reply as it is written, the agent's requests, and
 //! the whole reply when the turn ends.
 
 // Rust guideline compliant 2026-10-09
@@ -17,12 +17,12 @@ use super::types::{Binding, Button};
 use crate::Core;
 use crate::provider::clip;
 use crate::events::{AgentEvent, AgentEventEnvelope};
-use crate::threads::{Approval, ApprovalStatus, Message, MessageStatus, Role};
+use crate::chats::{Approval, ApprovalStatus, Message, MessageStatus, Role};
 
 /// How often the reply a chat app shows being written changes at most.
 const REPLY_EVERY: Duration = Duration::from_millis(1500);
 
-/// How often a working thread shows typing at most.
+/// How often a working chat shows typing at most.
 const TYPING_EVERY: Duration = Duration::from_secs(5);
 
 /// The most characters of a tool's summary or a request's detail a chat app is shown.
@@ -45,7 +45,7 @@ struct Progress {
     notes: HashMap<(Platform, String), String>,
 }
 
-/// Sends the events of bound threads, and the messages the person sends them, to their chats
+/// Sends the events of bound chats, and the messages the person sends them, to their chats
 /// until the server closes.
 pub(super) fn forward(core: &Weak<Core>, events: &Receiver<Out>) {
     let mut working: HashMap<String, Progress> = HashMap::new();
@@ -56,16 +56,16 @@ pub(super) fn forward(core: &Weak<Core>, events: &Receiver<Out>) {
         match out {
             Out::Event(event) => core.send_out(event, &mut working),
             Out::Sent {
-                thread_id,
+                chat_id,
                 message,
                 from,
             } => {
                 // A message from a chat app joins a turn asked for on the computer, so the
                 // reply goes there too.
-                if let (Some(_), Some(progress)) = (&from, working.get_mut(&thread_id)) {
+                if let (Some(_), Some(progress)) = (&from, working.get_mut(&chat_id)) {
                     progress.local = false;
                 }
-                core.show_sent(&thread_id, &message, from.as_ref());
+                core.show_sent(&chat_id, &message, from.as_ref());
             }
         }
     }
@@ -73,8 +73,8 @@ pub(super) fn forward(core: &Weak<Core>, events: &Receiver<Out>) {
 
 impl Core {
     /// Sends `text` to `chat`, split to the platform's length.
-    pub(super) fn say(&self, platform: Platform, chat: &str, text: &str) {
-        self.say_with(platform, chat, text, &[]);
+    pub(super) fn say(&self, platform: Platform, conversation: &str, text: &str) {
+        self.say_with(platform, conversation, text, &[]);
     }
 
     /// Sends `text` to `chat` with `buttons` under its last piece, and returns the id of that
@@ -82,7 +82,7 @@ impl Core {
     pub(super) fn say_with(
         &self,
         platform: Platform,
-        chat: &str,
+        conversation: &str,
         text: &str,
         buttons: &[Button],
     ) -> Option<String> {
@@ -92,7 +92,7 @@ impl Core {
         let mut id = None;
         for (i, piece) in pieces.iter().enumerate() {
             let buttons = if i == last { buttons } else { &[] };
-            match connector.send(chat, piece, buttons) {
+            match connector.send(conversation, piece, buttons) {
                 Ok(sent) => id = sent,
                 Err(error) => {
                     log::warn!(platform = platform.id(), error:% = error; "could not send to {{platform}}: {{error}}");
@@ -104,16 +104,22 @@ impl Core {
     }
 
     fn send_out(&self, envelope: AgentEventEnvelope, working: &mut HashMap<String, Progress>) {
-        let thread_id = envelope.thread_id;
-        if matches!(envelope.event, AgentEvent::ThreadDeleted) {
-            working.remove(&thread_id);
-            self.unbind_thread(&thread_id);
+        let chat_id = envelope.chat_id;
+        // A chat that works again, or is gone, leaves no usage notice to continue it.
+        if matches!(&envelope.event, AgentEvent::MessageStarted { message } if message.role == Role::Assistant)
+            || matches!(envelope.event, AgentEvent::ChatDeleted)
+        {
+            self.drop_reset_notices(&chat_id);
+        }
+        if matches!(envelope.event, AgentEvent::ChatDeleted) {
+            working.remove(&chat_id);
+            self.unbind_chat(&chat_id);
             return;
         }
         // A reply is written in many small pieces, so most are only kept.
         let mut writing = None;
         if let AgentEvent::TextDelta { text, .. } = &envelope.event {
-            let Some(progress) = working.get_mut(&thread_id).filter(|p| !p.local) else {
+            let Some(progress) = working.get_mut(&chat_id).filter(|p| !p.local) else {
                 return;
             };
             progress.text.push_str(text);
@@ -125,62 +131,62 @@ impl Core {
             progress.shown = Some(Instant::now());
             writing = Some(progress.text.clone());
         }
-        let mut chats = self.bound_chats(&thread_id);
+        let mut conversations = self.bound_conversations(&chat_id);
         if let AgentEvent::MessageStarted { message } = &envelope.event
             && message.role == Role::Assistant
-            && !chats.is_empty()
+            && !conversations.is_empty()
         {
-            let local = !self.asked_on_chat_app(&thread_id, &message.id);
+            let local = !self.asked_on_chat_app(&chat_id, &message.id);
             if !local {
-                self.chat_app_used(&thread_id);
+                self.chat_app_used(&chat_id);
             }
             let progress = Progress {
                 local,
                 ..Progress::default()
             };
-            working.insert(thread_id.clone(), progress);
+            working.insert(chat_id.clone(), progress);
         }
         // A turn asked for on the computer is answered there. Its conversations hear of it only
         // as any other chat's would, by the notification settings.
-        if working.get(&thread_id).is_some_and(|p| p.local) {
+        if working.get(&chat_id).is_some_and(|p| p.local) {
             if matches!(envelope.event, AgentEvent::TurnCompleted { .. }) {
-                working.remove(&thread_id);
-                self.chat_app_returns(&thread_id);
+                working.remove(&chat_id);
+                self.chat_app_returns(&chat_id);
             }
-            chats.clear();
+            conversations.clear();
         }
-        if chats.is_empty() {
+        if conversations.is_empty() {
             // A chat a dispatcher's conversation watches is told there; the rest go by the
             // notification settings.
-            if !self.tell_watchers(&thread_id, &envelope.event) {
-                self.notify(&thread_id, &envelope.event);
+            if !self.tell_watchers(&chat_id, &envelope.event) {
+                self.notify(&chat_id, &envelope.event);
             }
             return;
         }
         match envelope.event {
             AgentEvent::MessageStarted { message } if message.role == Role::Assistant => {
-                for b in &chats {
+                for b in &conversations {
                     if let Some(connector) = self.gateway.connector(b.platform) {
-                        connector.typing(&b.chat);
+                        connector.typing(&b.conversation);
                     }
                 }
             }
             AgentEvent::TextDelta { .. } => {
-                if let (Some(text), Some(progress)) = (writing, working.get_mut(&thread_id)) {
-                    for b in &chats {
+                if let (Some(text), Some(progress)) = (writing, working.get_mut(&chat_id)) {
+                    for b in &conversations {
                         self.show_writing(b, progress, &text);
                     }
                 }
             }
             AgentEvent::ToolStarted { .. } => {
-                let progress = working.entry(thread_id).or_default();
+                let progress = working.entry(chat_id).or_default();
                 if progress.typed.is_some_and(|at| at.elapsed() < TYPING_EVERY) {
                     return;
                 }
                 progress.typed = Some(Instant::now());
-                for b in &chats {
+                for b in &conversations {
                     if let Some(connector) = self.gateway.connector(b.platform) {
-                        connector.typing(&b.chat);
+                        connector.typing(&b.conversation);
                     }
                 }
             }
@@ -188,8 +194,8 @@ impl Core {
                 if !approval.auto && approval.status == ApprovalStatus::Pending =>
             {
                 let (text, buttons) = request(&approval);
-                for b in &chats {
-                    self.say_with(b.platform, &b.chat, &text, &buttons);
+                for b in &conversations {
+                    self.say_with(b.platform, &b.conversation, &text, &buttons);
                 }
             }
             AgentEvent::ApprovalResolved {
@@ -200,15 +206,15 @@ impl Core {
                 ..
             } => {
                 let from = self.gateway.lock().answered.remove(&approval_id);
-                for b in &chats {
+                for b in &conversations {
                     let text = outcome(
                         allowed,
                         !answers.is_empty(),
                         from.as_ref(),
                         b.platform,
-                        &b.chat,
+                        &b.conversation,
                     );
-                    self.say(b.platform, &b.chat, &text);
+                    self.say(b.platform, &b.conversation, &text);
                 }
             }
             AgentEvent::TurnCompleted {
@@ -217,22 +223,22 @@ impl Core {
                 error,
             } => {
                 // Its own conversations get the reply, so no other is still owed word of it.
-                self.unwatch(&thread_id);
-                self.chat_app_returns(&thread_id);
+                self.unwatch(&chat_id);
+                self.chat_app_returns(&chat_id);
                 let notes = working
-                    .remove(&thread_id)
+                    .remove(&chat_id)
                     .map(|progress| progress.notes)
                     .unwrap_or_default();
-                let Some(reply) = self.reply(&thread_id, &message_id, status, error) else {
+                let Some(reply) = self.reply(&chat_id, &message_id, status, error) else {
                     return;
                 };
-                self.chat_app_used(&thread_id);
-                for b in &chats {
+                self.chat_app_used(&chat_id);
+                for b in &conversations {
                     let note = notes
-                        .get(&(b.platform, b.chat.clone()))
+                        .get(&(b.platform, b.conversation.clone()))
                         .filter(|id| !id.is_empty());
                     if !note.is_some_and(|id| self.finish_writing(b, id, &reply)) {
-                        self.say_long(b.platform, &b.chat, &reply);
+                        self.say_long(b.platform, &b.conversation, &reply);
                     }
                 }
             }
@@ -240,44 +246,46 @@ impl Core {
         }
     }
 
-    /// Shows a message the person sent to `thread_id` in the chats that continue it, except the
+    /// Shows a message the person sent to `chat_id` in the chats that continue it, except the
     /// conversation `from` it was sent from.
-    fn show_sent(&self, thread_id: &str, message: &Message, from: Option<&(Platform, String)>) {
+    fn show_sent(&self, chat_id: &str, message: &Message, from: Option<&(Platform, String)>) {
         // What is typed on the computer stays there.
         if from.is_none() {
             return;
         }
         let text = sent(message);
-        for b in self.bound_chats(thread_id) {
-            if from.is_some_and(|(platform, chat)| *platform == b.platform && *chat == b.chat) {
+        for b in self.bound_conversations(chat_id) {
+            if from.is_some_and(|(platform, conversation)| {
+                *platform == b.platform && *conversation == b.conversation
+            }) {
                 continue;
             }
-            self.say(b.platform, &b.chat, &text);
+            self.say(b.platform, &b.conversation, &text);
         }
     }
 
     /// Shows the reply written so far in a chat, in one message it edits as more is written.
     /// Where a message cannot be edited, or each is mail or a paid text, the chat shows typing.
-    fn show_writing(&self, chat: &Binding, progress: &mut Progress, text: &str) {
-        let Some(connector) = self.gateway.connector(chat.platform) else {
+    fn show_writing(&self, conversation: &Binding, progress: &mut Progress, text: &str) {
+        let Some(connector) = self.gateway.connector(conversation.platform) else {
             return;
         };
-        let text = latest(text, chat.platform.limit());
-        let key = (chat.platform, chat.chat.clone());
+        let text = latest(text, conversation.platform.limit());
+        let key = (conversation.platform, conversation.conversation.clone());
         match progress.notes.get(&key) {
-            Some(id) if id.is_empty() => connector.typing(&chat.chat),
+            Some(id) if id.is_empty() => connector.typing(&conversation.conversation),
             Some(id) => {
-                if let Err(error) = connector.edit(&chat.chat, id, &text) {
+                if let Err(error) = connector.edit(&conversation.conversation, id, &text) {
                     log::debug!(error:% = error; "could not update a reply in a chat app: {{error}}");
                 }
             }
             None if !connector.notes() => {
-                connector.typing(&chat.chat);
+                connector.typing(&conversation.conversation);
                 progress.notes.insert(key, String::new());
             }
             None => {
                 let id = connector
-                    .send(&chat.chat, &text, &[])
+                    .send(&conversation.conversation, &text, &[])
                     .ok()
                     .flatten()
                     .unwrap_or_default();
@@ -288,33 +296,37 @@ impl Core {
 
     /// Turns the message `id`, which showed the reply being written, into the finished `reply`,
     /// with what does not fit in it sent after. Returns whether the chat now has the reply.
-    fn finish_writing(&self, chat: &Binding, id: &str, reply: &str) -> bool {
-        let Some(connector) = self.gateway.connector(chat.platform) else {
+    fn finish_writing(&self, conversation: &Binding, id: &str, reply: &str) -> bool {
+        let Some(connector) = self.gateway.connector(conversation.platform) else {
             return false;
         };
-        let pieces = chunks(reply, chat.platform.limit());
+        let pieces = chunks(reply, conversation.platform.limit());
         let Some((first, rest)) = pieces.split_first() else {
             return false;
         };
         // A reply long enough to go as a file is sent whole, as one.
-        if pieces.len() > MESSAGES || connector.edit(&chat.chat, id, first).is_err() {
+        if pieces.len() > MESSAGES
+            || connector
+                .edit(&conversation.conversation, id, first)
+                .is_err()
+        {
             return false;
         }
         for piece in rest {
-            self.say(chat.platform, &chat.chat, piece);
+            self.say(conversation.platform, &conversation.conversation, piece);
         }
         true
     }
 
-    /// Whether the turn that writes the message `reply` of `thread_id` was asked for in a chat
+    /// Whether the turn that writes the message `reply` of `chat_id` was asked for in a chat
     /// app: the message before it is the person's, sent from one.
-    fn asked_on_chat_app(&self, thread_id: &str, reply: &str) -> bool {
-        let Some(thread) = self.store.thread(thread_id) else {
+    fn asked_on_chat_app(&self, chat_id: &str, reply: &str) -> bool {
+        let Some(chat) = self.store.chat(chat_id) else {
             return false;
         };
-        let before = match thread.messages.iter().position(|m| m.id == reply) {
-            Some(at) => thread.messages[..at].last(),
-            None => thread.messages.last(),
+        let before = match chat.messages.iter().position(|m| m.id == reply) {
+            Some(at) => chat.messages[..at].last(),
+            None => chat.messages.last(),
         };
         before.is_some_and(|m| m.role == Role::User && m.via.is_some())
     }
@@ -323,13 +335,13 @@ impl Core {
     /// changed.
     pub(super) fn reply(
         &self,
-        thread_id: &str,
+        chat_id: &str,
         message_id: &str,
         status: MessageStatus,
         error: Option<String>,
     ) -> Option<String> {
-        let thread = self.store.thread(thread_id)?;
-        let message = thread.messages.iter().find(|m| m.id == message_id)?;
+        let chat = self.store.chat(chat_id)?;
+        let message = chat.messages.iter().find(|m| m.id == message_id)?;
         let mut parts = Vec::new();
         let text = message.text.trim();
         if !text.is_empty() {
@@ -440,7 +452,7 @@ pub(super) fn outcome(
     answered: bool,
     from: Option<&(Platform, String)>,
     platform: Platform,
-    chat: &str,
+    conversation: &str,
 ) -> String {
     let what = if answered {
         "Answered"
@@ -450,13 +462,13 @@ pub(super) fn outcome(
         "Denied"
     };
     match from {
-        Some((p, c)) if *p == platform && c == chat => format!("{what}."),
+        Some((p, c)) if *p == platform && c == conversation => format!("{what}."),
         Some((p, _)) => format!("{what} on {}.", p.label()),
         None => format!("{what} on your computer."),
     }
 }
 
-/// What the chats that continue a thread are shown of a message the person sent it: where it was
+/// What the chats that continue a chat are shown of a message the person sent it: where it was
 /// sent from, whether it steers or waits for the running reply, and the files it carries.
 fn sent(message: &Message) -> String {
     let place = message.via.map_or("your computer", Platform::label);

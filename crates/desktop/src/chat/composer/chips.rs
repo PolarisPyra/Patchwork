@@ -8,12 +8,12 @@ use gpui::{
     AnyElement, ClickEvent, Div, Focusable, PathBuilder, Stateful, Window, canvas, div, point,
     prelude::*, px,
 };
-use patchwork_core::threads::Thread;
-use patchwork_ui::pill::pill_chip;
+use patchwork_core::chats::Chat;
+use patchwork_ui::controls::pill::pill_chip;
 use patchwork_ui::theme::Theme;
 use patchwork_ui::{above, icon};
 use super::menus::{Menu, Pick};
-use super::state::{Composer, LaunchProject, Picks, offered};
+use super::draft::{Composer, LaunchProject, Picks, offered};
 
 impl Composer {
     /// A chip was clicked: opens its menu, or closes it if it is open. The press that just
@@ -121,8 +121,8 @@ impl Composer {
         let Some(workspace) = self.workspace.upgrade() else {
             return;
         };
-        let thread = workspace.read(cx).thread.as_ref().map(|t| t.id.clone());
-        let Some(id) = thread else {
+        let chat = workspace.read(cx).chat.as_ref().map(|t| t.id.clone());
+        let Some(id) = chat else {
             match pick {
                 Pick::Model(agent, model) => {
                     self.draft.agent = Some(agent);
@@ -150,11 +150,11 @@ impl Composer {
         workspace.update(cx, |w, cx| {
             let core = Arc::clone(&w.core);
             let done = match pick {
-                Pick::Model(agent, model) => core.set_thread_model(&id, agent, model),
-                Pick::Effort(effort) => core.set_thread_effort(&id, effort.as_deref()),
-                Pick::Compact(window) => core.set_thread_compact_window(&id, window),
-                Pick::Access(mode) => core.set_thread_access_mode(&id, mode),
-                Pick::Role(role) => core.set_thread_role(&id, role),
+                Pick::Model(agent, model) => core.set_chat_model(&id, agent, model),
+                Pick::Effort(effort) => core.set_chat_effort(&id, effort.as_deref()),
+                Pick::Compact(window) => core.set_chat_compact_window(&id, window),
+                Pick::Access(mode) => core.set_chat_access_mode(&id, mode),
+                Pick::Role(role) => core.set_chat_role(&id, role),
                 Pick::CompactNow => {
                     w.send_command("/compact", cx);
                     Ok(())
@@ -274,9 +274,8 @@ pub(super) fn fill_ring(fill: f32, t: &Theme) -> AnyElement {
 }
 
 /// The chat's context now, from the last reply that reported it.
-pub(super) fn context_of(thread: &Thread) -> Option<u64> {
-    thread
-        .messages
+pub(super) fn context_of(chat: &Chat) -> Option<u64> {
+    chat.messages
         .iter()
         .rev()
         .find_map(|m| m.usage.as_ref().map(|u| u.context))

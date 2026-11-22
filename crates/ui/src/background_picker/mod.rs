@@ -5,7 +5,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-mod render;
-mod state;
+mod layout;
+mod choices;
 
-pub use self::state::{BackgroundPicker, PickerEvent};
+pub use self::choices::{BackgroundPicker, PickerEvent};

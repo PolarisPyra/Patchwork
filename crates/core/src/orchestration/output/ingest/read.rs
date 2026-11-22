@@ -15,7 +15,7 @@ use serde_json::Value;
 
 use crate::provider::Parsed;
 use crate::provider;
-use crate::system::{processes, scope};
+use crate::system::processes::{running, scope};
 use crate::events::AgentEvent;
 use crate::provider::AgentKind;
 
@@ -32,7 +32,7 @@ fn line_kind(value: &Value) -> String {
 }
 
 /// Publishes a subagent's events to its own thread, with its replies a paragraph apart.
-fn publish_child(turn: &Turn, child: &mut SubagentThread, events: Vec<AgentEvent>) {
+fn publish_child(turn: &Turn, child: &mut SubagentChat, events: Vec<AgentEvent>) {
     for mut event in events {
         if let AgentEvent::TextDelta { text, .. } = &mut event {
             if child.has_text {
@@ -40,15 +40,15 @@ fn publish_child(turn: &Turn, child: &mut SubagentThread, events: Vec<AgentEvent
             }
             child.has_text = true;
         }
-        publish(&turn.core, &child.thread_id, event);
+        publish(&turn.core, &child.chat_id, event);
     }
 }
 
-use crate::threads::MessageStatus;
-use crate::threads::TokenUsage;
+use crate::chats::MessageStatus;
+use crate::chats::TokenUsage;
 use crate::logging::{AGENT_LOG, Data, Source};
 use crate::settings::LogLevel;
-use crate::workspace;
+use crate::source_control;
 use crate::system::now_ms;
 
 use crate::orchestration::tasks::background::Background;
@@ -65,7 +65,7 @@ use crate::orchestration::output::stream::Unsaved;
 use crate::orchestration::tasks::delegate::mark_call;
 use crate::orchestration::tasks::subagents::finish_child;
 use crate::orchestration::tasks::subagents::open_child;
-use crate::orchestration::tasks::subagents::SubagentThread;
+use crate::orchestration::tasks::subagents::SubagentChat;
 use crate::orchestration::turn::end::{TurnEnd, finish};
 use crate::orchestration::turn::start::Turn;
 use crate::orchestration::output::usage::message_usage;
@@ -105,8 +105,8 @@ pub(in crate::orchestration) fn ingest(
     let mut steer_reply_empty = false;
     // Tool id → the message it was started in, which a steer may since have moved on from.
     let mut tool_owner: HashMap<String, String> = HashMap::new();
-    // The threads of the subagents still running, by the call that started each.
-    let mut children: HashMap<String, SubagentThread> = HashMap::new();
+    // The chats of the subagents still running, by the call that started each.
+    let mut children: HashMap<String, SubagentChat> = HashMap::new();
     // The tasks the agent started, and which of them are listed under the background.
     let mut background = Background::default();
     // Every message of the turn: the first reply, then one per steering message taken.
@@ -117,7 +117,7 @@ pub(in crate::orchestration) fn ingest(
     let mut repeats = Repeats::default();
     // The agent could not find the session the turn resumed, so the turn runs again without it.
     let mut session_lost = false;
-    let goal = turn.core.store.thread(&turn.thread_id).and_then(|t| t.goal);
+    let goal = turn.core.store.chat(&turn.chat_id).and_then(|t| t.goal);
     // The agent reported its turn finished.
     let mut ended = false;
     // Text streamed to the frontend but not yet stored; saving every delta
@@ -139,7 +139,7 @@ pub(in crate::orchestration) fn ingest(
     let mut stdout = BufReader::new(stdout);
     while let Some(line) = next_line(&mut stdout) {
         let source =
-            |turn: &Turn| Source::agent(turn.agent, pid, &turn.thread_id, Some(&turn.message_id));
+            |turn: &Turn| Source::agent(turn.agent, pid, &turn.chat_id, Some(&turn.message_id));
         if AGENT_LOG.logs(LogLevel::Error) {
             AGENT_LOG.line("out", &source(&turn), &line);
         }
@@ -183,14 +183,14 @@ pub(in crate::orchestration) fn ingest(
             publish_child(&turn, child, events);
         }
         // Codex sends a subagent's notifications on the same stream, under the subagent's own
-        // thread. They go to its thread alone: its finished turn is not this one's. Its requests,
+        // chat. They go to its chat alone: its finished turn is not this one's. Its requests,
         // such as approvals, are answered here like any other.
         if turn.agent == AgentKind::Codex
             && value.get("id").is_none()
-            && let Some(thread) = value["params"]["threadId"].as_str()
-            && turn.session_id.as_deref().is_some_and(|own| own != thread)
+            && let Some(chat) = value["params"]["threadId"].as_str()
+            && turn.session_id.as_deref().is_some_and(|own| own != chat)
         {
-            if let Some(child) = children.get_mut(thread) {
+            if let Some(child) = children.get_mut(chat) {
                 let events =
                     provider::codex::subagent_events(&value, &turn.spec(), &child.message_id);
                 publish_child(&turn, child, events);
@@ -349,14 +349,14 @@ pub(in crate::orchestration) fn ingest(
                 Parsed::SessionId(id) => {
                     let store = &turn.core.store;
                     if let Err(e) =
-                        store.update_thread(&turn.thread_id, |t| t.session_id = Some(id.clone()))
+                        store.update_chat(&turn.chat_id, |t| t.session_id = Some(id.clone()))
                     {
                         log::warn!(error:% = e; "failed to save session id: {{error}}");
                     }
                     // The session has gone on from an undo's or a fork's point, and a later
                     // turn resumes where it is now.
                     if turn.agent == AgentKind::Claude
-                        && let Err(e) = turn.core.set_resume_point(&turn.thread_id, None)
+                        && let Err(e) = turn.core.set_resume_point(&turn.chat_id, None)
                     {
                         log::warn!(error:% = e; "failed to forget a resume point: {{error}}");
                     }
@@ -509,7 +509,7 @@ pub(in crate::orchestration) fn ingest(
                                 && tool.parent.is_none()
                                 && let Some(child) = open_child(&turn, tool)
                             {
-                                tool.child_thread_id = Some(child.thread_id.clone());
+                                tool.child_chat_id = Some(child.chat_id.clone());
                                 children.insert(tool.id.clone(), child);
                             }
                             mark_call(&turn, tool);
@@ -581,16 +581,16 @@ pub(in crate::orchestration) fn ingest(
     } else {
         LogLevel::Error
     };
-    let source = Source::agent(turn.agent, pid, &turn.thread_id, Some(&turn.message_id));
+    let source = Source::agent(turn.agent, pid, &turn.chat_id, Some(&turn.message_id));
     AGENT_LOG.write(level, "exit", &source, Data::Text(status));
     // Whatever the agent left running in its group or scope (MCP servers, background
     // commands) would otherwise outlive the turn and keep its memory in the agents' slice.
-    processes::signal_process_group(pid, processes::SIGKILL);
+    running::signal_process_group(pid, running::SIGKILL);
     if let Some(unit) = &turn.scope {
         scope::stop(unit);
     }
     turn.exited.store(true, Ordering::SeqCst);
-    crate::orchestration::turn::recovery::forget_agent(&turn.core.store, &turn.thread_id, pid);
+    crate::orchestration::turn::recovery::forget_agent(&turn.core.store, &turn.chat_id, pid);
     let tail = stderr_tail.join().unwrap_or_default();
     let cancelled = turn.cancelled.load(Ordering::SeqCst);
     let (status, error) = if cancelled {
@@ -607,7 +607,7 @@ pub(in crate::orchestration) fn ingest(
     for (_, child) in children.drain() {
         publish(
             &turn.core,
-            &child.thread_id,
+            &child.chat_id,
             AgentEvent::TurnCompleted {
                 message_id: child.message_id,
                 status,
@@ -617,7 +617,7 @@ pub(in crate::orchestration) fn ingest(
     }
 
     if !idle_untouched {
-        let after = workspace::git_changes(&turn.root).unwrap_or_default();
+        let after = source_control::git_changes(&turn.root).unwrap_or_default();
         let changed = turn.attribution.locked().settle(&turn.root, after);
         for path in changed {
             turn.publish(AgentEvent::FileTouched {
@@ -646,10 +646,10 @@ pub(in crate::orchestration) fn ingest(
     );
 }
 
-/// Publishes one event of the turn. A subagent whose call finishes also closes its thread.
+/// Publishes one event of the turn. A subagent whose call finishes also closes its chat.
 fn publish_event(
     turn: &Turn,
-    children: &mut HashMap<String, SubagentThread>,
+    children: &mut HashMap<String, SubagentChat>,
     unsaved: &mut Unsaved,
     event: AgentEvent,
 ) {

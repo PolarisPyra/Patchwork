@@ -11,7 +11,7 @@
 use std::collections::HashSet;
 
 use crate::provider::clip;
-use crate::threads::CheckFailure;
+use crate::chats::CheckFailure;
 
 /// Most failures read out of one run.
 const MOST: usize = 40;

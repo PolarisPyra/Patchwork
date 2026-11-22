@@ -115,7 +115,7 @@ fn an_address_clients_read_two_ways_names_no_host() {
 #[cfg(unix)]
 #[test]
 fn a_link_out_of_the_project_is_outside_it() {
-    use crate::system::fs::is_inside;
+    use crate::system::files::paths::is_inside;
     let dir = std::env::temp_dir().join(crate::system::new_id());
     let (project, outside) = (dir.join("project"), dir.join("outside"));
     std::fs::create_dir_all(&project).unwrap();

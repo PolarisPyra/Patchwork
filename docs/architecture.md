@@ -2,12 +2,12 @@
 
 ## Repo layout
 
-The repo is a Cargo workspace of `crates/system`, `crates/core`, `crates/android`, `crates/ui`, `crates/settings`, `crates/sidecar`, `crates/desktop` and `crates/remote`:
+The repo is a Cargo workspace of `crates/system`, `crates/core`, `crates/android`, `crates/ui`, `crates/sidecar`, `crates/pages`, `crates/modals`, `crates/desktop` and `crates/remote`:
 
-- `crates/system` (`patchwork-system`) — the user's machine, with no knowledge of threads or providers: the programs Patchwork starts and their environment, login shells, paths, opening files on the desktop, the system credential store (`keychain.rs`: the Secret Service through `oo7` on Linux, `keyring` elsewhere), machines reached over SSH (`ssh/`: the app's end of the connection, and the user's `~/.ssh/config`), and the one `Error`. The core re-exports it as `patchwork_core::system`.
+- `crates/system` (`patchwork-system`) — the user's machine, with no knowledge of chats or providers: the programs Patchwork starts and their environment, login shells, paths, opening files on the desktop, the system credential store (`keychain.rs`: the Secret Service through `oo7` on Linux, `keyring` elsewhere), machines reached over SSH (`ssh/`: the app's end of the connection, and the user's `~/.ssh/config`), and the one `Error`. The core re-exports it as `patchwork_core::system`.
 - `crates/core` — the backend, a Rust crate with no UI dependency
-  - `src/lib.rs` — the module list, `Core`, and how it opens. Every other module is one domain, holding its wire types, its `impl Core` operations and its logic: a folder domain splits them into `types.rs` (re-exported from the folder) and one file per concern, named for what it does (`threads/{lifecycle,list,options}.rs`), and a one-file domain keeps them in that order:
-  - `src/threads/` — threads and their messages; `src/projects.rs` — projects and their folders; `src/settings/` — the settings
+  - `src/lib.rs` — the module list, `Core`, and how it opens. Every other module is one domain, holding its wire types, its `impl Core` operations and its logic: a folder domain splits them into `types.rs` (re-exported from the folder) and one file per concern, named for what it does (`chats/{lifecycle,list,options}.rs`), and a one-file domain keeps them in that order:
+  - `src/chats/` — chats and their messages; `src/projects.rs` — projects and their folders; `src/settings/` — the settings
   - `src/provider/` — one module per agent CLI (`claude/`, `codex/`, `antigravity.rs`, `opencode/`, `api/`), finding and probing them (`locate.rs`, `probe.rs`), what a turn sends them (`turn.rs`) and reads back (`parsed.rs`), and handing each one its hooks (`hooks.rs`)
   - `src/orchestration/` — runs turns, grouped by feature, one folder each, with `orchestration/mod.rs` as the index: `turn/` (the `Runner`, starting and ending a turn, its process, turns cut off by a restart), `messages/` (sending, steering and queueing), `output/` (reading agent output into agent events and streaming them), `approvals/`, `changes/` (which files each reply changed, and per-turn checkpoints), `tasks/` (background tasks and subagents), and `goal/`
   - `src/permissions/` — the rules Patchwork answers approvals by, and the permission hook Codex and Antigravity run
@@ -25,11 +25,12 @@ The repo is a Cargo workspace of `crates/system`, `crates/core`, `crates/android
   - `src/android.rs` — `Core` as the Android tools' `Host`, `Core::android()`, and the two operations that write settings or build a terminal
 - `crates/android` (`patchwork-android`) — the Android tools: finding the SDK, virtual devices, emulators, connected phones, running an app, the screen stream and the agent's tools. It reads settings and saved state only through its `Host` trait.
 - `crates/desktop` — the app, drawn with GPUI (package `patchwork`). It calls `Core` directly and applies its agent events on the UI thread.
-  - `src/main.rs` — opens the core and the window; `src/workspace/` — the window: its toolbar, regions and resizing
-  - `src/{chat,sidebar,canvas,quilts,android,bots,orchestrator,onboarding}/` — UI, one folder per feature
-- `crates/settings` (`patchwork-settings`) — the Settings dialog and its panes
-- `crates/sidecar` (`patchwork-sidecar`) — the side windows: `panel/` (the terminal, Output and Screen views) and `browser/` (web pages and quilts drawn by headless Chrome)
-- `crates/ui` (`patchwork-ui`) — what the UI crates share: the app's actions (`actions.rs`), the controls (`controls.rs`), the colours and sizes (`theme/`), the icons and fonts it embeds from `assets/` (`assets.rs`), the text field every input is (`text_area/`), Markdown (`markdown.rs`), the background presets and animated scenes (`backdrop/`), and the shared menus, dialogs and text tools
+  - `src/main.rs` — opens the core and the window; `src/workspace/` — the window: its state, layout, bars, actions and update card, `hosts/` (its glue for the pages and dialogs of other crates) and `dock/` (the tabbed area under the chat and its place in the window); each feature keeps what it does to the window in its own folder (`chat/session.rs`, `agents/lifecycle.rs`, `sidebar/projects/`, `canvas/area.rs`); the dock's tabs are `src/terminal/`, `src/logs/` (Output) and `src/screen/`
+  - `src/{chat,sidebar,canvas,agents,orchestrator,workspace}/` — UI, one folder per feature
+- `crates/pages` (`patchwork-pages`) — the pages the window shows: `quilts/`, `android/` and `onboarding/`; each tells the window what to do through its events
+- `crates/modals` (`patchwork-modals`) — the dialogs over the window: `settings/` (Settings, with its panes in `settings/panes/`), `granular/` (a chat's or project's granular settings), `search.rs` (the search palette), `add_project/` (picking a project folder, locally or over SSH), `background.rs` (a chat's or agent's background picker), `credential.rs` (git's sign-in questions) and `interrupted.rs` (the card that asks before resuming replies the last session cut off); each tells the window what to do through its events
+- `crates/sidecar` (`patchwork-sidecar`) — the browser: `browser/` (web pages and quilts drawn by headless Chrome)
+- `crates/ui` (`patchwork-ui`) — what the UI crates share: the app's actions (`actions.rs`), the controls, menus and dialogs (`controls/`), the text tools: formatting, highlighting, Markdown, selection and the text field every input is (`text/`), the assets it embeds from `assets/` and the logos (`brand/`), the colours and sizes (`theme/`), the background presets and animated scenes (`backdrop/`), and handing work off the UI thread (`tasks.rs`)
 
 ## Data model
 
@@ -40,12 +41,12 @@ Everything the sidebar shows comes from one SQLite database, `patchwork.db`, in 
 | `settings` | App settings as JSON: theme, connected agents, integrations. |
 | `projects` | One row per project folder: `name`, `path` (unique), and `position` for sidebar order. |
 | `folders` | Sub-folders inside a project: `project_id`, `name`, `position`. Organisation only; no directory is created on disk. |
-| `threads` | Tasks and chats. `project_id` NULL makes it a chat. `folder_id` NULL puts it at the top level of its project. `session_id` lets the agent resume. |
-| `messages` | The messages of each thread, with text, tool calls, plan, file changes, approvals, attachments, and what the project's checks made of the turn. |
+| `chats` | Tasks and chats. `project_id` NULL makes it a chat. `folder_id` NULL puts it at the top level of its project. `session_id` lets the agent resume. |
+| `messages` | The messages of each chat, with text, tool calls, plan, file changes, approvals, attachments, and what the project's checks made of the turn. |
 | `scheduled_tasks` | Prompts that start a task on a schedule: its shape as JSON, the project, agent and access mode to run with, and when it last and next runs. |
-| `app_state` | Small key/value state that is not settings, such as the thread that was open last. |
+| `app_state` | Small key/value state that is not settings, such as the chat that was open last. |
 
-Where a thread runs:
+Where a chat runs:
 
 - **Task:** in its own git worktree, which its first turn makes with `git worktree add -b patchwork/<id>` into `.patchwork/worktrees/<repo>-<id>` in the project's repository (kept out of `git status` by the repository's `info/exclude`; a project on an SSH host keeps them in the host's Patchwork folder), unless the project edits in place, isn't a git repository on this computer, or the turn only plans. The task's `app_state` key `worktree:<id>` records it; a fork and the subagents work in their task's worktree unless the settings give a fork its own. If making it fails, that turn runs in the project's `path` and the task shows why. Once a task has a worktree, it never works in the project's `path` instead: a turn whose worktree can't be used or made again doesn't start, and checkpoints and Source Control refuse while it is gone.
   - **Moved:** worktrees an earlier version made under the app's local data directory are moved into their repository's `.patchwork/worktrees` by the hourly cleanup, with `git worktree move`, once their task is idle. A moved task's next message starts a new agent session, sent the transcript.
@@ -53,9 +54,9 @@ Where a thread runs:
   - **Broken:** the folder is there but isn't linked to its repository, and `git worktree repair` can't link it. Nothing commits in it, removes it, or makes it again until the user moves the folder away.
   - **Deleted task:** what it hadn't committed is committed to its branch, then the folder goes while no other task shares it, if the settings remove worktrees with deleted tasks. The branch goes only once the project, or the remote's default branch, has all of it.
   - **Settled:** an idle, clean worktree whose branch landed on the default branch, by its changes or a merged pull request into it, has its branch moved there.
-- **Chat:** in `chats/<thread id>` under the app's local data directory (`app_local_data_dir`). The folder is deleted with the chat.
+- **Chat:** in `chats/<chat id>` under the app's local data directory (`app_local_data_dir`). The folder is deleted with the chat.
 
-Sidebar order is the `position` column. A new thread gets `-created_at`, so the newest is first until it is dragged. Dropping rows calls `reorder_threads`, which numbers that list `0..n`.
+Sidebar order is the `position` column. A new chat gets `-created_at`, so the newest is first until it is dragged. Dropping rows calls `reorder_chats`, which numbers that list `0..n`.
 
 Schema changes go in as a new entry appended to `MIGRATIONS` in `crates/core/src/persistence/migrations/runner.rs`. Never edit one that has shipped.
 
@@ -92,8 +93,8 @@ itself: a suite too slow to run every time can be off while the others are on.
 - **What runs** (`crates/core/src/checks/detect.rs`). The first of: a `check` script in `package.json`, else its `test` script, run with the package manager the lockfile names when that tool is installed; `cargo test`; `python -m pytest`; `go test ./...`; a Makefile's `check` or `test` target; `mix test`. A project with none of them has nothing to check, and its replies show no card at all.
 - **When** (`crates/core/src/orchestration/turn/end.rs`). When a turn finishes with `Complete` and its reply changed at least one file. A stopped or failed turn changed nothing to judge.
 - **How** (`crates/core/src/checks/run.rs`). Through the same shell an agent's commands run in, in the project folder, with `CI=1` and colour off. Output keeps its last 16 KB; the process group is killed at 5 minutes, and that is never a pass.
-- **What it means** (`TurnChecks` in `crates/core/src/threads/messages.rs`). `passed`, `failed`, `timedOut`, or `notRun`, with the command, how long it took, one `CheckFailure` per thing that failed (`crates/core/src/checks/parse.rs` reads cargo's, Node's, Jest's, Vitest's, pytest's and Go's shapes), and the tail of the output. A check that did not finish is `timedOut` or `notRun`, never `passed`. A check left running when the app closed is `notRun` at the next start (`turn/recovery.rs`).
-- **What a reply shows** (`crates/desktop/src/chat/checks.rs`). Under the files a reply changed: the outcome, each failure by name, and the output behind a disclosure. Its button runs the command again; its footer turns the project's checks on or off without leaving the chat. A reply shows a card only when checks ran or are running for it, so with them off there is no card at all: the switch is in Settings → Checks, which is one place to look rather than a card in every reply saying it did not check. The result arrives as a `checksRecorded` event, saved on the message like an approval.
+- **What it means** (`TurnChecks` in `crates/core/src/chats/messages.rs`). `passed`, `failed`, `timedOut`, or `notRun`, with the command, how long it took, one `CheckFailure` per thing that failed (`crates/core/src/checks/parse.rs` reads cargo's, Node's, Jest's, Vitest's, pytest's and Go's shapes), and the tail of the output. A check that did not finish is `timedOut` or `notRun`, never `passed`. A check left running when the app closed is `notRun` at the next start (`turn/recovery.rs`).
+- **What a reply shows** (`crates/desktop/src/chat/transcript/reply/checks.rs`). Under the files a reply changed: the outcome, each failure by name, and the output behind a disclosure. Its button runs the command again; its footer turns the project's checks on or off without leaving the chat. A reply shows a card only when checks ran or are running for it, so with them off there is no card at all: the switch is in Settings → Checks, which is one place to look rather than a card in every reply saying it did not check. The result arrives as a `checksRecorded` event, saved on the message like an approval.
 - **Asking another way**. The command palette's "Run checks for the open task" runs them for the reply on screen, whether or not the project has them on, and the card it produces is where they can be turned on.
 
 ## Approvals and questions
@@ -113,7 +114,7 @@ process's stdin, or through the hook waiter, and the turn carries on.
 
 ## Config location
 
-`crates/system/src/dirs.rs` splits Patchwork's files by who owns them, each in a `patchwork` folder inside the platform's own:
+`crates/system/src/files/dirs.rs` splits Patchwork's files by who owns them, each in a `patchwork` folder inside the platform's own:
 
 | Holds | Linux | macOS | Windows |
 |---|---|---|---|

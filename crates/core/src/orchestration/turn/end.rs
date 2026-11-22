@@ -11,8 +11,8 @@ use crate::provider;
 use crate::Core;
 use crate::events::AgentEvent;
 use crate::provider::AgentKind;
-use crate::threads::MessageStatus;
-use crate::threads::Role;
+use crate::chats::MessageStatus;
+use crate::chats::Role;
 use crate::logging::{AGENT_LOG, Data, Source};
 use crate::settings::LogLevel;
 use crate::orchestration::messages::queue::FollowUp;
@@ -35,24 +35,24 @@ pub(in crate::orchestration) struct TurnEnd {
 /// changed files keep showing what the turn did once the changes are committed or edited again.
 pub(in crate::orchestration) fn record_turn(turn: &Turn, replies: &[String]) {
     let Some(first) = replies.first() else { return };
-    let Some(thread) = turn.core.store.thread(&turn.thread_id) else {
+    let Some(chat) = turn.core.store.chat(&turn.chat_id) else {
         return;
     };
-    if thread.project_id.is_none() {
+    if chat.project_id.is_none() {
         return;
     }
     // The snapshot before the turn belongs to the user message the first reply answers.
-    let Some(at) = thread.messages.iter().position(|m| &m.id == first) else {
+    let Some(at) = chat.messages.iter().position(|m| &m.id == first) else {
         return;
     };
-    let Some(asked) = thread.messages[..at]
+    let Some(asked) = chat.messages[..at]
         .iter()
         .rev()
         .find(|m| m.role == Role::User)
     else {
         return;
     };
-    if let Some(trees) = checkpoint::record_end(&turn.root, &turn.thread_id, &asked.id, replies) {
+    if let Some(trees) = checkpoint::record_end(&turn.root, &turn.chat_id, &asked.id, replies) {
         for id in replies {
             turn.publish(AgentEvent::TurnRecorded {
                 message_id: id.clone(),
@@ -63,14 +63,14 @@ pub(in crate::orchestration) fn record_turn(turn: &Turn, replies: &[String]) {
 }
 
 /// Holds messages a turn took but never answered as queued messages: the steers a stopped turn
-/// never answered, so they wait to be resumed instead of staying in the thread as sent, and the
+/// never answered, so they wait to be resumed instead of staying in the chat as sent, and the
 /// messages taken from its queue. They were handed to the agent, but its turn is gone, so they
 /// can be taken back again.
 pub(in crate::orchestration) fn hold_unanswered(turn: &Turn, ids: &[String]) {
     if ids.is_empty() {
         return;
     }
-    let saved = turn.core.store.update_thread(&turn.thread_id, |t| {
+    let saved = turn.core.store.update_chat(&turn.chat_id, |t| {
         t.messages
             .iter_mut()
             .filter(|m| ids.contains(&m.id))
@@ -92,7 +92,7 @@ pub(in crate::orchestration) fn hold_unanswered(turn: &Turn, ids: &[String]) {
     for id in ids {
         publish(
             &turn.core,
-            &turn.thread_id,
+            &turn.chat_id,
             AgentEvent::MessageQueued {
                 message_id: id.clone(),
                 queued: true,
@@ -120,20 +120,20 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         session_lost,
     } = end;
     // Forget the turn before announcing it. Queued messages remain persisted in the
-    // thread until the user explicitly resumes them; unanswered steers were already
+    // chat until the user explicitly resumes them; unanswered steers were already
     // delivered to the agent and continue automatically if needed.
     let (mut unanswered, queued) = {
         let mut turns = turn.core.runner.turns.locked();
         // A retired idle turn may already have been replaced by a new one.
         if turns
-            .get(&turn.thread_id)
+            .get(&turn.chat_id)
             .is_some_and(|t| Arc::ptr_eq(&t.exited, &turn.exited))
         {
-            turns.remove(&turn.thread_id);
+            turns.remove(&turn.chat_id);
             // A call the user allowed through a hook was allowed for this turn only.
-            turn.core.runner.grants.locked().remove(&turn.thread_id);
+            turn.core.runner.grants.locked().remove(&turn.chat_id);
         }
-        // Queued messages stay in the thread as queued until the turn has finished.
+        // Queued messages stay in the chat as queued until the turn has finished.
         // Steering messages the agent never answered continue automatically unless
         // the turn was stopped; a stopped turn holds them as queued messages instead.
         let unanswered = turn.steers.locked().drain(..).collect::<Vec<_>>();
@@ -161,7 +161,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
     }
     if session_lost && unanswered.is_empty() {
         let core = &turn.core;
-        let reset = core.store.update_thread(&turn.thread_id, |t| {
+        let reset = core.store.update_chat(&turn.chat_id, |t| {
             t.session_id = None;
             t.context_pending = true;
         });
@@ -169,7 +169,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
             log::warn!(error:% = e; "failed to drop a lost session: {{error}}");
         } else {
             // Kept so the reply can go back in the chat, with its error, if the rerun never starts.
-            let reply = core.store.thread(&turn.thread_id).and_then(|t| {
+            let reply = core.store.chat(&turn.chat_id).and_then(|t| {
                 t.messages
                     .iter()
                     .find(|m| m.id == turn.message_id)
@@ -178,12 +178,12 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
             turn.publish(AgentEvent::MessageRemoved {
                 message_id: turn.message_id.clone(),
             });
-            let (thread_id, text) = (turn.thread_id.clone(), turn.text.clone());
+            let (chat_id, text) = (turn.chat_id.clone(), turn.text.clone());
             let (attachments, images) = (turn.attachments.clone(), turn.images.clone());
             let started = core.runner.start_turn(
                 core,
                 TurnRequest {
-                    thread_id,
+                    chat_id,
                     text,
                     attachments,
                     images,
@@ -221,22 +221,22 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         // the chat again.
         if !cancelled && status == MessageStatus::Error {
             turn.core
-                .note_limit_failure(&turn.thread_id, last, turn.agent);
+                .note_limit_failure(&turn.chat_id, last, turn.agent);
         } else if !cancelled && status == MessageStatus::Complete {
-            turn.core.clear_limit_failures(&turn.thread_id, turn.agent);
+            turn.core.clear_limit_failures(&turn.chat_id, turn.agent);
         }
         // The project's own checks, once the reply reads as finished. Not every reply deserves
         // them: a stopped turn, or one that changed nothing, leaves the project as it was.
-        if crate::checks::worth_checking(&turn.core.store, &turn.thread_id, last, status) {
-            turn.core.check_after_turn(&turn.thread_id, last);
-            turn.core.review_after_turn(&turn.thread_id, last);
+        if crate::checks::worth_checking(&turn.core.store, &turn.chat_id, last, status) {
+            turn.core.check_after_turn(&turn.chat_id, last);
+            turn.core.review_after_turn(&turn.chat_id, last);
         }
     }
     // On a thread of its own, so a slow hook does not hold up the next turn.
     {
-        let (core, thread_id, root) = (
+        let (core, chat_id, root) = (
             Arc::clone(&turn.core),
-            turn.thread_id.clone(),
+            turn.chat_id.clone(),
             turn.root.clone(),
         );
         let (agent, ended) = (
@@ -249,7 +249,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         );
         std::thread::spawn(move || {
             for event in [ended, HookEvent::SessionEnd] {
-                turn_hooks(&core, event, &thread_id, &root, agent, Some(status));
+                turn_hooks(&core, event, &chat_id, &root, agent, Some(status));
             }
         })
     };
@@ -257,7 +257,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
     // An agent that was sent the conversation and gave nothing back before it failed never took
     // it, and has no session that holds it: the next turn sends it again.
     if status == MessageStatus::Error && turn.sent_context {
-        let saved = turn.core.store.update_thread(&turn.thread_id, |t| {
+        let saved = turn.core.store.update_chat(&turn.chat_id, |t| {
             let silent = t
                 .messages
                 .iter()
@@ -276,7 +276,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
     if !cancelled
         && status == MessageStatus::Error
         && unanswered.is_empty()
-        && turn.core.fall_back(&turn.thread_id)
+        && turn.core.fall_back(&turn.chat_id)
     {
         return;
     }
@@ -286,7 +286,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
     for f in &unanswered {
         publish(
             &turn.core,
-            &turn.thread_id,
+            &turn.chat_id,
             AgentEvent::MessageQueued {
                 message_id: f.message_id.clone(),
                 queued: false,
@@ -311,7 +311,7 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         if let Err(e) = core.runner.start_turn(
             core,
             TurnRequest {
-                thread_id: turn.thread_id.clone(),
+                chat_id: turn.chat_id.clone(),
                 text,
                 attachments,
                 images,
@@ -322,11 +322,11 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         }
     } else if goal_continues {
         // Messages queued meanwhile go first; the goal carries on after them.
-        goal::carry_on_later(&turn.core, &turn.thread_id);
+        goal::carry_on_later(&turn.core, &turn.chat_id);
     } else if !cancelled && status == MessageStatus::Complete {
         // Queued messages go once the turn has finished; after Stop or an error they wait for
         // the user to send them.
-        turn.core.send_queued_later(&turn.thread_id);
+        turn.core.send_queued_later(&turn.chat_id);
     }
 }
 
@@ -335,13 +335,13 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
 pub(in crate::orchestration) fn turn_hooks(
     core: &Core,
     event: HookEvent,
-    thread_id: &str,
+    chat_id: &str,
     root: &str,
     agent: AgentKind,
     status: Option<MessageStatus>,
 ) {
     // A dispatcher runs nothing on the computer, the user's hooks included.
-    if core.is_dispatcher(thread_id) {
+    if core.is_dispatcher(chat_id) {
         return;
     }
     let name = |value: serde_json::Result<Value>| {
@@ -354,7 +354,7 @@ pub(in crate::orchestration) fn turn_hooks(
     let status = status.map(|status| name(serde_json::to_value(status)));
     let context = crate::extensions::hooks::HookContext {
         event,
-        thread_id,
+        chat_id,
         root,
         agent: &agent,
         status: status.as_deref(),
@@ -369,7 +369,7 @@ pub(in crate::orchestration) fn background_id(tool_id: &str) -> String {
     format!("background:{tool_id}")
 }
 
-/// Logs the agent's CLI version once per run of the app. A thread asks, since running the CLI
+/// Logs the agent's CLI version once per run of the app. A chat asks, since running the CLI
 /// takes a moment the turn should not wait for.
 pub(in crate::orchestration) fn log_cli_version(agent: AgentKind) {
     static LOGGED: Mutex<Vec<AgentKind>> = Mutex::new(Vec::new());

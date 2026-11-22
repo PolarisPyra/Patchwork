@@ -11,7 +11,7 @@ use crate::settings::Settings;
 #[derive(Debug)]
 pub struct HookContext<'a> {
     pub event: HookEvent,
-    pub thread_id: &'a str,
+    pub chat_id: &'a str,
     /// The turn's project folder, where the hook runs.
     pub root: &'a str,
     pub agent: &'a str,
@@ -65,7 +65,7 @@ pub fn run_hooks(settings: &Settings, context: &HookContext<'_>) -> Vec<String> 
 fn run_command(command: &str, timeout_secs: u64, context: &HookContext<'_>) -> Result<(), Error> {
     let env = [
         ("PATCHWORK_EVENT", context.event.name()),
-        ("PATCHWORK_THREAD", context.thread_id),
+        ("PATCHWORK_THREAD", context.chat_id),
         ("PATCHWORK_CWD", crate::system::ssh::here(context.root)),
         ("PATCHWORK_AGENT", context.agent),
         ("PATCHWORK_STATUS", context.status.unwrap_or_default()),

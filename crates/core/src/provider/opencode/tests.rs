@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use super::run::tool;
 use crate::events::AgentEvent;
 use crate::provider::Parsed;
-use crate::threads::StepStatus;
+use crate::chats::StepStatus;
 
 fn todowrite(status: &str) -> Value {
     json!({

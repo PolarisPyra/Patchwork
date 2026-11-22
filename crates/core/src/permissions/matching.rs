@@ -3,8 +3,8 @@
 // Rust guideline compliant 2026-10-09
 
 use std::path::{Path, PathBuf};
-use crate::system::fs::{real, resolve};
-use crate::system::fs::home_dir;
+use crate::system::files::paths::{real, resolve};
+use crate::system::files::paths::home_dir;
 use super::{Effect, PermissionKind, PermissionRule};
 use super::command::{does_more, handed_code, may_run, split_writes};
 use super::{Target, opencode_name};

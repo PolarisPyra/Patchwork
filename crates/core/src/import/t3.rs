@@ -1,7 +1,7 @@
-//! T3 Code threads, from its SQLite state (`~/.t3/userdata/statev2.sqlite`).
+//! T3 Code chats, from its SQLite state (`~/.t3/userdata/statev2.sqlite`).
 //!
-//! T3 runs the same agent CLIs, and records each thread's native Claude session
-//! or Codex thread id, so imported threads resume the original conversation.
+//! T3 runs the same agent CLIs, and records each chat's native Claude session
+//! or Codex chat id, so imported chats resume the original conversation.
 //! The database is only ever opened read-only.
 
 // Rust guideline compliant 2026-10-09
@@ -12,10 +12,11 @@ use serde_json::Value;
 use super::{Session, SessionMessage, ilog, push_merged};
 use crate::system::time::parse_rfc3339_ms;
 use crate::provider::AgentKind;
-use crate::threads::Role;
+use crate::chats::Role;
 
 pub fn sessions() -> Vec<Session> {
-    let Some(path) = crate::system::fs::home_dir().map(|h| h.join(".t3/userdata/statev2.sqlite"))
+    let Some(path) =
+        crate::system::files::paths::home_dir().map(|h| h.join(".t3/userdata/statev2.sqlite"))
     else {
         ilog!("T3: no home folder");
         return vec![];
@@ -48,7 +49,7 @@ fn agent_of(provider: &str) -> Option<AgentKind> {
 }
 
 fn read(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
-    let mut threads = conn.prepare(
+    let mut chats = conn.prepare(
         "SELECT t.thread_id, t.title, t.default_provider, t.created_at, p.workspace_root,
                 t.payload_json
          FROM orchestration_v2_projection_threads t
@@ -64,7 +65,7 @@ fn read(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
          WHERE thread_id = ?1 AND streaming = 0 ORDER BY created_at",
     )?;
 
-    let rows = threads.query_map([], |r| {
+    let rows = chats.query_map([], |r| {
         Ok((
             r.get::<_, String>(0)?,
             r.get::<_, String>(1)?,
@@ -76,9 +77,9 @@ fn read(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
     })?;
     let mut out = Vec::new();
     for row in rows {
-        let (thread_id, title, provider, created, root, payload) = row?;
+        let (chat_id, title, provider, created, root, payload) = row?;
         let Some(agent) = agent_of(&provider) else {
-            ilog!("T3: skipped {thread_id}: provider {provider} can't be resumed");
+            ilog!("T3: skipped {chat_id}: provider {provider} can't be resumed");
             continue;
         };
         let payload: Value = serde_json::from_str(&payload).unwrap_or_default();
@@ -87,18 +88,18 @@ fn read(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
         }
         // The native session id is what lets a follow-up resume the conversation.
         let session_id = native
-            .query_map(params![thread_id, provider], |r| r.get::<_, String>(0))?
+            .query_map(params![chat_id, provider], |r| r.get::<_, String>(0))?
             .filter_map(Result::ok)
             .filter_map(|p| serde_json::from_str::<Value>(&p).ok())
             .find_map(|p| p["nativeThreadRef"]["nativeId"].as_str().map(String::from));
         let Some(session_id) = session_id else {
-            ilog!("T3: skipped {thread_id}: no native session id");
+            ilog!("T3: skipped {chat_id}: no native session id");
             continue;
         };
 
         let created_at = parse_rfc3339_ms(&created).unwrap_or(0);
         let mut msgs: Vec<SessionMessage> = Vec::new();
-        let rows = messages.query_map([&thread_id], |r| {
+        let rows = messages.query_map([&chat_id], |r| {
             Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
         })?;
         for row in rows {
@@ -121,7 +122,7 @@ fn read(conn: &Connection) -> rusqlite::Result<Vec<Session>> {
             agent,
             session_id,
             imported: false,
-            // A thread run in a T3 worktree resumes from that worktree.
+            // A chat run in a T3 worktree resumes from that worktree.
             cwd: payload["worktreePath"].as_str().map_or(root, String::from),
             title: Some(title).filter(|t| t != "New thread"),
             model: payload["modelSelection"]["model"]
@@ -156,7 +157,7 @@ mod tests {
         conn
     }
 
-    fn thread(conn: &Connection, id: &str, provider: &str, payload: &str, native: Option<&str>) {
+    fn chat(conn: &Connection, id: &str, provider: &str, payload: &str, native: Option<&str>) {
         conn.execute(
             "INSERT INTO orchestration_v2_projection_threads
              VALUES (?1, 'p', 'Fix the build', ?2, '1970-01-01T00:00:01Z', ?3, NULL, NULL)",
@@ -174,25 +175,25 @@ mod tests {
     }
 
     #[test]
-    fn reads_resumable_claude_and_codex_threads() {
+    fn reads_resumable_claude_and_codex_chats() {
         let conn = db();
-        thread(
+        chat(
             &conn,
             "a",
             "claudeAgent",
             r#"{"modelSelection":{"model":"claude-opus-5-5"},"worktreePath":"/wt"}"#,
             Some("sess-1"),
         );
-        thread(&conn, "b", "codex", "{}", Some("codex-thread"));
-        thread(&conn, "c", "antigravity", "{}", Some("x"));
-        thread(
+        chat(&conn, "b", "codex", "{}", Some("codex-thread"));
+        chat(&conn, "c", "antigravity", "{}", Some("x"));
+        chat(
             &conn,
             "d",
             "codex",
             r#"{"lineage":{"relationshipToParent":"subagent"}}"#,
             Some("y"),
         );
-        thread(&conn, "e", "codex", "{}", None);
+        chat(&conn, "e", "codex", "{}", None);
         conn.execute_batch(
             r#"INSERT INTO orchestration_v2_projection_messages VALUES
                ('a', 'user', 0, '1', '{"text":"fix it","createdAt":"1970-01-01T00:00:02Z"}'),

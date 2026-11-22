@@ -10,7 +10,7 @@ use crate::Error;
 use crate::settings::{DetectLocale, Settings};
 
 /// A shell to start.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Launch {
     pub shell: String,
     pub args: Vec<String>,
@@ -171,7 +171,7 @@ pub fn launch(
         env.insert("LANG".into(), format!("{language}.UTF-8"));
     }
 
-    let home = crate::system::fs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    let home = crate::system::files::paths::home_dir().unwrap_or_else(|| PathBuf::from("/"));
     // A project on an SSH host, or the host itself, gets the user's login shell there, over the
     // shared connection.
     let remote = match (crate::system::ssh::split(&folder), host) {

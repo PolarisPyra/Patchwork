@@ -130,8 +130,8 @@ impl Discord {
 
     /// Deletes the message `id` in `chat`, waiting out the rate limit, and returns the status
     /// Discord answered with.
-    fn delete(&self, chat: &str, id: &str) -> Result<StatusCode, Error> {
-        let url = format!("{API}/channels/{chat}/messages/{id}");
+    fn delete(&self, conversation: &str, id: &str) -> Result<StatusCode, Error> {
+        let url = format!("{API}/channels/{conversation}/messages/{id}");
         for _ in 0..DELETE_TRIES {
             let mut response = self
                 .http
@@ -217,7 +217,7 @@ impl Discord {
         Some(Incoming {
             platform: Platform::Discord,
             id: data["id"].as_str().map(str::to_string),
-            chat: data["channel_id"].as_str()?.to_string(),
+            conversation: data["channel_id"].as_str()?.to_string(),
             sender: author["id"].as_str()?.to_string(),
             name: author["username"].as_str().unwrap_or_default().to_string(),
             text: text.trim().to_string(),
@@ -291,7 +291,7 @@ impl Discord {
         Some(Incoming {
             platform: Platform::Discord,
             id: data["id"].as_str().map(str::to_string),
-            chat: data["channel_id"].as_str()?.to_string(),
+            conversation: data["channel_id"].as_str()?.to_string(),
             sender: user.get("id")?.as_str()?.to_string(),
             name: user
                 .get("username")
@@ -346,7 +346,12 @@ impl Connector for Discord {
         Ok(())
     }
 
-    fn send(&self, chat: &str, text: &str, buttons: &[Button]) -> Result<Option<String>, Error> {
+    fn send(
+        &self,
+        conversation: &str,
+        text: &str,
+        buttons: &[Button],
+    ) -> Result<Option<String>, Error> {
         let mut body = json!({"content": text});
         if !buttons.is_empty() {
             let rows: Vec<Value> = buttons
@@ -361,16 +366,26 @@ impl Connector for Discord {
                 .collect();
             body["components"] = Value::Array(rows);
         }
-        let sent = self.call("POST", &format!("/channels/{chat}/messages"), Some(&body))?;
+        let sent = self.call(
+            "POST",
+            &format!("/channels/{conversation}/messages"),
+            Some(&body),
+        )?;
         Ok(sent["id"].as_str().map(str::to_string))
     }
 
-    fn send_file(&self, chat: &str, name: &str, bytes: &[u8], caption: &str) -> Result<(), Error> {
+    fn send_file(
+        &self,
+        conversation: &str,
+        name: &str,
+        bytes: &[u8],
+        caption: &str,
+    ) -> Result<(), Error> {
         let payload = json!({"content": caption}).to_string();
         let (kind, body) = multipart(&[("payload_json", &payload)], "files[0]", name, bytes);
         let response = self
             .http
-            .post(&format!("{API}/channels/{chat}/messages"))
+            .post(&format!("{API}/channels/{conversation}/messages"))
             .header("Authorization", &self.auth())
             .header("User-Agent", USER_AGENT)
             .header("Content-Type", &kind)
@@ -379,14 +394,14 @@ impl Connector for Discord {
         json("Discord", response).map(drop)
     }
 
-    fn edit(&self, chat: &str, id: &str, text: &str) -> Result<(), Error> {
-        let path = format!("/channels/{chat}/messages/{id}");
+    fn edit(&self, conversation: &str, id: &str, text: &str) -> Result<(), Error> {
+        let path = format!("/channels/{conversation}/messages/{id}");
         self.call("PATCH", &path, Some(&json!({"content": text})))
             .map(drop)
     }
 
-    fn clear(&self, chat: &str) -> Result<bool, Error> {
-        let channel = self.call("GET", &format!("/channels/{chat}"), None)?;
+    fn clear(&self, conversation: &str) -> Result<bool, Error> {
+        let channel = self.call("GET", &format!("/channels/{conversation}"), None)?;
         let me = self.me.locked().clone();
         // Elsewhere the bot may delete other people's messages only with Manage Messages, which
         // the first refusal shows it lacks.
@@ -394,7 +409,7 @@ impl Connector for Discord {
         let mut all = true;
         let mut before = String::new();
         loop {
-            let mut path = format!("/channels/{chat}/messages?limit=100");
+            let mut path = format!("/channels/{conversation}/messages?limit=100");
             if !before.is_empty() {
                 path.push_str("&before=");
                 path.push_str(&before);
@@ -416,7 +431,7 @@ impl Connector for Discord {
                     all = false;
                     continue;
                 }
-                match self.delete(chat, id)? {
+                match self.delete(conversation, id)? {
                     status if status.is_success() => {}
                     StatusCode::NOT_FOUND => {}
                     StatusCode::FORBIDDEN => {
@@ -431,8 +446,15 @@ impl Connector for Discord {
         }
     }
 
-    fn typing(&self, chat: &str) {
-        let _ = self.call("POST", &format!("/channels/{chat}/typing"), None);
+    fn remove(&self, conversation: &str, id: &str) -> Result<(), Error> {
+        match self.delete(conversation, id)? {
+            status if status.is_success() || status == StatusCode::NOT_FOUND => Ok(()),
+            status => Err(format!("Discord refused the request: {status}").into()),
+        }
+    }
+
+    fn typing(&self, conversation: &str) {
+        let _ = self.call("POST", &format!("/channels/{conversation}/typing"), None);
     }
 }
 

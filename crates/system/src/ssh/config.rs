@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-use crate::fs::home_dir;
+use crate::files::paths::home_dir;
 
 /// A `Host` alias from `~/.ssh/config`, with what its block sets.
 #[derive(Debug, Serialize)]

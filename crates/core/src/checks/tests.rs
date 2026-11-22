@@ -6,7 +6,7 @@ use super::reply::*;
 use super::*;
 use std::time::Duration;
 use crate::system::now_ms;
-use crate::threads::{CheckStatus, MessageStatus};
+use crate::chats::{CheckStatus, MessageStatus};
 
 #[test]
 fn a_short_output_is_kept_whole() {
@@ -270,21 +270,21 @@ fn set_enabled_for(store: &crate::persistence::Store, project_id: &str, on: bool
 fn only_a_finished_reply_that_changed_files_is_checked() {
     let (store, data) = store();
     // A task in a project, whose one reply changed a file.
-    let thread = crate::threads::Thread {
+    let chat = crate::chats::Chat {
         id: "t1".into(),
         project_id: Some("p1".into()),
         title: "a task".into(),
         agent: crate::provider::AgentKind::Claude,
         model: None,
-        access_mode: crate::threads::AccessMode::FullAccess,
+        access_mode: crate::chats::AccessMode::FullAccess,
         effort: None,
         compact_window: None,
         background: None,
         session_id: None,
         created_at: 1,
-        messages: vec![std::sync::Arc::new(crate::threads::Message {
+        messages: vec![std::sync::Arc::new(crate::chats::Message {
             id: "m1".into(),
-            role: crate::threads::Role::Assistant,
+            role: crate::chats::Role::Assistant,
             text: "done".into(),
             created_at: 1,
             status: MessageStatus::Complete,
@@ -320,48 +320,48 @@ fn only_a_finished_reply_that_changed_files_is_checked() {
         role_pending: false,
         favorite: false,
         pinned: false,
-        bot_id: None,
+        agent_id: None,
     };
-    let id = thread.messages[0].id.clone();
-    store.insert_threads(vec![thread.clone()]).unwrap();
+    let id = chat.messages[0].id.clone();
+    store.insert_chats(vec![chat.clone()]).unwrap();
     assert!(worth_checking(
         &store,
-        &thread.id,
+        &chat.id,
         &id,
         MessageStatus::Complete
     ));
     assert!(
-        !worth_checking(&store, &thread.id, &id, MessageStatus::Cancelled),
+        !worth_checking(&store, &chat.id, &id, MessageStatus::Cancelled),
         "a stopped turn is not checked"
     );
     assert!(
-        !worth_checking(&store, &thread.id, &id, MessageStatus::Error),
+        !worth_checking(&store, &chat.id, &id, MessageStatus::Error),
         "a failed turn is not checked"
     );
 
     store
-        .update_thread(&thread.id, |t| {
+        .update_chat(&chat.id, |t| {
             t.project_id = None;
             std::sync::Arc::make_mut(&mut t.messages[0]).files.clear();
         })
         .unwrap();
     assert!(
-        !worth_checking(&store, &thread.id, &id, MessageStatus::Complete),
+        !worth_checking(&store, &chat.id, &id, MessageStatus::Complete),
         "a chat without a project has no checks"
     );
 
     store
-        .update_thread(&thread.id, |t| {
+        .update_chat(&chat.id, |t| {
             t.project_id = Some("p1".into());
             std::sync::Arc::make_mut(&mut t.messages[0]).files = vec!["src/a.ts".into()];
-            t.parent = Some(crate::threads::ThreadParent {
-                thread_id: "parent".into(),
+            t.parent = Some(crate::chats::ChatParent {
+                chat_id: "parent".into(),
                 tool_id: "tool".into(),
             });
         })
         .unwrap();
     assert!(
-        !worth_checking(&store, &thread.id, &id, MessageStatus::Complete),
+        !worth_checking(&store, &chat.id, &id, MessageStatus::Complete),
         "a subagent's transcript is checked by the turn that started it"
     );
     let _ = std::fs::remove_dir_all(data);

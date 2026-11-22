@@ -5,7 +5,7 @@
 use chrono::NaiveDate;
 
 use crate::provider::AgentKind;
-use crate::threads::TokenUsage;
+use crate::chats::TokenUsage;
 
 /// Tokens of each kind and what they cost, in US dollars.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -102,7 +102,7 @@ pub struct ProjectCost {
 /// One chat's share.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ChatCost {
-    pub thread_id: String,
+    pub chat_id: String,
     pub title: String,
     pub project: Option<String>,
     /// False once the chat is deleted, so there is nothing to open.
@@ -240,7 +240,7 @@ impl CostReport {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ReplyCost {
     pub(crate) message_id: String,
-    pub(crate) thread_id: String,
+    pub(crate) chat_id: String,
     pub(crate) title: String,
     /// The project's name.
     pub(crate) project: Option<String>,

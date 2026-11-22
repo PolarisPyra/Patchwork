@@ -8,7 +8,7 @@ use crate::settings::LogLevel;
 use super::scrub::{MAX_TEXT_CHARS, cut, redact, scrubbed};
 use super::{Data, Json, Record, Source, may_report_error};
 
-/// `2026-10-26 12:17:29.562 [info] [pid 1234] [thread a1b2c3d4] out: {…}`, with the data
+/// `2026-10-26 12:17:29.562 [info] [pid 1234] [chat a1b2c3d4] out: {…}`, with the data
 /// made safe to share; None when a line checked at Error turns out not to report one.
 pub(super) fn render(record: Record) -> Option<String> {
     let mut level = record.level;
@@ -42,17 +42,14 @@ pub(super) fn render(record: Record) -> Option<String> {
     };
     let short = |id: String| id.chars().take(8).collect::<String>();
     let Source {
-        pid,
-        thread,
-        message,
-        ..
+        pid, chat, message, ..
     } = record.source;
     let mut line = format!("{} [{level}] ", local_time(record.at));
     if let Some(pid) = pid {
         let _ = write!(line, "[pid {pid}] ");
     }
-    if let Some(thread) = thread {
-        let _ = write!(line, "[thread {}] ", short(thread));
+    if let Some(chat) = chat {
+        let _ = write!(line, "[chat {}] ", short(chat));
     }
     if let Some(message) = message {
         let _ = write!(line, "[message {}] ", short(message));

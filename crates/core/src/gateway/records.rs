@@ -1,4 +1,4 @@
-//! The pairings and the chats bound to threads, kept in the app state table so they last
+//! The pairings and the chats bound to chats, kept in the app state table so they last
 //! across launches.
 
 // Rust guideline compliant 2026-10-09
@@ -17,16 +17,16 @@ use crate::{Error, Core};
 /// The app state key of the pairings.
 const PAIRED: &str = "gateway.pairings";
 
-/// The app state key of the chats bound to threads.
+/// The app state key of the chats bound to chats.
 const BINDINGS: &str = "gateway.bindings";
 
-/// The app state key of the ids of the dispatcher threads.
+/// The app state key of the ids of the dispatcher chats.
 const DISPATCHERS: &str = "gateway.dispatchers";
 
-/// The app state key of the ids of the threads the chat apps started, which run in the background.
+/// The app state key of the ids of the chats the chat apps started, which run in the background.
 const OPENED: &str = "gateway.opened";
 
-/// The app state key of the threads a conversation is told about without talking to them.
+/// The app state key of the chats a conversation is told about without talking to them.
 const WATCHES: &str = "gateway.watches";
 
 /// The app state key of what the chat apps had Patchwork do.
@@ -44,26 +44,31 @@ impl Core {
         calls
     }
 
-    /// Records that the dispatcher `thread_id` ran `capability`, and whether it worked.
+    /// Records that the dispatcher `chat_id` ran `capability`, and whether it worked.
     pub(crate) fn note_capability(
         &self,
-        thread_id: &str,
+        chat_id: &str,
         capability: &str,
         permission: &str,
         ok: bool,
     ) {
-        let chat = self.bound_chats(thread_id).into_iter().next();
-        let who = chat.as_ref().map_or_else(String::new, |chat| {
-            self.pairings()
-                .into_iter()
-                .filter(|u| u.platform == chat.platform && u.chat.as_deref() == Some(&chat.chat))
-                .map(|u| u.name)
-                .collect::<Vec<_>>()
-                .join(", ")
-        });
+        let conversation = self.bound_conversations(chat_id).into_iter().next();
+        let who = conversation
+            .as_ref()
+            .map_or_else(String::new, |conversation| {
+                self.pairings()
+                    .into_iter()
+                    .filter(|u| {
+                        u.platform == conversation.platform
+                            && u.conversation.as_deref() == Some(&conversation.conversation)
+                    })
+                    .map(|u| u.name)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            });
         let call = ChatAppCall {
             at: now_ms(),
-            platform: chat.map(|chat| chat.platform),
+            platform: conversation.map(|conversation| conversation.platform),
             who,
             capability: capability.to_string(),
             permission: permission.to_string(),
@@ -107,7 +112,7 @@ impl Core {
         platform: Platform,
         id: &str,
         name: &str,
-        chat: &str,
+        conversation: &str,
     ) -> Result<(), Error> {
         self.change_list(PAIRED, |paired: &mut Vec<Pairing>| {
             paired.retain(|u| u.platform != platform || u.id != id);
@@ -116,17 +121,16 @@ impl Core {
                 id: id.to_string(),
                 name: name.to_string(),
                 paired_at: now_ms(),
-                chat: Some(chat.to_string()),
+                conversation: Some(conversation.to_string()),
             });
         })
     }
 
     /// Remembers `chat` as the conversation `id` on `platform` last wrote from.
-    pub(super) fn note_chat(&self, platform: Platform, id: &str, chat: &str) {
-        let known = self
-            .pairings()
-            .iter()
-            .any(|u| u.platform == platform && u.id == id && u.chat.as_deref() == Some(chat));
+    pub(super) fn note_conversation(&self, platform: Platform, id: &str, conversation: &str) {
+        let known = self.pairings().iter().any(|u| {
+            u.platform == platform && u.id == id && u.conversation.as_deref() == Some(conversation)
+        });
         if known {
             return;
         }
@@ -135,7 +139,7 @@ impl Core {
                 .iter_mut()
                 .find(|u| u.platform == platform && u.id == id)
             {
-                entry.chat = Some(chat.to_string());
+                entry.conversation = Some(conversation.to_string());
             }
         });
         if let Err(error) = saved {
@@ -143,77 +147,82 @@ impl Core {
         }
     }
 
-    /// The thread `chat` on `platform` talks to.
-    pub(super) fn bound_thread(&self, platform: Platform, chat: &str) -> Option<String> {
+    /// The chat `chat` on `platform` talks to.
+    pub(super) fn bound_chat(&self, platform: Platform, conversation: &str) -> Option<String> {
         self.read_list::<Binding>(BINDINGS)
             .into_iter()
-            .find(|b| b.platform == platform && b.chat == chat)
-            .map(|b| b.thread_id)
+            .find(|b| b.platform == platform && b.conversation == conversation)
+            .map(|b| b.chat_id)
     }
 
-    /// Every conversation bound to a thread.
+    /// Every conversation bound to a chat.
     pub(super) fn bindings(&self) -> Vec<Binding> {
         self.read_list(BINDINGS)
     }
 
-    /// The chats that talk to `thread_id`.
-    pub(crate) fn bound_chats(&self, thread_id: &str) -> Vec<Binding> {
+    /// The chats that talk to `chat_id`.
+    pub(crate) fn bound_conversations(&self, chat_id: &str) -> Vec<Binding> {
         self.read_list::<Binding>(BINDINGS)
             .into_iter()
-            .filter(|b| b.thread_id == thread_id)
+            .filter(|b| b.chat_id == chat_id)
             .collect()
     }
 
-    /// Makes `chat` talk to `thread_id`, or to no thread, and tells the window both threads' chat
+    /// Makes `chat` talk to `chat_id`, or to no chat, and tells the window both chats' chat
     /// apps changed.
-    pub(super) fn bind_chat(&self, platform: Platform, chat: &str, thread_id: Option<&str>) {
-        let mut changed: Vec<String> = thread_id.iter().map(|id| (*id).to_string()).collect();
+    pub(super) fn bind_conversation(
+        &self,
+        platform: Platform,
+        conversation: &str,
+        chat_id: Option<&str>,
+    ) {
+        let mut changed: Vec<String> = chat_id.iter().map(|id| (*id).to_string()).collect();
         let saved = self.change_list(BINDINGS, |list: &mut Vec<Binding>| {
             list.retain(|b| {
-                let kept = b.platform != platform || b.chat != chat;
-                if !kept && !changed.contains(&b.thread_id) {
-                    changed.push(b.thread_id.clone());
+                let kept = b.platform != platform || b.conversation != conversation;
+                if !kept && !changed.contains(&b.chat_id) {
+                    changed.push(b.chat_id.clone());
                 }
                 kept
             });
-            if let Some(thread_id) = thread_id {
+            if let Some(chat_id) = chat_id {
                 list.push(Binding {
                     platform,
-                    chat: chat.to_string(),
-                    thread_id: thread_id.to_string(),
+                    conversation: conversation.to_string(),
+                    chat_id: chat_id.to_string(),
                 });
             }
         });
         if let Err(error) = saved {
-            log::warn!(error:% = error; "could not save a conversation's thread: {{error}}");
+            log::warn!(error:% = error; "could not save a conversation's chat: {{error}}");
             return;
         }
-        for thread_id in changed {
+        for chat_id in changed {
             self.emit(AgentEventEnvelope {
-                thread_id,
+                chat_id,
                 event: AgentEvent::ChatAppsChanged,
             });
         }
     }
 
-    /// Forgets the chats bound to a thread that was deleted, and what else was kept about it.
-    pub(super) fn unbind_thread(&self, thread_id: &str) {
+    /// Forgets the chats bound to a chat that was deleted, and what else was kept about it.
+    pub(super) fn unbind_chat(&self, chat_id: &str) {
         let saved = self.change_list(BINDINGS, |list: &mut Vec<Binding>| {
-            list.retain(|b| b.thread_id != thread_id);
+            list.retain(|b| b.chat_id != chat_id);
         });
         if let Err(error) = saved {
-            log::warn!(error:% = error; "could not save a conversation's thread: {{error}}");
+            log::warn!(error:% = error; "could not save a conversation's chat: {{error}}");
         }
-        self.unwatch(thread_id);
+        self.unwatch(chat_id);
         let saved = self.change_list(OPENED, |list: &mut Vec<String>| {
-            list.retain(|id| id != thread_id);
+            list.retain(|id| id != chat_id);
         });
         if let Err(error) = saved {
-            log::warn!(error:% = error; "could not forget a chat app's thread: {{error}}");
+            log::warn!(error:% = error; "could not forget a chat app's chat: {{error}}");
         }
-        if self.is_dispatcher(thread_id) {
+        if self.is_dispatcher(chat_id) {
             let saved = self.change_list(DISPATCHERS, |list: &mut Vec<String>| {
-                list.retain(|id| id != thread_id);
+                list.retain(|id| id != chat_id);
             });
             if let Err(error) = saved {
                 log::warn!(error:% = error; "could not forget a dispatcher: {{error}}");
@@ -221,29 +230,29 @@ impl Core {
         }
     }
 
-    /// Whether `thread_id` is a dispatcher: a chat app's chat whose agent has Patchwork's tools
+    /// Whether `chat_id` is a dispatcher: a chat app's chat whose agent has Patchwork's tools
     /// and nothing of the computer.
-    pub(crate) fn is_dispatcher(&self, thread_id: &str) -> bool {
+    pub(crate) fn is_dispatcher(&self, chat_id: &str) -> bool {
         self.read_list::<String>(DISPATCHERS)
             .iter()
-            .any(|id| id == thread_id)
+            .any(|id| id == chat_id)
     }
 
-    /// Whether `thread_id` was started from a chat app before chat apps had bots, so it runs in
-    /// the background: the window neither lists it nor notifies about it. A chat app's bot's
-    /// runs are listed under the bot.
-    pub(crate) fn in_background(&self, thread_id: &str) -> bool {
-        self.background_threads().iter().any(|id| id == thread_id)
+    /// Whether `chat_id` was started from a chat app before chat apps had agents, so it runs in
+    /// the background: the window neither lists it nor notifies about it. A chat app agent's
+    /// runs are listed under the agent.
+    pub(crate) fn in_background(&self, chat_id: &str) -> bool {
+        self.background_chats().iter().any(|id| id == chat_id)
     }
 
-    /// The ids of every thread a chat app started that is not a bot's run. See `in_background`.
-    pub(crate) fn background_threads(&self) -> Vec<String> {
+    /// The ids of every chat a chat app started that is not an agent's run. See `in_background`.
+    pub(crate) fn background_chats(&self) -> Vec<String> {
         let mut ids = self.read_list::<String>(OPENED);
         ids.extend(self.read_list::<String>(DISPATCHERS));
-        let runs: Vec<String> = self.store.with_threads(|threads| {
-            threads
+        let runs: Vec<String> = self.store.with_chats(|chats| {
+            chats
                 .iter()
-                .filter(|t| t.bot_id.is_some() && ids.contains(&t.id))
+                .filter(|t| t.agent_id.is_some() && ids.contains(&t.id))
                 .map(|t| t.id.clone())
                 .collect()
         });
@@ -251,20 +260,20 @@ impl Core {
         ids
     }
 
-    /// Makes `thread_id` a dispatcher.
-    pub(super) fn mark_dispatcher(&self, thread_id: &str) -> Result<(), Error> {
+    /// Makes `chat_id` a dispatcher.
+    pub(super) fn mark_dispatcher(&self, chat_id: &str) -> Result<(), Error> {
         self.change_list(DISPATCHERS, |list: &mut Vec<String>| {
-            list.push(thread_id.to_string());
+            list.push(chat_id.to_string());
         })
     }
 
-    /// Has `chat` told when `thread_id` asks something or finishes its reply.
-    pub(crate) fn watch_chat(&self, thread_id: &str, platform: Platform, chat: &str) {
+    /// Has `chat` told when `chat_id` asks something or finishes its reply.
+    pub(crate) fn watch_conversation(&self, chat_id: &str, platform: Platform, conversation: &str) {
         let saved = self.change_list(WATCHES, |list: &mut Vec<Binding>| {
             let watch = Binding {
                 platform,
-                chat: chat.to_string(),
-                thread_id: thread_id.to_string(),
+                conversation: conversation.to_string(),
+                chat_id: chat_id.to_string(),
             };
             if !list.contains(&watch) {
                 list.push(watch);
@@ -275,35 +284,35 @@ impl Core {
         }
     }
 
-    /// The conversations told about `thread_id`.
-    pub(super) fn watchers(&self, thread_id: &str) -> Vec<Binding> {
+    /// The conversations told about `chat_id`.
+    pub(super) fn watchers(&self, chat_id: &str) -> Vec<Binding> {
         self.read_list::<Binding>(WATCHES)
             .into_iter()
-            .filter(|b| b.thread_id == thread_id)
+            .filter(|b| b.chat_id == chat_id)
             .collect()
     }
 
-    /// Stops telling anyone about `thread_id`.
-    pub(super) fn unwatch(&self, thread_id: &str) {
-        if self.watchers(thread_id).is_empty() {
+    /// Stops telling anyone about `chat_id`.
+    pub(super) fn unwatch(&self, chat_id: &str) {
+        if self.watchers(chat_id).is_empty() {
             return;
         }
         let saved = self.change_list(WATCHES, |list: &mut Vec<Binding>| {
-            list.retain(|b| b.thread_id != thread_id);
+            list.retain(|b| b.chat_id != chat_id);
         });
         if let Err(error) = saved {
             log::warn!(error:% = error; "could not forget a watched chat: {{error}}");
         }
     }
 
-    fn read_list<T: DeserializeOwned>(&self, key: &str) -> Vec<T> {
+    pub(super) fn read_list<T: DeserializeOwned>(&self, key: &str) -> Vec<T> {
         self.store
             .state(key)
             .and_then(|json| serde_json::from_str(&json).ok())
             .unwrap_or_default()
     }
 
-    fn change_list<T: Serialize + DeserializeOwned>(
+    pub(super) fn change_list<T: Serialize + DeserializeOwned>(
         &self,
         key: &str,
         change: impl FnOnce(&mut Vec<T>),

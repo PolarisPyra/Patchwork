@@ -71,26 +71,26 @@ fn text<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
 
 impl Core {
     /// The tool as Patchwork's own server lists it.
-    pub(crate) fn quilt_tools(&self, thread_id: &str) -> Vec<Value> {
-        if self.store.thread(thread_id).is_none() {
+    pub(crate) fn quilt_tools(&self, chat_id: &str) -> Vec<Value> {
+        if self.store.chat(chat_id).is_none() {
             return Vec::new();
         }
         vec![json!({"name": TOOL, "description": DESCRIPTION, "inputSchema": input_schema()})]
     }
 
-    /// Runs the tool for the agent of `thread_id`.
+    /// Runs the tool for the agent of `chat_id`.
     ///
     /// # Errors
     ///
     /// Returns an error when an argument is missing or wrong, the quilt to change does not
     /// exist, `old_str` does not appear exactly once, or the database write fails.
-    pub(crate) fn run_quilt_tool(&self, thread_id: &str, args: &Value) -> Result<String, Error> {
+    pub(crate) fn run_quilt_tool(&self, chat_id: &str, args: &Value) -> Result<String, Error> {
         let key = text(args, "id").ok_or("Give the quilt's id")?.trim();
         // It names the quilt's folder, so it can't name a path.
         if key.contains(['/', '\\', ':', '\0']) || key.starts_with('.') {
             return Err("Give the id as a plain name, such as \"sales-chart\"".into());
         }
-        let existing = self.store.quilt_by_key(thread_id, key);
+        let existing = self.store.quilt_by_key(chat_id, key);
         let command = text(args, "command").unwrap_or_default();
         let (quilt, content) = match (command, existing) {
             ("create", existing) => {
@@ -104,7 +104,7 @@ impl Core {
                 let now = now_ms();
                 let mut quilt = existing.unwrap_or_else(|| Quilt {
                     id: uuid::Uuid::new_v4().to_string(),
-                    thread_id: thread_id.to_owned(),
+                    chat_id: chat_id.to_owned(),
                     key: key.to_owned(),
                     kind,
                     title: key.to_owned(),

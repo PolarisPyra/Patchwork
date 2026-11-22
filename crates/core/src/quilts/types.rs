@@ -192,7 +192,7 @@ impl QuiltKind {
 pub struct Quilt {
     pub id: String,
     /// The chat whose agent made it.
-    pub thread_id: String,
+    pub chat_id: String,
     /// What the agent calls it, unique in its chat.
     pub key: String,
     pub kind: QuiltKind,

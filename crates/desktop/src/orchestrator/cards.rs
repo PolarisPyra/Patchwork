@@ -8,15 +8,15 @@ use std::sync::Arc;
 
 use gpui::{AnyElement, Div, Hsla, Role, SharedString, Stateful, div, hsla, prelude::*, px};
 use patchwork_core::projects::Project;
-use patchwork_core::threads::{Standing, Thread};
+use patchwork_core::chats::{Standing, Chat};
 
-use super::render::{glass, ink, warm};
-use super::state::{Orchestrator, Outcome, Request};
+use super::layout::{glass, ink, warm};
+use super::requests::{Orchestrator, Outcome, Request};
 use patchwork_ui::theme::{fs_sm, fs_xs, radius_lg};
 use patchwork_ui::{button, display_title, icon, spinner};
 
 /// A chat as a card shows it.
-struct Chat {
+struct Row {
     id: String,
     /// Its title, then its project when it has one.
     name: String,
@@ -24,18 +24,18 @@ struct Chat {
     line: Option<String>,
 }
 
-impl Chat {
-    fn read(thread: &Thread, projects: &[Project]) -> Self {
-        let project = thread
+impl Row {
+    fn read(chat: &Chat, projects: &[Project]) -> Self {
+        let project = chat
             .project_id
             .as_ref()
             .and_then(|id| projects.iter().find(|p| &p.id == id));
-        let title = display_title(&thread.title);
+        let title = display_title(&chat.title);
         Self {
-            id: thread.id.clone(),
+            id: chat.id.clone(),
             name: project.map_or_else(|| title.clone(), |p| format!("{title} · {}", p.name)),
-            standing: thread.standing(),
-            line: thread.latest_line(),
+            standing: chat.standing(),
+            line: chat.latest_line(),
         }
     }
 }
@@ -68,7 +68,7 @@ fn mark(standing: Standing) -> AnyElement {
 }
 
 /// How the chats of one request stand together: waiting on the person before anything else.
-fn together(chats: &[Chat]) -> Standing {
+fn together(chats: &[Row]) -> Standing {
     [Standing::Waiting, Standing::Working, Standing::Failed]
         .into_iter()
         .find(|standing| chats.iter().any(|chat| chat.standing == *standing))
@@ -139,13 +139,13 @@ impl Orchestrator {
     pub(super) fn card(
         &self,
         request: &Request,
-        threads: &[Arc<Thread>],
+        chats: &[Arc<Chat>],
         projects: &[Project],
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let row_id = ("orchestrator-request", request.id);
         let text = request.text.clone();
-        let chats: Vec<Chat> = match &request.outcome {
+        let chats: Vec<Row> = match &request.outcome {
             Outcome::Routing => {
                 return plate(div().id(row_id))
                     .role(Role::Status)
@@ -166,10 +166,10 @@ impl Orchestrator {
                     .into_any_element();
             }
             Outcome::Routed(to) => to
-                .thread_ids
+                .chat_ids
                 .iter()
-                .filter_map(|id| threads.iter().find(|t| &t.id == id))
-                .map(|thread| Chat::read(thread, projects))
+                .filter_map(|id| chats.iter().find(|t| &t.id == id))
+                .map(|chat| Row::read(chat, projects))
                 .collect(),
         };
         match chats.as_slice() {

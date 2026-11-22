@@ -1,4 +1,4 @@
-//! The `Runner`: the agent processes up in each thread, and handing a message to one, stopping
+//! The `Runner`: the agent processes up in each chat, and handing a message to one, stopping
 //! one, or stopping them all.
 
 // Rust guideline compliant 2026-10-09
@@ -18,11 +18,11 @@ use crate::orchestration::turn::limit::LimitWait;
 use crate::orchestration::turn::start::RunningTurn;
 use crate::permissions::Target;
 use crate::provider;
-use crate::system::{processes, scope};
-use crate::threads::MessageStatus;
-use crate::workspace;
+use crate::system::processes::{running, scope};
+use crate::chats::MessageStatus;
+use crate::source_control;
 
-/// What became of a message sent to a thread.
+/// What became of a message sent to a chat.
 #[derive(Debug)]
 pub enum Delivery {
     /// Written to the running turn.
@@ -38,24 +38,24 @@ pub enum Delivery {
 #[derive(Default)]
 pub struct Runner {
     pub(in crate::orchestration) turns: Mutex<HashMap<String, RunningTurn>>,
-    /// Threads whose turn is being started. Its agent is not in `turns` until it is spawned, so a
+    /// Chats whose turn is being started. Its agent is not in `turns` until it is spawned, so a
     /// second start in that window would run a second agent beside the first.
     pub(in crate::orchestration) starting: Mutex<HashSet<String>>,
     /// Messages this process has handed to a turn, whether steered or queued. Written under the
     /// `turns` lock, so a withdrawal sees it in the same order as the queue it checks.
     pub(in crate::orchestration) handed_over: Mutex<HashSet<String>>,
-    /// Threads stopped while their turn was starting, whose agent is stopped once it is up.
+    /// Chats stopped while their turn was starting, whose agent is stopped once it is up.
     pub(in crate::orchestration) stop_starting: Mutex<HashSet<String>>,
     /// Permission hooks waiting for the user, by approval id.
     pub(in crate::orchestration) hooks: Mutex<HashMap<String, std::sync::mpsc::Sender<bool>>>,
-    /// Calls the user allowed through a hook, by thread, so the agent's own request for them
+    /// Calls the user allowed through a hook, by chat, so the agent's own request for them
     /// is not asked again.
     pub(in crate::orchestration) grants: Mutex<HashMap<String, Vec<Target>>>,
     /// The commands Patchwork's own agent runs, which outlive its turns as background jobs.
     pub(in crate::orchestration) jobs: crate::orchestration::tasks::jobs::Jobs,
-    /// The turns that resume when their agent's usage limit resets, by thread.
+    /// The turns that resume when their agent's usage limit resets, by chat.
     pub(in crate::orchestration) limit_waits: Mutex<HashMap<String, LimitWait>>,
-    /// Calls that start a sub agent on another agent, by the thread that made them, from when
+    /// Calls that start a sub agent on another agent, by the chat that made them, from when
     /// its reply shows one until the sub agent it starts takes it up.
     pub(in crate::orchestration) delegated:
         Mutex<HashMap<String, Vec<crate::orchestration::tasks::delegate::Called>>>,
@@ -74,31 +74,31 @@ impl std::fmt::Debug for Runner {
 }
 
 impl Runner {
-    /// Whether a turn is being started in the thread, before its agent is in `turns`.
-    pub fn is_starting(&self, thread_id: &str) -> bool {
-        self.starting.locked().contains(thread_id)
+    /// Whether a turn is being started in the chat, before its agent is in `turns`.
+    pub fn is_starting(&self, chat_id: &str) -> bool {
+        self.starting.locked().contains(chat_id)
     }
 
     /// Asks a turn still starting to stop once its agent is up. Called under the `turns` lock,
     /// which the start inserts its agent under before it looks here.
-    fn stop_when_started(&self, thread_id: &str) {
-        if self.is_starting(thread_id) {
-            self.stop_starting.locked().insert(thread_id.into());
+    fn stop_when_started(&self, chat_id: &str) {
+        if self.is_starting(chat_id) {
+            self.stop_starting.locked().insert(chat_id.into());
         }
     }
 
-    /// Whether a reply is under way in the thread. An agent that is only kept up by shell
+    /// Whether a reply is under way in the chat. An agent that is only kept up by shell
     /// commands it left running does not count.
-    pub fn is_running(&self, thread_id: &str) -> bool {
+    pub fn is_running(&self, chat_id: &str) -> bool {
         self.turns
             .locked()
-            .get(thread_id)
+            .get(chat_id)
             .is_some_and(|turn| !turn.idle.load(Ordering::SeqCst))
     }
 
-    /// Whether an agent process is up in the thread, replying or idle.
-    pub fn has_agent(&self, thread_id: &str) -> bool {
-        self.turns.locked().contains_key(thread_id)
+    /// Whether an agent process is up in the chat, replying or idle.
+    pub fn has_agent(&self, chat_id: &str) -> bool {
+        self.turns.locked().contains_key(chat_id)
     }
 
     /// The pids of the agent processes that are up, replying or idle.
@@ -106,7 +106,7 @@ impl Runner {
         self.turns.locked().values().map(|turn| turn.pid).collect()
     }
 
-    /// The threads with a reply under way, each with the folder it works in and what its files
+    /// The chats with a reply under way, each with the folder it works in and what its files
     /// are judged by.
     pub(in crate::orchestration) fn attributions(
         &self,
@@ -119,7 +119,7 @@ impl Runner {
             .collect()
     }
 
-    /// The threads with a reply under way.
+    /// The chats with a reply under way.
     pub fn running(&self) -> Vec<String> {
         let turns = self.turns.locked();
         turns
@@ -131,21 +131,21 @@ impl Runner {
 
     /// Stops every idle agent, as `retire_idle` does.
     pub fn retire_all_idle(&self) {
-        let threads: Vec<String> = {
+        let chats: Vec<String> = {
             let turns = self.turns.locked();
             turns.keys().cloned().collect()
         };
-        for thread_id in threads {
-            self.retire_idle(&thread_id);
+        for chat_id in chats {
+            self.retire_idle(&chat_id);
         }
     }
 
-    /// Stops the thread's idle agent, and the shell commands it left running, so a turn that
+    /// Stops the chat's idle agent, and the shell commands it left running, so a turn that
     /// needs a process of its own can start. A turn that is replying is left to finish, and is
     /// not used again once it is idle.
-    pub fn retire_idle(&self, thread_id: &str) {
+    pub fn retire_idle(&self, chat_id: &str) {
         let mut turns = self.turns.locked();
-        match turns.get(thread_id) {
+        match turns.get(chat_id) {
             Some(turn) if turn.idle.load(Ordering::SeqCst) => {}
             Some(turn) => {
                 turn.stale.store(true, Ordering::SeqCst);
@@ -153,7 +153,7 @@ impl Runner {
             }
             None => return,
         }
-        let Some(turn) = turns.remove(thread_id) else {
+        let Some(turn) = turns.remove(chat_id) else {
             return;
         };
         turn.cancelled.store(true, Ordering::SeqCst);
@@ -168,11 +168,11 @@ impl Runner {
     /// Starts the idle agent's record of the project's files over from how they are now, before
     /// a message resumes it: the watcher leaves an idle agent alone, so what changed between its
     /// replies, such as the user's own edits, is no part of the next one.
-    pub(in crate::orchestration) fn rebase_idle(&self, thread_id: &str) {
+    pub(in crate::orchestration) fn rebase_idle(&self, chat_id: &str) {
         let found = {
             let turns = self.turns.locked();
             turns
-                .get(thread_id)
+                .get(chat_id)
                 .filter(|turn| turn.idle.load(Ordering::SeqCst))
                 .map(|turn| {
                     (
@@ -185,7 +185,7 @@ impl Runner {
         let Some((root, idle, shared)) = found else {
             return;
         };
-        let now = workspace::git_changes(&root).unwrap_or_default();
+        let now = source_control::git_changes(&root).unwrap_or_default();
         let mut record = shared.locked();
         // Another message may have resumed it meanwhile, and that reply's record stays.
         if idle.load(Ordering::SeqCst) {
@@ -193,11 +193,11 @@ impl Runner {
         }
     }
 
-    /// Hands a new compact window to the API turn replying in `thread_id`, which compacts by it
+    /// Hands a new compact window to the API turn replying in `chat_id`, which compacts by it
     /// from its next step. Other agents read it only when they start.
-    pub fn set_compact_window(&self, thread_id: &str, window: u64) {
+    pub fn set_compact_window(&self, chat_id: &str, window: u64) {
         let turns = self.turns.locked();
-        if let Some(turn) = turns.get(thread_id)
+        if let Some(turn) = turns.get(chat_id)
             && turn.agent == provider::AgentKind::Api
             && !turn.idle.load(Ordering::SeqCst)
         {
@@ -205,12 +205,12 @@ impl Runner {
         }
     }
 
-    /// Hands a message to the turn running in `thread_id`: written to the agent when it
+    /// Hands a message to the turn running in `chat_id`: written to the agent when it
     /// can take input mid-turn, otherwise kept to start the next turn.
     /// `subagents` are the subagent calls still running in the foreground.
     pub fn steer(
         &self,
-        thread_id: &str,
+        chat_id: &str,
         input: FollowUpInput<'_>,
         session_id: Option<&str>,
         subagents: &[String],
@@ -222,9 +222,9 @@ impl Runner {
             images,
             merged,
         } = input;
-        self.background_subagents(thread_id, subagents);
+        self.background_subagents(chat_id, subagents);
         let turns = self.turns.locked();
-        let Some(turn) = turns.get(thread_id) else {
+        let Some(turn) = turns.get(chat_id) else {
             return Delivery::NotRunning;
         };
         let follow_up = FollowUp {
@@ -277,9 +277,9 @@ impl Runner {
     /// Stops the turn and drops the messages waiting for it. The agent's scope is stopped along
     /// with its process group, so a command it started in a session of its own, which
     /// could keep its output open, ends with it.
-    pub fn cancel(&self, thread_id: &str) {
+    pub fn cancel(&self, chat_id: &str) {
         let turns = self.turns.locked();
-        if let Some(turn) = turns.get(thread_id) {
+        if let Some(turn) = turns.get(chat_id) {
             stop_turn(turn);
             let (pid, exited, scope) = (turn.pid, Arc::clone(&turn.exited), turn.scope.clone());
             std::thread::spawn(move || {
@@ -289,7 +289,7 @@ impl Runner {
                 }
             });
         } else {
-            self.stop_when_started(thread_id);
+            self.stop_when_started(chat_id);
         }
     }
 
@@ -298,11 +298,11 @@ impl Runner {
     /// up for the next message. An agent that cannot be interrupted, or that does not end its
     /// reply within `INTERRUPT_GRACE` or before Stop is pressed again, is stopped as `cancel`
     /// stops it. `session_id` is the
-    /// thread's agent session, which Codex needs.
-    pub fn interrupt(&self, thread_id: &str, session_id: Option<&str>) {
+    /// chat's agent session, which Codex needs.
+    pub fn interrupt(&self, chat_id: &str, session_id: Option<&str>) {
         let turns = self.turns.locked();
-        let Some(turn) = turns.get(thread_id) else {
-            self.stop_when_started(thread_id);
+        let Some(turn) = turns.get(chat_id) else {
+            self.stop_when_started(chat_id);
             return;
         };
         let turn_id = turn.native.locked().clone();
@@ -313,7 +313,7 @@ impl Runner {
         // Stop pressed again while the agent has yet to end its reply ends it now.
         let Some(line) = line.filter(|_| !turn.interrupts.waiting()) else {
             drop(turns);
-            return self.cancel(thread_id);
+            return self.cancel(chat_id);
         };
         stop_turn(turn);
         let asked = turn.interrupts.ask();
@@ -364,7 +364,7 @@ impl Runner {
             })
             .collect();
         for (pid, _) in &running {
-            processes::signal_process_group(*pid, processes::SIGTERM);
+            running::signal_process_group(*pid, running::SIGTERM);
         }
         let deadline = Instant::now() + QUIT_GRACE;
         while Instant::now() < deadline && running.iter().any(|(_, e)| !e.load(Ordering::SeqCst)) {
@@ -374,7 +374,7 @@ impl Runner {
         running
             .iter()
             .filter(|(_, exited)| !exited.load(Ordering::SeqCst))
-            .for_each(|(pid, _)| processes::signal_process_group(*pid, processes::SIGKILL));
+            .for_each(|(pid, _)| running::signal_process_group(*pid, running::SIGKILL));
     }
 }
 

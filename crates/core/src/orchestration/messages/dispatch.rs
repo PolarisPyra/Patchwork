@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use crate::events::{AgentEvent, AgentEventEnvelope};
-use crate::threads::{Attachment, NewThread};
+use crate::chats::{Attachment, NewChat};
 use crate::{Error, Core};
 
 /// Where a dispatched request went.
@@ -22,7 +22,7 @@ pub enum Route {
 #[derive(Debug, Clone)]
 pub struct Dispatched {
     /// One chat, or one for each project the request was split across.
-    pub thread_ids: Vec<String>,
+    pub chat_ids: Vec<String>,
     pub route: Route,
 }
 
@@ -51,7 +51,7 @@ impl Core {
         self: &Arc<Self>,
         prompt: &str,
         target: &Target,
-        new: &NewThread,
+        new: &NewChat,
         attachments: &[Attachment],
     ) -> Result<Dispatched, Error> {
         let prompt = prompt.trim();
@@ -59,38 +59,38 @@ impl Core {
             return Err("Write what to do".into());
         }
         let project_ids = match target {
-            Target::Chat(thread_id) => {
+            Target::Chat(chat_id) => {
                 self.send_message(
-                    thread_id.clone(),
+                    chat_id.clone(),
                     prompt.to_string(),
                     attachments.to_vec(),
                     true,
                 )?;
                 return Ok(Dispatched {
-                    thread_ids: vec![thread_id.clone()],
+                    chat_ids: vec![chat_id.clone()],
                     route: Route::Sent,
                 });
             }
             Target::New(project_id) => vec![project_id.clone()],
             Target::Split(project_ids) => project_ids.iter().cloned().map(Some).collect(),
         };
-        let mut thread_ids = Vec::new();
+        let mut chat_ids = Vec::new();
         let mut failed = None;
         for project_id in project_ids {
-            let new = NewThread {
+            let new = NewChat {
                 id: None,
                 project_id,
                 ..new.clone()
             };
             match self.start_chat(new, prompt, attachments) {
-                Ok(thread_id) => thread_ids.push(thread_id),
+                Ok(chat_id) => chat_ids.push(chat_id),
                 Err(e) => failed = Some(e),
             }
         }
         match failed {
-            Some(e) if thread_ids.is_empty() => Err(e),
+            Some(e) if chat_ids.is_empty() => Err(e),
             _ => Ok(Dispatched {
-                thread_ids,
+                chat_ids,
                 route: Route::Started,
             }),
         }
@@ -99,30 +99,30 @@ impl Core {
     /// Starts a chat with `prompt` and `attachments` as its first message, and gives its id.
     fn start_chat(
         self: &Arc<Self>,
-        new: NewThread,
+        new: NewChat,
         prompt: &str,
         attachments: &[Attachment],
     ) -> Result<String, Error> {
-        let thread = self.create_thread(new)?;
-        let thread_id = thread.id.clone();
+        let chat = self.create_chat(new)?;
+        let chat_id = chat.id.clone();
         self.emit(AgentEventEnvelope {
-            thread_id: thread_id.clone(),
-            event: AgentEvent::ThreadCreated { thread },
+            chat_id: chat_id.clone(),
+            event: AgentEvent::ChatCreated { chat },
         });
         // A chat that cannot start leaves no empty chat behind.
         if let Err(e) = self.send_message(
-            thread_id.clone(),
+            chat_id.clone(),
             prompt.to_string(),
             attachments.to_vec(),
             false,
         ) {
-            self.delete_thread(&thread_id);
+            self.delete_chat(&chat_id);
             self.emit(AgentEventEnvelope {
-                thread_id,
-                event: AgentEvent::ThreadDeleted,
+                chat_id,
+                event: AgentEvent::ChatDeleted,
             });
             return Err(e);
         }
-        Ok(thread_id)
+        Ok(chat_id)
     }
 }

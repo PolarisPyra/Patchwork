@@ -5,9 +5,9 @@
 // Rust guideline compliant 2026-10-09
 
 mod commands;
-mod state;
-mod view;
+mod open_menu;
+mod layout;
 mod keys;
 
 pub use commands::{local_command};
-pub use state::{SigilMenu};
+pub use open_menu::{SigilMenu};

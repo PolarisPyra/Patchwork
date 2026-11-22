@@ -12,7 +12,7 @@ use crate::permissions::PermissionSettings;
 use crate::projects::Project;
 use crate::provider::AgentKind;
 use crate::themes::{BackdropChoice, Color, Density, Follow, ProjectLook};
-use crate::threads::AgentPick;
+use crate::chats::AgentPick;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -446,9 +446,11 @@ pub struct LoggingSettings {
     /// `themes.log`: each theme and background added, written, reset or deleted.
     pub themes: LogLevel,
     /// `chat-<id>.log`: the events and agent traffic of each chat with a warning or an error.
-    pub threads: LogLevel,
+    #[serde(alias = "threads")]
+    pub chats: LogLevel,
     /// A chat's right-click menu has Open logs.
-    pub thread_menu: bool,
+    #[serde(alias = "threadMenu")]
+    pub chat_menu: bool,
 }
 
 impl Default for LoggingSettings {
@@ -461,8 +463,8 @@ impl Default for LoggingSettings {
             themes: LogLevel::Info,
             // A chat's log is what gets sent when something goes wrong in it, so it keeps what
             // each tool call and error said.
-            threads: LogLevel::Debug,
-            thread_menu: true,
+            chats: LogLevel::Debug,
+            chat_menu: true,
         }
     }
 }

@@ -6,12 +6,16 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use super::gradle::application_id;
-use super::types::{Framework, MobileProject, RunCommand, RunMode, RunTarget, Sdk, Snapshot};
-use super::tool::{self, tool_command};
-use super::{avd, devices};
+use crate::sdk::avd::Avd;
+use crate::devices::connected::Device;
+use crate::sdk::gradle::{Variant, application_id};
+use crate::sdk::detect::{Framework, MobileProject};
+use crate::sdk::locate::Sdk;
+use crate::sdk::tool::{self, tool_command};
+use super::devices::connected;
+use super::sdk::avd;
 use patchwork_system::Error;
 
 use super::host::Android;
@@ -154,7 +158,7 @@ impl Android<'_> {
         self.emulators.prune(self.host);
         Snapshot {
             avds: avd::list(&found.avd_home),
-            devices: devices::list(found, self.emulators),
+            devices: connected::list(found, self.emulators),
             sdk,
         }
     }
@@ -252,4 +256,51 @@ pub fn with_sdk_tools(sdk: &Sdk, path: &str) -> Option<String> {
         .map(Path::to_path_buf);
     let joined = std::env::join_paths(tools.chain(std::env::split_paths(path))).ok()?;
     Some(joined.to_string_lossy().into_owned())
+}
+
+/// The panel's whole picture at one moment.
+#[derive(Debug, Clone)]
+pub struct Snapshot {
+    /// The SDK, or why there is none to use.
+    pub sdk: Result<Sdk, Error>,
+    pub avds: Vec<Avd>,
+    /// The running emulators and connected devices, or why adb could not list them.
+    pub devices: Result<Vec<Device>, Error>,
+}
+
+/// The command that builds, installs and runs a project on a device.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunCommand {
+    /// The command line, as the person would type it in `cwd`.
+    pub line: String,
+    pub cwd: PathBuf,
+}
+
+/// What running the app is for, which decides whether the framework's tool stays running.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunMode {
+    /// In a terminal the panel keeps, so the tool stays to reload the code as it changes.
+    Attached,
+    /// To its end, for an agent that waits for the result: the tool builds, installs, opens the
+    /// app and exits.
+    Once,
+}
+
+/// The device and build a run is for.
+#[derive(Debug, Clone, Copy)]
+pub struct RunTarget<'a> {
+    pub serial: &'a str,
+    /// The virtual device an emulator runs.
+    pub avd: Option<&'a str>,
+    pub variant: &'a Variant,
+    pub mode: RunMode,
+}
+
+/// How an app that is running takes code that changed since it was built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reload {
+    /// The framework's tool reloads when this is typed into the terminal it runs in.
+    Typed(&'static str),
+    /// The app reloads when the device is sent the R key twice.
+    DeviceKeys,
 }

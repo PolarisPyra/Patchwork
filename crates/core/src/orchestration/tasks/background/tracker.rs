@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use crate::provider::TaskEvent;
 use crate::provider::claude::SHELL_TASK;
 use crate::events::AgentEvent;
-use crate::threads::BackgroundTask;
-use crate::threads::TaskStatus;
+use crate::chats::BackgroundTask;
+use crate::chats::TaskStatus;
 
 /// One task the turn has seen. An ended task stays, because the agent may report its end twice.
 #[derive(Debug)]
@@ -15,7 +15,7 @@ pub(super) struct Entry {
     task: BackgroundTask,
     /// Where it was started, to list Codex's open tasks in the order they began.
     order: u64,
-    /// False for a task a subagent started, which is listed under that subagent's thread instead.
+    /// False for a task a subagent started, which is listed under that subagent's chat instead.
     top_level: bool,
     /// Whether the agent reports the task's end, so the task holds the turn's stdin open.
     reported: bool,

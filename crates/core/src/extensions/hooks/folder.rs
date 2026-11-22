@@ -228,7 +228,7 @@ mod tests {
         let project_path = project.to_string_lossy().into_owned();
         let context = HookContext {
             event: HookEvent::Stop,
-            thread_id: "t1",
+            chat_id: "t1",
             root: &project_path,
             agent: "claude",
             status: Some("complete"),
@@ -260,7 +260,7 @@ mod tests {
         let project_path = project.to_string_lossy().into_owned();
         let context = HookContext {
             event: HookEvent::Stop,
-            thread_id: "t1",
+            chat_id: "t1",
             root: &project_path,
             agent: "codex",
             status: None,

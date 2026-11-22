@@ -5,8 +5,9 @@ members = [
   "crates/android",
   "crates/core",
   "crates/ui",
-  "crates/settings",
   "crates/sidecar",
+  "crates/modals",
+  "crates/pages",
   "crates/desktop",
   "crates/remote",
 ]
@@ -29,8 +30,9 @@ categories = ["development-tools"]
 [workspace.dependencies]
 patchwork-android = { path = "crates/android" }
 patchwork-core = { path = "crates/core" }
+patchwork-modals = { path = "crates/modals" }
+patchwork-pages = { path = "crates/pages" }
 patchwork-system = { path = "crates/system" }
-patchwork-settings = { path = "crates/settings" }
 patchwork-sidecar = { path = "crates/sidecar" }
 patchwork-ui = { path = "crates/ui" }
 

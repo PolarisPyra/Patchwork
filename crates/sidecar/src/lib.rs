@@ -1,5 +1,4 @@
-//! The windows beside the chat: the panel under it, with the terminal, the Output view and the
-//! Screen view, and the browser that draws web pages and quilts.
+//! The browser, which draws web pages and quilts.
 
 // Rust guideline compliant 2026-10-09
 
@@ -9,4 +8,3 @@
 )]
 
 pub mod browser;
-pub mod panel;

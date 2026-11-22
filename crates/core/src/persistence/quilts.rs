@@ -10,7 +10,7 @@ use crate::Error;
 use crate::quilts::{Quilt, QuiltKind, QuiltVersion};
 
 /// The columns `quilt` reads, with the number of versions last.
-const COLUMNS: &str = "a.id, a.thread_id, a.key, a.kind, a.title, a.language, a.created_at,
+const COLUMNS: &str = "a.id, a.chat_id, a.key, a.kind, a.title, a.language, a.created_at,
      a.updated_at, a.pinned, (SELECT COUNT(*) FROM quilt_versions v WHERE v.quilt_id = a.id)";
 
 /// A quilt from a row of [`COLUMNS`].
@@ -18,7 +18,7 @@ fn quilt(r: &Row<'_>) -> rusqlite::Result<Quilt> {
     let kind: String = r.get(3)?;
     Ok(Quilt {
         id: r.get(0)?,
-        thread_id: r.get(1)?,
+        chat_id: r.get(1)?,
         key: r.get(2)?,
         kind: QuiltKind::parse(&kind).unwrap_or(QuiltKind::Code),
         title: r.get(4)?,
@@ -54,9 +54,9 @@ impl Store {
         self.find_quilt("a.id = ?1", params![id])
     }
 
-    /// The quilt the agent of `thread_id` calls `key`.
-    pub(crate) fn quilt_by_key(&self, thread_id: &str, key: &str) -> Option<Quilt> {
-        self.find_quilt("a.thread_id = ?1 AND a.key = ?2", params![thread_id, key])
+    /// The quilt the agent of `chat_id` calls `key`.
+    pub(crate) fn quilt_by_key(&self, chat_id: &str, key: &str) -> Option<Quilt> {
+        self.find_quilt("a.chat_id = ?1 AND a.key = ?2", params![chat_id, key])
     }
 
     fn find_quilt(&self, filter: &str, values: &[&dyn rusqlite::ToSql]) -> Option<Quilt> {
@@ -110,12 +110,12 @@ impl Store {
         let mut inner = self.lock();
         let tx = inner.conn.transaction().map_err(err)?;
         tx.execute(
-            "INSERT INTO quilts (id, thread_id, key, kind, title, language, created_at,
+            "INSERT INTO quilts (id, chat_id, key, kind, title, language, created_at,
              updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT (id) DO UPDATE SET kind = ?4, title = ?5, language = ?6, updated_at = ?8",
             params![
                 quilt.id,
-                quilt.thread_id,
+                quilt.chat_id,
                 quilt.key,
                 quilt.kind.name(),
                 quilt.title,

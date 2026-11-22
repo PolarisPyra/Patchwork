@@ -13,7 +13,7 @@
 //! ├─ agent-claude.log         one log per agent: its processes and their traffic
 //! └─ chat-<id>.log            one file per chat with a warning or an error in this launch, or
 //!                             whose Open logs was used: its log, under the report Open logs
-//!                             writes at the top (see `thread_log` and `report`)
+//!                             writes at the top (see `chat_log` and `report`)
 //! ```
 //!
 //! Each line reads `2026-10-26 12:17:29.562 [info] message`, and each log is set to Trace,
@@ -40,7 +40,7 @@ mod render;
 mod report;
 mod scrub;
 pub mod system;
-mod thread_log;
+mod chat_log;
 
 #[doc(inline)]
 pub use debug_log::{
@@ -49,11 +49,11 @@ pub use debug_log::{
 use debug_log::{LaunchLog, Record, may_report_error};
 use files::session;
 #[doc(inline)]
-pub use files::{session_dir, channels, LogChunk, read, export};
+pub use files::{session_dir, channels, LogChunk, read, export, logs_folder};
 #[doc(inline)]
 pub use main_log::start_main_log;
 #[doc(inline)]
 pub use scrub::{Json, redact};
 pub(crate) use scrub::{hide, set_known};
 #[doc(inline)]
-pub use thread_log::{THREAD_LOG, ThreadLog};
+pub use chat_log::{CHAT_LOG, ChatLog};

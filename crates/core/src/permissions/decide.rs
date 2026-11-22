@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::system::fs::real;
+use crate::system::files::paths::real;
 use super::command::{command_prefix, split_writes};
 use super::matching::{Unit, covers, folder_of, host, shown, units};
 use super::{
@@ -61,7 +61,7 @@ enum Answer {
 
 /// The permission rules' verdict on `target`, or None when the user must be asked.
 ///
-/// The rules' answer to `target` in a thread of `project` (None for a chat) working in `root`, or
+/// The rules' answer to `target` in a chat of `project` (None for a chat) working in `root`, or
 /// None when the user is to be asked. Deny and ask rules win when they cover any part of the
 /// request; allow rules have to cover all of it, and reading in a `skills` folder needs none.
 /// Then the scope's default for the kind decides, then the default for everywhere.
@@ -103,7 +103,7 @@ pub fn unasked(
 /// Whether a deny rule in `rules` covers any part of `target`.
 ///
 /// Whether one of `rules` that refuses covers any part of `target` in `root`, outside the
-/// settings' scopes: a bot's blocked tools. A file a command writes by redirection counts as an
+/// settings' scopes: an agent's blocked tools. A file a command writes by redirection counts as an
 /// edit.
 #[must_use]
 pub fn refuses(rules: &[PermissionRule], root: &Path, target: &Target) -> bool {
@@ -123,7 +123,7 @@ pub fn refuses(rules: &[PermissionRule], root: &Path, target: &Target) -> bool {
 
 /// The deny and ask rules of one kind that `opencode run` is told at launch.
 ///
-/// The deny and ask rules of one kind that hold in a thread, for an agent that has to be told at
+/// The deny and ask rules of one kind that hold in a chat, for an agent that has to be told at
 /// launch what to ask about: `opencode run` (1.x), which cannot ask Patchwork mid-turn. Codex,
 /// Claude, and Antigravity read the rules at each call instead (see `permissions::hook`).
 #[derive(Debug, Clone, PartialEq)]
@@ -154,7 +154,7 @@ impl Guarded {
     }
 }
 
-/// The kinds a thread of `project` (None for a chat) has deny or ask rules for, or denies by
+/// The kinds a chat of `project` (None for a chat) has deny or ask rules for, or denies by
 /// default.
 #[must_use]
 pub fn guarded(settings: &PermissionSettings, project: Option<&str>) -> Vec<Guarded> {
@@ -330,7 +330,7 @@ fn answer(
 
 /// The patterns "Always allow" saves for `target`, or none if unsafe.
 ///
-/// The patterns "Always allow" saves for `target`: the thread's own folder or the folder outside
+/// The patterns "Always allow" saves for `target`: the chat's own folder or the folder outside
 /// it, each command's leading words, the web host, or the MCP server. Empty when a rule could not
 /// safely cover it, such as a command with a substitution or a redirect.
 #[must_use]

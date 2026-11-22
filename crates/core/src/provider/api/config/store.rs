@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 
 use crate::Error;
 use crate::provider::api::servers;
-use crate::system::fs::write_private;
+use crate::system::files::paths::write_private;
 
 use super::secrets::{delete_secret, headers_secret, store_secret, with_headers};
 use super::types::{ApiProvider, KeyChange, ProviderView};
@@ -53,7 +53,7 @@ fn read_config() -> Config {
     };
     let Ok(mut value) = serde_json::from_str::<Value>(&text) else {
         // Not JSON: this keeps a copy beside it and starts over, as for any settings file.
-        return crate::system::fs::read_json_or_default(&path);
+        return crate::system::files::paths::read_json_or_default(&path);
     };
     let mut filled = false;
     if let Some(list) = value.get_mut("providers").and_then(Value::as_array_mut) {
@@ -79,7 +79,7 @@ fn read_config() -> Config {
             }
             config
         }
-        Err(_) => crate::system::fs::read_json_or_default(&path),
+        Err(_) => crate::system::files::paths::read_json_or_default(&path),
     }
 }
 

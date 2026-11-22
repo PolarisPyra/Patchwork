@@ -1,4 +1,4 @@
-//! Starting a turn: the agent's command, arguments and input built from the thread, its process
+//! Starting a turn: the agent's command, arguments and input built from the chat, its process
 //! spawned, and the watch that retires it once it has sat idle.
 
 // Rust guideline compliant 2026-10-09
@@ -22,15 +22,15 @@ use crate::orchestration::changes::attribution::Attribution;
 use crate::extensions::hooks::HookEvent;
 use crate::provider::TurnSpec;
 use crate::provider;
-use crate::system::scope;
+use crate::system::processes::scope;
 use crate::Core;
 use crate::events::AgentEvent;
 use crate::provider::AgentKind;
 use crate::system::now_ms;
-use crate::threads::Role;
+use crate::chats::Role;
 use crate::logging::{AGENT_LOG, Data, Source};
 use crate::settings::LogLevel;
-use crate::workspace;
+use crate::source_control;
 use crate::orchestration::changes::checkpoint;
 use crate::orchestration::output::ingest::ingest;
 use crate::orchestration::turn::process::AgentStdin;
@@ -43,17 +43,17 @@ use crate::orchestration::messages::queue::Steers;
 use crate::orchestration::Runner;
 use crate::orchestration::tasks::subagents::Controls;
 
-/// Refuses a turn in a thread whose agent is replying, rather than starting a second agent beside
+/// Refuses a turn in a chat whose agent is replying, rather than starting a second agent beside
 /// it that nothing could stop.
 const ALREADY_REPLYING: &str = "This chat already has a reply running";
 
 impl Runner {
     pub(crate) fn start_turn(&self, core: &Arc<Core>, request: TurnRequest) -> Result<(), Error> {
-        let starting = Starting::claim(self, &request.thread_id)?;
+        let starting = Starting::claim(self, &request.chat_id)?;
         self.start_claimed(core, request, starting)
     }
 
-    /// Starts the turn in a thread the caller has claimed, as one that changes the thread first
+    /// Starts the turn in a chat the caller has claimed, as one that changes the chat first
     /// does, so that no other turn starts in it between the change and this one.
     pub(in crate::orchestration) fn start_claimed(
         &self,
@@ -62,7 +62,7 @@ impl Runner {
         starting: Starting<'_>,
     ) -> Result<(), Error> {
         let TurnRequest {
-            thread_id,
+            chat_id,
             text,
             attachments,
             images,
@@ -70,11 +70,11 @@ impl Runner {
         } = request;
         let _starting = starting;
         // Whoever asked may have checked before another turn started here.
-        if self.is_running(&thread_id) {
+        if self.is_running(&chat_id) {
             return Err(ALREADY_REPLYING.into());
         }
         // A turn of its own (a /goal, a compaction) replaces an idle agent process.
-        self.retire_idle(&thread_id);
+        self.retire_idle(&chat_id);
         let (
             agent,
             root,
@@ -88,30 +88,29 @@ impl Runner {
             project_id,
             checkpoint,
         ) = {
-            let thread = core.thread(&thread_id)?;
+            let chat = core.chat(&chat_id)?;
             // The message being sent is the newest user message; the transcript is what came before.
             // A resumed turn whose agent kept no session is told the conversation instead.
             // Claude picks its own session up from where an undo or a fork left it instead.
-            let point = (thread.agent == AgentKind::Claude && thread.session_id.is_some())
-                .then(|| core.resume_point(&thread_id))
+            let point = (chat.agent == AgentKind::Claude && chat.session_id.is_some())
+                .then(|| core.resume_point(&chat_id))
                 .flatten();
-            let fresh = point.is_none()
-                && (thread.context_pending || (resumes && thread.session_id.is_none()));
+            let fresh =
+                point.is_none() && (chat.context_pending || (resumes && chat.session_id.is_none()));
             let context = fresh.then(|| {
                 // A resumed turn sends no new message, so everything so far came before it.
                 let end = if resumes {
-                    thread.messages.len()
+                    chat.messages.len()
                 } else {
-                    thread
-                        .messages
+                    chat.messages
                         .iter()
                         .rposition(|m| m.role == Role::User)
-                        .unwrap_or(thread.messages.len())
+                        .unwrap_or(chat.messages.len())
                 };
-                crate::import::transcript(&thread.messages[..end])
+                crate::import::transcript(&chat.messages[..end])
             });
             let settings = core.store.settings();
-            let root = if let Some(id) = &thread.project_id {
+            let root = if let Some(id) = &chat.project_id {
                 let project = settings
                     .projects
                     .iter()
@@ -129,36 +128,34 @@ impl Runner {
                     .into());
                 }
                 // Its start is claimed already, so a step that begins from here on sees it.
-                if core.worktree_step_running(&thread) {
+                if core.worktree_step_running(&chat) {
                     return Err(
                         "Patchwork is merging, updating or discarding this task's worktree; send again once it's done"
                             .into(),
                     );
                 }
-                core.turn_root(&thread, id, &project.path)
+                core.turn_root(&chat, id, &project.path)
                     .map_err(|e| e.to_string())?
             } else {
-                let dir = core.chat_dir(&thread_id);
+                let dir = core.chat_dir(&chat_id);
                 std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
                 dir.to_string_lossy().into_owned()
             };
             (
-                thread.agent,
+                chat.agent,
                 root,
-                thread.session_id,
-                thread.model,
-                thread.access_mode,
-                thread.effort,
-                thread
-                    .compact_window
-                    .unwrap_or_else(|| settings.tokens.compact_window(thread.agent)),
+                chat.session_id,
+                chat.model,
+                chat.access_mode,
+                chat.effort,
+                chat.compact_window
+                    .unwrap_or_else(|| settings.tokens.compact_window(chat.agent)),
                 context,
                 point,
-                thread.project_id.clone(),
+                chat.project_id.clone(),
                 // Project files are snapshotted before the newest user message's turn changes them.
-                thread.project_id.and(
-                    thread
-                        .messages
+                chat.project_id.and(
+                    chat.messages
                         .iter()
                         .rev()
                         .find(|m| m.role == Role::User)
@@ -169,7 +166,7 @@ impl Runner {
         let sends_context = context.is_some();
         // Claude restores a goal of its own on resume, which Patchwork's would run beside. Each
         // session is checked once.
-        let checked = format!("claude-goal-checked:{thread_id}");
+        let checked = format!("claude-goal-checked:{chat_id}");
         if agent == AgentKind::Claude
             && let Some(session) = &session_id
             && !crate::system::ssh::is_remote(&root)
@@ -183,7 +180,7 @@ impl Runner {
         let settings = core.store.settings();
         // A chat app's dispatcher has Patchwork's chat tools and nothing of the computer, which
         // only the agents that can be launched without their own tools can promise.
-        let dispatcher = core.is_dispatcher(&thread_id);
+        let dispatcher = core.is_dispatcher(&chat_id);
         if dispatcher && !matches!(agent, AgentKind::Claude | AgentKind::Api) {
             return Err("A chat app's own chat runs on Claude or Patchwork's agent only,                         since the others cannot be kept from the computer.                         Switch it with /agent claude, or start a chat in a project with /new <project>"
                 .into());
@@ -194,7 +191,7 @@ impl Runner {
             crate::extensions::skills::enabled(&settings)
         };
         // A /goal that sets or resumes the goal reaches the agent as the goal's brief.
-        let text = crate::orchestration::goal::agent_text(&core.store, &thread_id, text);
+        let text = crate::orchestration::goal::agent_text(&core.store, &chat_id, text);
         // A message that names a skill as "$name" anywhere reaches the agent in the form it runs.
         let text = match crate::extensions::skills::invoked(&text, &skills) {
             Some((skill, rest)) => crate::extensions::skills::invocation(agent, &skill, rest),
@@ -204,22 +201,22 @@ impl Runner {
         let text = if dispatcher {
             text
         } else {
-            let (text, switched) = core.summon_agents(&thread_id, text, session_id.is_none());
-            core.told_role(&thread_id, switched);
+            let (text, switched) = core.summon_agents(&chat_id, text, session_id.is_none());
+            core.told_role(&chat_id, switched);
             text
         };
-        let text = core.chat_app_voice(&thread_id, text, session_id.is_none());
-        let text = core.bot_brief(&thread_id, text, session_id.is_none());
-        let text = core.worktree_brief(&thread_id, text, session_id.is_none());
-        let text = core.chat_app_context(&thread_id, text);
+        let text = core.chat_app_voice(&chat_id, text, session_id.is_none());
+        let text = core.agent_brief(&chat_id, text, session_id.is_none());
+        let text = core.worktree_brief(&chat_id, text, session_id.is_none());
+        let text = core.chat_app_context(&chat_id, text);
         let text = match context {
             Some(context) => format!("{context}{text}"),
             None => text,
         };
-        // Codex takes its instructions as the thread's developer instructions; Claude takes them as
+        // Codex takes its instructions as the chat's developer instructions; Claude takes them as
         // launch arguments. OpenCode and Antigravity get only the user's system prompt.
         let instructions = match agent {
-            _ if dispatcher => Some(crate::threads::chat_tools::DISPATCHER.to_string()),
+            _ if dispatcher => Some(crate::chats::tools::DISPATCHER.to_string()),
             AgentKind::Codex => Some(crate::orchestration::agent_instructions(
                 &settings,
                 AgentKind::Codex,
@@ -259,23 +256,23 @@ impl Runner {
         let agents = match agent {
             _ if dispatcher => Vec::new(),
             AgentKind::Claude | AgentKind::Codex | AgentKind::OpenCode => {
-                core.thread_agents(&thread_id)
+                core.chat_agents(&chat_id)
             }
             AgentKind::Antigravity | AgentKind::Api => Vec::new(),
         };
-        // The tools a bot blocks. Every agent but `opencode run` asks Patchwork at each call;
+        // The tools an agent blocks. Every agent but `opencode run` asks Patchwork at each call;
         // that one is told at launch, and can't be told about servers.
         let blocked = core
-            .run_bot_id(&thread_id)
-            .and_then(|id| core.bot(&id))
-            .map(|bot| bot.blocked)
+            .run_agent_id(&chat_id)
+            .and_then(|id| core.agent(&id))
+            .map(|agent| agent.blocked)
             .unwrap_or_default();
         if !blocked.is_empty() {
             let opencode_run =
                 agent == AgentKind::OpenCode && !crate::provider::opencode::uses_serve();
             if opencode_run && !blocked.servers.is_empty() {
                 return Err(
-                    "This bot blocks MCP servers, which this version of OpenCode can't \
+                    "This agent blocks MCP servers, which this version of OpenCode can't \
                             enforce. Update OpenCode, or unblock the servers"
                         .into(),
                 );
@@ -293,7 +290,7 @@ impl Runner {
             }
             if agent == AgentKind::Claude && crate::provider::mcp::relay_endpoint().is_none() {
                 return Err(
-                    "Patchwork's permission relay is not running, so this bot's blocked \
+                    "Patchwork's permission relay is not running, so this agent's blocked \
                             tools would not be refused. Restart Patchwork and try again"
                         .into(),
                 );
@@ -305,7 +302,7 @@ impl Runner {
         let spec = TurnSpec {
             root: crate::system::ssh::here(&root),
             host: crate::system::ssh::split(&root).map(|at| at.host),
-            thread_id: &thread_id,
+            chat_id: &chat_id,
             session_id: session_id.as_deref(),
             model: model.as_deref(),
             vision_model: vision_model.as_ref(),
@@ -327,24 +324,25 @@ impl Runner {
 
         // Agents often edit files through the shell, so changes are also found by
         // comparing git state before and after the turn.
-        let attribution = Attribution::shared(workspace::git_changes(&root).unwrap_or_default());
+        let attribution =
+            Attribution::shared(source_control::git_changes(&root).unwrap_or_default());
         if !resumes {
             turn_hooks(
                 core,
                 HookEvent::UserPromptSubmit,
-                &thread_id,
+                &chat_id,
                 &root,
                 agent,
                 None,
             );
             if let Some(message_id) = &checkpoint {
-                checkpoint::capture(&root, &thread_id, message_id);
+                checkpoint::capture(&root, &chat_id, message_id);
             }
         }
         let mut args = provider::turn_args(agent, &spec);
         if agent == AgentKind::Claude && dispatcher {
             args.extend(crate::provider::claude::launch::dispatcher_args(
-                crate::threads::chat_tools::DISPATCHER,
+                crate::chats::tools::DISPATCHER,
             ));
         } else if agent == AgentKind::Claude {
             args.extend(crate::provider::claude::launch::launch_args(
@@ -354,7 +352,7 @@ impl Runner {
             ));
             args.extend(crate::provider::claude::launch::permission_args());
             args.extend(crate::provider::claude::launch::agents_args(&agents, &root));
-            args.extend(core.bot_claude_args(&thread_id));
+            args.extend(core.agent_claude_args(&chat_id));
         }
         // After an undo or a fork the session goes on from the reply they left last. The
         // point is forgotten once the session reports in, as it then goes on from there.
@@ -400,7 +398,7 @@ impl Runner {
             .envs(provider::turn_env(agent, &spec))
             .envs(crate::permissions::hook::env(
                 agent,
-                &thread_id,
+                &chat_id,
                 crate::system::ssh::here(&root),
             ))
             .current_dir(&root);
@@ -449,7 +447,7 @@ impl Runner {
                     ""
                 },
             );
-            let source = Source::agent(agent, pid, &thread_id, None);
+            let source = Source::agent(agent, pid, &chat_id, None);
             AGENT_LOG.write(
                 LogLevel::Info,
                 "start",
@@ -473,13 +471,13 @@ impl Runner {
         if (sends_context || point.is_some())
             && let Err(error) = core
                 .store
-                .update_thread(&thread_id, |t| t.context_pending = false)
+                .update_chat(&chat_id, |t| t.context_pending = false)
         {
             return abandon(&mut child, error);
         }
-        let source = Source::agent(agent, pid, &thread_id, None);
+        let source = Source::agent(agent, pid, &chat_id, None);
         let stderr_tail = std::thread::spawn(move || read_stderr_tail(stderr, &source));
-        let stdin: Stdin = Arc::new(Mutex::new(AgentStdin::take(&mut child, agent, &thread_id)));
+        let stdin: Stdin = Arc::new(Mutex::new(AgentStdin::take(&mut child, agent, &chat_id)));
         for line in &input {
             write_line(&stdin, line);
         }
@@ -496,7 +494,7 @@ impl Runner {
         let idle = Arc::new(AtomicBool::new(false));
         let turn = Turn {
             core: Arc::clone(core),
-            thread_id: thread_id.clone(),
+            chat_id: chat_id.clone(),
             message_id: message.id.clone(),
             agent,
             cancelled: Arc::clone(&cancelled),
@@ -534,7 +532,7 @@ impl Runner {
             dispatcher,
         };
         self.turns.locked().insert(
-            thread_id,
+            chat_id,
             RunningTurn {
                 pid: child.id(),
                 cancelled,
@@ -556,18 +554,18 @@ impl Runner {
         );
         crate::orchestration::turn::recovery::note_agent(
             &core.store,
-            &turn.thread_id,
+            &turn.chat_id,
             pid,
             turn.scope.as_deref(),
         );
         // Stopped while it was starting, as by Stop or archiving the chat: it stops now it can.
-        if self.stop_starting.locked().remove(&turn.thread_id) {
-            self.cancel(&turn.thread_id);
+        if self.stop_starting.locked().remove(&turn.chat_id) {
+            self.cancel(&turn.chat_id);
         }
         turn.publish(AgentEvent::MessageStarted { message });
         let watched = Watched {
             core: Arc::clone(core),
-            thread_id: turn.thread_id.clone(),
+            chat_id: turn.chat_id.clone(),
             pid,
             scope: turn.scope.clone(),
             exited: Arc::clone(&turn.exited),

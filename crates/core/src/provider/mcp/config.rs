@@ -146,11 +146,13 @@ pub(super) fn read_config() -> Config {
             .file_name()
             .and_then(|n| n.to_str())
             .and_then(|n| n.strip_suffix(".json"))
-            .filter(|n| crate::system::fs::is_plain_file_name(n))
+            .filter(|n| crate::system::files::paths::is_plain_file_name(n))
         else {
             continue;
         };
-        if let Some(server) = crate::system::fs::read_json_or_default::<Option<McpServer>>(&path) {
+        if let Some(server) =
+            crate::system::files::paths::read_json_or_default::<Option<McpServer>>(&path)
+        {
             mcp_servers.insert(name.to_string(), server);
         }
     }
@@ -215,7 +217,7 @@ pub fn save(name: &str, previous: Option<String>, server: McpServer) -> Result<(
     if name.is_empty() {
         return Err("Give the server a name".into());
     }
-    if !crate::system::fs::is_plain_file_name(&name) {
+    if !crate::system::files::paths::is_plain_file_name(&name) {
         return Err("The name cannot start with a dot or have any of / \\ : * ? \" < > |".into());
     }
     match (&server.command, &server.url) {
@@ -331,7 +333,7 @@ pub fn restart(name: &str) {
 
 fn write_server(name: &str, server: &McpServer) -> Result<(), Error> {
     let text = serde_json::to_string_pretty(server).map_err(|e| e.to_string())?;
-    crate::system::fs::write_private(&file(name), &text)
+    crate::system::files::paths::write_private(&file(name), &text)
 }
 
 fn remove_file(name: &str) -> Result<(), Error> {

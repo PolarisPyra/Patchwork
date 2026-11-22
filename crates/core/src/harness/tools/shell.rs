@@ -2,8 +2,8 @@
 //! limit. Patchwork runs it rather than the agent's process, so one still running at its limit
 //! carries on as a background job; this is the command it runs and what the model is told of it.
 //!
-//! Each command starts where the thread's last one ended: in its folder, when that is in the
-//! project, and with the variables it exported. Bash writes both to the thread's shell file as
+//! Each command starts where the chat's last one ended: in its folder, when that is in the
+//! project, and with the variables it exported. Bash writes both to the chat's shell file as
 //! the command exits, and the next command reads them back before it runs.
 
 // Rust guideline compliant 2026-10-09
@@ -41,9 +41,9 @@ fi
 [ -f "$__pw_file" ] && . "$__pw_file" 2>/dev/null
 eval "$__pw_cmd""##;
 
-/// The file thread `thread_id`'s shell is kept in between its commands.
-pub(crate) fn shell_file(thread_id: &str) -> PathBuf {
-    let name: String = thread_id
+/// The file chat `chat_id`'s shell is kept in between its commands.
+pub(crate) fn shell_file(chat_id: &str) -> PathBuf {
+    let name: String = chat_id
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
         .collect();

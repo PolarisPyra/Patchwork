@@ -6,6 +6,8 @@
 
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
+
 use super::outbound::outcome;
 use crate::provider::clip;
 use super::platform::Platform;
@@ -14,7 +16,7 @@ use crate::Core;
 use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::notifications::{ChatAppsWhen, Kind, Notices, Place, resets_in};
 use crate::system::now_ms;
-use crate::threads::{Approval, ApprovalStatus, Thread};
+use crate::chats::{Approval, ApprovalStatus, Chat};
 
 /// The most characters of a finished chat's reply a notice shows.
 const REPLY_LIMIT: usize = 300;
@@ -22,15 +24,29 @@ const REPLY_LIMIT: usize = 300;
 /// A request sent to a conversation on a chat app, which it can answer until it is resolved.
 pub(super) struct Notice {
     pub platform: Platform,
-    pub chat: String,
-    pub thread_id: String,
+    pub conversation: String,
+    pub chat_id: String,
     pub approval_id: String,
 }
 
+/// The app state key of the usage notices still showing a Continue when it resets button.
+const RESETS: &str = "gateway.resets";
+
+/// A usage notice sent to a conversation, deleted once the chat is set to continue, starts
+/// another turn, or is deleted, so no stale button is left to press.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResetNotice {
+    pub platform: Platform,
+    pub conversation: String,
+    pub chat_id: String,
+    pub message_id: String,
+}
+
 impl Core {
-    /// Tells the pairings about `event` of a thread no conversation continues, when the
+    /// Tells the pairings about `event` of a chat no conversation continues, when the
     /// settings ask for it there and, unless they say always, you are away.
-    pub(super) fn notify(&self, thread_id: &str, event: &AgentEvent) {
+    pub(super) fn notify(&self, chat_id: &str, event: &AgentEvent) {
         if let AgentEvent::ApprovalResolved {
             approval_id,
             allowed,
@@ -52,43 +68,57 @@ impl Core {
         if !relevant || !(always || self.away()) {
             return;
         }
-        let Some(thread) = self.store.thread(thread_id) else {
+        let Some(chat) = self.store.chat(chat_id) else {
             return;
         };
-        let Some(kind) = self.notice_kind(Place::ChatApps, &thread, event) else {
+        let Some(kind) = self.notice_kind(Place::ChatApps, &chat, event) else {
             return;
         };
         match event {
             AgentEvent::ApprovalRequested { approval, .. } => {
                 for place in self.chat_places() {
-                    self.show_request(&thread, approval, place.platform, &place.chat);
+                    self.show_request(&chat, approval, place.platform, &place.conversation);
                 }
             }
             AgentEvent::GoalUpdated { goal: Some(goal) } => {
                 let text = format!(
                     "{} met its goal:\n\n{}",
-                    self.heading(&thread),
+                    self.heading(&chat),
                     clip(&goal.objective, REPLY_LIMIT)
                 );
-                self.tell_finished(&thread, &text);
+                self.tell_finished(&chat, &text);
             }
             AgentEvent::TurnCompleted { .. } if kind == Kind::Usage => {
                 let resets = self
-                    .limit_reset(&thread)
+                    .limit_reset(&chat)
                     .map(|at| format!(" It resets {}.", resets_in(at, now_ms())))
                     .unwrap_or_default();
-                let text = format!("{} ran out of usage.{resets}", self.heading(&thread));
+                let text = format!("{} ran out of usage.{resets}", self.heading(&chat));
                 let resume = Button {
                     label: "Continue when it resets".to_string(),
-                    reply: format!("/resume {thread_id}"),
+                    reply: format!("/resume {chat_id}"),
                 };
                 for place in self.chat_places() {
-                    self.say_with(
+                    let sent = self.say_with(
                         place.platform,
-                        &place.chat,
+                        &place.conversation,
                         &text,
                         std::slice::from_ref(&resume),
                     );
+                    let Some(message_id) = sent else {
+                        continue;
+                    };
+                    let notice = ResetNotice {
+                        platform: place.platform,
+                        conversation: place.conversation,
+                        chat_id: chat_id.to_string(),
+                        message_id,
+                    };
+                    if let Err(error) =
+                        self.change_list(RESETS, |list: &mut Vec<ResetNotice>| list.push(notice))
+                    {
+                        log::warn!(error:% = error; "could not keep a usage notice: {{error}}");
+                    }
                 }
             }
             AgentEvent::TurnCompleted {
@@ -96,7 +126,7 @@ impl Core {
                 status,
                 error,
             } => {
-                let Some(reply) = self.reply(thread_id, message_id, *status, error.clone()) else {
+                let Some(reply) = self.reply(chat_id, message_id, *status, error.clone()) else {
                     return;
                 };
                 let how = if kind == Kind::Failed {
@@ -106,29 +136,29 @@ impl Core {
                 };
                 let text = format!(
                     "{} {how}:\n\n{}",
-                    self.heading(&thread),
+                    self.heading(&chat),
                     clip(&reply, REPLY_LIMIT)
                 );
-                self.tell_finished(&thread, &text);
+                self.tell_finished(&chat, &text);
             }
             _ => {}
         }
     }
 
     /// Sends `text` to the pairings, with buttons to mute the chat.
-    fn tell_finished(&self, thread: &Thread, text: &str) {
+    fn tell_finished(&self, chat: &Chat, text: &str) {
         let mut buttons = vec![Button {
             label: "Mute this chat".to_string(),
-            reply: format!("/mute {}", thread.id),
+            reply: format!("/mute {}", chat.id),
         }];
-        if let Some(project) = &thread.project_id {
+        if let Some(project) = &chat.project_id {
             buttons.push(Button {
                 label: "Mute project".to_string(),
                 reply: format!("/mute project {project}"),
             });
         }
         for place in self.chat_places() {
-            self.say_with(place.platform, &place.chat, text, &buttons);
+            self.say_with(place.platform, &place.conversation, text, &buttons);
         }
     }
 
@@ -137,7 +167,7 @@ impl Core {
     pub(super) fn answer_notice(
         self: &Arc<Self>,
         platform: Platform,
-        chat: &str,
+        conversation: &str,
         text: &str,
     ) -> bool {
         let told: Vec<(String, String)> = self
@@ -146,13 +176,13 @@ impl Core {
             .notices
             .iter()
             .rev()
-            .filter(|n| n.platform == platform && n.chat == chat)
-            .map(|n| (n.thread_id.clone(), n.approval_id.clone()))
+            .filter(|n| n.platform == platform && n.conversation == conversation)
+            .map(|n| (n.chat_id.clone(), n.approval_id.clone()))
             .collect();
-        for (thread_id, approval_id) in told {
-            match self.approval_waiting(&thread_id, &approval_id) {
+        for (chat_id, approval_id) in told {
+            match self.approval_waiting(&chat_id, &approval_id) {
                 Some(approval) => {
-                    self.answer(platform, chat, &thread_id, &approval, text);
+                    self.answer(platform, conversation, &chat_id, &approval, text);
                     return true;
                 }
                 // A request its turn left unanswered is no longer waiting.
@@ -170,12 +200,12 @@ impl Core {
     pub(super) fn answer_by_id(
         self: &Arc<Self>,
         platform: Platform,
-        chat: &str,
+        conversation: &str,
         approval_id: &str,
         text: &str,
     ) {
-        let thread_id = self.store.with_threads(|threads| {
-            threads
+        let chat_id = self.store.with_chats(|chats| {
+            chats
                 .iter()
                 .find(|t| {
                     t.messages
@@ -184,19 +214,19 @@ impl Core {
                 })
                 .map(|t| t.id.clone())
         });
-        match thread_id.and_then(|id| Some((self.approval_waiting(&id, approval_id)?, id))) {
-            Some((approval, id)) => self.answer(platform, chat, &id, &approval, text),
-            None => self.say(platform, chat, "That request is no longer waiting."),
+        match chat_id.and_then(|id| Some((self.approval_waiting(&id, approval_id)?, id))) {
+            Some((approval, id)) => self.answer(platform, conversation, &id, &approval, text),
+            None => self.say(platform, conversation, "That request is no longer waiting."),
         }
     }
 
-    /// The request `approval_id` of `thread_id`, while its agent waits on it.
-    fn approval_waiting(&self, thread_id: &str, approval_id: &str) -> Option<Approval> {
-        if !self.runner.is_running(thread_id) {
+    /// The request `approval_id` of `chat_id`, while its agent waits on it.
+    fn approval_waiting(&self, chat_id: &str, approval_id: &str) -> Option<Approval> {
+        if !self.runner.is_running(chat_id) {
             return None;
         }
         self.store
-            .thread(thread_id)?
+            .chat(chat_id)?
             .messages
             .iter()
             .flat_map(|m| m.approvals.iter())
@@ -220,8 +250,14 @@ impl Core {
             (closed, from)
         };
         for n in closed {
-            let text = outcome(allowed, answered, from.as_ref(), n.platform, &n.chat);
-            self.say(n.platform, &n.chat, &text);
+            let text = outcome(
+                allowed,
+                answered,
+                from.as_ref(),
+                n.platform,
+                &n.conversation,
+            );
+            self.say(n.platform, &n.conversation, &text);
         }
     }
 
@@ -241,7 +277,7 @@ impl Core {
                 .map(|p| format!("chats in {}", p.name))
         } else {
             self.store
-                .thread(id)
+                .chat(id)
                 .map(|t| format!("\u{201c}{}\u{201d}", t.title))
         };
         let Some(named) = named else {
@@ -251,7 +287,7 @@ impl Core {
         let saved = if project {
             self.set_project_notices(id, false)
         } else {
-            self.set_thread_notices(id, Some(Notices::Off))
+            self.set_chat_notices(id, Some(Notices::Off))
         };
         match saved {
             Ok(()) => {
@@ -261,21 +297,21 @@ impl Core {
         }
     }
 
-    /// Sets the chat `thread_id` to continue once its agent's usage limit resets, from a
+    /// Sets the chat `chat_id` to continue once its agent's usage limit resets, from a
     /// notice's button, and returns what to tell the conversation.
-    pub(super) fn resume_at_reset(&self, thread_id: &str) -> String {
-        let Some(thread) = self.store.thread(thread_id) else {
+    pub(super) fn resume_at_reset(&self, chat_id: &str) -> String {
+        let Some(chat) = self.store.chat(chat_id) else {
             return "Press Continue when it resets under a notice to pick the chat.".to_string();
         };
-        match self.resume_at_limit_reset(thread_id) {
+        match self.resume_at_limit_reset(chat_id) {
             Ok(at) => {
                 self.emit(AgentEventEnvelope {
-                    thread_id: thread_id.to_string(),
+                    chat_id: chat_id.to_string(),
                     event: AgentEvent::OptionsChanged,
                 });
                 format!(
                     "\u{201c}{}\u{201d} continues {}.",
-                    thread.title,
+                    chat.title,
                     resets_in(at, now_ms())
                 )
             }
@@ -283,9 +319,49 @@ impl Core {
         }
     }
 
-    /// The thread's title in quotes, and its project when it has one.
-    pub(super) fn heading(&self, thread: &Thread) -> String {
-        let project = thread.project_id.as_ref().and_then(|id| {
+    /// Deletes the usage notices of `chat_id` from the chat apps, on a thread of its own, so a
+    /// chat that has moved on shows no button to set it to continue.
+    pub(crate) fn drop_reset_notices(&self, chat_id: &str) {
+        // Every turn of every chat asks, so the list is only rewritten when it has some.
+        let listed = self.read_list::<ResetNotice>(RESETS);
+        if !listed.iter().any(|n| n.chat_id == chat_id) {
+            return;
+        }
+        let mut dropped = Vec::new();
+        let changed = self.change_list(RESETS, |list: &mut Vec<ResetNotice>| {
+            let (gone, kept) = std::mem::take(list)
+                .into_iter()
+                .partition(|n| n.chat_id == chat_id);
+            *list = kept;
+            dropped = gone;
+        });
+        if let Err(error) = changed {
+            log::warn!(error:% = error; "could not forget the usage notices: {{error}}");
+        }
+        let removals: Vec<_> = dropped
+            .into_iter()
+            .filter_map(|n| Some((self.gateway.connector(n.platform)?, n)))
+            .collect();
+        if removals.is_empty() {
+            return;
+        }
+        let spawned = std::thread::Builder::new()
+            .name("gateway-drop-resets".into())
+            .spawn(move || {
+                for (connector, n) in removals {
+                    if let Err(error) = connector.remove(&n.conversation, &n.message_id) {
+                        log::warn!(platform = n.platform.id(), error:% = error; "could not delete a usage notice on {{platform}}: {{error}}");
+                    }
+                }
+            });
+        if let Err(error) = spawned {
+            log::warn!(error:% = error; "could not start deleting usage notices: {{error}}");
+        }
+    }
+
+    /// The chat's title in quotes, and its project when it has one.
+    pub(super) fn heading(&self, chat: &Chat) -> String {
+        let project = chat.project_id.as_ref().and_then(|id| {
             self.store
                 .settings()
                 .projects
@@ -294,8 +370,8 @@ impl Core {
                 .map(|p| p.name)
         });
         match project {
-            Some(name) => format!("\u{201c}{}\u{201d} in {name}", thread.title),
-            None => format!("\u{201c}{}\u{201d}", thread.title),
+            Some(name) => format!("\u{201c}{}\u{201d} in {name}", chat.title),
+            None => format!("\u{201c}{}\u{201d}", chat.title),
         }
     }
 }

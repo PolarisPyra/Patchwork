@@ -57,7 +57,7 @@ impl Core {
         Ok(changed)
     }
 
-    /// A value the app keeps under `key`, such as the thread that was open last.
+    /// A value the app keeps under `key`, such as the chat that was open last.
     #[must_use]
     pub fn state(&self, key: &str) -> Option<String> {
         self.store.state(key)

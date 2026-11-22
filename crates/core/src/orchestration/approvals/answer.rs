@@ -14,7 +14,7 @@ use crate::events::AgentEvent;
 use crate::Core;
 use crate::permissions::{self, Decision, RuleRef, Target};
 use crate::provider;
-use crate::threads::{ApprovalStatus, Question, Thread};
+use crate::chats::{ApprovalStatus, Question, Chat};
 
 /// The user's answer to an approval request: whether it was allowed, any answers to questions,
 /// and the rule the user saved with it.
@@ -26,62 +26,61 @@ pub struct ApprovalDecision<'a> {
     pub rule: Option<RuleRef>,
 }
 
-/// What the permission rules answer to `target` in the thread, or None to ask the user.
+/// What the permission rules answer to `target` in the chat, or None to ask the user.
 pub(in crate::orchestration) fn decide(
     core: &Core,
-    thread_id: &str,
+    chat_id: &str,
     root: &str,
     target: &Target,
 ) -> Option<Decision> {
-    let thread = core.store.thread(thread_id);
+    let chat = core.store.chat(chat_id);
     let settings = core.store.settings();
     permissions::decide(
         &settings.permissions,
-        thread.as_ref().and_then(|t| t.project_id.as_deref()),
+        chat.as_ref().and_then(|t| t.project_id.as_deref()),
         std::path::Path::new(root),
         target,
-        &readable(core, thread_id, thread.as_ref(), &settings),
+        &readable(core, chat_id, chat.as_ref(), &settings),
     )
 }
 
-/// What the permission rules answer to `target` in the thread when the access mode runs it
+/// What the permission rules answer to `target` in the chat when the access mode runs it
 /// without asking.
 pub(in crate::orchestration) fn unasked(
     core: &Core,
-    thread_id: &str,
+    chat_id: &str,
     root: &str,
     target: &Target,
     asks: bool,
 ) -> permissions::Unasked {
-    let thread = core.store.thread(thread_id);
+    let chat = core.store.chat(chat_id);
     let settings = core.store.settings();
     permissions::unasked(
         &settings.permissions,
-        thread.as_ref().and_then(|t| t.project_id.as_deref()),
+        chat.as_ref().and_then(|t| t.project_id.as_deref()),
         std::path::Path::new(root),
         target,
-        &readable(core, thread_id, thread.as_ref(), &settings),
+        &readable(core, chat_id, chat.as_ref(), &settings),
         asks,
     )
 }
 
-/// The folders thread `thread_id`'s agent reads without asking: the skills, every file and
-/// folder the user attached in the thread, and for a bot's run the files the bot knows.
+/// The folders chat `chat_id`'s agent reads without asking: the skills, every file and
+/// folder the user attached in the chat, and for an agent's run the files the agent knows.
 fn readable(
     core: &Core,
-    thread_id: &str,
-    thread: Option<&Thread>,
+    chat_id: &str,
+    chat: Option<&Chat>,
     settings: &crate::settings::Settings,
 ) -> Vec<std::path::PathBuf> {
     let mut folders = crate::extensions::skills::folders(settings);
     folders.extend(
-        thread
-            .iter()
+        chat.iter()
             .flat_map(|t| &t.messages)
             .flat_map(|m| &m.attachments)
             .map(|a| std::path::PathBuf::from(&a.path)),
     );
-    folders.extend(core.run_knowledge_dir(thread_id));
+    folders.extend(core.run_knowledge_dir(chat_id));
     folders
 }
 
@@ -90,10 +89,10 @@ impl Runner {
     pub(crate) fn respond(
         &self,
         core: &Arc<Core>,
-        thread_id: &str,
+        chat_id: &str,
         decision: ApprovalDecision<'_>,
     ) -> Result<(), Error> {
-        self.resolve(core, thread_id, decision, false)
+        self.resolve(core, chat_id, decision, false)
     }
 
     /// Answers the pending approvals the permission rules now cover, in every running turn, once
@@ -103,20 +102,20 @@ impl Runner {
             let turns = self.turns.locked();
             turns
                 .iter()
-                .flat_map(|(thread_id, turn)| {
+                .flat_map(|(chat_id, turn)| {
                     let pending = turn.pending.locked();
                     pending
                         .iter()
                         .filter_map(|(id, p)| {
                             let target = p.target.clone()?;
-                            Some((thread_id.clone(), id.clone(), target, p.root.clone()))
+                            Some((chat_id.clone(), id.clone(), target, p.root.clone()))
                         })
                         .collect::<Vec<_>>()
                 })
                 .collect()
         };
-        for (thread_id, approval_id, target, root) in waiting {
-            let Some(Decision { allow, rule }) = decide(core, &thread_id, &root, &target) else {
+        for (chat_id, approval_id, target, root) in waiting {
+            let Some(Decision { allow, rule }) = decide(core, &chat_id, &root, &target) else {
                 continue;
             };
             let decision = ApprovalDecision {
@@ -126,7 +125,7 @@ impl Runner {
                 rule: Some(rule),
             };
             // The user may have answered it meanwhile.
-            let _ = self.resolve(core, &thread_id, decision, true);
+            let _ = self.resolve(core, &chat_id, decision, true);
         }
     }
 
@@ -134,7 +133,7 @@ impl Runner {
     fn resolve(
         &self,
         core: &Arc<Core>,
-        thread_id: &str,
+        chat_id: &str,
         decision: ApprovalDecision<'_>,
         auto: bool,
     ) -> Result<(), Error> {
@@ -146,7 +145,7 @@ impl Runner {
         } = decision;
         let waited = {
             let turns = self.turns.locked();
-            turns.get(thread_id).and_then(|turn| {
+            turns.get(chat_id).and_then(|turn| {
                 turn.pending
                     .locked()
                     .remove(approval_id)
@@ -157,7 +156,7 @@ impl Runner {
         // ended. The answer still counts, and a question is answered by asking it again in a new
         // turn, so a request the person can still read above the composer can still be answered.
         let Some((agent, stdin, pending)) = waited else {
-            return answer_in_new_turn(core, thread_id, approval_id, allow, &answers, rule, auto);
+            return answer_in_new_turn(core, chat_id, approval_id, allow, &answers, rule, auto);
         };
         // A permission hook holds the call until it hears the answer.
         if pending.reply.get("hook").is_some() {
@@ -172,7 +171,7 @@ impl Runner {
         }
         publish(
             core,
-            thread_id,
+            chat_id,
             AgentEvent::ApprovalResolved {
                 message_id: pending.message_id,
                 approval_id: approval_id.into(),
@@ -186,7 +185,7 @@ impl Runner {
     }
 }
 
-/// Answers an approval no running turn is waiting for, in `thread_id`: records the answer on the
+/// Answers an approval no running turn is waiting for, in `chat_id`: records the answer on the
 /// stored request, and sends what it says as the next turn's message. That is how a question the
 /// app asked before it closed, or the one above the composer after its reply was stopped, can still
 /// be answered: the agent is told, in a message of the user's, rather than nothing happening.
@@ -195,7 +194,7 @@ impl Runner {
 /// once the turn that asked is gone, so it is only recorded as answered or denied.
 fn answer_in_new_turn(
     core: &Arc<Core>,
-    thread_id: &str,
+    chat_id: &str,
     approval_id: &str,
     allow: bool,
     answers: &HashMap<String, Vec<String>>,
@@ -206,9 +205,9 @@ fn answer_in_new_turn(
     // than answered a second time.
     let (message_id, questions) = core
         .store
-        .thread(thread_id)
-        .and_then(|thread| {
-            thread.messages.iter().find_map(|message| {
+        .chat(chat_id)
+        .and_then(|chat| {
+            chat.messages.iter().find_map(|message| {
                 let approval = message
                     .approvals
                     .iter()
@@ -220,7 +219,7 @@ fn answer_in_new_turn(
     // Said before it is recorded, so a turn that cannot start leaves the request waiting for
     // another try rather than answered and lost.
     if allow && let Some(text) = answer_message(&questions, answers) {
-        core.send_message(thread_id.to_string(), text, Vec::new(), false)?;
+        core.send_message(chat_id.to_string(), text, Vec::new(), false)?;
     }
     let status = if allow {
         ApprovalStatus::Allowed
@@ -228,8 +227,8 @@ fn answer_in_new_turn(
         ApprovalStatus::Denied
     };
     let recorded = answers.clone();
-    core.store.update_thread(thread_id, |thread| {
-        for message in &mut thread.messages {
+    core.store.update_chat(chat_id, |chat| {
+        for message in &mut chat.messages {
             let Some(at) = message.approvals.iter().position(|a| a.id == approval_id) else {
                 continue;
             };
@@ -243,7 +242,7 @@ fn answer_in_new_turn(
     })?;
     publish(
         core,
-        thread_id,
+        chat_id,
         AgentEvent::ApprovalResolved {
             message_id,
             approval_id: approval_id.into(),
@@ -281,7 +280,7 @@ fn answer_message(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::threads::QuestionOption;
+    use crate::chats::QuestionOption;
 
     fn question(id: &str, asked: &str) -> Question {
         Question {

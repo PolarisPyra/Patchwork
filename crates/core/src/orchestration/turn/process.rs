@@ -22,7 +22,7 @@ use std::time::Duration;
 use crate::logging::{AGENT_LOG, Data, Source};
 use crate::provider::AgentKind;
 use crate::settings::LogLevel;
-use crate::system::processes;
+use crate::system::processes::running;
 use crate::orchestration::messages::queue::Steers;
 
 /// How much of the agent's stderr is kept for error reporting.
@@ -69,9 +69,9 @@ impl AgentStdin {
     pub(in crate::orchestration) fn take(
         child: &mut Child,
         agent: AgentKind,
-        thread_id: &str,
+        chat_id: &str,
     ) -> Option<Self> {
-        let source = Source::agent(agent, child.id(), thread_id, None);
+        let source = Source::agent(agent, child.id(), chat_id, None);
         let pipe = child.stdin.take()?;
         let (lines, queued) = mpsc::channel();
         let writer = source.clone();
@@ -113,11 +113,11 @@ fn write_all(mut pipe: ChildStdin, lines: &mpsc::Receiver<String>, source: &Sour
 /// Sends SIGTERM to the agent's process group, then SIGKILL if the agent has not exited
 /// after `KILL_AFTER`.
 pub(in crate::orchestration) fn terminate(pid: u32, exited: Arc<AtomicBool>) {
-    processes::signal_process_group(pid, processes::SIGTERM);
+    running::signal_process_group(pid, running::SIGTERM);
     std::thread::spawn(move || {
         std::thread::sleep(KILL_AFTER);
         if !exited.load(Ordering::SeqCst) {
-            processes::signal_process_group(pid, processes::SIGKILL);
+            running::signal_process_group(pid, running::SIGKILL);
         }
     });
 }
@@ -160,7 +160,7 @@ pub(in crate::orchestration) fn exit_error(exit: Option<ExitStatus>) -> String {
     }
     // Memory is named only when the kernel counted a kill for it among the agents: another
     // program, or another Patchwork, can send the same signal.
-    if crate::system::scope::killed_for_memory() {
+    if crate::system::processes::scope::killed_for_memory() {
         return "The agent was stopped because the system ran low on memory".into();
     }
     #[cfg(unix)]

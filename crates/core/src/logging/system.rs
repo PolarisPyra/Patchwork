@@ -13,7 +13,7 @@ use std::sync::OnceLock;
 use serde_json::{json, Value};
 
 use crate::provider::{self, AgentKind};
-use crate::system::fs::home_dir;
+use crate::system::files::paths::home_dir;
 
 /// This launch's report, worked out by the first caller.
 static REPORT: OnceLock<Value> = OnceLock::new();

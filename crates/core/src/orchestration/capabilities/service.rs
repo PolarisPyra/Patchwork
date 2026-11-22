@@ -54,7 +54,7 @@ pub(super) fn project(ctx: &Ctx<'_>, args: &Value) -> Result<Project, Error> {
 /// Tells the window that the settings changed, so it draws them.
 pub(super) fn changed(ctx: &Ctx<'_>) {
     ctx.core.emit(AgentEventEnvelope {
-        thread_id: String::new(),
+        chat_id: String::new(),
         event: AgentEvent::SettingsChanged,
     });
 }
@@ -320,7 +320,7 @@ pub(super) fn delete_scheduled(ctx: &Ctx<'_>, args: &Value) -> Result<String, Er
 )]
 pub(super) fn diagnostics(ctx: &Ctx<'_>, _: &Value) -> Result<String, Error> {
     let core = ctx.core;
-    let chats = core.store.threads();
+    let chats = core.store.chats();
     let replying = chats
         .iter()
         .filter(|t| core.runner.is_running(&t.id) || core.runner.is_starting(&t.id))
@@ -375,7 +375,7 @@ pub(super) fn install_update(ctx: &Ctx<'_>, _: &Value) -> Result<String, Error> 
                     // The reply's last piece is on its way to the chat app.
                     std::thread::sleep(REPLY_SENT);
                     core.emit(AgentEventEnvelope {
-                        thread_id: String::new(),
+                        chat_id: String::new(),
                         event: AgentEvent::RestartToUpdate,
                     });
                 })

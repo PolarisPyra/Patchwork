@@ -14,14 +14,14 @@ use super::{Session, SessionMessage, ilog, push_merged};
 use crate::provider;
 use crate::system::time::parse_rfc3339_ms;
 use crate::provider::AgentKind;
-use crate::threads::Role;
+use crate::chats::Role;
 
 pub fn sessions() -> Vec<Session> {
     let Some(home) = provider::codex::home() else {
         ilog!("Codex: no home folder");
         return vec![];
     };
-    let titles = thread_names(&home.join("session_index.jsonl"));
+    let titles = chat_names(&home.join("session_index.jsonl"));
     let dir = home.join("sessions");
     let files = provider::codex::rollout_files(&dir);
     ilog!(
@@ -49,8 +49,8 @@ pub fn sessions() -> Vec<Session> {
         .collect()
 }
 
-/// Thread names Codex generated, from `session_index.jsonl` (later lines win).
-fn thread_names(path: &Path) -> HashMap<String, String> {
+/// Chat names Codex generated, from `session_index.jsonl` (later lines win).
+fn chat_names(path: &Path) -> HashMap<String, String> {
     std::fs::read_to_string(path)
         .unwrap_or_default()
         .lines()
@@ -78,10 +78,10 @@ fn parse(reader: impl BufRead) -> Option<Session> {
         .find_map(|l| serde_json::from_str::<Value>(&l).ok())
         .filter(|v| v["type"] == "session_meta")?;
     let payload = &meta["payload"];
-    let user_thread = payload["thread_source"]
+    let user_chat = payload["thread_source"]
         .as_str()
         .is_none_or(|s| s == "user");
-    let subagent = !user_thread || payload["source"].is_object();
+    let subagent = !user_chat || payload["source"].is_object();
     let session_id = payload["id"].as_str()?.to_string();
     let cwd = payload["cwd"].as_str()?.to_string();
     let created_at = payload["timestamp"]

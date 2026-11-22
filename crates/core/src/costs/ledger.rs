@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::Core;
 use crate::provider::AgentKind;
-use crate::threads::Thread;
+use crate::chats::Chat;
 
 use super::prices::turn_model;
 use super::types::ReplyCost;
@@ -19,16 +19,16 @@ struct Models {
 }
 
 impl Models {
-    fn of(&mut self, thread: &Thread) -> Option<String> {
-        if let Some(model) = &thread.model {
+    fn of(&mut self, chat: &Chat) -> Option<String> {
+        if let Some(model) = &chat.model {
             return Some(model.clone());
         }
-        if let Some(model) = self.defaults.get(&thread.agent) {
+        if let Some(model) = self.defaults.get(&chat.agent) {
             return Some(model.clone());
         }
         self.configured
-            .entry(thread.agent)
-            .or_insert_with(|| turn_model(thread.agent, None))
+            .entry(chat.agent)
+            .or_insert_with(|| turn_model(chat.agent, None))
             .clone()
     }
 }
@@ -54,9 +54,9 @@ impl Core {
     pub(super) fn counted_replies(&self) -> (Vec<ReplyCost>, HashSet<String>) {
         let names = self.project_names();
         let mut models = self.models();
-        let (mut replies, open) = self.store.with_threads(|threads| {
-            let open: HashSet<String> = threads.iter().map(|t| t.id.clone()).collect();
-            let replies: Vec<ReplyCost> = threads
+        let (mut replies, open) = self.store.with_chats(|chats| {
+            let open: HashSet<String> = chats.iter().map(|t| t.id.clone()).collect();
+            let replies: Vec<ReplyCost> = chats
                 .iter()
                 .flat_map(|t| replies_of(t, 0, &names, &mut models))
                 .collect();
@@ -75,11 +75,11 @@ impl Core {
 
     /// Keeps the costs of a chat's replies from the `from`th message on, before they are
     /// deleted, so the totals still count them.
-    pub(crate) fn keep_reply_costs(&self, thread_id: &str, from: usize) {
-        let Some(thread) = self.store.thread(thread_id) else {
+    pub(crate) fn keep_reply_costs(&self, chat_id: &str, from: usize) {
+        let Some(chat) = self.store.chat(chat_id) else {
             return;
         };
-        let rows = replies_of(&thread, from, &self.project_names(), &mut self.models());
+        let rows = replies_of(&chat, from, &self.project_names(), &mut self.models());
         if rows.is_empty() {
             return;
         }
@@ -90,12 +90,12 @@ impl Core {
 }
 
 fn replies_of(
-    thread: &Thread,
+    chat: &Chat,
     from: usize,
     names: &HashMap<String, String>,
     models: &mut Models,
 ) -> Vec<ReplyCost> {
-    let with_usage = thread
+    let with_usage = chat
         .messages
         .iter()
         .skip(from)
@@ -103,8 +103,8 @@ fn replies_of(
     if with_usage.clone().next().is_none() {
         return Vec::new();
     }
-    let model = models.of(thread);
-    let project = thread
+    let model = models.of(chat);
+    let project = chat
         .project_id
         .as_ref()
         .and_then(|id| names.get(id))
@@ -113,10 +113,10 @@ fn replies_of(
         .filter_map(|m| {
             Some(ReplyCost {
                 message_id: m.id.clone(),
-                thread_id: thread.id.clone(),
-                title: thread.title.clone(),
+                chat_id: chat.id.clone(),
+                title: chat.title.clone(),
                 project: project.clone(),
-                agent: thread.agent,
+                agent: chat.agent,
                 model: model.clone(),
                 at: m.finished_at.unwrap_or(m.created_at),
                 usage: m.usage?,

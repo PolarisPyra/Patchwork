@@ -10,11 +10,11 @@ use patchwork_core::updates::{RELEASES_URL, RestartResult, UpdateState, restart_
 
 use patchwork_ui::theme::{radius, radius_sm, Theme};
 use patchwork_ui::{BtnKind, btn, button, icon, popup_shadow};
-use super::state::Workspace;
+use super::window::Workspace;
 
 /// Restarts into the installed update. Replies that are running resume after it; when Settings
 /// says a launch never resumes them, the user confirms the restart first.
-pub(super) fn restart_to_update(core: &Arc<Core>, window: &mut Window, cx: &mut App) {
+pub(crate) fn restart_to_update(core: &Arc<Core>, window: &mut Window, cx: &mut App) {
     match core.restart_to_update(false) {
         RestartResult::NothingReady => {}
         RestartResult::Restart => restart(cx),
@@ -45,7 +45,7 @@ pub(super) fn restart_to_update(core: &Arc<Core>, window: &mut Window, cx: &mut 
 }
 
 /// Quits and starts the copy the update installed.
-pub(super) fn restart(cx: &mut App) {
+pub(crate) fn restart(cx: &mut App) {
     if let Some(path) = restart_path() {
         cx.set_restart_path(path);
     }
@@ -63,7 +63,7 @@ impl Workspace {
 
     /// A card once a new version is installed (restart to use it) or, for a copy that cannot
     /// install updates itself, out (download it). Each version's card shows until it is closed.
-    pub(super) fn update_card(
+    pub(crate) fn update_card(
         &self,
         t: &Theme,
         cx: &mut Context<Self>,

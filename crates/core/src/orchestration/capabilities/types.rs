@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 
-use crate::threads::{AccessMode, Thread};
+use crate::chats::{AccessMode, Chat};
 use crate::{Core, Error};
 
 /// What a capability needs before it runs.
@@ -99,7 +99,7 @@ pub(super) const fn json(name: &'static str, about: &'static str) -> Arg {
 pub(crate) struct Ctx<'a> {
     pub(super) core: &'a Arc<Core>,
     /// The dispatcher's chat.
-    pub(super) caller: &'a Thread,
+    pub(super) caller: &'a Chat,
     /// Whether the caller stopped waiting.
     pub(super) stopped: &'a dyn Fn() -> bool,
 }

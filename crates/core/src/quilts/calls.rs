@@ -5,7 +5,7 @@
 
 use super::tool::TOOL;
 use super::types::Quilt;
-use crate::threads::{EditLines, ToolCall};
+use crate::chats::{EditLines, ToolCall};
 
 /// The tool's name as Claude calls it on Patchwork's own server.
 pub(crate) const CLAUDE_NAME: &str = "mcp__patchwork__quilt";
@@ -32,18 +32,18 @@ pub fn is_quilt_call(tool: &ToolCall) -> bool {
 
 /// The quilt and version that the quilt-tool call `tool` saved.
 ///
-/// Read from what the tool answered, among the quilts of chat `thread_id`. An answer from
+/// Read from what the tool answered, among the quilts of chat `chat_id`. An answer from
 /// before it named the quilt's id is matched by its title.
 #[must_use]
 pub fn saved_by<'a>(
     quilts: &'a [Quilt],
-    thread_id: &str,
+    chat_id: &str,
     tool: &ToolCall,
 ) -> Option<(&'a Quilt, u32)> {
     let rest = tool.output.as_deref()?.strip_prefix("Saved version ")?;
     let (n, rest) = rest.split_once(" of \"")?;
     let n = n.parse().ok()?;
-    let ours = || quilts.iter().filter(|a| a.thread_id == thread_id);
+    let ours = || quilts.iter().filter(|a| a.chat_id == chat_id);
     let found = if let Some((_, after)) = rest.split_once("\" (id ") {
         let (key, _) = after.split_once(')')?;
         ours().find(|a| a.key == key)?

@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use std::io::BufRead;
-use crate::threads::AccessMode;
+use crate::chats::AccessMode;
 use std::sync::Mutex;
 use crate::orchestration::turn::process::AgentStdin;
 use crate::orchestration::turn::process::Stdin;
@@ -19,7 +19,7 @@ use crate::orchestration::changes::attribution::changed_paths;
 use crate::orchestration::turn::process::write_line;
 use crate::provider::{self, AgentKind, Parsed};
 use crate::system::new_id;
-use crate::workspace::{self, FileChange};
+use crate::source_control::{self, FileChange};
 
 pub(in crate::orchestration) fn change(path: &str, status: &str, additions: u32) -> FileChange {
     FileChange {
@@ -60,7 +60,7 @@ pub(in crate::orchestration) fn live_turn(agent: AgentKind, mode: AccessMode) {
     let spec = TurnSpec {
         root: root_str,
         host: None,
-        thread_id: "thread",
+        chat_id: "thread",
         session_id: None,
         model: (agent == AgentKind::Claude).then_some("haiku"),
         vision_model: None,
@@ -79,7 +79,7 @@ pub(in crate::orchestration) fn live_turn(agent: AgentKind, mode: AccessMode) {
         hooks: &[],
         dispatcher: false,
     };
-    let baseline = workspace::git_changes(root_str).unwrap();
+    let baseline = source_control::git_changes(root_str).unwrap();
     let input = provider::turn_input(agent, &spec);
     let mut child = provider::agent_command(agent)
         .unwrap()
@@ -135,7 +135,7 @@ pub(in crate::orchestration) fn live_turn(agent: AgentKind, mode: AccessMode) {
     if mode == AccessMode::Supervised && agent != AgentKind::Antigravity {
         assert!(parsed.iter().any(|p| matches!(p, Parsed::Approval { .. })));
     }
-    let changed = changed_paths(&baseline, &workspace::git_changes(root_str).unwrap());
+    let changed = changed_paths(&baseline, &source_control::git_changes(root_str).unwrap());
     assert_eq!(changed, ["hello.txt"]);
     let content = std::fs::read_to_string(root.join("hello.txt")).unwrap();
     assert_eq!(content.trim(), "hi");

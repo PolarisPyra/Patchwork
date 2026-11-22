@@ -14,10 +14,10 @@ use crate::system::now_ms;
 
 use super::files::LogFile;
 use super::render::render;
-use super::THREAD_LOG;
+use super::CHAT_LOG;
 
 /// The agent logs, `agent-<agent>.log`, with `agents.log` for records from no agent. A record
-/// about a chat goes to its thread log too.
+/// about a chat goes to its chat log too.
 pub static AGENT_LOG: DebugLog = DebugLog::new("agents.log");
 
 /// The window's errors and warnings, `window.log`.
@@ -87,21 +87,21 @@ pub(super) struct Record {
     pub(super) data: Data,
 }
 
-/// Where a record comes from: the agent, its process, and the thread and reply it works on.
+/// Where a record comes from: the agent, its process, and the chat and reply it works on.
 #[derive(Debug, Clone, Default)]
 pub struct Source {
     pub agent: Option<AgentKind>,
     pub pid: Option<u32>,
-    pub thread: Option<String>,
+    pub chat: Option<String>,
     pub message: Option<String>,
 }
 
 impl Source {
-    pub fn agent(agent: AgentKind, pid: u32, thread: &str, message: Option<&str>) -> Self {
+    pub fn agent(agent: AgentKind, pid: u32, chat: &str, message: Option<&str>) -> Self {
         Self {
             agent: Some(agent),
             pid: Some(pid),
-            thread: Some(thread.into()),
+            chat: Some(chat.into()),
             message: message.map(String::from),
         }
     }
@@ -160,8 +160,8 @@ impl DebugLog {
     /// Logs `data` at `level`, and to the log of the chat it is about, if any, at that log's own
     /// level. `event` names what happened, or is empty for a plain message.
     pub fn write(&self, level: LogLevel, event: &'static str, source: &Source, data: Data) {
-        if source.thread.is_some() && THREAD_LOG.logs(level) {
-            THREAD_LOG.write(level, event, source, data.clone());
+        if source.chat.is_some() && CHAT_LOG.logs(level) {
+            CHAT_LOG.write(level, event, source, data.clone());
         }
         self.send(level, event, source, data);
     }
@@ -209,10 +209,10 @@ impl DebugLog {
         if let Some((level, data)) = line_record(|level| self.logs(level), line) {
             self.send(level, event, source, data);
         }
-        if source.thread.is_some()
-            && let Some((level, data)) = line_record(|level| THREAD_LOG.logs(level), line)
+        if source.chat.is_some()
+            && let Some((level, data)) = line_record(|level| CHAT_LOG.logs(level), line)
         {
-            THREAD_LOG.write(level, event, source, data);
+            CHAT_LOG.write(level, event, source, data);
         }
     }
 }
@@ -262,7 +262,7 @@ fn launch_logs(levels: &LoggingSettings) -> [(&'static dyn LaunchLog, LogLevel);
         (&WINDOW_LOG, levels.window),
         (&IMPORT_LOG, levels.imports),
         (&THEME_LOG, levels.themes),
-        (&THREAD_LOG, levels.threads),
+        (&CHAT_LOG, levels.chats),
     ]
 }
 

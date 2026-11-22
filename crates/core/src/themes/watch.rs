@@ -7,7 +7,7 @@ use crate::system::Locked;
 use notify::RecursiveMode;
 
 use super::library::{CODE, SCENES, THEMES};
-use crate::workspace::watch::settled;
+use crate::projects::watch::settled;
 use crate::{Error, Core};
 
 /// Watches the theme folders until dropped.
@@ -23,7 +23,7 @@ impl Core {
     /// # Errors
     ///
     /// Returns an error when the watcher cannot be created, cannot watch a folder, or its
-    /// thread cannot be started.
+    /// chat cannot be started.
     pub fn watch_themes(&self, on_change: impl Fn() + Send + 'static) -> Result<(), Error> {
         let mut current = self.themes_watch.locked();
         *current = None;

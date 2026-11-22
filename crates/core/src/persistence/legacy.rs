@@ -11,9 +11,9 @@ use serde::de::DeserializeOwned;
 
 use super::err;
 use super::settings::save_settings;
-use super::threads::{save_message, save_thread_row};
+use super::chats::{save_message, save_chat_row};
 use crate::settings::Settings;
-use crate::threads::Thread;
+use crate::chats::Chat;
 
 fn load_json<T: DeserializeOwned + Default>(path: &Path) -> T {
     let Ok(text) = std::fs::read_to_string(path) else {
@@ -26,29 +26,29 @@ fn load_json<T: DeserializeOwned + Default>(path: &Path) -> T {
     })
 }
 
-/// Moves `settings.json` / `threads.json` from before SQLite into a new database,
+/// Moves `settings.json` / `chats.json` from before SQLite into a new database,
 /// keeping the old files as `*.json.bak`.
 pub(super) fn import_legacy_json(conn: &mut Connection, dir: &Path) -> Result<(), Error> {
     let settings_path = dir.join("settings.json");
-    let threads_path = dir.join("threads.json");
-    if !settings_path.exists() && !threads_path.exists() {
+    let chats_path = dir.join("threads.json");
+    if !settings_path.exists() && !chats_path.exists() {
         return Ok(());
     }
     let mut settings: Settings = load_json(&settings_path);
     if settings.agents.is_empty() {
         settings.agents.extend(settings.agent.take());
     }
-    let threads: Vec<Thread> = load_json(&threads_path);
+    let chats: Vec<Chat> = load_json(&chats_path);
     let tx = conn.transaction().map_err(err)?;
     save_settings(&tx, &settings).map_err(err)?;
-    for t in &threads {
-        save_thread_row(&tx, t).map_err(err)?;
+    for t in &chats {
+        save_chat_row(&tx, t).map_err(err)?;
         for (i, m) in t.messages.iter().enumerate() {
             save_message(&tx, &t.id, i, m).map_err(err)?;
         }
     }
     tx.commit().map_err(err)?;
-    [settings_path, threads_path]
+    [settings_path, chats_path]
         .into_iter()
         .filter(|path| path.exists())
         .for_each(|path| {

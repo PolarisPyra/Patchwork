@@ -3,13 +3,14 @@
 
 // Rust guideline compliant 2026-10-09
 
-mod actions;
+mod file_actions;
+mod area;
 mod body;
 mod conflicts;
 mod diff;
 mod header;
 mod history;
-mod render;
-mod state;
+mod layout;
+mod open_file;
 
-pub use state::{CANVAS_MAX_FRACTION, CANVAS_MIN, Canvas, CanvasTab};
+pub use open_file::{CANVAS_MAX_FRACTION, CANVAS_MIN, Canvas, CanvasTab};

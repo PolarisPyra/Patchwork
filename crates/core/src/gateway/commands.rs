@@ -27,9 +27,9 @@ impl Core {
     pub(super) fn gateway_command(
         self: &Arc<Self>,
         message: &Incoming,
-        thread: Option<&str>,
+        chat: Option<&str>,
     ) -> bool {
-        let (platform, chat) = (message.platform, message.chat.as_str());
+        let (platform, conversation) = (message.platform, message.conversation.as_str());
         let text = message.text.trim().trim_start_matches('/');
         let (word, rest) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
         // Telegram names the bot in commands sent in groups: `/new@patchwork_bot`.
@@ -42,7 +42,7 @@ impl Core {
                 let project = if rest.is_empty() {
                     None
                 } else if rest.eq_ignore_ascii_case("chat") {
-                    Some(Place::Chat)
+                    Some(Place::Conversation)
                 } else {
                     let lower = rest.to_lowercase();
                     let found = settings
@@ -58,7 +58,7 @@ impl Core {
                     let Some(p) = found else {
                         self.say(
                             platform,
-                            chat,
+                            conversation,
                             &format!("No project is named {rest}. Ask which projects there are."),
                         );
                         return true;
@@ -71,7 +71,7 @@ impl Core {
                         .iter()
                         .find(|p| &p.id == id)
                         .map(|p| p.name.clone()),
-                    Some(Place::Chat) => None,
+                    Some(Place::Conversation) => None,
                     None => settings
                         .gateway
                         .project_id
@@ -79,11 +79,11 @@ impl Core {
                         .and_then(|id| settings.projects.iter().find(|p| &p.id == id))
                         .map(|p| p.name.clone()),
                 };
-                self.bind_chat(platform, chat, None);
+                self.bind_conversation(platform, conversation, None);
                 self.gateway
                     .lock()
-                    .chats
-                    .entry((platform, chat.to_string()))
+                    .conversations
+                    .entry((platform, conversation.to_string()))
                     .or_default()
                     .project = project;
                 match name {
@@ -91,7 +91,7 @@ impl Core {
                     None => "Your next message starts a new chat.".to_string(),
                 }
             }
-            "stop" => match thread {
+            "stop" => match chat {
                 Some(id) if self.runner.is_running(id) => {
                     self.cancel_turn(id);
                     "Stopped.".to_string()
@@ -99,40 +99,40 @@ impl Core {
                 _ => "Nothing is running.".to_string(),
             },
             "clear" => {
-                if let Some(id) = thread
+                if let Some(id) = chat
                     && self.runner.is_running(id)
                 {
                     self.cancel_turn(id);
                 }
-                self.clear_chat(platform, chat);
+                self.clear_conversation(platform, conversation);
                 return true;
             }
             "mute" => self.mute_notices(rest),
             "resume" => self.resume_at_reset(rest),
             "answer" => {
                 let (id, reply) = rest.split_once(char::is_whitespace).unwrap_or((rest, ""));
-                self.answer_by_id(platform, chat, id, reply.trim());
+                self.answer_by_id(platform, conversation, id, reply.trim());
                 return true;
             }
             _ => return false,
         };
-        self.say(platform, chat, &reply);
+        self.say(platform, conversation, &reply);
         true
     }
 
     /// Starts the conversation `chat` over and deletes the messages in it that its chat app lets
     /// Patchwork delete. A long conversation takes a while, so it is done off the caller's
-    /// thread.
-    fn clear_chat(self: &Arc<Self>, platform: Platform, chat: &str) {
+    /// chat.
+    fn clear_conversation(self: &Arc<Self>, platform: Platform, conversation: &str) {
         let Some(connector) = self.gateway.connector(platform) else {
             return;
         };
-        self.bind_chat(platform, chat, None);
-        let (weak, chat) = (Arc::downgrade(self), chat.to_string());
+        self.bind_conversation(platform, conversation, None);
+        let (weak, conversation) = (Arc::downgrade(self), conversation.to_string());
         let spawned = std::thread::Builder::new()
             .name("gateway-clear".to_string())
             .spawn(move || {
-                let reply = match connector.clear(&chat) {
+                let reply = match connector.clear(&conversation) {
                     Ok(true) => "Cleared. Your next message starts a new chat.".to_string(),
                     Ok(false) => format!(
                         "Cleared Patchwork's messages. {} does not let it delete yours here. Your next message starts a new chat.",
@@ -143,7 +143,7 @@ impl Core {
                     ),
                 };
                 if let Some(core) = weak.upgrade() {
-                    core.say(platform, &chat, &reply);
+                    core.say(platform, &conversation, &reply);
                 }
             });
         if let Err(error) = spawned {

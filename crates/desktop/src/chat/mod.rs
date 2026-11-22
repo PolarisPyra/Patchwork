@@ -1,37 +1,21 @@
 //! The open chat: its transcript, the usage line and the composer, with search and "Open in
 //! editor" in the row above the transcript.
+//!
+//! `transcript/` is the message list and each reply, `top_right/` what floats over the
+//! transcript's top right, `above_composer/` the strips and cards between the transcript and the
+//! composer, and `composer/` the box a message is written in.
 
 // Rust guideline compliant 2026-10-09
 
-pub mod approvals;
+pub mod above_composer;
 pub mod backdrop;
-pub mod background;
-pub mod checks;
 pub mod composer;
-pub mod files;
-pub mod find;
-pub mod folder;
-pub mod goal;
-mod header;
-mod interrupted;
-pub mod lineage;
-pub mod plan;
-pub mod prompts;
-pub mod proposed;
-pub mod queue;
-pub mod rail;
-mod reply;
-pub mod review;
-pub(crate) mod scheme;
-pub mod secret;
-pub mod subagents;
-pub mod timeline;
-mod transcript;
-pub mod user;
-mod view;
-pub mod worktree;
-pub mod worktree_choice;
+mod layout;
+mod session;
+pub(crate) mod text_colors;
+pub mod top_right;
+pub mod transcript;
 
-pub use transcript::{Pieces, Row};
-pub use view::{OPEN_HOLD, render};
-pub(crate) use view::usage_line;
+pub use layout::{OPEN_HOLD, render};
+pub(crate) use layout::usage_line;
+pub use transcript::message_list::{Pieces, Row};

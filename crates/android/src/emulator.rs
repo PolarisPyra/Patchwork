@@ -19,10 +19,10 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use super::devices::{self, ADB_LIMIT, emulator_port, emulator_serial};
-use super::tool::{self, tail, tool_command};
-use super::sdk;
-use super::types::{Boot, Booting, Sdk};
+use crate::devices::connected::{self, ADB_LIMIT, emulator_port, emulator_serial};
+use crate::sdk::tool::{self, tail, tool_command};
+use crate::sdk::locate;
+use crate::sdk::locate::Sdk;
 use super::host::Host;
 use patchwork_system::Error;
 
@@ -63,7 +63,7 @@ impl Started {
         {
             i32::try_from(self.pid)
                 .ok()
-                .and_then(patchwork_system::processes::find)
+                .and_then(patchwork_system::processes::running::find)
                 .is_some_and(|process| Some(&process.started) == self.token.as_ref())
         }
         #[cfg(not(unix))]
@@ -285,13 +285,13 @@ fn log_tail(avd: &str) -> String {
 }
 
 impl Android<'_> {
-    /// The Android SDK for the project at `project`, found as [`sdk::locate`] finds it.
+    /// The Android SDK for the project at `project`, found as [`locate::locate`] finds it.
     ///
     /// # Errors
     ///
     /// Returns an error when no SDK is found.
     pub fn sdk(&self, project: &Path) -> Result<Sdk, Error> {
-        sdk::locate(self.host.sdk_setting().as_deref(), Some(project))
+        locate::locate(self.host.sdk_setting().as_deref(), Some(project))
     }
 
     /// Starts the virtual device `avd`, its screen shown in the panel rather than a window, and
@@ -310,7 +310,7 @@ impl Android<'_> {
             self.emulators.accelerated.store(true, Ordering::Relaxed);
         }
         let started = self.emulators.started(self.host);
-        let running = devices::list(&sdk, self.emulators).unwrap_or_default();
+        let running = connected::list(&sdk, self.emulators).unwrap_or_default();
         if running
             .iter()
             .any(|device| device.avd.as_deref() == Some(avd))
@@ -369,7 +369,7 @@ impl Android<'_> {
         #[cfg(unix)]
         let token = i32::try_from(pid)
             .ok()
-            .and_then(patchwork_system::processes::find)
+            .and_then(patchwork_system::processes::running::find)
             .map(|process| process.started);
         #[cfg(not(unix))]
         let token = None;
@@ -474,7 +474,7 @@ impl Android<'_> {
             return Ok(());
         }
         let listed = || {
-            devices::list(&sdk, self.emulators)
+            connected::list(&sdk, self.emulators)
                 .is_ok_and(|devices| devices.iter().any(|device| device.serial == serial))
         };
         while listed() && Instant::now() < deadline {
@@ -507,14 +507,14 @@ impl Android<'_> {
     pub fn delete_avd(&self, project: &Path, avd: &str) -> Result<(), Error> {
         let sdk = self.sdk(project)?;
         self.emulators.prune(self.host);
-        let running = devices::list(&sdk, self.emulators).unwrap_or_default();
+        let running = connected::list(&sdk, self.emulators).unwrap_or_default();
         if running
             .iter()
             .any(|device| device.avd.as_deref() == Some(avd))
         {
             return Err(format!("{avd} is running. Stop it, then delete it.").into());
         }
-        super::avd::delete(&sdk, avd)
+        crate::sdk::avd::delete(&sdk, avd)
     }
 }
 
@@ -523,15 +523,15 @@ fn end(entry: &Started) {
     #[cfg(unix)]
     if let Some(process) = i32::try_from(entry.pid)
         .ok()
-        .and_then(patchwork_system::processes::find)
+        .and_then(patchwork_system::processes::running::find)
         .filter(|process| Some(&process.started) == entry.token.as_ref())
     {
-        patchwork_system::processes::signal(&process, libc::SIGTERM);
+        patchwork_system::processes::running::signal(&process, libc::SIGTERM);
     }
     #[cfg(not(unix))]
-    patchwork_system::processes::signal_process_group(
+    patchwork_system::processes::running::signal_process_group(
         entry.pid,
-        patchwork_system::processes::SIGKILL,
+        patchwork_system::processes::running::SIGKILL,
     );
 }
 
@@ -558,4 +558,22 @@ fn detach(cmd: &mut std::process::Command) {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
     }
+}
+
+/// How an emulator starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Boot {
+    /// From its saved snapshot when it has one.
+    Quick,
+    /// As a device that was switched off, without loading the snapshot.
+    Cold,
+    /// With its data erased, as a new device.
+    Wipe,
+}
+
+/// An emulator that was started and has yet to finish booting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Booting {
+    pub avd: String,
+    pub serial: String,
 }

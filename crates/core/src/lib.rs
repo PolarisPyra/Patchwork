@@ -9,7 +9,7 @@ pub use patchwork_system::VERSION;
 pub mod android;
 pub mod quilts;
 pub mod backgrounds;
-pub mod bots;
+pub mod agents;
 pub mod browser;
 pub mod checks;
 pub mod computer;
@@ -27,22 +27,22 @@ pub mod persistence;
 pub mod projects;
 pub mod provider;
 pub mod scheduled;
-pub mod secrets;
+
 pub mod settings;
 pub mod source_control;
 pub mod terminal;
 pub mod themes;
-pub mod threads;
+pub mod chats;
 pub mod updates;
 pub mod usage;
 pub mod vault;
-pub mod workspace;
+pub mod worktree;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use orchestration::Runner;
-use extensions::{agents, hooks, skills};
+use extensions::{hooks, skills};
 use persistence::Store;
 
 use crate::events::AgentEventEnvelope;
@@ -71,8 +71,8 @@ pub struct Core {
     /// The tasks whose worktree a merge, update, discard or branch switch is working on, so no
     /// turn starts in it and no second step runs at the same time.
     worktree_steps: std::sync::Mutex<std::collections::HashSet<String>>,
-    /// One folder per bot, which holds the files it knows.
-    bots_dir: PathBuf,
+    /// One folder per agent, which holds the files it knows.
+    agents_dir: PathBuf,
     sink: EventSink,
     /// The watcher on the folder Source Control shows for the active project.
     project_watch: std::sync::Mutex<Option<projects::ProjectWatch>>,
@@ -80,16 +80,16 @@ pub struct Core {
     skills_watch: std::sync::Mutex<Option<skills::Watcher>>,
     themes_watch: std::sync::Mutex<Option<themes::Watcher>>,
     /// The custom agents that `&name` summons.
-    pub agents: Arc<agents::Library>,
+    pub agents: Arc<extensions::agents::Library>,
     /// The integrated terminal's running shells.
     pub terminals: terminal::Terminals,
     /// Secret requests waiting for the user.
-    secrets: secrets::Waiters,
+    secrets: vault::requests::Waiters,
     /// Where updating the app stands.
     updates: updates::Updates,
     /// The Android emulators Patchwork started.
     emulators: android::Emulators,
-    /// The chat apps connected to Patchwork's threads.
+    /// The chat apps connected to Patchwork's chats.
     gateway: gateway::Hub,
     /// Whether the person is at Patchwork, for routing notifications.
     presence: notifications::Presence,
@@ -102,7 +102,7 @@ impl std::fmt::Debug for Core {
 }
 
 impl Core {
-    /// `dirs` are Patchwork's folders (see `system::dirs`); `data_dir` is the app's own folder,
+    /// `dirs` are Patchwork's folders (see `system::files::dirs`); `data_dir` is the app's own folder,
     /// which holds chat scratch folders.
     ///
     /// # Errors
@@ -110,7 +110,7 @@ impl Core {
     /// Returns an error when the database cannot be opened or read, or when recovering the turns an
     /// earlier run left unfinished fails.
     pub fn open(dirs: &system::Dirs, data_dir: &Path, sink: EventSink) -> Result<Arc<Self>, Error> {
-        system::dirs::init(dirs.clone());
+        system::files::dirs::init(dirs.clone());
         system::ssh::set_helper_source(updates::release_helper);
         // A debug build's folders start as a copy of the released app's, on its first launch.
         let mut not_copied = Vec::new();
@@ -126,13 +126,13 @@ impl Core {
         skills::init(&dirs.config);
         hooks::init(&dirs.config);
         themes::init();
-        let agents = agents::Library::open(&dirs.config);
-        std::thread::spawn(system::scope::prepare);
+        let agents = extensions::agents::Library::open(&dirs.config);
+        std::thread::spawn(system::processes::scope::prepare);
         // Read at launch, so the first command does not wait on the shell.
         std::thread::spawn(system::login_env);
         // Ends what terminals left running when a Patchwork before this one was killed.
         std::thread::spawn(terminal::sweep);
-        secrets::keep_swept();
+        vault::requests::keep_swept();
         let logs = logging::session_dir(&dirs.logs);
         let store = Store::open(&dirs.data)?;
         settings::follow(&store.settings());
@@ -163,14 +163,14 @@ impl Core {
             installers_dir: data_dir.join("installers"),
             worktrees_dir: data_dir.join("worktrees"),
             worktree_steps: std::sync::Mutex::default(),
-            bots_dir: data_dir.join("bots"),
+            agents_dir: agents::agents_folder(data_dir),
             sink,
             project_watch: std::sync::Mutex::default(),
             skills_watch: std::sync::Mutex::default(),
             themes_watch: std::sync::Mutex::default(),
             agents,
             terminals: terminal::Terminals::default(),
-            secrets: secrets::Waiters::default(),
+            secrets: vault::requests::Waiters::default(),
             updates: updates::Updates::default(),
             emulators: android::Emulators::default(),
             gateway: gateway::Hub::default(),
@@ -183,49 +183,49 @@ impl Core {
             None => serde_json::json!({"deny": "Patchwork is closing"}),
         }));
         let weak = Arc::downgrade(&core);
-        provider::mcp::set_tool_handler(Box::new(move |thread_id, tool, args, stopped| match weak
-            .upgrade()
-        {
-            // A chat app's dispatcher has Patchwork's capabilities and nothing else.
-            Some(core) if core.is_dispatcher(thread_id) => {
-                core.run_capability(thread_id, tool, args, stopped)
+        provider::mcp::set_tool_handler(Box::new(move |chat_id, tool, args, stopped| {
+            match weak.upgrade() {
+                // A chat app's dispatcher has Patchwork's capabilities and nothing else.
+                Some(core) if core.is_dispatcher(chat_id) => {
+                    core.run_capability(chat_id, tool, args, stopped)
+                }
+                Some(core) if tool == vault::requests::TOOL => {
+                    core.runner.request_secret(&core, chat_id, args, stopped)
+                }
+                Some(core) if tool == chats::delegate::TOOL => {
+                    core.runner.run_sub_agent(&core, chat_id, args, stopped)
+                }
+                Some(core) if tool == chats::delegate::RESULT => {
+                    core.runner.sub_agent_result(&core, chat_id, args, stopped)
+                }
+                Some(core) if chats::tools::is_tool(tool) => core
+                    .runner
+                    .run_chat_tool(&core, chat_id, tool, args, stopped),
+                Some(core) if tool == quilts::TOOL => core.run_quilt_tool(chat_id, args),
+                Some(core) if tool.starts_with(android::TOOL_PREFIX) => {
+                    core.android().tool(chat_id, tool, args, stopped)
+                }
+                Some(_) => Err(format!("Patchwork has no tool {tool}").into()),
+                None => Err("Patchwork is closing".into()),
             }
-            Some(core) if tool == secrets::TOOL => {
-                core.runner.request_secret(&core, thread_id, args, stopped)
-            }
-            Some(core) if tool == threads::delegate::TOOL => {
-                core.runner.run_sub_agent(&core, thread_id, args, stopped)
-            }
-            Some(core) if tool == threads::delegate::RESULT => core
-                .runner
-                .sub_agent_result(&core, thread_id, args, stopped),
-            Some(core) if threads::chat_tools::is_tool(tool) => core
-                .runner
-                .run_chat_tool(&core, thread_id, tool, args, stopped),
-            Some(core) if tool == quilts::TOOL => core.run_quilt_tool(thread_id, args),
-            Some(core) if tool.starts_with(android::TOOL_PREFIX) => {
-                core.android().tool(thread_id, tool, args, stopped)
-            }
-            Some(_) => Err(format!("Patchwork has no tool {tool}").into()),
-            None => Err("Patchwork is closing".into()),
         }));
         let weak = Arc::downgrade(&core);
-        provider::mcp::set_tool_lister(Box::new(move |thread_id| {
+        provider::mcp::set_tool_lister(Box::new(move |chat_id| {
             weak.upgrade()
                 .map(|core| {
                     // A chat app's dispatcher has Patchwork's capabilities and nothing else.
-                    if core.is_dispatcher(thread_id) {
+                    if core.is_dispatcher(chat_id) {
                         return orchestration::capabilities::tools();
                     }
                     let mut tools = vec![serde_json::json!({
-                        "name": secrets::TOOL,
-                        "description": secrets::DESCRIPTION,
-                        "inputSchema": secrets::input_schema(),
+                        "name": vault::requests::TOOL,
+                        "description": vault::requests::DESCRIPTION,
+                        "inputSchema": vault::requests::input_schema(),
                     })];
-                    tools.extend(core.chat_tools(thread_id));
-                    tools.extend(core.delegate_tools(thread_id));
-                    tools.extend(core.android().tools(thread_id));
-                    tools.extend(core.quilt_tools(thread_id));
+                    tools.extend(core.chat_tools(chat_id));
+                    tools.extend(core.delegate_tools(chat_id));
+                    tools.extend(core.android().tools(chat_id));
+                    tools.extend(core.quilt_tools(chat_id));
                     tools
                 })
                 .unwrap_or_default()
@@ -243,7 +243,7 @@ impl Core {
     fn emit(&self, event: AgentEventEnvelope) {
         orchestration::log_event(&event);
         self.gateway.observe(&event);
-        self.notify_desktop(&event.thread_id, &event.event);
+        self.notify_desktop(&event.chat_id, &event.event);
         (self.sink)(event);
     }
 }

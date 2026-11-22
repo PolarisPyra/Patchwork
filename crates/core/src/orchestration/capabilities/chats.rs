@@ -12,7 +12,7 @@ use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::gateway::options;
 use crate::notifications::{Notices, resets_in};
 use crate::system::now_ms;
-use crate::threads::{Thread, chat_tools};
+use crate::chats::{Chat, tools};
 
 /// The most chats offered when a name fits several.
 const CANDIDATES: usize = 8;
@@ -28,47 +28,47 @@ fn chat_tool(ctx: &Ctx<'_>, tool: &str, args: &Value) -> Result<String, Error> {
 
 /// Lists the chats.
 pub(super) fn list(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    chat_tool(ctx, chat_tools::LIST, args)
+    chat_tool(ctx, tools::LIST, args)
 }
 
 /// Reads how far a chat has got.
 pub(super) fn read(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    chat_tool(ctx, chat_tools::READ, args)
+    chat_tool(ctx, tools::READ, args)
 }
 
 /// Lists the projects.
 pub(super) fn projects(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    chat_tool(ctx, chat_tools::PROJECTS, args)
+    chat_tool(ctx, tools::PROJECTS, args)
 }
 
 /// Starts a chat.
 pub(super) fn start(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    chat_tool(ctx, chat_tools::START, args)
+    chat_tool(ctx, tools::START, args)
 }
 
 /// Messages a chat.
 pub(super) fn send(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    chat_tool(ctx, chat_tools::SEND, args)
+    chat_tool(ctx, tools::SEND, args)
 }
 
 /// Waits for a chat's reply.
 pub(super) fn wait(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    chat_tool(ctx, chat_tools::WAIT, args)
+    chat_tool(ctx, tools::WAIT, args)
 }
 
 /// Stops a chat.
 pub(super) fn stop(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    chat_tool(ctx, chat_tools::STOP, args)
+    chat_tool(ctx, tools::STOP, args)
 }
 
 /// Passes the person's answer on to a chat.
 pub(super) fn answer(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    chat_tool(ctx, chat_tools::ANSWER, args)
+    chat_tool(ctx, tools::ANSWER, args)
 }
 
 /// Has the person told when a chat finishes.
 pub(super) fn notify(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    chat_tool(ctx, chat_tools::NOTIFY, args)
+    chat_tool(ctx, tools::NOTIFY, args)
 }
 
 /// The chat `args` names: by `chat_id`, or by `name` in the person's words when one chat fits
@@ -78,7 +78,7 @@ pub(super) fn notify(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
 ///
 /// Returns an error when neither is given, no chat fits, or several fit equally; that error
 /// lists them with their ids, to pick from or ask about.
-pub(super) fn chat(ctx: &Ctx<'_>, args: &Value) -> Result<Thread, Error> {
+pub(super) fn chat(ctx: &Ctx<'_>, args: &Value) -> Result<Chat, Error> {
     let core = ctx.core;
     let own = ctx.caller.id.as_str();
     let id = text(args, "chat_id");
@@ -88,7 +88,7 @@ pub(super) fn chat(ctx: &Ctx<'_>, args: &Value) -> Result<Thread, Error> {
         }
         return core
             .store
-            .thread(id)
+            .chat(id)
             .filter(|t| t.parent.is_none())
             .ok_or_else(|| "No chat with that id; list_chats lists them".into());
     }
@@ -96,13 +96,13 @@ pub(super) fn chat(ctx: &Ctx<'_>, args: &Value) -> Result<Thread, Error> {
     if name.is_empty() {
         return Err("Give the chat_id, or the name the person called the chat".into());
     }
-    let chats: Vec<Thread> = core
+    let chats: Vec<Chat> = core
         .store
-        .threads()
+        .chats()
         .into_iter()
         .filter(|t| t.parent.is_none() && t.archived_at.is_none() && t.id != own)
         .collect();
-    let found = chat_tools::matching(core, &chats, name);
+    let found = tools::matching(core, &chats, name);
     match found.as_slice() {
         [] => Err("No chat has a title or project like that; list_chats lists them".into()),
         [only] => Ok((*only).clone()),
@@ -122,22 +122,22 @@ pub(super) fn chat(ctx: &Ctx<'_>, args: &Value) -> Result<Thread, Error> {
 }
 
 /// Tells the window that what the chat runs with, or its place in the list, changed.
-fn changed(ctx: &Ctx<'_>, thread_id: &str) {
+fn changed(ctx: &Ctx<'_>, chat_id: &str) {
     ctx.core.emit(AgentEventEnvelope {
-        thread_id: thread_id.to_string(),
+        chat_id: chat_id.to_string(),
         event: AgentEvent::OptionsChanged,
     });
 }
 
 /// Changes what a chat runs with: its agent, model and access.
 pub(super) fn set_options(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    let thread = chat(ctx, args)?;
+    let chat = chat(ctx, args)?;
     let access = text(args, "access");
     if !access.is_empty() {
         // More access is more the chat may do unasked, which only the person grants.
         ctx.escalate(
             "Patchwork: change a chat's access",
-            &format!("{} to {access}", thread.title),
+            &format!("{} to {access}", chat.title),
         )?;
     }
     let mut any = false;
@@ -148,13 +148,13 @@ pub(super) fn set_options(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> 
             let now = ctx
                 .core
                 .store
-                .thread(&thread.id)
-                .unwrap_or_else(|| thread.clone());
+                .chat(&chat.id)
+                .unwrap_or_else(|| chat.clone());
             ctx.core.set_chat_option(&now, word, value)?;
             any = true;
         }
     }
-    let now = ctx.core.store.thread(&thread.id).unwrap_or(thread);
+    let now = ctx.core.store.chat(&chat.id).unwrap_or(chat);
     Ok(if any {
         format!("Changed. {}", options::options(&now))
     } else {
@@ -164,25 +164,25 @@ pub(super) fn set_options(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> 
 
 /// Renames a chat.
 pub(super) fn rename(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    let thread = chat(ctx, args)?;
+    let chat = chat(ctx, args)?;
     let title = text(args, "title");
-    ctx.core.rename_thread(&thread.id, title)?;
-    changed(ctx, &thread.id);
+    ctx.core.rename_chat(&chat.id, title)?;
+    changed(ctx, &chat.id);
     Ok(format!(
         "Renamed \u{201c}{}\u{201d} to \u{201c}{title}\u{201d}.",
-        thread.title
+        chat.title
     ))
 }
 
 /// Archives a chat, or brings it back.
 pub(super) fn archive(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    let thread = chat(ctx, args)?;
+    let chat = chat(ctx, args)?;
     let archived = args["archived"].as_bool().unwrap_or(true);
-    ctx.core.set_thread_archived(&thread.id, archived)?;
-    changed(ctx, &thread.id);
+    ctx.core.set_chat_archived(&chat.id, archived)?;
+    changed(ctx, &chat.id);
     Ok(format!(
         "\u{201c}{}\u{201d} is {}.",
-        thread.title,
+        chat.title,
         if archived {
             "archived"
         } else {
@@ -193,35 +193,35 @@ pub(super) fn archive(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
 
 /// Deletes a chat for good.
 pub(super) fn delete(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    let thread = chat(ctx, args)?;
-    ctx.core.delete_thread(&thread.id);
-    if ctx.core.store.thread(&thread.id).is_some() {
+    let chat = chat(ctx, args)?;
+    ctx.core.delete_chat(&chat.id);
+    if ctx.core.store.chat(&chat.id).is_some() {
         return Err("Patchwork could not delete that chat; its log says why".into());
     }
     ctx.core.emit(AgentEventEnvelope {
-        thread_id: thread.id.clone(),
-        event: AgentEvent::ThreadDeleted,
+        chat_id: chat.id.clone(),
+        event: AgentEvent::ChatDeleted,
     });
-    Ok(format!("Deleted \u{201c}{}\u{201d}.", thread.title))
+    Ok(format!("Deleted \u{201c}{}\u{201d}.", chat.title))
 }
 
 /// Opens a chat in Patchwork's window on the computer.
 pub(super) fn open(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    let thread = chat(ctx, args)?;
+    let chat = chat(ctx, args)?;
     ctx.core.emit(AgentEventEnvelope {
-        thread_id: thread.id.clone(),
+        chat_id: chat.id.clone(),
         event: AgentEvent::OpenChat,
     });
     Ok(format!(
         "Asked Patchwork's window to open \u{201c}{}\u{201d}. It shows there when the window \
          is running.",
-        thread.title
+        chat.title
     ))
 }
 
 /// Sets which of a chat's events the person is told about.
 pub(super) fn notices(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    let thread = chat(ctx, args)?;
+    let chat = chat(ctx, args)?;
     let wanted = text(args, "notices").to_lowercase();
     let notices = match wanted.as_str() {
         "all" => Notices::All,
@@ -230,10 +230,10 @@ pub(super) fn notices(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
         "off" => Notices::Off,
         _ => return Err("Notices are one of: all, asks, finished, off".into()),
     };
-    ctx.core.set_thread_notices(&thread.id, Some(notices))?;
+    ctx.core.set_chat_notices(&chat.id, Some(notices))?;
     Ok(format!(
         "\u{201c}{}\u{201d} now sends: {wanted}.",
-        thread.title
+        chat.title
     ))
 }
 
@@ -245,11 +245,11 @@ pub(super) fn unmute_all(ctx: &Ctx<'_>, _: &Value) -> Result<String, Error> {
 
 /// Sets a chat that stopped at its agent's usage limit to continue when the limit resets.
 pub(super) fn resume_at_reset(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error> {
-    let thread = chat(ctx, args)?;
-    let at = ctx.core.resume_at_limit_reset(&thread.id)?;
-    changed(ctx, &thread.id);
+    let chat = chat(ctx, args)?;
+    let at = ctx.core.resume_at_limit_reset(&chat.id)?;
+    changed(ctx, &chat.id);
     Ok(json!({
-        "chat": thread.title,
+        "chat": chat.title,
         "continues_at_epoch_ms": at,
         "continues": resets_in(at, now_ms()),
     })

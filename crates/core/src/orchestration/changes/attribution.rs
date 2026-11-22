@@ -22,9 +22,9 @@ use crate::orchestration::publish;
 use crate::Core;
 use crate::events::AgentEvent;
 use crate::system::now_ms;
-use crate::threads::{MessageStatus, Role, ToolCall};
-use crate::workspace::{self, FileChange};
-use crate::workspace::watch::Change;
+use crate::chats::{MessageStatus, Role, ToolCall};
+use crate::source_control::{self, FileChange};
+use crate::projects::watch::Change;
 
 /// How long after a tool call returns its writes may still arrive: FSEvents reports late.
 const GRACE: Duration = Duration::from_secs(1);
@@ -262,7 +262,7 @@ impl Attribution {
         after: Vec<FileChange>,
     ) -> Vec<String> {
         let mut paths = changed_paths(&self.baseline, &after);
-        for path in workspace::committed_since(root, self.since) {
+        for path in source_control::committed_since(root, self.since) {
             if !paths.contains(&path) {
                 paths.push(path);
             }
@@ -367,17 +367,17 @@ impl Core {
         burst: &[Change],
     ) {
         let mut replies = Vec::new();
-        for (thread_id, root, attribution) in self.runner.attributions() {
+        for (chat_id, root, attribution) in self.runner.attributions() {
             if root != folder {
                 continue;
             }
-            let Some(thread) = self.store.thread(&thread_id) else {
+            let Some(chat) = self.store.chat(&chat_id) else {
                 continue;
             };
-            if thread.project_id.as_deref() != Some(project_id) {
+            if chat.project_id.as_deref() != Some(project_id) {
                 continue;
             }
-            let reply = thread
+            let reply = chat
                 .messages
                 .iter()
                 .rev()
@@ -386,7 +386,7 @@ impl Core {
             let candidates = attribution
                 .locked()
                 .candidates(changes, burst, &reply.files);
-            replies.push((thread_id, reply.id.clone(), attribution, candidates));
+            replies.push((chat_id, reply.id.clone(), attribution, candidates));
         }
         let decided = claims(
             &replies
@@ -394,7 +394,7 @@ impl Core {
                 .map(|(.., candidates)| candidates.as_slice())
                 .collect::<Vec<_>>(),
         );
-        for ((thread_id, message_id, attribution, candidates), outcomes) in
+        for ((chat_id, message_id, attribution, candidates), outcomes) in
             replies.into_iter().zip(decided)
         {
             let mut claimed = Vec::new();
@@ -411,7 +411,7 @@ impl Core {
                     message_id: message_id.clone(),
                     path,
                 };
-                publish(self, &thread_id, touched);
+                publish(self, &chat_id, touched);
             }
         }
     }

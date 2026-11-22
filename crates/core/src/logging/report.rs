@@ -13,15 +13,15 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize as _;
 
 use crate::provider::{self, AgentKind};
-use crate::system::fs::home_dir;
-use crate::threads::{Message, StepStatus, Thread};
+use crate::system::files::paths::home_dir;
+use crate::chats::{Message, StepStatus, Chat};
 use crate::{Error, Core};
 
 use super::render::local_time;
 use super::scrub::{cut, redact, scrubbed};
 use super::system::{report, shown};
-use super::thread_log::log_part;
-use super::{session, Json, THREAD_LOG};
+use super::chat_log::log_part;
+use super::{session, Json, CHAT_LOG};
 
 /// This launch's warning and error lines past this many are left out, oldest first.
 const MAX_PROBLEMS: usize = 300;
@@ -30,18 +30,15 @@ const MAX_PROBLEMS: usize = 300;
 const MAX_TOOL_OUTPUT: usize = 600;
 
 impl Core {
-    /// Writes the report of `thread_id` and returns its path.
+    /// Writes the report of `chat_id` and returns its path.
     ///
     /// # Errors
     ///
     /// Returns an error when the chat is unknown, when the settings cannot be serialized, or when
     /// the chat log writer is missing, has stopped, or cannot write the report file.
-    pub fn thread_report(&self, thread_id: &str) -> Result<PathBuf, Error> {
-        let thread = self
-            .store
-            .thread(thread_id)
-            .ok_or(crate::threads::NOT_FOUND)?;
-        let project = thread
+    pub fn chat_report(&self, chat_id: &str) -> Result<PathBuf, Error> {
+        let chat = self.store.chat(chat_id).ok_or(crate::chats::NOT_FOUND)?;
+        let project = chat
             .project_id
             .as_deref()
             .map(|id| self.project_root(id).map(|path| shown(Path::new(&path))));
@@ -53,11 +50,11 @@ impl Core {
             local_time(crate::system::now_ms())
         );
         section(&mut text, "System", &pretty(report()));
-        section(&mut text, "Chat", &chat(&thread, project));
-        section(&mut text, "Replies", &replies(&thread.messages));
+        section(&mut text, "Chat", &chat_details(&chat, project));
+        section(&mut text, "Replies", &replies(&chat.messages));
         section(&mut text, "This launch's warnings and errors", &problems());
         section(&mut text, "Settings", &pretty(&settings));
-        let earlier = earlier(thread_id);
+        let earlier = earlier(chat_id);
         if !earlier.is_empty() {
             section(&mut text, "Earlier launches", &earlier);
         }
@@ -68,7 +65,7 @@ impl Core {
             text = text.replace(&home, "~");
         }
 
-        let path = THREAD_LOG.report(&thread.id, text)?;
+        let path = CHAT_LOG.report(&chat.id, text)?;
         log::info!(path:% = path.display(); "wrote a chat's report: {{path}}");
         Ok(path)
     }
@@ -88,15 +85,15 @@ fn pretty(value: &serde_json::Value) -> String {
 
 /// The chat's settings and state, with the CLI its agent runs now. Patchwork runs its own agent,
 /// which has no CLI to ask: its command is Patchwork itself, and asking it would start the app.
-fn chat(thread: &Thread, project: Option<Result<String, Error>>) -> String {
-    let (cli, version) = if thread.agent == AgentKind::Api {
+fn chat_details(chat: &Chat, project: Option<Result<String, Error>>) -> String {
+    let (cli, version) = if chat.agent == AgentKind::Api {
         ("built in".to_string(), Some(crate::VERSION.to_string()))
     } else {
-        let cli = provider::agent_command(thread.agent).map_or_else(
+        let cli = provider::agent_command(chat.agent).map_or_else(
             |e| e.to_string(),
             |command| shown(Path::new(command.get_program())),
         );
-        (cli, provider::cli_version(thread.agent))
+        (cli, provider::cli_version(chat.agent))
     };
     let project = match project {
         Some(Ok(path)) => path,
@@ -104,29 +101,29 @@ fn chat(thread: &Thread, project: Option<Result<String, Error>>) -> String {
         None => "none (a chat)".into(),
     };
     pretty(&serde_json::json!({
-        "id": thread.id,
-        "title": thread.title,
+        "id": chat.id,
+        "title": chat.title,
         "project": project,
-        "agent": format!("{:?}", thread.agent),
+        "agent": format!("{:?}", chat.agent),
         "cli": cli,
         "cliVersion": version,
-        "model": thread.model,
-        "accessMode": thread.access_mode,
-        "effort": thread.effort,
-        "compactWindow": thread.compact_window,
-        "sessionId": thread.session_id,
-        "createdAt": local_time(thread.created_at),
-        "goal": thread.goal.as_ref().map(|goal| serde_json::json!({
+        "model": chat.model,
+        "accessMode": chat.access_mode,
+        "effort": chat.effort,
+        "compactWindow": chat.compact_window,
+        "sessionId": chat.session_id,
+        "createdAt": local_time(chat.created_at),
+        "goal": chat.goal.as_ref().map(|goal| serde_json::json!({
             "status": goal.status,
             "checks": goal.checks,
             "secondsUsed": goal.seconds_used(crate::system::now_ms()),
         })),
-        "parent": thread.parent,
-        "archived": thread.archived_at.is_some(),
-        "role": thread.role,
-        "importedFrom": thread.imported_from.as_deref().map(|path| shown(Path::new(path))),
-        "contextPending": thread.context_pending,
-        "messages": thread.messages.len(),
+        "parent": chat.parent,
+        "archived": chat.archived_at.is_some(),
+        "role": chat.role,
+        "importedFrom": chat.imported_from.as_deref().map(|path| shown(Path::new(path))),
+        "contextPending": chat.context_pending,
+        "messages": chat.messages.len(),
     }))
 }
 
@@ -212,9 +209,9 @@ fn replies(messages: &[Arc<Message>]) -> String {
 }
 
 /// The chat's logs from the kept launches before this one, oldest first, each under its launch.
-fn earlier(thread_id: &str) -> String {
+fn earlier(chat_id: &str) -> String {
     let mut text = String::new();
-    for path in THREAD_LOG.earlier(thread_id) {
+    for path in CHAT_LOG.earlier(chat_id) {
         let Ok(file) = std::fs::read_to_string(&path) else {
             continue;
         };

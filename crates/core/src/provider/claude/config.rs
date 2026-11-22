@@ -9,7 +9,7 @@ use serde_json::Value;
 use crate::provider::AgentKind;
 use crate::provider::AgentStatus;
 use crate::provider::ModelOption;
-use crate::system::fs::home_dir;
+use crate::system::files::paths::home_dir;
 use crate::provider::probe;
 
 /// `$CLAUDE_CONFIG_DIR`, else `~/.claude`.

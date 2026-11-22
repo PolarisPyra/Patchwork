@@ -11,12 +11,12 @@ use gpui::{
     prelude::*, px, relative,
 };
 
-use super::render::{glass, ink};
-use super::state::Orchestrator;
-use crate::chat::user::attachment_chip;
-use patchwork_ui::menu::{Menu, MenuItem};
-use patchwork_ui::pill::pill;
-use patchwork_ui::pill::SEND;
+use super::layout::{glass, ink};
+use super::requests::Orchestrator;
+use crate::chat::transcript::user_message::attachment_chip;
+use patchwork_ui::controls::menu::{Menu, MenuItem};
+use patchwork_ui::controls::pill::pill;
+use patchwork_ui::controls::pill::SEND;
 use patchwork_ui::theme::theme;
 use patchwork_ui::{button, icon};
 

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
-use crate::threads::AccessMode;
+use crate::chats::AccessMode;
 use crate::provider::Image;
 use crate::provider::TurnSpec;
 
@@ -26,7 +26,7 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
         "stream-json",
         "--verbose",
         "--include-partial-messages",
-        // A subagent's own text and reasoning, for its thread; without this only its calls arrive.
+        // A subagent's own text and reasoning, for its chat; without this only its calls arrive.
         "--forward-subagent-text",
         // No `--thinking-display summarized`: with it the reply's text after a think arrived all
         // at once, as the think ended, instead of streaming. The status line's timer shows a long

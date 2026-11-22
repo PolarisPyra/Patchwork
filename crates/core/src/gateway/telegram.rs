@@ -84,7 +84,7 @@ impl Telegram {
             return Some(Incoming {
                 platform: Platform::Telegram,
                 id: press["id"].as_str().map(|id| format!("press:{id}")),
-                chat: id_text(&message["chat"]["id"])?,
+                conversation: id_text(&message["chat"]["id"])?,
                 sender: id_text(&press["from"]["id"])?,
                 name: name(&press["from"]),
                 text: press["data"].as_str()?.to_string(),
@@ -104,7 +104,7 @@ impl Telegram {
         Some(Incoming {
             platform: Platform::Telegram,
             id: id_text(&message["message_id"]),
-            chat: id_text(&message["chat"]["id"])?,
+            conversation: id_text(&message["chat"]["id"])?,
             sender: id_text(&from["id"])?,
             name: name(from),
             text: text.trim().to_string(),
@@ -142,8 +142,13 @@ impl Connector for Telegram {
         Ok(())
     }
 
-    fn send(&self, chat: &str, text: &str, buttons: &[Button]) -> Result<Option<String>, Error> {
-        let mut body = json!({"chat_id": chat, "text": text});
+    fn send(
+        &self,
+        conversation: &str,
+        text: &str,
+        buttons: &[Button],
+    ) -> Result<Option<String>, Error> {
+        let mut body = json!({"chat_id": conversation, "text": text});
         if !buttons.is_empty() {
             let keys: Vec<Value> = buttons
                 .iter()
@@ -160,9 +165,15 @@ impl Connector for Telegram {
         Ok(sent["message_id"].as_i64().map(|id| id.to_string()))
     }
 
-    fn send_file(&self, chat: &str, name: &str, bytes: &[u8], caption: &str) -> Result<(), Error> {
+    fn send_file(
+        &self,
+        conversation: &str,
+        name: &str,
+        bytes: &[u8],
+        caption: &str,
+    ) -> Result<(), Error> {
         let (kind, body) = multipart(
-            &[("chat_id", chat), ("caption", caption)],
+            &[("chat_id", conversation), ("caption", caption)],
             "document",
             name,
             bytes,
@@ -177,19 +188,28 @@ impl Connector for Telegram {
         result(response).map(drop)
     }
 
-    fn edit(&self, chat: &str, id: &str, text: &str) -> Result<(), Error> {
+    fn edit(&self, conversation: &str, id: &str, text: &str) -> Result<(), Error> {
         let id: i64 = id.parse().map_err(|_bad| "Not a Telegram message id")?;
         self.call(
             "editMessageText",
-            &json!({"chat_id": chat, "message_id": id, "text": text}),
+            &json!({"chat_id": conversation, "message_id": id, "text": text}),
         )
         .map(drop)
     }
 
-    fn typing(&self, chat: &str) {
+    fn remove(&self, conversation: &str, id: &str) -> Result<(), Error> {
+        let id: i64 = id.parse().map_err(|_bad| "Not a Telegram message id")?;
+        self.call(
+            "deleteMessage",
+            &json!({"chat_id": conversation, "message_id": id}),
+        )
+        .map(drop)
+    }
+
+    fn typing(&self, conversation: &str) {
         let _ = self.call(
             "sendChatAction",
-            &json!({"chat_id": chat, "action": "typing"}),
+            &json!({"chat_id": conversation, "action": "typing"}),
         );
     }
 }

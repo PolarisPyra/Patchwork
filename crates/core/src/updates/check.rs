@@ -217,7 +217,7 @@ impl Core {
         self.updates.status()
     }
 
-    /// Calls `listener` whenever `update_status` changes, from the thread that changed it.
+    /// Calls `listener` whenever `update_status` changes, from the chat that changed it.
     pub fn on_update_change(&self, listener: Box<dyn Fn() + Send + Sync>) {
         *self.updates.listener.locked() = Some(listener);
     }

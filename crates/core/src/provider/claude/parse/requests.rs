@@ -5,8 +5,8 @@
 use serde_json::Value;
 use crate::permissions::Target;
 use crate::permissions::PermissionKind;
-use crate::threads::Question;
-use crate::threads::QuestionOption;
+use crate::chats::Question;
+use crate::chats::QuestionOption;
 use crate::provider::one_line;
 use crate::provider::Parsed;
 use crate::provider::summarize;

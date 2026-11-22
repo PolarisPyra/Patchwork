@@ -9,10 +9,10 @@ use std::sync::Arc;
 use gpui::{AppContext, Context, Window};
 use patchwork_core::Core;
 use patchwork_core::orchestration::Target;
-use patchwork_core::threads::{AskKind, NewThread};
+use patchwork_core::chats::{AskKind, NewChat};
 
-use super::render::Place;
-use super::state::{Orchestrator, Outcome, PLACEHOLDER, Picker, Waiting};
+use super::layout::Place;
+use super::requests::{Orchestrator, Outcome, PLACEHOLDER, Picker, Waiting};
 
 /// The most projects and chats the `@` list offers.
 const MAX_ENTRIES: usize = 7;
@@ -40,12 +40,12 @@ impl Orchestrator {
 
     /// The core, and the chat a request starts when it names none: in the project picked under
     /// the pill.
-    fn launch(&self, cx: &Context<Self>) -> Option<(Arc<Core>, NewThread)> {
+    fn launch(&self, cx: &Context<Self>) -> Option<(Arc<Core>, NewChat)> {
         let workspace = self.workspace.upgrade()?;
         let workspace = workspace.read(cx);
         let composer = self.composer.read(cx);
         let project = composer.launch_project(&workspace.settings);
-        let new = composer.launch_thread(project, &workspace.settings);
+        let new = composer.launch_chat(project, &workspace.settings);
         Some((Arc::clone(&workspace.core), new))
     }
 
@@ -138,10 +138,10 @@ impl Orchestrator {
         let projects = workspace.settings.projects.iter();
         let projects = projects.map(|project| Target::New(Some(project.id.clone())));
         let chats = workspace
-            .threads
+            .chats
             .iter()
             .filter(|t| t.parent.is_none() && t.archived_at.is_none())
-            .map(|thread| Target::Chat(thread.id.clone()));
+            .map(|chat| Target::Chat(chat.id.clone()));
         std::iter::once(Target::New(None))
             .chain(projects)
             .chain(chats)
@@ -241,20 +241,16 @@ impl Orchestrator {
             }
             AskKind::InChat => {
                 // The chat's own composer answers it, so the chat opens as usual.
-                let thread_id = waiting.ask.thread_id.clone();
-                let _ = self
-                    .workspace
-                    .update(cx, |w, cx| w.open_thread(&thread_id, cx));
+                let chat_id = waiting.ask.chat_id.clone();
+                let _ = self.workspace.update(cx, |w, cx| w.open_chat(&chat_id, cx));
             }
         }
         cx.notify();
     }
 
     /// Opens a card's chat read-only, as a subagent shows: the pill sends it what comes next.
-    pub(super) fn open(&self, thread_id: &str, cx: &mut Context<Self>) {
-        let _ = self
-            .workspace
-            .update(cx, |w, cx| w.peek_thread(thread_id, cx));
+    pub(super) fn open(&self, chat_id: &str, cx: &mut Context<Self>) {
+        let _ = self.workspace.update(cx, |w, cx| w.peek_chat(chat_id, cx));
     }
 
     /// Answers the question shown: allows or denies it, with `words` as the answer to an open
@@ -271,8 +267,7 @@ impl Orchestrator {
             _ => HashMap::new(),
         };
         let core = Arc::clone(&workspace.read(cx).core);
-        if let Err(e) =
-            core.respond_approval(&ask.thread_id, &ask.approval_id, allow, answers, None)
+        if let Err(e) = core.respond_approval(&ask.chat_id, &ask.approval_id, allow, answers, None)
         {
             log::warn!(error:% = e; "could not answer an agent from the orchestrator: {{error}}");
         }

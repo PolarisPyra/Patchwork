@@ -81,11 +81,11 @@ pub fn set_relay_port(port: u16) {
 /// state folder is too deep for either. It is named for this build, so a debug build and the
 /// installed app each keep their own masters and neither ends the other's.
 fn socket_dir() -> PathBuf {
-    let name = crate::dirs::NAME;
+    let name = crate::files::dirs::NAME;
     if let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR") {
         return PathBuf::from(runtime).join(format!("{name}-ssh"));
     }
-    crate::fs::home_dir().map_or_else(
+    crate::files::paths::home_dir().map_or_else(
         || crate::dirs().state.join("patchwork-ssh"),
         |home| home.join(".ssh").join(name),
     )

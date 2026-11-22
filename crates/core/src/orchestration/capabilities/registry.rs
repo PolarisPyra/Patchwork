@@ -14,7 +14,7 @@ use serde_json::{Map, Value, json};
 
 use super::table::all;
 use super::types::{Capability, Ctx, Kind, Permission};
-use crate::threads::{AccessMode, Role, Thread};
+use crate::chats::{AccessMode, Role, Chat};
 use crate::{Core, Error};
 
 /// The most characters of an argument the person is shown when asked to allow a capability.
@@ -43,7 +43,7 @@ enum Standing {
 }
 
 /// The message the caller's turn answers.
-fn turn(caller: &Thread) -> String {
+fn turn(caller: &Chat) -> String {
     caller
         .messages
         .iter()
@@ -336,21 +336,21 @@ pub(crate) fn invoke(ctx: &Ctx<'_>, id: &str, args: &Value) -> Result<String, Er
 }
 
 impl Core {
-    /// Runs the capability `id` for the dispatcher's chat `thread_id`, as its tool call.
+    /// Runs the capability `id` for the dispatcher's chat `chat_id`, as its tool call.
     ///
     /// # Errors
     ///
     /// Returns an error when the chat is not a dispatcher, or as `invoke` does.
     pub(crate) fn run_capability(
         self: &Arc<Self>,
-        thread_id: &str,
+        chat_id: &str,
         id: &str,
         args: &Value,
         stopped: &dyn Fn() -> bool,
     ) -> Result<String, Error> {
         let caller = self
             .store
-            .thread(thread_id)
+            .chat(chat_id)
             .filter(|t| self.is_dispatcher(&t.id))
             .ok_or("Only a chat app's dispatcher can do that")?;
         let ctx = Ctx {

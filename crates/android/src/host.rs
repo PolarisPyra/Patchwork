@@ -28,7 +28,7 @@ pub trait Host: Sync {
     fn set_state(&self, key: &str, value: &str) -> Result<(), Error>;
 
     /// The project a chat works in, by id, and its folder. None when the chat has none.
-    fn thread_project(&self, thread_id: &str) -> Option<(String, PathBuf)>;
+    fn chat_project(&self, chat_id: &str) -> Option<(String, PathBuf)>;
 }
 
 /// The Android tools, acting for `host` on the emulators it started.

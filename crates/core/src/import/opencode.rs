@@ -3,7 +3,7 @@
 //! `session`/`message`/`part` tables and the 2.x `session_v2`/`session_message` tables.
 //!
 //! OpenCode is not an agent Patchwork runs, so these conversations cannot be resumed. They are
-//! imported as transcripts, which the first turn of the thread sends to the agent as context.
+//! imported as transcripts, which the first turn of the chat sends to the agent as context.
 //! The database is only ever opened read-only.
 
 // Rust guideline compliant 2026-10-09
@@ -14,7 +14,7 @@ use serde_json::Value;
 use super::{Session, SessionMessage, ilog, push_merged};
 use std::path::Path;
 use crate::provider::{AgentKind, opencode};
-use crate::threads::Role;
+use crate::chats::Role;
 
 pub fn sessions(agent: AgentKind) -> Vec<Session> {
     let Some(dir) = opencode::data_dir() else {

@@ -49,7 +49,8 @@ impl Core {
     /// Returns an error when the agent has no CLI, the home or app data folder is unavailable, the
     /// installer cannot be downloaded or run, or it finishes without leaving the CLI in place.
     pub fn install_cli(&self, kind: AgentKind) -> Result<(), Error> {
-        let home = crate::system::fs::home_dir().ok_or("Could not find the home folder")?;
+        let home =
+            crate::system::files::paths::home_dir().ok_or("Could not find the home folder")?;
         let (installer, bin) = plan(kind, &home)?;
         std::fs::create_dir_all(&self.installers_dir)
             .map_err(|e| format!("Could not make {}: {e}", self.installers_dir.display()))?;

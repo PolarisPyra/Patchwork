@@ -4,9 +4,9 @@
 // Rust guideline compliant 2026-11-10
 
 use gpui::{Window, prelude::*};
-use patchwork_core::threads::{Attachment, Role};
+use patchwork_core::chats::{Attachment, Role};
 
-use super::state::Composer;
+use super::draft::Composer;
 
 /// Where Up has stepped to among the sent messages.
 pub(super) struct Recall {
@@ -25,12 +25,12 @@ impl Composer {
             return Vec::new();
         };
         let mut sent: Vec<(String, Vec<Attachment>)> = Vec::new();
-        let messages = workspace.read(cx).thread.as_ref().map(|t| &t.messages);
+        let messages = workspace.read(cx).chat.as_ref().map(|t| &t.messages);
         for m in messages.into_iter().flatten().rev() {
             if m.role != Role::User {
                 continue;
             }
-            let text = crate::chat::user::without_image_markdown(&m.text)
+            let text = crate::chat::transcript::user_message::without_image_markdown(&m.text)
                 .trim()
                 .to_string();
             let message = (text, m.attachments.clone());

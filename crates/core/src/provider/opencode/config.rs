@@ -8,10 +8,10 @@ use rusqlite::{Connection, OpenFlags};
 use std::sync::Mutex;
 use serde_json::{Value, json};
 use crate::provider::{AgentKind, AgentStatus, ModelOption};
-use crate::threads::AccessMode;
+use crate::chats::AccessMode;
 use crate::provider::TurnSpec;
 use crate::provider::find_binary;
-use crate::system::fs::home_dir;
+use crate::system::files::paths::home_dir;
 use crate::provider::located_or;
 use crate::provider::probe;
 use crate::provider::probe_at;
@@ -174,7 +174,7 @@ pub fn permission_config(spec: &TurnSpec) -> Option<Value> {
 }
 
 /// The user's system prompt for `opencode run`, in a file its `instructions` loads into the system
-/// prompt. 2.x gets it from the bridge instead (see `bridge.rs`).
+/// prompt. 2.x gets it from the bridge instead (see `bridge/`).
 #[must_use]
 pub fn instructions_config(spec: &TurnSpec) -> Option<Value> {
     let text = spec.instructions?;

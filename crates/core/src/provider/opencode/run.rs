@@ -4,7 +4,7 @@
 
 use serde_json::Value;
 use crate::events::AgentEvent;
-use crate::threads::{AccessMode, AttachmentKind, PlanStep, TokenUsage};
+use crate::chats::{AccessMode, AttachmentKind, PlanStep, TokenUsage};
 use crate::provider::Parsed;
 use crate::provider::ToolStart;
 use crate::provider::TurnSpec;

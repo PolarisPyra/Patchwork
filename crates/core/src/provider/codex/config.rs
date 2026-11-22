@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use crate::provider::AgentKind;
 use crate::provider::AgentStatus;
 use crate::provider::ModelOption;
-use crate::system::fs::home_dir;
+use crate::system::files::paths::home_dir;
 use crate::provider::probe;
 
 /// `$CODEX_HOME`, else `~/.codex`.

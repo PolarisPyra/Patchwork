@@ -1,5 +1,5 @@
 //! Settings → Permissions: the approval requests Patchwork answers itself, by the rules for the
-//! thread's project (or for chats without one) and the rules for everywhere.
+//! chat's project (or for chats without one) and the rules for everywhere.
 
 // Rust guideline compliant 2026-10-09
 

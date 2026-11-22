@@ -24,7 +24,7 @@ pub(super) const KEEP_SESSIONS: usize = 10;
 /// The log files of versions before session folders, which could hold API keys.
 const OLD_LOGS: [&str; 3] = ["agents.log", "imports.log", "app.log"];
 
-/// How a chat's file is named in a launch's folder: `chat-<thread id>.log`.
+/// How a chat's file is named in a launch's folder: `chat-<chat id>.log`.
 pub(super) const CHAT_PREFIX: &str = "chat-";
 
 /// How much of a log the Output panel shows when it opens it.
@@ -36,6 +36,17 @@ static SESSION: OnceLock<PathBuf> = OnceLock::new();
 /// This launch's folder, once `session_dir` has made it.
 pub(super) fn session() -> Option<&'static Path> {
     SESSION.get().map(PathBuf::as_path)
+}
+
+/// The logs folder, made when it is not there yet, to open in the file manager.
+///
+/// # Errors
+///
+/// Returns an error when the folder cannot be made.
+pub fn logs_folder() -> Result<PathBuf, Error> {
+    let logs = crate::system::dirs().logs.clone();
+    crate::system::files::paths::make_folder(&logs)?;
+    Ok(logs)
 }
 
 /// This launch's folder in the logs folder `logs`. The first call makes it, deletes all but the

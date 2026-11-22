@@ -4,10 +4,10 @@
 
 use std::path::Path;
 use serde_json::{Value, json};
-use crate::system::fs::{real, resolve};
+use crate::system::files::paths::{real, resolve};
 use crate::permissions::Target;
 use crate::permissions::PermissionKind;
-use crate::threads::AccessMode;
+use crate::chats::AccessMode;
 
 /// The tools offered to the model.
 #[must_use]
@@ -70,9 +70,9 @@ pub fn definitions() -> Value {
             }}}, "required": ["questions"]}),
         ),
         tool(
-            crate::secrets::TOOL,
-            crate::secrets::DESCRIPTION,
-            crate::secrets::input_schema(),
+            crate::vault::requests::TOOL,
+            crate::vault::requests::DESCRIPTION,
+            crate::vault::requests::input_schema(),
         ),
         tool(
             "update_plan",
@@ -225,10 +225,10 @@ pub fn summary(name: &str, args: &Value, root: &Path) -> String {
     let summary = match name {
         "bash" => field("command"),
         "job_output" | "job_kill" => field("job_id"),
-        crate::threads::delegate::RESULT => field("sub_agent_id"),
+        crate::chats::delegate::RESULT => field("sub_agent_id"),
         "fetch_url" => field("url"),
         crate::quilts::TOOL => field("command"),
-        crate::threads::delegate::TOOL => field("description"),
+        crate::chats::delegate::TOOL => field("description"),
         "glob" | "grep" => field("pattern"),
         "ask_user" => args["questions"][0]["question"]
             .as_str()

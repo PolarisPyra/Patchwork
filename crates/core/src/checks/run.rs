@@ -44,7 +44,7 @@ pub fn run(root: &str, command: &str, limit: Duration) -> Result<Outcome, Error>
         .env("CLICOLOR", "0");
     let cmd = crate::system::ssh::supervised(cmd)?;
     let started = Instant::now();
-    let (mut child, range) = crate::system::contained::spawn(cmd, Stdio::null())
+    let (mut child, range) = crate::system::processes::contained::spawn(cmd, Stdio::null())
         .map_err(|e| format!("The check command didn't start: {e}"))?;
     let stdout = keep_tail(child.stdout.take(), KEEP);
     let stderr = keep_tail(child.stderr.take(), KEEP);

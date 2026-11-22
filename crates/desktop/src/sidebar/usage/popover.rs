@@ -2,13 +2,13 @@
 
 // Rust guideline compliant 2026-10-09
 
-use super::state::ROW_H;
-use super::state::describe_agent;
-use super::state::wait_left;
-use super::state::Entry;
+use super::limits::ROW_H;
+use super::limits::describe_agent;
+use super::limits::wait_left;
+use super::limits::Entry;
 use super::ring::ring;
-use super::state::peak;
-use super::state::limited_until;
+use super::limits::peak;
+use super::limits::limited_until;
 use gpui::{AnyElement, FontWeight, Role, SharedString, deferred, div, prelude::*, px, relative};
 use patchwork_core::provider::AgentKind;
 use patchwork_ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};

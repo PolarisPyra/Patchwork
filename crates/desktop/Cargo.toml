@@ -12,7 +12,8 @@ categories.workspace = true
 
 [dependencies]
 patchwork-core.workspace = true
-patchwork-settings.workspace = true
+patchwork-modals.workspace = true
+patchwork-pages.workspace = true
 patchwork-sidecar.workspace = true
 patchwork-ui.workspace = true
 
@@ -27,6 +28,7 @@ log = { workspace = true, default-features = true }
 # layout and text shaping.
 mimalloc = { workspace = true, default-features = true }
 serde_json = { workspace = true, default-features = true }
+vt100 = { workspace = true, default-features = true }
 
 [build-dependencies]
 # Embeds the Windows icon in the exe.

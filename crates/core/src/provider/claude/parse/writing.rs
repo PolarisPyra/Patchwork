@@ -11,7 +11,7 @@ use std::sync::{Mutex, PoisonError};
 use crate::quilts::Written;
 use crate::events::AgentEvent;
 use crate::provider::Parsed;
-use crate::threads::{EditLines, ToolCall};
+use crate::chats::{EditLines, ToolCall};
 
 /// A quilt call being written.
 struct Writing {

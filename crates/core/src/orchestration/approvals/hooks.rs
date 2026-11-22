@@ -18,16 +18,16 @@ use crate::orchestration::{Runner, publish, unasked};
 use crate::{Core, Error};
 use crate::permissions::{self, PermissionKind, Target, Unasked};
 use crate::events::AgentEvent;
-use crate::threads::{AccessMode, Approval, ApprovalStatus, Role};
+use crate::chats::{AccessMode, Approval, ApprovalStatus, Role};
 
 impl Runner {
-    /// The answer to a hook's `request` (its thread, root, title, detail, kind, and resources):
+    /// The answer to a hook's `request` (its chat, root, title, detail, kind, and resources):
     /// `{"deny": reason}` to refuse the call, or `{"deny": null}` to let it run as the access
     /// mode decides.
     pub fn hook_request(&self, core: &Core, request: &Value) -> Value {
         let refused = |reason: &str| json!({"deny": reason});
         let text = |key: &str| request[key].as_str().unwrap_or_default().to_string();
-        let (thread_id, root) = (text("thread"), text("root"));
+        let (chat_id, root) = (text("chat"), text("root"));
         // A request whose kind this version cannot read is refused rather than let past the rules.
         let Ok(kind) = serde_json::from_value(request["kind"].clone()) else {
             return refused("Patchwork could not read this call to check it against its rules");
@@ -40,18 +40,18 @@ impl Runner {
         let target = Target::new(kind, resources);
         let full = core
             .store
-            .thread(&thread_id)
+            .chat(&chat_id)
             .is_some_and(|t| t.access_mode == AccessMode::FullAccess);
-        // A tool the bot blocks is refused before any rule is read.
-        if core.bot_refuses(&thread_id, Path::new(&root), &target) {
-            return Self::refuse_blocked(core, &thread_id, &text("title"), &text("detail"), kind);
+        // A tool the agent blocks is refused before any rule is read.
+        if core.agent_refuses(&chat_id, Path::new(&root), &target) {
+            return Self::refuse_blocked(core, &chat_id, &text("title"), &text("detail"), kind);
         }
-        let denied = match unasked(core, &thread_id, &root, &target, !full) {
+        let denied = match unasked(core, &chat_id, &root, &target, !full) {
             Unasked::Run => return json!({"deny": null}),
             Unasked::Refuse(decision) => Some(decision),
             Unasked::Ask => None,
         };
-        let Some(message_id) = reply_id(core, &thread_id) else {
+        let Some(message_id) = reply_id(core, &chat_id) else {
             return refused("This turn is no longer running");
         };
         let mut approval = Approval {
@@ -65,7 +65,7 @@ impl Runner {
             approval.auto = true;
             publish(
                 core,
-                &thread_id,
+                &chat_id,
                 AgentEvent::ApprovalRequested {
                     message_id,
                     approval,
@@ -75,23 +75,23 @@ impl Runner {
         }
 
         // An ask rule: the call waits for the user's answer.
-        match self.hold(core, thread_id, message_id, root, approval, Some(target)) {
+        match self.hold(core, chat_id, message_id, root, approval, Some(target)) {
             Ok(()) => json!({"deny": null}),
             Err(reason) => refused(reason),
         }
     }
 
-    /// Records a call the bot behind thread `thread_id` blocks as refused, in its latest reply,
+    /// Records a call the agent behind chat `chat_id` blocks as refused, in its latest reply,
     /// and returns the hook's answer that refuses it.
     fn refuse_blocked(
         core: &Core,
-        thread_id: &str,
+        chat_id: &str,
         title: &str,
         detail: &str,
         kind: PermissionKind,
     ) -> Value {
-        let reason = crate::bots::BLOCKED_REASON;
-        if let Some(message_id) = reply_id(core, thread_id) {
+        let reason = crate::agents::BLOCKED_REASON;
+        if let Some(message_id) = reply_id(core, chat_id) {
             let approval = Approval {
                 status: ApprovalStatus::Denied,
                 kind: Some(kind),
@@ -103,7 +103,7 @@ impl Runner {
             };
             publish(
                 core,
-                thread_id,
+                chat_id,
                 AgentEvent::ApprovalRequested {
                     message_id,
                     approval,
@@ -113,7 +113,7 @@ impl Runner {
         json!({"deny": format!("{reason}. Do not try it again.")})
     }
 
-    /// Asks the person, in the latest reply of the chat `thread_id`, to allow what `title` and
+    /// Asks the person, in the latest reply of the chat `chat_id`, to allow what `title` and
     /// `detail` say, and waits for their answer while the chat's turn runs. Patchwork's own
     /// operations ask this way before they change something.
     ///
@@ -123,15 +123,15 @@ impl Runner {
     pub(in crate::orchestration) fn confirm(
         &self,
         core: &Core,
-        thread_id: &str,
+        chat_id: &str,
         title: &str,
         detail: &str,
     ) -> Result<(), Error> {
-        let message_id = reply_id(core, thread_id).ok_or("This turn is no longer running")?;
+        let message_id = reply_id(core, chat_id).ok_or("This turn is no longer running")?;
         let approval = Approval::pending(title.to_string(), crate::provider::one_line(detail));
         self.hold(
             core,
-            thread_id.to_string(),
+            chat_id.to_string(),
             message_id,
             String::new(),
             approval,
@@ -141,11 +141,11 @@ impl Runner {
     }
 
     /// Shows `approval` in the message `message_id` and waits until the person answers it or the
-    /// turn of `thread_id` stops.
+    /// turn of `chat_id` stops.
     fn hold(
         &self,
         core: &Core,
-        thread_id: String,
+        chat_id: String,
         message_id: String,
         root: String,
         approval: Approval,
@@ -154,7 +154,7 @@ impl Runner {
         let (tx, rx) = mpsc::channel();
         let stopped = {
             let turns = self.turns.locked();
-            let Some(turn) = turns.get(&thread_id) else {
+            let Some(turn) = turns.get(&chat_id) else {
                 return Err("This turn is no longer running");
             };
             self.hooks.locked().insert(approval.id.clone(), tx);
@@ -172,7 +172,7 @@ impl Runner {
         let id = approval.id.clone();
         publish(
             core,
-            &thread_id,
+            &chat_id,
             AgentEvent::ApprovalRequested {
                 message_id,
                 approval,
@@ -186,7 +186,7 @@ impl Runner {
                     if let Some(target) = target {
                         self.grants
                             .locked()
-                            .entry(thread_id)
+                            .entry(chat_id)
                             .or_default()
                             .push(target);
                     }
@@ -206,12 +206,12 @@ impl Runner {
     /// Whether the user already allowed `target` through a hook, which then counts once.
     pub(in crate::orchestration) fn take_grant(
         &self,
-        thread_id: &str,
+        chat_id: &str,
         target: &Target,
         root: &Path,
     ) -> bool {
         let mut grants = self.grants.locked();
-        let Some(granted) = grants.get_mut(thread_id) else {
+        let Some(granted) = grants.get_mut(chat_id) else {
             return false;
         };
         let Some(i) = granted
@@ -225,9 +225,9 @@ impl Runner {
     }
 }
 
-/// The id of the newest reply in the thread: the one its running turn writes into.
-pub(super) fn reply_id(core: &Core, thread_id: &str) -> Option<String> {
-    core.store.thread(thread_id).and_then(|t| {
+/// The id of the newest reply in the chat: the one its running turn writes into.
+pub(super) fn reply_id(core: &Core, chat_id: &str) -> Option<String> {
+    core.store.chat(chat_id).and_then(|t| {
         t.messages
             .iter()
             .rfind(|m| m.role == Role::Assistant)

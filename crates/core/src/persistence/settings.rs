@@ -68,5 +68,5 @@ pub(super) fn load_settings(conn: &Connection) -> rusqlite::Result<Settings> {
 
 /// `path` without the `\\?\` prefix a Windows path kept by an earlier version may carry.
 fn plain_path(path: String) -> String {
-    crate::system::fs::without_verbatim(std::path::Path::new(&path)).unwrap_or(path)
+    crate::system::files::paths::without_verbatim(std::path::Path::new(&path)).unwrap_or(path)
 }

@@ -19,7 +19,7 @@ use serde_json::{Value, json};
 
 use crate::extensions::hooks::AgentHook;
 use crate::provider::AgentKind;
-use crate::threads::AccessMode;
+use crate::chats::AccessMode;
 
 /// The argument that starts Patchwork's own binary as the API agent.
 pub const BRIDGE_ARG: &str = "--api-bridge";
@@ -499,7 +499,7 @@ impl Agent {
             "context": self.context,
         }))
         .map_err(|e| e.to_string())?;
-        crate::system::fs::write_private(&self.session_file, &text)
+        crate::system::files::paths::write_private(&self.session_file, &text)
     }
 }
 

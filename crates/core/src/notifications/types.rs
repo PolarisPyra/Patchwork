@@ -18,9 +18,10 @@ pub struct NotificationSettings {
     pub chat_apps_when: ChatAppsWhen,
     /// How long Patchwork must be out of focus, in seconds, before you count as away.
     pub away_after_secs: u32,
-    /// The chats that have their own choice, by thread id. It wins over the events above and
+    /// The chats that have their own choice, by chat id. It wins over the events above and
     /// over a muted project.
-    pub threads: BTreeMap<String, Notices>,
+    #[serde(alias = "threads")]
+    pub chats: BTreeMap<String, Notices>,
     /// The projects whose chats without their own choice notify nowhere.
     pub muted_projects: Vec<String>,
 }
@@ -38,7 +39,7 @@ impl Default for NotificationSettings {
             chat_apps: Events::default(),
             chat_apps_when: ChatAppsWhen::Away,
             away_after_secs: 300,
-            threads: BTreeMap::new(),
+            chats: BTreeMap::new(),
             muted_projects: Vec::new(),
         }
     }
@@ -48,8 +49,8 @@ impl NotificationSettings {
     /// The chat's own choice, or nothing when its project is muted; None when it follows the
     /// events chosen for each place.
     #[must_use]
-    pub fn chat(&self, thread_id: &str, project_id: Option<&str>) -> Option<Notices> {
-        if let Some(own) = self.threads.get(thread_id) {
+    pub fn chat(&self, chat_id: &str, project_id: Option<&str>) -> Option<Notices> {
+        if let Some(own) = self.chats.get(chat_id) {
             return Some(*own);
         }
         project_id
@@ -57,16 +58,10 @@ impl NotificationSettings {
             .then_some(Notices::Off)
     }
 
-    /// Whether `kind` in the chat `thread_id` of `project_id` notifies at `place`.
+    /// Whether `kind` in the chat `chat_id` of `project_id` notifies at `place`.
     #[must_use]
-    pub fn wants(
-        &self,
-        place: Place,
-        kind: Kind,
-        thread_id: &str,
-        project_id: Option<&str>,
-    ) -> bool {
-        match self.chat(thread_id, project_id) {
+    pub fn wants(&self, place: Place, kind: Kind, chat_id: &str, project_id: Option<&str>) -> bool {
+        match self.chat(chat_id, project_id) {
             Some(own) => own.allows(kind),
             None => match place {
                 Place::Desktop => self.desktop.allows(kind),
@@ -184,7 +179,7 @@ impl Notices {
 #[serde(rename_all = "camelCase")]
 pub struct DesktopNotice {
     /// Names the notice, so a later one replaces it and an answer takes it down: the request's
-    /// id for a question, else the thread's id and the event.
+    /// id for a question, else the chat's id and the event.
     pub tag: String,
     pub title: String,
     pub body: String,

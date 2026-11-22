@@ -79,16 +79,17 @@ pub struct BackgroundImage {
 pub struct RemovedBackground {
     pub file: String,
     /// The chats that showed it as their own background.
-    pub threads: Vec<String>,
+    #[serde(alias = "threads")]
+    pub chats: Vec<String>,
     /// It was the background every chat shares.
     pub shared: bool,
     /// Which Orchestrator backgrounds showed it: the one every window shows, light windows'
     /// and dark ones'.
     #[serde(default)]
     pub page: [bool; 3],
-    /// The bots that showed it as their own background.
+    /// The agents that showed it as their own background.
     #[serde(default)]
-    pub bots: Vec<String>,
+    pub agents: Vec<String>,
     /// It was the Quilts page's background.
     #[serde(default)]
     pub quilts: bool,
@@ -144,13 +145,13 @@ impl Core {
     /// # Errors
     ///
     /// Returns an error when the chat's changes cannot be saved to the database.
-    pub fn set_thread_background(
+    pub fn set_chat_background(
         &self,
         id: &str,
         background: Option<ChatBackground>,
     ) -> Result<(), Error> {
         self.store
-            .update_thread(id, move |t| t.background = background)
+            .update_chat(id, move |t| t.background = background)
     }
 
     /// Copies a picture into Patchwork's folder, so the background stays when the original is
@@ -346,7 +347,7 @@ impl Core {
     /// # Errors
     ///
     /// Returns an error when `file` names a path rather than a plain file name, when the picture
-    /// cannot be moved aside, or when a chat, a bot or the settings cannot be saved.
+    /// cannot be moved aside, or when a chat, an agent or the settings cannot be saved.
     pub fn remove_background_image(&self, file: &str) -> Result<RemovedBackground, Error> {
         // A name with a folder in it could reach a file outside the backgrounds folder.
         if Path::new(file).file_name().and_then(|n| n.to_str()) != Some(file) {
@@ -360,22 +361,22 @@ impl Core {
         let picture = ChatBackground::Image {
             file: file.to_owned(),
         };
-        let threads: Vec<String> = self.store.with_threads(|threads| {
-            threads
+        let chats: Vec<String> = self.store.with_chats(|chats| {
+            chats
                 .iter()
                 .filter(|t| t.background.as_ref() == Some(&picture))
                 .map(|t| t.id.clone())
                 .collect()
         });
-        for id in &threads {
-            self.store.update_thread(id, |t| t.background = None)?;
+        for id in &chats {
+            self.store.update_chat(id, |t| t.background = None)?;
         }
-        let mut bots = Vec::new();
-        for mut bot in self.store.bots() {
-            if bot.background.as_ref() == Some(&picture) {
-                bot.background = None;
-                self.store.save_bot(&bot)?;
-                bots.push(bot.id);
+        let mut agents = Vec::new();
+        for mut agent in self.store.agents() {
+            if agent.background.as_ref() == Some(&picture) {
+                agent.background = None;
+                self.store.save_agent(&agent)?;
+                agents.push(agent.id);
             }
         }
         let settings = self.store.settings();
@@ -393,10 +394,10 @@ impl Core {
         })?;
         Ok(RemovedBackground {
             file: file.to_owned(),
-            threads,
+            chats,
             shared,
             page,
-            bots,
+            agents,
             quilts,
         })
     }
@@ -407,7 +408,7 @@ impl Core {
     /// # Errors
     ///
     /// Returns an error when the file name contains a path, when the picture cannot be moved back
-    /// into the backgrounds folder, or when a chat, a bot or the settings cannot be saved.
+    /// into the backgrounds folder, or when a chat, an agent or the settings cannot be saved.
     pub fn restore_background_image(&self, removed: &RemovedBackground) -> Result<(), Error> {
         let file = removed.file.as_str();
         if Path::new(file).file_name().and_then(|n| n.to_str()) != Some(file) {
@@ -421,17 +422,17 @@ impl Core {
         let picture = ChatBackground::Image {
             file: file.to_owned(),
         };
-        for id in &removed.threads {
-            self.store.update_thread(id, |t| {
+        for id in &removed.chats {
+            self.store.update_chat(id, |t| {
                 if t.background.is_none() {
                     t.background = Some(picture.clone());
                 }
             })?;
         }
-        for mut bot in self.store.bots() {
-            if bot.background.is_none() && removed.bots.contains(&bot.id) {
-                bot.background = Some(picture.clone());
-                self.store.save_bot(&bot)?;
+        for mut agent in self.store.agents() {
+            if agent.background.is_none() && removed.agents.contains(&agent.id) {
+                agent.background = Some(picture.clone());
+                self.store.save_agent(&agent)?;
             }
         }
         self.update_settings(|s| {

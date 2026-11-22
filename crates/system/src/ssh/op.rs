@@ -200,7 +200,7 @@ pub fn make_dirs(host: &str, path: &str) -> Result<String, Error> {
 /// # Errors
 ///
 /// Returns an error when the host cannot be reached or the folder cannot be read.
-pub fn browse(host: &str, path: Option<&str>) -> Result<crate::browse::DirListing, Error> {
+pub fn browse(host: &str, path: Option<&str>) -> Result<crate::files::browse::DirListing, Error> {
     call(
         host,
         &Request::Browse {

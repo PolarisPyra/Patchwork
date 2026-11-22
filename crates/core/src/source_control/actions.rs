@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use crate::workspace::{self, RepoAction};
+use crate::source_control::RepoAction;
 use crate::{Core, Error};
 
 impl Core {
@@ -15,13 +15,13 @@ impl Core {
     pub fn repo_action(
         &self,
         project_id: &str,
-        thread_id: Option<&str>,
+        chat_id: Option<&str>,
         action: RepoAction,
     ) -> Result<String, Error> {
-        let root = self.source_root(project_id, thread_id)?;
+        let root = self.source_root(project_id, chat_id)?;
         let _hold = self.hold_source_folder(
             &root,
-            thread_id,
+            chat_id,
             "Wait for the task to finish before changing its worktree",
         )?;
         let switches = matches!(
@@ -39,7 +39,7 @@ impl Core {
 
 /// Does `action` in the repository at `root`, and returns what to say it did.
 fn run_action(root: &str, action: RepoAction) -> Result<String, Error> {
-    use workspace as ws;
+    use crate::source_control as ws;
     Ok(match action {
         RepoAction::Fetch { all } => format!("Fetched {}", ws::fetch(root, all)?),
         RepoAction::Sync => format!("Synced with {}", ws::sync(root)?),

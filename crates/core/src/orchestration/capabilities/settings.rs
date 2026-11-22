@@ -111,7 +111,7 @@ fn visible(settings: &Settings) -> Result<Value, Error> {
 /// Tells the window that the settings changed, so it draws them.
 fn changed(ctx: &Ctx<'_>) {
     ctx.core.emit(AgentEventEnvelope {
-        thread_id: String::new(),
+        chat_id: String::new(),
         event: AgentEvent::SettingsChanged,
     });
 }

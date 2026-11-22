@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use super::*;
 use crate::provider::AgentKind;
 use crate::system::new_id;
-use crate::threads::{Message, MessageStatus, Role, Thread};
+use crate::chats::{Message, MessageStatus, Role, Chat};
 
 fn temp_dir() -> PathBuf {
     let dir = std::env::temp_dir().join(new_id());
@@ -44,15 +44,15 @@ fn message(text: &str, status: MessageStatus) -> Message {
     }
 }
 
-fn thread(messages: Vec<Message>) -> Thread {
-    Thread {
+fn chat(messages: Vec<Message>) -> Chat {
+    Chat {
         id: new_id(),
         project_id: None,
         title: "t".into(),
         agent: AgentKind::Antigravity,
         model: Some("pro".into()),
         session_id: Some("s".into()),
-        access_mode: crate::threads::AccessMode::Supervised,
+        access_mode: crate::chats::AccessMode::Supervised,
         created_at: 2,
         messages: messages.into_iter().map(std::sync::Arc::new).collect(),
         goal: None,
@@ -70,7 +70,7 @@ fn thread(messages: Vec<Message>) -> Thread {
         role_pending: false,
         favorite: false,
         pinned: false,
-        bot_id: None,
+        agent_id: None,
     }
 }
 
@@ -82,7 +82,7 @@ fn legacy_json_moves_into_sqlite() {
         r#"{"onboarded":true,"agent":"codex","projects":[{"id":"p","name":"n","path":"/x"}]}"#,
     )
     .unwrap();
-    let t = thread(vec![message("hi", MessageStatus::Streaming)]);
+    let t = chat(vec![message("hi", MessageStatus::Streaming)]);
     std::fs::write(
         dir.join("threads.json"),
         serde_json::to_string(&[&t]).unwrap(),
@@ -93,7 +93,7 @@ fn legacy_json_moves_into_sqlite() {
     let s = store.settings();
     assert_eq!(s.agents, [AgentKind::Codex]);
     assert_eq!(s.projects[0].path, "/x");
-    let loaded = store.thread(&t.id).unwrap();
+    let loaded = store.chat(&t.id).unwrap();
     assert_eq!(loaded.messages[0].status, MessageStatus::Interrupted);
     assert_eq!(loaded.messages[0].files, ["a.rs"]);
     assert!(dir.join("settings.json.bak").exists() && !dir.join("threads.json").exists());
@@ -101,13 +101,13 @@ fn legacy_json_moves_into_sqlite() {
 }
 
 #[test]
-fn thread_changes_survive_reopen_and_delete_cascades() {
+fn chat_changes_survive_reopen_and_delete_cascades() {
     let dir = temp_dir();
     let store = Store::open(&dir).unwrap();
-    let t = thread(vec![message("a", MessageStatus::Complete)]);
-    store.insert_threads(vec![t.clone()]).unwrap();
+    let t = chat(vec![message("a", MessageStatus::Complete)]);
+    store.insert_chats(vec![t.clone()]).unwrap();
     store
-        .update_thread(&t.id, |t| {
+        .update_chat(&t.id, |t| {
             t.title = "renamed".into();
             t.slash_commands = vec![crate::provider::ProviderSlashCommand {
                 name: "review".into(),
@@ -121,7 +121,7 @@ fn thread_changes_survive_reopen_and_delete_cascades() {
     drop(store);
 
     let store = Store::open(&dir).unwrap();
-    let loaded = store.thread(&t.id).unwrap();
+    let loaded = store.chat(&t.id).unwrap();
     assert_eq!(loaded.title, "renamed");
     assert_eq!(loaded.slash_commands[0].name, "review");
     assert_eq!(
@@ -135,7 +135,7 @@ fn thread_changes_survive_reopen_and_delete_cascades() {
         [(AgentKind::Antigravity, "s".to_string())]
     );
 
-    store.delete_thread(&t.id).unwrap();
+    store.delete_chat(&t.id).unwrap();
     let count: i64 = store
         .lock()
         .conn
@@ -184,13 +184,13 @@ fn scheduled_tasks_survive_reopen() {
         project_id: Some("p".into()),
         agent: AgentKind::Codex,
         model: None,
-        access_mode: crate::threads::AccessMode::Auto,
+        access_mode: crate::chats::AccessMode::Auto,
         enabled: true,
         last_run_at: None,
         next_run_at: None,
         created_at: 7,
         recent_runs: Vec::new(),
-        bot_id: None,
+        agent_id: None,
     };
     let saved = crate::scheduled::prepare(task).unwrap();
     store.save_scheduled_task(&saved).unwrap();
@@ -257,13 +257,13 @@ fn a_task_without_a_name_or_a_time_is_refused() {
         project_id: None,
         agent: AgentKind::Claude,
         model: None,
-        access_mode: crate::threads::AccessMode::Supervised,
+        access_mode: crate::chats::AccessMode::Supervised,
         enabled: true,
         last_run_at: None,
         next_run_at: None,
         created_at: 0,
         recent_runs: Vec::new(),
-        bot_id: None,
+        agent_id: None,
     };
     crate::scheduled::prepare(task("", "09:00")).unwrap_err();
     crate::scheduled::prepare(task("n", "nine")).unwrap_err();
@@ -277,13 +277,13 @@ fn a_task_without_a_name_or_a_time_is_refused() {
 fn a_replys_checks_survive_reopen() {
     let dir = temp_dir();
     let store = Store::open(&dir).unwrap();
-    let mut t = thread(vec![message("done", MessageStatus::Complete)]);
-    std::sync::Arc::make_mut(&mut t.messages[0]).checks = Some(crate::threads::TurnChecks {
-        status: crate::threads::CheckStatus::Failed,
+    let mut t = chat(vec![message("done", MessageStatus::Complete)]);
+    std::sync::Arc::make_mut(&mut t.messages[0]).checks = Some(crate::chats::TurnChecks {
+        status: crate::chats::CheckStatus::Failed,
         command: Some("cargo test".into()),
         duration_ms: 1234,
         tests: Some(3),
-        failures: vec![crate::threads::CheckFailure {
+        failures: vec![crate::chats::CheckFailure {
             name: "math::subtracts".into(),
             detail: "assertion `left == right` failed".into(),
         }],
@@ -292,13 +292,13 @@ fn a_replys_checks_survive_reopen() {
         enabled: true,
         at: 42,
     });
-    store.insert_threads(vec![t.clone()]).unwrap();
+    store.insert_chats(vec![t.clone()]).unwrap();
     drop(store);
 
     let store = Store::open(&dir).unwrap();
-    let loaded = store.thread(&t.id).unwrap();
+    let loaded = store.chat(&t.id).unwrap();
     let checks = loaded.messages[0].checks.clone().expect("kept");
-    assert_eq!(checks.status, crate::threads::CheckStatus::Failed);
+    assert_eq!(checks.status, crate::chats::CheckStatus::Failed);
     assert_eq!(checks.command.as_deref(), Some("cargo test"));
     assert_eq!(checks.failures[0].name, "math::subtracts");
     assert!(checks.enabled);

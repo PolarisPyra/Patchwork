@@ -7,14 +7,14 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 
-use crate::threads::{AccessMode, TokenUsage};
+use crate::chats::{AccessMode, TokenUsage};
 use crate::provider::AgentKind;
 use crate::provider::AgentStatus;
 use crate::provider::CliInfo;
 use crate::provider::cli_info::{self, InfoCommand};
 use crate::provider::ModelOption;
 use super::find_binary;
-use crate::system::fs::home_dir;
+use crate::system::files::paths::home_dir;
 use super::located_or;
 use super::one_line;
 use super::probe;

@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use crate::threads::TokenUsage;
+use crate::chats::TokenUsage;
 
 /// How the id of the main agent's output that its requests left uncounted starts. It is kept out
 /// of the context like a subagent's request, but it is the main agent's.

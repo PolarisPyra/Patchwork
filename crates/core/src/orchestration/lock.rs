@@ -29,8 +29,8 @@ impl Core {
     pub fn lock_vault(self: &Arc<Self>) -> Result<(), Error> {
         self.shut_vault()?;
         // An agent keeps the keys it was started with, replying or not.
-        for thread_id in self.runner.running() {
-            self.stop_turn(&thread_id, false);
+        for chat_id in self.runner.running() {
+            self.stop_turn(&chat_id, false);
         }
         self.runner.retire_all_idle();
         Ok(())

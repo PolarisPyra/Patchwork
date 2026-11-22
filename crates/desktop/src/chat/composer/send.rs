@@ -7,9 +7,9 @@ use std::sync::Arc;
 
 use gpui::{App, AppContext as _, ClipboardEntry, Context, Focusable, PathPromptOptions, Window};
 use patchwork_core::Core;
-use patchwork_core::threads::{Attachment, GoalStatus, NewThread, is_long_paste};
+use patchwork_core::chats::{Attachment, GoalStatus, NewChat, is_long_paste};
 use crate::workspace::{Workspace, is_working};
-use super::state::Composer;
+use super::draft::Composer;
 use super::sigil_menu;
 
 impl Composer {
@@ -25,7 +25,7 @@ impl Composer {
             return;
         }
         let w = workspace.read(cx);
-        let working = w.thread.as_ref().is_some_and(is_working);
+        let working = w.chat.as_ref().is_some_and(is_working);
         // Same as clicking the queued message's Steer button. The draft is not sent.
         if alternate && working && !w.queued().is_empty() && !w.editing_queued() {
             workspace.update(cx, crate::workspace::Workspace::steer_first_queued);
@@ -48,7 +48,7 @@ impl Composer {
         if workspace.read(cx).answering_in_composer() {
             if !text.is_empty() || !self.attachments.is_empty() {
                 let attachments = std::mem::take(&mut self.attachments);
-                let answer = patchwork_core::threads::answer_with_attachments(&text, &attachments);
+                let answer = patchwork_core::chats::answer_with_attachments(&text, &attachments);
                 workspace.update(cx, |w, cx| w.answer_question(answer, cx));
                 self.editor.update(cx, |e, cx| e.clear(window, cx));
                 cx.notify();
@@ -59,7 +59,7 @@ impl Composer {
             return;
         }
         let picks = self.picks(workspace.read(cx));
-        let new = NewThread {
+        let new = NewChat {
             id: None,
             project_id: workspace.read(cx).settings.active_project_id.clone(),
             agent: picks.agent,
@@ -69,10 +69,10 @@ impl Composer {
             compact_window: picks.compact,
         };
         let attachments = std::mem::take(&mut self.attachments);
-        // On a bot's page the message starts a run of the bot.
-        if workspace.read(cx).bot_shown.is_some() {
+        // On an agent's page the message starts a run of the agent.
+        if workspace.read(cx).agent_shown.is_some() {
             let kept = attachments.clone();
-            if !workspace.update(cx, |w, cx| w.send_to_bot(text, attachments, new, cx)) {
+            if !workspace.update(cx, |w, cx| w.send_to_agent(text, attachments, new, cx)) {
                 self.attachments = kept;
                 return;
             }
@@ -83,7 +83,7 @@ impl Composer {
         workspace.update(cx, |w, cx| {
             // A granular chat is asked what it runs with before its first message goes, unless
             // its project says.
-            if w.thread.is_none() && w.core.asks_granular(new.project_id.as_deref()) {
+            if w.chat.is_none() && w.core.asks_granular(new.project_id.as_deref()) {
                 let first = (text, attachments, queue);
                 w.start_granular_chat(new, picks.role, first, window, cx);
             } else {
@@ -131,7 +131,7 @@ impl Composer {
     /// Puts a message that was not sent back, ahead of anything written since.
     pub fn put_back(&mut self, text: &str, attachments: Vec<Attachment>, cx: &mut Context<Self>) {
         // The composer lists images with the other attachments, not inline in the text.
-        let mut text = crate::chat::user::without_image_markdown(text);
+        let mut text = crate::chat::transcript::user_message::without_image_markdown(text);
         let written = self.editor.read(cx).content.trim().to_string();
         if !written.is_empty() {
             text = format!("{text}\n\n{written}");
@@ -290,7 +290,7 @@ fn copied_files(text: &str) -> Vec<PathBuf> {
 /// a running reply. While a goal runs, follow-ups wait by default.
 pub(super) fn queue_by_default(w: &Workspace) -> bool {
     let goal_active = w
-        .thread
+        .chat
         .as_ref()
         .and_then(|t| t.goal.as_ref())
         .is_some_and(|g| g.status == GoalStatus::Active);

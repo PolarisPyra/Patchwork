@@ -48,7 +48,7 @@ pub(super) fn cipher(key: &[u8; KEY_LEN]) -> XChaCha20Poly1305 {
 )]
 pub(super) fn held(key: &[u8; KEY_LEN]) -> Box<XChaCha20Poly1305> {
     let held = Box::new(cipher(key));
-    if let Err(e) = crate::system::memory::pin(&*held) {
+    if let Err(e) = crate::system::machine::memory::pin(&*held) {
         log::warn!(error:% = e; "the vault's key could be written to the swap file: {{error}}");
     }
     held
