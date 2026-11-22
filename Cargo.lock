@@ -4658,6 +4658,7 @@ name = "patchwork-system"
 version = "26.11.133"
 dependencies = [
  "base64 0.22.1",
+ "chrono",
  "libc",
  "log",
  "resvg",
@@ -4665,7 +4666,6 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.21",
- "time",
  "trash",
  "uuid",
  "which 7.0.3",
