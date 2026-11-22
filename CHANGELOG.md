@@ -3,6 +3,15 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.138] - 2026-11-22
+
+## What's Changed
+* docs: add GEMINI.md matching CLAUDE.md project rules by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/297
+* fix(sidebar): exporting a task now opens the save dialog on Linux by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/298
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.137...26.11.138
+
 ## [26.11.137] - 2026-11-22
 
 ## What's Changed
