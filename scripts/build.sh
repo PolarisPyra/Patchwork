@@ -9,18 +9,24 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Build all three SSH helpers in one cargo-zigbuild invocation in a separate target dir so build
+# scripts and proc macros compile once and run alongside the main app's build.
+cargo zigbuild --release -p patchwork-remote --target-dir target/remote \
+  --target x86_64-unknown-linux-musl \
+  --target aarch64-unknown-linux-musl \
+  --target x86_64-pc-windows-gnu &
+helpers=$!
 cargo build --release -p patchwork
+wait "$helpers"
 
 app=target/release/Patchwork.AppDir
 rm -rf "$app"
 mkdir -p "$app/usr/bin"
 cp target/release/patchwork "$app/usr/bin/"
 for arch in x86_64 aarch64; do
-  cargo zigbuild --release -p patchwork-remote --target "$arch-unknown-linux-musl"
-  cp "target/$arch-unknown-linux-musl/release/patchwork-remote" "$app/usr/bin/patchwork-remote-linux-$arch"
+  cp "target/remote/$arch-unknown-linux-musl/release/patchwork-remote" "$app/usr/bin/patchwork-remote-linux-$arch"
 done
-cargo zigbuild --release -p patchwork-remote --target x86_64-pc-windows-gnu
-cp target/x86_64-pc-windows-gnu/release/patchwork-remote.exe "$app/usr/bin/patchwork-remote-windows-x86_64.exe"
+cp target/remote/x86_64-pc-windows-gnu/release/patchwork-remote.exe "$app/usr/bin/patchwork-remote-windows-x86_64.exe"
 ln -s usr/bin/patchwork "$app/AppRun"
 sed 's|@EXEC@|patchwork|' packaging/patchwork.desktop > "$app/dev.patchwork.ade.desktop"
 cp assets/logo.png "$app/dev.patchwork.ade.png"

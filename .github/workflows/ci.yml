@@ -3,7 +3,8 @@ name: CI
 # Checks every PR, every push to main, a run started by hand and a weekly run on main. Two jobs side
 # by side: check (rustfmt, clippy and the Rust tests) and audit (Cargo.lock against the RustSec
 # advisories, so an advisory on something the app ships is seen without anyone having to look).
-# A PR runs it whatever it changes, since the ruleset on main requires the check job.
+# On a PR that touches no Rust inputs (docs, site, other workflows), check skips the Rust build and
+# finishes in seconds while still satisfying the ruleset on main.
 #
 # Actions are pinned to commits; the comment after each names the version it was.
 
@@ -31,6 +32,8 @@ env:
   # No debug info in the check and test builds, which nothing here debugs: it was most of the Rust
   # cache, which took longer to restore than the checks took to run.
   CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
+  CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
 
 jobs:
   check:
@@ -38,46 +41,78 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 2
+
+      # On a PR, HEAD is the merge commit onto main, so HEAD^1..HEAD is the PR's changed files.
+      - name: Check whether Rust inputs changed
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "rust=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only HEAD^1 HEAD \
+            | grep -qE '^(crates/|assets/|Cargo\.toml$|Cargo\.lock$|CHANGELOG\.md$|\.github/workflows/ci\.yml$)'; then
+            echo "rust=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "rust=false" >> "$GITHUB_OUTPUT"
+            echo "No Rust inputs changed; skipping fmt, clippy and tests."
+          fi
 
       # The runner's Azure apt mirror is sometimes throttled, so use archive.ubuntu.com directly.
       - name: Use archive.ubuntu.com
+        if: steps.changed.outputs.rust == 'true'
         run: sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
 
-      # What GPUI links against on Linux: X11 and Wayland input, fonts, and D-Bus.
+      # What GPUI links against on Linux (X11/Wayland input, fonts, D-Bus) plus clang for mold.
       - name: Install the Linux packages
+        if: steps.changed.outputs.rust == 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y -o Acquire::Retries=3 libdbus-1-dev libfontconfig-dev \
+          sudo apt-get install -y -o Acquire::Retries=3 --no-install-recommends \
+            clang libdbus-1-dev libfontconfig-dev \
             libfreetype-dev libwayland-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
 
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
+        if: steps.changed.outputs.rust == 'true'
+        with:
+          tool: mold@3.0.0
+
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        if: steps.changed.outputs.rust == 'true'
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: rustfmt, clippy
 
       # Saved only from main, so a run by hand on another branch starts from main's.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: steps.changed.outputs.rust == 'true'
         with:
           shared-key: ci
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Format
+        if: steps.changed.outputs.rust == 'true'
         run: cargo fmt --all -- --check
 
       - name: Lint
+        if: steps.changed.outputs.rust == 'true'
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Test
+        if: steps.changed.outputs.rust == 'true'
         run: cargo test --workspace
 
   audit:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked --version 0.23.0
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
+        with:
+          tool: cargo-audit@0.23.0
 
       - name: Check Cargo.lock for advisories
         run: cargo audit
