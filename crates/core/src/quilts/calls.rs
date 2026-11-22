@@ -1,46 +1,49 @@
-//! A chat's calls of the artifact tool, as its transcript holds them: telling them from other
-//! calls, and finding the artifact and version each one saved.
+//! A chat's calls of the quilt tool, as its transcript holds them: telling them from other
+//! calls, and finding the quilt and version each one saved.
 
 // Rust guideline compliant 2026-10-09
 
 use super::tool::TOOL;
-use super::types::Artifact;
+use super::types::Quilt;
 use crate::threads::{EditLines, ToolCall};
 
 /// The tool's name as Claude calls it on Patchwork's own server.
-pub(crate) const CLAUDE_NAME: &str = "mcp__patchwork__artifact";
+pub(crate) const CLAUDE_NAME: &str = "mcp__patchwork__quilt";
 
-/// What the tool tells its agent after saving version `n` of the artifact titled `title`,
+/// What the tool tells its agent after saving version `n` of the quilt titled `title`,
 /// named `key` in its chat. [`saved_by`] reads it back.
 pub(super) fn saved(title: &str, key: &str, n: u32) -> String {
-    format!(
-        "Saved version {n} of \"{title}\" (id {key}). The person sees it on the Artifacts page."
-    )
+    format!("Saved version {n} of \"{title}\" (id {key}). The person sees it on the Quilts page.")
 }
 
-/// Whether `tool` is a call of the artifact tool: by Claude, by Codex, or through Patchwork's own
-/// harness, which names it as the tool is named.
+/// The tool's name before it was called `quilt`, which older chats' calls hold.
+const OLD_TOOL: &str = "artifact";
+
+/// Whether `tool` is a call of the quilt tool, by its name now or before: by Claude, by Codex,
+/// or through Patchwork's own harness, which names it as the tool is named.
 #[must_use]
-pub fn is_artifact_call(tool: &ToolCall) -> bool {
-    tool.name == CLAUDE_NAME
-        || tool.name == TOOL
-        || (tool.name == "MCP" && tool.summary == format!("patchwork.{TOOL}"))
+pub fn is_quilt_call(tool: &ToolCall) -> bool {
+    [TOOL, OLD_TOOL].into_iter().any(|name| {
+        tool.name == name
+            || tool.name == format!("mcp__patchwork__{name}")
+            || (tool.name == "MCP" && tool.summary == format!("patchwork.{name}"))
+    })
 }
 
-/// The artifact and version that the artifact-tool call `tool` saved.
+/// The quilt and version that the quilt-tool call `tool` saved.
 ///
-/// Read from what the tool answered, among the artifacts of chat `thread_id`. An answer from
-/// before it named the artifact's id is matched by its title.
+/// Read from what the tool answered, among the quilts of chat `thread_id`. An answer from
+/// before it named the quilt's id is matched by its title.
 #[must_use]
 pub fn saved_by<'a>(
-    artifacts: &'a [Artifact],
+    quilts: &'a [Quilt],
     thread_id: &str,
     tool: &ToolCall,
-) -> Option<(&'a Artifact, u32)> {
+) -> Option<(&'a Quilt, u32)> {
     let rest = tool.output.as_deref()?.strip_prefix("Saved version ")?;
     let (n, rest) = rest.split_once(" of \"")?;
     let n = n.parse().ok()?;
-    let ours = || artifacts.iter().filter(|a| a.thread_id == thread_id);
+    let ours = || quilts.iter().filter(|a| a.thread_id == thread_id);
     let found = if let Some((_, after)) = rest.split_once("\" (id ") {
         let (key, _) = after.split_once(')')?;
         ours().find(|a| a.key == key)?
@@ -51,7 +54,7 @@ pub fn saved_by<'a>(
     Some((found, n))
 }
 
-/// Gives the artifact-tool call `tool` the type, title and line count its whole input `args` holds,
+/// Gives the quilt-tool call `tool` the type, title and line count its whole input `args` holds,
 /// for a card shown once the call has begun. `args` may be the input's JSON text.
 pub(crate) fn fill_in(tool: &mut ToolCall, args: &serde_json::Value) {
     let parsed;
@@ -82,7 +85,7 @@ pub(crate) fn fill_in(tool: &mut ToolCall, args: &serde_json::Value) {
 /// How many more lines are written before a card being written is told again.
 const STEP: u32 = 10;
 
-/// What a card being written shows of an artifact-tool call whose input is still arriving: its
+/// What a card being written shows of a quilt-tool call whose input is still arriving: its
 /// title, its type, its command, and how many lines it holds so far.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Written {

@@ -8,6 +8,8 @@ use gpui::{
     MouseUpEvent, NavigationDirection, Role, StyleRefinement, Window, deferred, div, prelude::*,
     px, relative,
 };
+use crate::chat::backdrop::quilts_scheme;
+use crate::chat::scheme::in_scheme;
 use crate::ui::menu::Menu;
 use crate::ui::theme::{font_ui, fs_md, radius, radius_sm, STATUSBAR_H, Theme, theme};
 use crate::ui::{button, display_title, icon};
@@ -36,7 +38,7 @@ impl Render for Workspace {
             _ if self.page == Page::Orchestrator => {
                 format!("{} - Orchestrator mode", crate::APP_TITLE)
             }
-            _ if self.page == Page::Artifacts => format!("{} - Artifacts", crate::APP_TITLE),
+            _ if self.page == Page::Quilts => format!("{} - Quilts", crate::APP_TITLE),
             (_, Some(bot)) => format!("{} - {}", crate::APP_TITLE, bot.name),
             (Some(thread), None) => {
                 format!("{} - {}", crate::APP_TITLE, display_title(&thread.title))
@@ -52,24 +54,24 @@ impl Render for Workspace {
         let t = *theme(cx);
         let orchestrating = self.page == Page::Orchestrator;
         // The page and its browser are made when it shows and closed when it is left.
-        let artifacts = if self.page == Page::Artifacts {
-            Some(self.artifacts_page(window, cx))
+        let quilts = if self.page == Page::Quilts {
+            Some(self.quilts_page(window, cx))
         } else {
-            if self.artifacts.take().is_some() {
+            if self.quilts.take().is_some() {
                 self.cool_browser_unless_shown(cx);
             }
-            self.artifact_chat = false;
+            self.quilt_chat = false;
             None
         };
         // The panel beside a chat closes with its browser once another chat is open, so a page
         // no one sees is not drawn.
         let thread = self.thread.as_ref().map(|t| &t.id);
         if self
-            .artifact_beside
+            .quilt_beside
             .as_ref()
             .is_some_and(|(of, _)| Some(of) != thread)
         {
-            self.artifact_beside = None;
+            self.quilt_beside = None;
             self.cool_browser_unless_shown(cx);
         }
         let chats = self.page == Page::Chats;
@@ -98,7 +100,7 @@ impl Render for Workspace {
         let credential_dialog = self.credential_dialog(cx);
         self.time_error(cx);
         let error = self.error_toast(&t, cx);
-        let artifact_chat = self.artifact_chat_card(&t, cx);
+        let quilt_chat = self.quilt_chat_card(&t, cx);
         div()
             .id("workspace")
             .track_focus(&self.focus)
@@ -126,8 +128,8 @@ impl Render for Workspace {
             // whatever has it: the chat box, a field, a button. Tab brings the chat box back.
             .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, window, cx| {
                 // Escape from the chat's card, once its message box has let it go, closes it.
-                if e.keystroke.key == "escape" && this.artifact_chat && !this.covered() {
-                    this.close_artifact_chat(window, cx);
+                if e.keystroke.key == "escape" && this.quilt_chat && !this.covered() {
+                    this.close_quilt_chat(window, cx);
                     cx.stop_propagation();
                     return;
                 }
@@ -149,7 +151,7 @@ impl Render for Workspace {
                 if keys.key == "space" && !held.modified() {
                     match this.page {
                         Page::Orchestrator => this.orchestrator_tasks = !this.orchestrator_tasks,
-                        Page::Artifacts => {}
+                        Page::Quilts => {}
                         Page::Chats => {
                             let open = this.sidebar_view().is_some();
                             // Looking in on a chat from the orchestrator ends here.
@@ -258,10 +260,8 @@ impl Render for Workspace {
                 this.peeking = false;
                 cx.notify();
             }))
-            .on_action(cx.listener(|this, _: &crate::ShowArtifacts, _, cx| {
-                this.page = Page::Artifacts;
-                this.peeking = false;
-                cx.notify();
+            .on_action(cx.listener(|this, _: &crate::ShowQuilts, _, cx| {
+                this.show_quilts_page(cx);
             }))
             .on_action(cx.listener(|this, _: &crate::ShowArchived, _, cx| {
                 this.view = Some(View::Archived);
@@ -336,15 +336,29 @@ impl Render for Workspace {
                                 ),
                             )
                     }))
-                    .children(artifacts.map(|page| {
+                    .children(quilts.map(|page| {
+                        // Over its background and in that background's scheme, as a chat is. Cached,
+                        // so a backdrop that moves redraws only itself, not the gallery over it.
+                        let page = div().flex().flex_1().min_w_0().min_h_0().child(
+                            page.cached(StyleRefinement::default().flex_1().min_w_0().min_h_0()),
+                        );
+                        let page = match quilts_scheme(self) {
+                            Some(scheme) => in_scheme(scheme, page).into_any_element(),
+                            None => page.into_any_element(),
+                        };
                         div()
                             .relative()
                             .flex()
                             .flex_1()
                             .min_w_0()
                             .min_h_0()
+                            .child(
+                                self.quilts_backdrop_region
+                                    .clone()
+                                    .cached(StyleRefinement::default().absolute().inset_0()),
+                            )
                             .child(page)
-                            .children(artifact_chat)
+                            .children(quilt_chat)
                     }))
                     .children(bot_page)
                     .children((chats && self.bot_shown.is_none()).then(|| {
@@ -430,50 +444,48 @@ impl Workspace {
 }
 
 impl Workspace {
-    /// Starts a chat asking for a new artifact, or opens the chat an artifact came from.
-    pub(super) fn on_artifacts(
+    /// Starts a chat asking for a new quilt, or opens the chat a quilt came from.
+    pub(super) fn on_quilts(
         &mut self,
-        _: &gpui::Entity<crate::artifacts::ArtifactsPage>,
-        event: &crate::artifacts::ArtifactsEvent,
+        _: &gpui::Entity<crate::quilts::QuiltsPage>,
+        event: &crate::quilts::QuiltsEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         match event {
-            crate::artifacts::ArtifactsEvent::OpenChat(id) => {
+            crate::quilts::QuiltsEvent::OpenChat(id) => {
                 let same = self.thread.as_ref().is_some_and(|t| &t.id == id);
-                if self.artifact_chat && same {
-                    self.close_artifact_chat(window, cx);
+                if self.quilt_chat && same {
+                    self.close_quilt_chat(window, cx);
                 } else {
-                    self.open_artifact_chat(id, window, cx);
+                    self.open_quilt_chat(id, window, cx);
                 }
             }
-            crate::artifacts::ArtifactsEvent::Closed => {
-                self.artifact_beside = None;
+            crate::quilts::QuiltsEvent::Closed => {
+                self.quilt_beside = None;
                 self.cool_browser_unless_shown(cx);
                 window.focus(&self.focus, cx);
             }
-            crate::artifacts::ArtifactsEvent::OpenFull { id, n } => {
-                self.artifact_beside = None;
-                self.open_artifact(id.clone(), *n, window, cx);
+            crate::quilts::QuiltsEvent::OpenFull { id, n } => {
+                self.quilt_beside = None;
+                self.open_quilt(id.clone(), *n, window, cx);
             }
-            crate::artifacts::ArtifactsEvent::AskFix { thread_id, text } => {
-                if self.page == Page::Artifacts {
-                    self.open_artifact_chat(thread_id, window, cx);
+            crate::quilts::QuiltsEvent::Shown(open) => {
+                if self.page == Page::Quilts && self.quilt_open != *open {
+                    let from = self.place();
+                    self.quilt_open.clone_from(open);
+                    self.went_from(from);
+                }
+            }
+            crate::quilts::QuiltsEvent::AskFix { thread_id, text } => {
+                if self.page == Page::Quilts {
+                    self.open_quilt_chat(thread_id, window, cx);
                 } else {
                     self.open_thread(thread_id, cx);
                 }
                 if self.thread.as_ref().is_some_and(|t| &t.id == thread_id) {
                     self.send(text.clone(), Vec::new(), None, None, cx);
                 }
-            }
-            crate::artifacts::ArtifactsEvent::MakeNew(kind) => {
-                self.page = Page::Chats;
-                self.peeking = false;
-                self.new_chat(cx);
-                self.composer.update(cx, |c, cx| {
-                    c.set_draft(kind.request(), Vec::new(), cx);
-                    c.focus(window, cx);
-                });
             }
         }
         cx.notify();

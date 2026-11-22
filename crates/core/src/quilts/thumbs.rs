@@ -1,4 +1,4 @@
-//! A picture of an artifact's version for the gallery, taken by the installed browser once and
+//! A picture of a quilt's version for the gallery, taken by the installed browser once and
 //! kept in the cache.
 //!
 //! The browser is started headless for each picture with a profile of its own, draws the page
@@ -27,22 +27,23 @@ const LIMIT: Duration = Duration::from_secs(30);
 static TAKING: Mutex<()> = Mutex::new(());
 
 impl Core {
-    /// A picture of version `n` of the artifact `id`, as a PNG file. Taken the first time it is
-    /// asked for and kept after that. Blocks for the few seconds the browser takes, so it runs
-    /// off the UI thread.
+    /// A picture of version `n` of the quilt `id`, as a PNG file, drawn dark when `dark` as the
+    /// viewer draws it for a dark theme. Taken the first time it is asked for and kept after
+    /// that. Blocks for the few seconds the browser takes, so it runs off the UI
+    /// thread.
     ///
     /// # Errors
     ///
-    /// Returns an error when the artifact or version is gone, no browser is installed, or the
+    /// Returns an error when the quilt or version is gone, no browser is installed, or the
     /// browser fails or takes too long.
-    pub fn artifact_thumbnail(&self, id: &str, n: u32) -> Result<PathBuf, Error> {
-        let folder = crate::system::dirs().cache.join("artifacts").join("thumbs");
-        let file = folder.join(format!("{id}-{n}.png"));
+    pub fn quilt_thumbnail(&self, id: &str, n: u32, dark: bool) -> Result<PathBuf, Error> {
+        let folder = crate::system::dirs().cache.join("quilts").join("thumbs");
+        let file = folder.join(thumbnail_name(id, n, dark));
         if file.is_file() {
             return Ok(file);
         }
-        let browser = find_browser().ok_or("Pictures of artifacts need a Chromium browser")?;
-        let url = self.artifact_page(id, n)?;
+        let browser = find_browser().ok_or("Pictures of quilts need a Chromium browser")?;
+        let url = self.quilt_page(id, n)?;
         std::fs::create_dir_all(&folder)?;
 
         let _taking = TAKING
@@ -67,6 +68,11 @@ impl Core {
             .arg(format!("--window-size={},{}", SIZE.0, SIZE.1))
             .arg(format!("--virtual-time-budget={PAGE_TIME}"))
             .arg(format!("--screenshot={}", partial.display()))
+            // The page reads it as `prefers-color-scheme`: 0 is dark and 1 light.
+            .arg(format!(
+                "--blink-settings=preferredColorScheme={}",
+                u8::from(!dark)
+            ))
             .args([
                 "--hide-scrollbars",
                 "--mute-audio",
@@ -104,4 +110,10 @@ impl Core {
         std::fs::rename(&partial, &file)?;
         Ok(file)
     }
+}
+
+/// The file a version's picture is kept in, one for each of the dark and the light theme.
+pub(crate) fn thumbnail_name(id: &str, n: u32, dark: bool) -> String {
+    let scheme = if dark { "dark" } else { "light" };
+    format!("{id}-{n}-{scheme}.png")
 }

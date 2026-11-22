@@ -15,7 +15,7 @@ use crate::chat::timeline::{
     lines_of, steps_of, work_key,
 };
 use crate::chat::{approvals, proposed, subagents};
-use super::artifact::artifact_card;
+use super::quilt::quilt_card;
 use super::note::note_pill;
 
 /// Step `i` of a reply; of a group of calls only the calls in `part`, of a text only its bytes in
@@ -84,7 +84,7 @@ pub(super) fn reply_step(
             ),
         Step::Agents(tools) => subagents::subagents(w, m, tools, t, cx),
         Step::Note(tool) => note_pill(m, i, tool, t),
-        Step::Artifact(tool) => artifact_card(w, m, tool, t, cx),
+        Step::Quilt(tool) => quilt_card(w, m, tool, t, cx),
         Step::Approvals(ids) => approvals::approvals(w, m, ids, t, cx),
         Step::Compaction(running) => div().pb(px(20.)).child(
             div()

@@ -51,7 +51,7 @@ pub(super) fn claude_tool_use(
     );
     if let Parsed::Event(AgentEvent::ToolStarted { tool, .. }) = &mut started {
         tool.lines = edit_lines(name, input);
-        if name == crate::artifacts::CLAUDE_NAME {
+        if name == crate::quilts::CLAUDE_NAME {
             tool.title = input["title"].as_str().map(str::to_owned);
         }
     }
@@ -260,13 +260,13 @@ pub fn parse(v: &Value, root: &str, message_id: &str) -> Vec<Parsed> {
         }
         // Text arrives token by token in `stream_event`s; the full `assistant` text is skipped.
         Some("stream_event") => {
-            // An artifact takes a while to write, so its card shows as soon as the call begins
+            // A quilt takes a while to write, so its card shows as soon as the call begins
             // rather than once its input is whole; the full call then fills it in.
             let block = &v["event"]["content_block"];
             if parent.is_none()
                 && v["event"]["type"] == "content_block_start"
                 && block["type"] == "tool_use"
-                && block["name"] == crate::artifacts::CLAUDE_NAME
+                && block["name"] == crate::quilts::CLAUDE_NAME
             {
                 claude_tool_use(block, root, message_id, None, &mut out);
                 if let (Some(index), Some(Parsed::Event(AgentEvent::ToolStarted { tool, .. }))) =

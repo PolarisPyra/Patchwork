@@ -1,18 +1,20 @@
-//! The Artifacts page's state: every artifact as last read, the gallery's search, filter and
-//! pictures, and the artifact opened, its versions, the version shown, and the page that draws
+//! The Quilts page's state: every quilt as last read, the gallery's search, filter and
+//! pictures, and the quilt opened, its versions, the version shown, and the page that draws
 //! it.
 
 // Rust guideline compliant 2026-10-09
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui::{
-    App, ClipboardItem, Entity, EventEmitter, FocusHandle, Pixels, Point, ScrollHandle,
+    App, Bounds, ClipboardItem, Entity, EventEmitter, FocusHandle, Pixels, Point, ScrollHandle,
     UniformListScrollHandle, prelude::*,
 };
 use patchwork_core::Core;
-use patchwork_core::artifacts::{Artifact, ArtifactKind, ArtifactVersion, ChangeRow, artifact_changes};
+use patchwork_core::quilts::{Quilt, QuiltKind, QuiltVersion, ChangeRow, quilt_changes};
 
 use super::thumbs::Thumbs;
 use crate::browser::{BrowserView, PageErrorsChanged};
@@ -21,17 +23,17 @@ use crate::ui::off_thread;
 use crate::ui::text_area::{Changed, TextArea};
 
 /// What the page asks the window to do.
-pub enum ArtifactsEvent {
-    /// Start a new chat whose draft asks for an artifact of this kind.
-    MakeNew(ArtifactKind),
-    /// Open the chat an artifact came from.
+pub enum QuiltsEvent {
+    /// Open the chat a quilt came from.
     OpenChat(String),
-    /// Send `text` to the chat `thread_id`, which made the artifact.
+    /// Send `text` to the chat `thread_id`, which made the quilt.
     AskFix { thread_id: String, text: String },
     /// Close the panel beside the chat.
     Closed,
-    /// Show version `n` of the artifact `id` on the Artifacts page instead of beside the chat.
+    /// Show version `n` of the quilt `id` on the Quilts page instead of beside the chat.
     OpenFull { id: String, n: u32 },
+    /// The page went to the quilt `id`, or back to the gallery, for the window's history.
+    Shown(Option<String>),
 }
 
 /// What the viewer shows of the version.
@@ -45,7 +47,7 @@ pub(super) enum Show {
     Changes,
 }
 
-/// Where the artifacts the gallery shows were made.
+/// Where the quilts the gallery shows were made.
 #[derive(Clone, PartialEq, Eq)]
 pub(super) enum Place {
     All,
@@ -55,11 +57,11 @@ pub(super) enum Place {
     Project(String),
 }
 
-pub struct ArtifactsPage {
+pub struct QuiltsPage {
     pub(super) core: Arc<Core>,
-    /// Every artifact, the most recently changed first.
-    pub(super) list: Vec<Artifact>,
-    /// Each chat's title, by its id, for the chat an artifact came from.
+    /// Every quilt, the most recently changed first.
+    pub(super) list: Vec<Quilt>,
+    /// Each chat's title, by its id, for the chat a quilt came from.
     pub(super) chats: HashMap<String, String>,
     /// Each chat's project, by the chat's id: the project's id and name.
     pub(super) projects: HashMap<String, (String, String)>,
@@ -68,15 +70,15 @@ pub struct ArtifactsPage {
     pub(super) place: Place,
     pub(super) search: Entity<TextArea>,
     /// The kind the gallery shows, or every kind.
-    pub(super) filter: Option<ArtifactKind>,
+    pub(super) filter: Option<QuiltKind>,
     /// Whether the gallery shows cards rather than rows.
     pub(super) grid: bool,
     /// The versions' pictures, which the chats' cards share.
     pub(super) thumbs: Entity<Thumbs>,
-    /// The artifact opened in the viewer; the gallery shows while there is none.
+    /// The quilt opened in the viewer; the gallery shows while there is none.
     pub(super) selected: Option<String>,
-    /// The picked artifact's versions, the oldest first.
-    pub(super) versions: Vec<ArtifactVersion>,
+    /// The picked quilt's versions, the oldest first.
+    pub(super) versions: Vec<QuiltVersion>,
     /// The number of the version shown.
     pub(super) shown: Option<u32>,
     pub(super) show: Show,
@@ -84,11 +86,11 @@ pub struct ArtifactsPage {
     pub(super) changes: Vec<ChangeRow>,
     pub(super) preview: Option<Entity<BrowserView>>,
     pub(super) error: Option<String>,
-    /// An artifact's menu and where it shows.
+    /// A quilt's menu and where it shows.
     pub(super) menu: Option<(Entity<Menu>, Point<Pixels>)>,
-    /// The field in place of the opened artifact's title while it is renamed.
+    /// The field in place of the opened quilt's title while it is renamed.
     pub(super) renaming: Option<Entity<TextArea>>,
-    /// Whether this is the panel beside a chat, which shows one artifact and no gallery.
+    /// Whether this is the panel beside a chat, which shows one quilt and no gallery.
     pub(super) docked: bool,
     /// The chat the window shows over the page, by its id.
     pub(super) chat_shown: Option<String>,
@@ -96,9 +98,15 @@ pub struct ArtifactsPage {
     pub(super) gallery_scroll: ScrollHandle,
     pub(super) code_scroll: ScrollHandle,
     pub(super) changes_scroll: UniformListScrollHandle,
+    /// What the mascot is doing, and since when.
+    pub(super) patch: Option<(super::patch::Act, std::time::Instant)>,
+    /// Where each quilt's card or row was last drawn, so a kind's tile can scroll to it.
+    pub(super) spots: Rc<RefCell<HashMap<String, Bounds<Pixels>>>>,
+    /// The kind whose quilts are lit after its tile was picked, and since when.
+    pub(super) flash: Option<(QuiltKind, std::time::Instant)>,
 }
 
-impl ArtifactsPage {
+impl QuiltsPage {
     /// The page, which knows the chat `came_from` that was open when it opened.
     pub fn new(
         core: Arc<Core>,
@@ -107,7 +115,7 @@ impl ArtifactsPage {
         cx: &mut Context<Self>,
     ) -> Self {
         let search = cx.new(|cx| {
-            let mut field = TextArea::new("Search artifacts", "Search artifacts", cx);
+            let mut field = TextArea::new("Search quilts", "Search quilts", cx);
             field.single_line = true;
             field.placeholder_color = Some(crate::ui::theme::input_placeholder());
             field
@@ -141,12 +149,15 @@ impl ArtifactsPage {
             gallery_scroll: ScrollHandle::new(),
             code_scroll: ScrollHandle::new(),
             changes_scroll: UniformListScrollHandle::new(),
+            patch: None,
+            spots: Rc::default(),
+            flash: None,
         };
         page.reload(cx);
         page
     }
 
-    /// The panel beside a chat, showing version `n` of the artifact `id`.
+    /// The panel beside a chat, showing version `n` of the quilt `id`.
     pub fn beside_chat(
         core: Arc<Core>,
         thumbs: Entity<Thumbs>,
@@ -160,7 +171,7 @@ impl ArtifactsPage {
         page
     }
 
-    /// Reads the artifacts again, and the opened one's versions, following its newest when that
+    /// Reads the quilts again, and the opened one's versions, following its newest when that
     /// was the one shown. Goes back to the gallery when the opened one is gone.
     pub fn reload(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
@@ -185,7 +196,7 @@ impl ArtifactsPage {
                         Some((t.id.clone(), (id.clone(), named.get(id)?.clone())))
                     })
                     .collect();
-                (core.artifacts(), chats, projects)
+                (core.quilts(), chats, projects)
             },
             |this, (list, chats, projects), cx| {
                 this.list = list;
@@ -199,9 +210,10 @@ impl ArtifactsPage {
                 } else {
                     this.close(cx);
                 }
+                let dark = crate::ui::theme::theme(cx).is_dark();
                 this.thumbs.update(cx, |thumbs, cx| {
                     for a in this.list.iter().filter(|a| a.kind.drawn()) {
-                        thumbs.want(&a.id, a.versions, cx);
+                        thumbs.want(&a.id, a.versions, dark, cx);
                     }
                 });
                 cx.notify();
@@ -209,13 +221,13 @@ impl ArtifactsPage {
         );
     }
 
-    /// Shows only artifacts of `kind`, or all of them.
-    pub(super) fn set_filter(&mut self, kind: Option<ArtifactKind>, cx: &mut Context<Self>) {
+    /// Shows only quilts of `kind`, or all of them.
+    pub(super) fn set_filter(&mut self, kind: Option<QuiltKind>, cx: &mut Context<Self>) {
         self.filter = kind;
         cx.notify();
     }
 
-    /// Shows only the artifacts made in `place`.
+    /// Shows only the quilts made in `place`.
     pub(super) fn set_place(&mut self, place: Place, cx: &mut Context<Self>) {
         self.place = place;
         cx.notify();
@@ -227,15 +239,10 @@ impl ArtifactsPage {
         cx.notify();
     }
 
-    /// Asks the window for a new chat that makes an artifact of `kind`.
-    pub(super) fn make_new(&mut self, kind: ArtifactKind, cx: &mut Context<Self>) {
-        cx.emit(ArtifactsEvent::MakeNew(kind));
-    }
-
-    /// Asks the window to open the chat the opened artifact came from.
+    /// Asks the window to open the chat the opened quilt came from.
     pub(super) fn open_chat(&mut self, cx: &mut Context<Self>) {
-        if let Some(artifact) = self.current() {
-            cx.emit(ArtifactsEvent::OpenChat(artifact.thread_id.clone()));
+        if let Some(quilt) = self.current() {
+            cx.emit(QuiltsEvent::OpenChat(quilt.thread_id.clone()));
         }
     }
 
@@ -245,18 +252,20 @@ impl ArtifactsPage {
         cx.notify();
     }
 
-    /// Asks the window to show the opened artifact on the Artifacts page.
+    /// Asks the window to show the opened quilt on the Quilts page.
     pub(super) fn open_full(&mut self, cx: &mut Context<Self>) {
         if let (Some(id), Some(n)) = (self.selected.clone(), self.shown) {
-            cx.emit(ArtifactsEvent::OpenFull { id, n });
+            cx.emit(QuiltsEvent::OpenFull { id, n });
         }
     }
 
-    /// Goes back to the gallery, ending the opened artifact's browser; beside a chat, closes the
+    /// Goes back to the gallery, ending the opened quilt's browser; beside a chat, closes the
     /// panel.
     pub(super) fn close(&mut self, cx: &mut Context<Self>) {
         if self.docked {
-            cx.emit(ArtifactsEvent::Closed);
+            cx.emit(QuiltsEvent::Closed);
+        } else {
+            cx.emit(QuiltsEvent::Shown(None));
         }
         self.selected = None;
         self.versions.clear();
@@ -267,20 +276,20 @@ impl ArtifactsPage {
         cx.notify();
     }
 
-    /// The artifact picked.
-    pub(super) fn current(&self) -> Option<&Artifact> {
+    /// The quilt picked.
+    pub(super) fn current(&self) -> Option<&Quilt> {
         let id = self.selected.as_ref()?;
         self.list.iter().find(|a| &a.id == id)
     }
 
     /// The version shown.
-    pub(super) fn version(&self) -> Option<&ArtifactVersion> {
+    pub(super) fn version(&self) -> Option<&QuiltVersion> {
         let n = self.shown?;
         self.versions.iter().find(|v| v.n == n)
     }
 
-    /// The artifacts the filters and the search match, by title, type or chat.
-    pub(super) fn matching(&self, cx: &App) -> Vec<&Artifact> {
+    /// The quilts the filters and the search match, by title, type or chat.
+    pub(super) fn matching(&self, cx: &App) -> Vec<&Quilt> {
         let typed = self.search.read(cx).content.trim().to_lowercase();
         self.list
             .iter()
@@ -305,8 +314,11 @@ impl ArtifactsPage {
             .collect()
     }
 
-    /// Opens the artifact `id` and shows its newest version.
+    /// Opens the quilt `id` and shows its newest version.
     pub(super) fn select(&mut self, id: String, cx: &mut Context<Self>) {
+        if !self.docked {
+            cx.emit(QuiltsEvent::Shown(Some(id.clone())));
+        }
         self.selected = Some(id);
         self.renaming = None;
         self.versions.clear();
@@ -324,13 +336,29 @@ impl ArtifactsPage {
         cx.notify();
     }
 
-    /// Opens the artifact `id` on its version `n`, as a chat's card asks.
+    /// Opens the quilt `id` on its version `n`, as a chat's card asks.
     pub fn open(&mut self, id: String, n: u32, cx: &mut Context<Self>) {
-        self.select(id, cx);
-        self.shown = Some(n);
+        if self.selected.as_ref() == Some(&id) {
+            self.show(n, cx);
+        } else {
+            self.select(id, cx);
+            self.shown = Some(n);
+        }
     }
 
-    /// Reads the picked artifact's versions. The newest is shown when it was before, or when the
+    /// Opens the quilt `open` on its newest version, or goes back to the gallery, unless the
+    /// page already shows it, as the window's back and forward ask.
+    pub fn go(&mut self, open: Option<String>, cx: &mut Context<Self>) {
+        if self.selected == open {
+            return;
+        }
+        match open {
+            Some(id) => self.select(id, cx),
+            None => self.close(cx),
+        }
+    }
+
+    /// Reads the picked quilt's versions. The newest is shown when it was before, or when the
     /// one shown is gone.
     fn load_versions(&mut self, cx: &mut Context<Self>) {
         let Some(id) = self.selected.clone() else {
@@ -340,7 +368,7 @@ impl ArtifactsPage {
         let asked = id.clone();
         off_thread(
             cx,
-            move || core.artifact_versions(&id),
+            move || core.quilt_versions(&id),
             move |this, versions, cx| {
                 if this.selected.as_ref() != Some(&asked) {
                     return;
@@ -362,7 +390,7 @@ impl ArtifactsPage {
         );
     }
 
-    /// Shows version `n` of the picked artifact.
+    /// Shows version `n` of the picked quilt.
     pub(super) fn show(&mut self, n: u32, cx: &mut Context<Self>) {
         if self.shown == Some(n) {
             return;
@@ -414,7 +442,7 @@ impl ArtifactsPage {
         let asked = (self.selected.clone(), self.shown);
         off_thread(
             cx,
-            move || artifact_changes(&old, &new),
+            move || quilt_changes(&old, &new),
             move |this, rows, cx| {
                 if (this.selected.clone(), this.shown) == asked {
                     this.changes = rows;
@@ -426,17 +454,17 @@ impl ArtifactsPage {
 
     /// Writes the version shown as a page and opens it in the preview.
     fn draw(&mut self, cx: &mut Context<Self>) {
-        let (Some(artifact), Some(n)) = (self.current(), self.shown) else {
+        let (Some(quilt), Some(n)) = (self.current(), self.shown) else {
             return;
         };
-        if self.show != Show::Preview || !artifact.kind.drawn() {
+        if self.show != Show::Preview || !quilt.kind.drawn() {
             return;
         }
-        let (id, title) = (artifact.id.clone(), artifact.title.clone());
+        let (id, title) = (quilt.id.clone(), quilt.title.clone());
         let core = Arc::clone(&self.core);
         off_thread(
             cx,
-            move || core.artifact_page(&id, n),
+            move || core.quilt_page(&id, n),
             move |this, page, cx| {
                 match page {
                     Ok(url) => {
@@ -461,13 +489,13 @@ impl ArtifactsPage {
 
     /// Asks where to save the version shown's source, and saves it there.
     pub(super) fn save_as(&mut self, cx: &mut Context<Self>) {
-        let (Some(artifact), Some(version)) = (self.current(), self.version()) else {
+        let (Some(quilt), Some(version)) = (self.current(), self.version()) else {
             return;
         };
         let name = format!(
             "{}.{}",
-            artifact.key,
-            artifact.kind.extension(artifact.language.as_deref())
+            quilt.key,
+            quilt.kind.extension(quilt.language.as_deref())
         );
         let text = version.content.clone();
         let home = patchwork_core::system::fs::home_dir().unwrap_or_default();
@@ -499,9 +527,9 @@ impl ArtifactsPage {
         }
     }
 
-    /// Asks the chat that made the artifact to fix the errors its page met.
+    /// Asks the chat that made the quilt to fix the errors its page met.
     pub(super) fn ask_fix(&mut self, cx: &mut Context<Self>) {
-        let (Some(artifact), Some(n)) = (self.current(), self.shown) else {
+        let (Some(quilt), Some(n)) = (self.current(), self.shown) else {
             return;
         };
         let errors = self.page_errors(cx).join("\n");
@@ -509,26 +537,26 @@ impl ArtifactsPage {
             return;
         }
         let text = format!(
-            "Version {n} of the artifact \"{}\" (id {}) shows these errors when it runs:\n\n\
+            "Version {n} of the quilt \"{}\" (id {}) shows these errors when it runs:\n\n\
              ```\n{errors}\n```\n\nPlease fix them.",
-            artifact.title, artifact.key
+            quilt.title, quilt.key
         );
-        cx.emit(ArtifactsEvent::AskFix {
-            thread_id: artifact.thread_id.clone(),
+        cx.emit(QuiltsEvent::AskFix {
+            thread_id: quilt.thread_id.clone(),
             text,
         });
     }
 
     /// Saves the version shown again as the newest.
     pub(super) fn restore(&mut self, cx: &mut Context<Self>) {
-        let (Some(artifact), Some(n)) = (self.current(), self.shown) else {
+        let (Some(quilt), Some(n)) = (self.current(), self.shown) else {
             return;
         };
-        let id = artifact.id.clone();
+        let id = quilt.id.clone();
         let core = Arc::clone(&self.core);
         off_thread(
             cx,
-            move || core.restore_artifact(&id, n),
+            move || core.restore_quilt(&id, n),
             |this, restored, cx| {
                 match restored {
                     // The core tells the window, which reads them again and follows the newest.
@@ -549,14 +577,14 @@ impl ArtifactsPage {
 
     /// Opens the version shown in the system's browser.
     pub(super) fn open_outside(&mut self, cx: &mut Context<Self>) {
-        let (Some(artifact), Some(n)) = (self.current(), self.shown) else {
+        let (Some(quilt), Some(n)) = (self.current(), self.shown) else {
             return;
         };
-        let id = artifact.id.clone();
+        let id = quilt.id.clone();
         let core = Arc::clone(&self.core);
         off_thread(
             cx,
-            move || core.artifact_page(&id, n),
+            move || core.quilt_page(&id, n),
             |this, page, cx| match page {
                 Ok(url) => cx.open_url(&url),
                 Err(e) => {
@@ -568,9 +596,9 @@ impl ArtifactsPage {
     }
 }
 
-impl EventEmitter<ArtifactsEvent> for ArtifactsPage {}
+impl EventEmitter<QuiltsEvent> for QuiltsPage {}
 
-impl gpui::Focusable for ArtifactsPage {
+impl gpui::Focusable for QuiltsPage {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus.clone()
     }

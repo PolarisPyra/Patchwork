@@ -43,8 +43,8 @@ impl Agent {
         let summary = crate::harness::tools::summary(&call.name, &args, &self.root);
         let mut started =
             json!({"type": "api.tool", "id": call.id, "name": call.name, "summary": summary});
-        // An artifact's card reads its title and size from the whole input.
-        if call.name == crate::artifacts::TOOL {
+        // A quilt's card reads its title and size from the whole input.
+        if call.name == crate::quilts::TOOL {
             started["arguments"] = args.clone();
         }
         emit(&started);

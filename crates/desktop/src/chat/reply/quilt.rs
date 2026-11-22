@@ -1,6 +1,6 @@
-//! The card a call of the artifact tool shows in the transcript: a shimmer with the artifact's
+//! The card a call of the quilt tool shows in the transcript: a shimmer with the quilt's
 //! title and the lines written so far while the agent writes it, then its picture and name,
-//! which open it. A reply that changes one artifact several times shows one card, its last.
+//! which open it. A reply that changes one quilt several times shows one card, its last.
 
 // Rust guideline compliant 2026-10-09
 
@@ -11,10 +11,10 @@ use gpui::{
     App, Bounds, Corners, Div, Hsla, ObjectFit, Pixels, Role, SharedString, Window, canvas, div,
     fill, img, linear_color_stop, linear_gradient, point, prelude::*, px,
 };
-use patchwork_core::artifacts::{ArtifactKind, is_artifact_call, saved_by};
+use patchwork_core::quilts::{QuiltKind, is_quilt_call, saved_by};
 use patchwork_core::threads::{Message, MessageStatus, StepStatus, ToolCall};
 
-use crate::artifacts::kind_icon;
+use crate::quilts::kind_icon;
 use crate::chat::timeline::is_running;
 use crate::ui::theme::{Theme, fs_md, fs_xs, radius_lg, radius_sm};
 
@@ -30,8 +30,8 @@ const GLOW: f32 = 0.07;
 /// How long the shimmer takes to cross the card and rest, in seconds.
 const SWEEP: f32 = 1.8;
 
-/// The card for the artifact-tool call `tool` in reply `m`.
-pub(super) fn artifact_card(
+/// The card for the quilt-tool call `tool` in reply `m`.
+pub(super) fn quilt_card(
     w: &Workspace,
     m: &Message,
     tool: &ToolCall,
@@ -42,19 +42,19 @@ pub(super) fn artifact_card(
     let running = m.status == MessageStatus::Streaming && is_running(tool);
     let failed = tool.status == StepStatus::Error;
     let saved = (!running && !failed)
-        .then(|| saved_by(&w.artifact_list, thread_id, tool))
+        .then(|| saved_by(&w.quilt_list, thread_id, tool))
         .flatten();
-    // The reply's later calls that saved this artifact again show it instead.
+    // The reply's later calls that saved this quilt again show it instead.
     let later: Vec<&ToolCall> = m
         .tools
         .iter()
         .skip_while(|other| other.id != tool.id)
         .skip(1)
-        .filter(|other| is_artifact_call(other))
+        .filter(|other| is_quilt_call(other))
         .collect();
-    if let Some((artifact, _)) = saved
+    if let Some((quilt, _)) = saved
         && later.iter().any(|other| {
-            saved_by(&w.artifact_list, thread_id, other).is_some_and(|(a, _)| a.id == artifact.id)
+            saved_by(&w.quilt_list, thread_id, other).is_some_and(|(a, _)| a.id == quilt.id)
         })
     {
         return div();
@@ -65,15 +65,15 @@ pub(super) fn artifact_card(
         .map(|l| format!(" \u{b7} {} lines", l.added))
         .unwrap_or_default();
     let (glyph, title, detail) = match saved {
-        Some((artifact, n)) => (
-            kind_icon(artifact.kind),
-            artifact.title.clone(),
-            Some(format!("{} \u{b7} Version {n}", artifact.kind.label())),
+        Some((quilt, n)) => (
+            kind_icon(quilt.kind),
+            quilt.title.clone(),
+            Some(format!("{} \u{b7} Version {n}", quilt.kind.label())),
         ),
         None if running => {
             // Until its input names them, the kind is not known, and most calls make one.
-            let kind = tool.kind.as_deref().and_then(ArtifactKind::parse);
-            let noun = kind.map_or("an artifact", ArtifactKind::noun);
+            let kind = tool.kind.as_deref().and_then(QuiltKind::parse);
+            let noun = kind.map_or("a quilt", QuiltKind::noun);
             let verb = if changing { "Changing" } else { "Making" };
             (
                 kind.map_or("sparkle", kind_icon),
@@ -86,20 +86,20 @@ pub(super) fn artifact_card(
                 }),
             )
         }
-        None if failed => ("x-circle", "The artifact was not saved".to_owned(), None),
-        None => ("sparkle", "Artifact".to_owned(), None),
+        None if failed => ("x-circle", "The quilt was not saved".to_owned(), None),
+        None => ("sparkle", "Quilt".to_owned(), None),
     };
-    let picture = saved.and_then(|(artifact, n)| {
-        if !artifact.kind.drawn() {
+    let picture = saved.and_then(|(quilt, n)| {
+        if !quilt.kind.drawn() {
             return None;
         }
-        let (id, thumbs) = (artifact.id.clone(), w.thumbs.clone());
+        let (id, thumbs) = (quilt.id.clone(), w.thumbs.clone());
         let taken = thumbs
             .read(cx)
-            .get(&id, n)
+            .get(&id, n, t.is_dark())
             .map(Option::<&std::path::PathBuf>::cloned);
         if taken.is_none() {
-            thumbs.update(cx, |thumbs, cx| thumbs.want(&id, n, cx));
+            thumbs.update(cx, |thumbs, cx| thumbs.want(&id, n, t.is_dark(), cx));
         }
         taken.flatten()
     });
@@ -162,18 +162,18 @@ pub(super) fn artifact_card(
         );
     let card = match saved {
         _ if running => body
-            .id(SharedString::from(format!("artifact-{}", tool.id)))
+            .id(SharedString::from(format!("quilt-{}", tool.id)))
             .role(Role::Status)
             .aria_label(match &detail {
                 Some(d) => format!("{title}, {d}"),
                 None => title,
             })
             .child(shimmer(t.text)),
-        Some((artifact, n)) => {
-            let id = artifact.id.clone();
+        Some((quilt, n)) => {
+            let id = quilt.id.clone();
             let hover = t.bg_hover;
             button(
-                SharedString::from(format!("artifact-{}", tool.id)),
+                SharedString::from(format!("quilt-{}", tool.id)),
                 format!("Open {title}"),
             )
             .rounded(px(radius_lg()))
@@ -186,11 +186,11 @@ pub(super) fn artifact_card(
                 ),
             )
             .on_click(cx.listener(move |this: &mut Workspace, _, window, cx| {
-                this.open_artifact_beside(id.clone(), n, window, cx);
+                this.open_quilt_beside(id.clone(), n, window, cx);
             }))
         }
         None => body
-            .id(SharedString::from(format!("artifact-{}", tool.id)))
+            .id(SharedString::from(format!("quilt-{}", tool.id)))
             .aria_label(title),
     };
     div().pb(px(8.)).child(card)

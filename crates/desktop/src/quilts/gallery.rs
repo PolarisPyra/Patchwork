@@ -1,56 +1,73 @@
-//! The gallery: every artifact as a card with its picture or as a row, filtered by kind and by
+//! The gallery: every quilt as a card with its picture or as a row, filtered by kind and by
 //! where it was made, searched, and grouped with the pinned first, then by project, with tiles
 //! that start a chat making a new one.
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{
-    AnyElement, App, Div, FontWeight, KeyDownEvent, MouseButton, MouseDownEvent, ObjectFit, Role,
-    SharedString, Stateful, Window, div, img, prelude::*, px,
-};
-use patchwork_core::artifacts::{Artifact, ArtifactKind};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::time::{Duration, Instant};
 
+use gpui::{
+    AnyElement, App, Bounds, Div, Pixels, canvas, point, FontWeight, KeyDownEvent, MouseButton,
+    MouseDownEvent, ObjectFit, Role, SharedString, Stateful, Window, div, img, prelude::*, px,
+};
+use patchwork_core::quilts::{Quilt, QuiltKind};
+
+use super::patch::{Act, patch};
 use super::render::kind_icon;
-use super::state::{ArtifactsPage, Place};
-use crate::ui::theme::{Theme, fs_md, fs_sm, fs_xxl, radius, radius_sm};
+use super::state::{QuiltsPage, Place};
+use crate::ui::theme::{Theme, fs_lg, fs_md, fs_sm, fs_xxl, radius, radius_sm};
 use crate::ui::{
     button, focus_ring, format_relative, icon, icon_button, input_box, scrollbar, spinner, tooltip,
 };
 
 /// A card's width; its picture is 16 by 10, as the pictures are taken.
-const CARD_WIDTH: f32 = 248.;
+const CARD_WIDTH: f32 = 320.;
 
 /// The group a card's picture and its border hover as.
-const PICTURE: &str = "artifact-picture";
+const PICTURE: &str = "quilt-picture";
 
-/// The gallery's widest, so cards stay in tidy rows on a wide window.
-const MAX_WIDTH: f32 = 1120.;
+/// How long a kind's quilts stay lit after its tile is picked.
+const FLASH: Duration = Duration::from_secs(1);
 
-impl ArtifactsPage {
+/// The room left above the first of a kind's quilts when the gallery scrolls to it.
+const SCROLL_MARGIN: f32 = 24.;
+
+impl QuiltsPage {
     /// The title, the search, and the switch between cards and rows.
-    fn top(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> Div {
+    fn top(&self, sad: bool, t: &Theme, window: &Window, cx: &mut Context<Self>) -> Div {
         let focused = gpui::Focusable::focus_handle(self.search.read(cx), cx).is_focused(window);
         let grid = self.grid;
         div()
             .flex()
             .items_center()
-            .gap(px(8.))
+            .gap(px(16.))
+            .child(
+                button("quilts-patch", "Patch, wave hello")
+                    .flex_none()
+                    .rounded(px(radius()))
+                    .child(patch(self.patch, sad, 104.))
+                    .on_click(cx.listener(|this, _, _, cx| this.play(Act::Wave, cx))),
+            )
             .child(
                 div()
                     .flex_1()
-                    .text_size(px(fs_xxl()))
+                    .text_size(px(fs_xxl() * 1.3))
                     .font_weight(FontWeight::SEMIBOLD)
-                    .child("Artifacts"),
+                    .child("Quilts"),
             )
             .child(
                 input_box(focused, t)
-                    .w(px(240.))
-                    .child(icon("magnifying-glass", 14.))
+                    .w(px(320.))
+                    .gap(px(8.))
+                    .child(icon("magnifying-glass", 16.))
                     .child(div().flex_1().min_w_0().child(self.search.clone())),
             )
             .child(
                 icon_button(
-                    "artifacts-layout",
+                    "quilts-layout",
                     if grid {
                         "Show as list"
                     } else {
@@ -86,19 +103,19 @@ impl ArtifactsPage {
             let on = i == at;
             let all = values.clone();
             div()
-                .id(SharedString::from(format!("artifacts-{name}-{i}")))
+                .id(SharedString::from(format!("quilts-{name}-{i}")))
                 .role(Role::Tab)
                 .aria_label(label.clone())
                 .aria_selected(on)
                 .tab_index(0)
                 .focus_visible(focus_ring)
                 .cursor_pointer()
-                .h(px(26.))
-                .px(px(12.))
+                .h(px(32.))
+                .px(px(14.))
                 .flex()
                 .items_center()
                 .rounded_full()
-                .text_size(px(fs_sm()))
+                .text_size(px(fs_md()))
                 .text_color(if on { fg } else { muted })
                 .when(on, |d| d.bg(selected))
                 .hover(move |s| s.text_color(fg))
@@ -114,7 +131,7 @@ impl ArtifactsPage {
                 }))
         });
         div()
-            .id(SharedString::from(format!("artifacts-{name}")))
+            .id(SharedString::from(format!("quilts-{name}")))
             .role(Role::TabList)
             .aria_label(name)
             .flex()
@@ -123,11 +140,11 @@ impl ArtifactsPage {
             .children(tabs)
     }
 
-    /// All, then each kind there is an artifact of.
+    /// All, then each kind there is a quilt of.
     fn filters(&self, t: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
-        let kinds: Vec<(String, Option<ArtifactKind>)> = std::iter::once(("All".to_owned(), None))
+        let kinds: Vec<(String, Option<QuiltKind>)> = std::iter::once(("All".to_owned(), None))
             .chain(
-                ArtifactKind::ALL
+                QuiltKind::ALL
                     .into_iter()
                     .filter(|k| self.list.iter().any(|a| a.kind == *k))
                     .map(|k| (k.label().to_owned(), Some(k))),
@@ -140,7 +157,7 @@ impl ArtifactsPage {
         self.tab_row("Kinds", kinds, at, Self::set_filter, t, cx)
     }
 
-    /// Everywhere, the chat open when the page opened, then each project there is an artifact
+    /// Everywhere, the chat open when the page opened, then each project there is a quilt
     /// from; None when there is only everywhere.
     fn places(&self, t: &Theme, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
         let mut places = vec![("Everywhere".to_owned(), Place::All)];
@@ -173,31 +190,54 @@ impl ArtifactsPage {
         Some(self.tab_row("Places", places, at, Self::set_place, t, cx))
     }
 
-    /// The tiles that start a chat making a doc, deck, sheet, design, dashboard or board.
-    fn new_tiles(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
+    /// The tiles for docs, decks, sheets, designs, dashboards and boards, each going to its
+    /// quilts (`QuiltKind::tile`); one with none is dimmed and goes nowhere.
+    fn kind_tiles(&self, t: &Theme, cx: &mut Context<Self>) -> Div {
         let (hover, border) = (t.bg_hover, t.border);
-        let tiles = ArtifactKind::MADE_NEW.into_iter().map(|kind| {
+        let tiles = QuiltKind::MADE_NEW.into_iter().map(|kind| {
+            let count = self
+                .list
+                .iter()
+                .filter(|a| a.kind.tile() == Some(kind))
+                .count();
+            let label = match count {
+                0 => format!("{}, none yet", kind.label()),
+                1 => format!("{}, 1 quilt", kind.label()),
+                n => format!("{}, {n} quilts", kind.label()),
+            };
             button(
-                SharedString::from(format!("artifacts-new-{}", kind.name())),
-                format!("New {}", kind.label()),
+                SharedString::from(format!("quilts-kind-{}", kind.name())),
+                label,
             )
             .flex_col()
             .justify_center()
-            .gap(px(8.))
-            .w(px(112.))
-            .h(px(84.))
+            .gap(px(12.))
+            .flex_1()
+            .min_w(px(150.))
+            .h(px(120.))
             .rounded(px(radius()))
             .border_1()
             .border_color(border)
             .bg(t.bg_panel)
-            .hover(move |s| s.bg(hover))
+            .map(|b| {
+                if count == 0 {
+                    b.cursor_default().opacity(0.5)
+                } else {
+                    b.hover(move |s| s.bg(hover))
+                }
+            })
             .child(
                 div()
                     .text_color(t.text_muted)
-                    .child(icon(kind_icon(kind), 22.)),
+                    .child(icon(kind_icon(kind), 32.)),
             )
-            .child(div().text_size(px(fs_sm())).child(kind.label()))
-            .on_click(cx.listener(move |this, _, _, cx| this.make_new(kind, cx)))
+            .child(div().text_size(px(fs_lg())).child(kind.label()))
+            .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                if *hovered {
+                    this.play(Act::Sew, cx);
+                }
+            }))
+            .on_click(cx.listener(move |this, _, _, cx| this.go_to_kind(kind, cx)))
         });
         div()
             .flex()
@@ -205,55 +245,69 @@ impl ArtifactsPage {
             .gap(px(10.))
             .child(
                 div()
-                    .text_size(px(fs_md()))
+                    .text_size(px(fs_lg()))
                     .font_weight(FontWeight::MEDIUM)
-                    .child("Make something new"),
+                    .child("Jump to"),
             )
             .child(
                 div()
-                    .id("artifacts-new")
+                    .id("quilts-kinds")
                     .role(Role::Group)
-                    .aria_label("Make something new")
+                    .aria_label("Jump to a kind")
                     .flex()
                     .flex_wrap()
-                    .gap(px(10.))
+                    .gap(px(12.))
                     .children(tiles),
             )
     }
 
-    /// An artifact's picture, a spinner while it is taken, or its kind's icon.
-    fn picture(&self, artifact: &Artifact, t: &Theme, cx: &App) -> AnyElement {
+    /// A quilt's picture for the theme's darkness, a spinner while it is taken, or its kind's
+    /// icon. A picture not taken yet for the theme is asked for, as when the theme changed.
+    fn picture(&self, quilt: &Quilt, t: &Theme, cx: &mut Context<Self>) -> AnyElement {
         let frame = div()
             .size_full()
             .flex()
             .items_center()
             .justify_center()
             .text_color(t.text_subtle);
-        match self.thumbs.read(cx).get(&artifact.id, artifact.versions) {
+        let (id, n, dark) = (&quilt.id, quilt.versions, t.is_dark());
+        let taken = self
+            .thumbs
+            .read(cx)
+            .get(id, n, dark)
+            .map(Option::<&std::path::PathBuf>::cloned);
+        if taken.is_none() && quilt.kind.drawn() {
+            self.thumbs
+                .update(cx, |thumbs, cx| thumbs.want(id, n, dark, cx));
+        }
+        match taken {
             // The picture keeps the frame's corners, which clipping alone does not.
-            Some(Some(path)) => img(path.clone())
+            Some(Some(path)) => img(path)
                 .size_full()
                 .rounded(px(radius()))
                 .object_fit(ObjectFit::Cover)
                 .into_any_element(),
-            None if artifact.kind.drawn() => {
+            None if quilt.kind.drawn() => {
                 frame.child(spinner(16., t.text_subtle)).into_any_element()
             }
             _ => frame
-                .child(icon(kind_icon(artifact.kind), 28.))
+                .child(icon(kind_icon(quilt.kind), 28.))
                 .into_any_element(),
         }
     }
 
-    /// An artifact as a card: its picture, title, kind and when it changed.
-    fn card(&self, artifact: &Artifact, t: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
+    /// A quilt as a card: its picture, title, kind and when it changed.
+    fn card(&self, quilt: &Quilt, t: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
         let (hover, border) = (t.border_strong, t.border);
-        let id = artifact.id.clone();
+        let (lit, accent) = (self.lit(quilt), t.accent);
+        let id = quilt.id.clone();
         button(
-            SharedString::from(format!("artifact-{}", artifact.id)),
-            artifact.title.clone(),
+            SharedString::from(format!("quilt-{}", quilt.id)),
+            quilt.title.clone(),
         )
         .role(Role::ListItem)
+        .relative()
+        .child(spot(&self.spots, &quilt.id))
         .flex_col()
         .items_start()
         .gap(px(8.))
@@ -267,7 +321,7 @@ impl ArtifactsPage {
                 .overflow_hidden()
                 .rounded(px(radius()))
                 .bg(t.bg_editor)
-                .child(self.picture(artifact, t, cx))
+                .child(self.picture(quilt, t, cx))
                 // The border is drawn over the picture, so the picture's edge never shows past
                 // its curve at the corners.
                 .child(
@@ -277,11 +331,17 @@ impl ArtifactsPage {
                         .left_0()
                         .size_full()
                         .rounded(px(radius()))
-                        .border_1()
-                        .border_color(border)
-                        .group_hover(PICTURE, move |s| s.border_color(hover)),
+                        .map(|d| {
+                            if lit {
+                                d.border_2().border_color(accent)
+                            } else {
+                                d.border_1()
+                                    .border_color(border)
+                                    .group_hover(PICTURE, move |s| s.border_color(hover))
+                            }
+                        }),
                 )
-                .when(artifact.pinned, |d| {
+                .when(quilt.pinned, |d| {
                     d.child(pin_marker(t).absolute().top(px(6.)).right(px(6.)))
                 }),
         )
@@ -293,35 +353,35 @@ impl ArtifactsPage {
                 .child(
                     div()
                         .truncate()
-                        .text_size(px(fs_md()))
-                        .child(artifact.title.clone()),
+                        .text_size(px(fs_lg()))
+                        .child(quilt.title.clone()),
                 )
                 .child(
                     div()
                         .truncate()
-                        .text_size(px(fs_sm()))
+                        .text_size(px(fs_md()))
                         .text_color(t.text_muted)
                         .child(format!(
                             "{} · {}",
-                            artifact.kind.label(),
-                            format_relative(artifact.updated_at)
+                            quilt.kind.label(),
+                            format_relative(quilt.updated_at)
                         )),
                 ),
         )
-        .map(|b| self.with_menu(b, artifact, cx))
+        .map(|b| self.with_menu(b, quilt, cx))
         .on_click(cx.listener(move |this, _, _, cx| this.select(id.clone(), cx)))
     }
 
-    /// `item` with the artifact's menu on a right click, and its state said.
+    /// `item` with the quilt's menu on a right click, and its state said.
     fn with_menu(
         &self,
         item: Stateful<Div>,
-        artifact: &Artifact,
+        quilt: &Quilt,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        let id = artifact.id.clone();
-        item.when(artifact.pinned, |b| {
-            b.aria_label(format!("{}, pinned", artifact.title))
+        let id = quilt.id.clone();
+        item.when(quilt.pinned, |b| {
+            b.aria_label(format!("{}, pinned", quilt.title))
         })
         .on_mouse_down(
             MouseButton::Right,
@@ -332,13 +392,14 @@ impl ArtifactsPage {
         )
     }
 
-    /// An artifact as a row: its icon, title, kind, chat and when it changed.
-    fn row(&self, artifact: &Artifact, t: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
+    /// A quilt as a row: its icon, title, kind, chat and when it changed.
+    fn row(&self, quilt: &Quilt, t: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
         let hover = t.bg_hover;
-        let id = artifact.id.clone();
+        let lit = self.lit(quilt);
+        let id = quilt.id.clone();
         let chat = self
             .chats
-            .get(&artifact.thread_id)
+            .get(&quilt.thread_id)
             .cloned()
             .unwrap_or_default();
         let cell = |text: String, width: f32| {
@@ -351,10 +412,12 @@ impl ArtifactsPage {
                 .child(text)
         };
         button(
-            SharedString::from(format!("artifact-{}", artifact.id)),
-            artifact.title.clone(),
+            SharedString::from(format!("quilt-{}", quilt.id)),
+            quilt.title.clone(),
         )
         .role(Role::ListItem)
+        .relative()
+        .child(spot(&self.spots, &quilt.id))
         .gap(px(12.))
         .px(px(10.))
         .h(px(40.))
@@ -362,11 +425,12 @@ impl ArtifactsPage {
         .border_b_1()
         .border_color(t.border)
         .hover(move |s| s.bg(hover))
+        .when(lit, |d| d.bg(t.bg_selected_muted))
         .child(
             div()
                 .flex_none()
                 .text_color(t.text_muted)
-                .child(icon(kind_icon(artifact.kind), 16.)),
+                .child(icon(kind_icon(quilt.kind), 16.)),
         )
         .child(
             div()
@@ -374,22 +438,62 @@ impl ArtifactsPage {
                 .min_w_0()
                 .truncate()
                 .text_size(px(fs_md()))
-                .child(artifact.title.clone()),
+                .child(quilt.title.clone()),
         )
-        .when(artifact.pinned, |d| d.child(pin_marker(t)))
-        .child(cell(artifact.kind.label().to_owned(), 90.))
+        .when(quilt.pinned, |d| d.child(pin_marker(t)))
+        .child(cell(quilt.kind.label().to_owned(), 90.))
         .child(cell(chat, 200.))
-        .child(cell(format_relative(artifact.updated_at), 80.))
-        .map(|b| self.with_menu(b, artifact, cx))
+        .child(cell(format_relative(quilt.updated_at), 80.))
+        .map(|b| self.with_menu(b, quilt, cx))
         .on_click(cx.listener(move |this, _, _, cx| this.select(id.clone(), cx)))
     }
 
-    /// The artifacts shown in groups, each with its heading: the pinned first, then each
+    /// Whether `quilt` is counted under the tile just picked.
+    fn lit(&self, quilt: &Quilt) -> bool {
+        self.flash
+            .is_some_and(|(kind, _)| quilt.kind.tile() == Some(kind))
+    }
+
+    /// Scrolls to the first quilt shown under the tile `kind` and lights all of them for a
+    /// moment; does nothing when none is shown.
+    fn go_to_kind(&mut self, kind: QuiltKind, cx: &mut Context<Self>) {
+        let first = self
+            .sections(cx)
+            .into_iter()
+            .flat_map(|(_, list)| list)
+            .find(|a| a.kind.tile() == Some(kind));
+        let Some(first) = first else {
+            return;
+        };
+        if let Some(spot) = self.spots.borrow().get(&first.id) {
+            let scroll = &self.gallery_scroll;
+            let (view, offset) = (scroll.bounds(), scroll.offset());
+            let lowest = -scroll.max_offset().y;
+            let y =
+                (offset.y - (spot.top() - view.top()) + px(SCROLL_MARGIN)).clamp(lowest, px(0.));
+            scroll.set_offset(point(offset.x, y));
+        }
+        let since = Instant::now();
+        self.flash = Some((kind, since));
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(FLASH).await;
+            let _ = this.update(cx, |this, cx| {
+                if this.flash.is_some_and(|(_, at)| at == since) {
+                    this.flash = None;
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// The quilts shown in groups, each with its heading: the pinned first, then each
     /// project's, then those from chats in no project.
-    fn sections(&self, cx: &App) -> Vec<(String, Vec<Artifact>)> {
-        let mut sections: Vec<(String, Vec<Artifact>)> = Vec::new();
+    fn sections(&self, cx: &App) -> Vec<(String, Vec<Quilt>)> {
+        let mut sections: Vec<(String, Vec<Quilt>)> = Vec::new();
         let mut put =
-            |heading: &str, a: &Artifact| match sections.iter_mut().find(|(h, _)| h == heading) {
+            |heading: &str, a: &Quilt| match sections.iter_mut().find(|(h, _)| h == heading) {
                 Some((_, list)) => list.push(a.clone()),
                 None => sections.push((heading.to_owned(), vec![a.clone()])),
             };
@@ -411,20 +515,22 @@ impl ArtifactsPage {
         sections
     }
 
-    /// The gallery: its top, the tiles, the filters, and the artifacts.
+    /// The gallery: its top, the tiles, the filters, and the quilts.
     pub(super) fn gallery(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let sections = self.sections(cx);
         let headed = sections.len() > 1;
+        let sad = sections.is_empty() && !self.list.is_empty();
         let body = if sections.is_empty() {
             div()
                 .py(px(48.))
                 .flex()
                 .justify_center()
+                .text_size(px(fs_lg()))
                 .text_color(t.text_muted)
                 .child(if self.list.is_empty() {
-                    "No artifacts yet"
+                    "No quilts yet"
                 } else {
-                    "No artifacts match"
+                    "No quilts match"
                 })
                 .into_any_element()
         } else {
@@ -449,22 +555,18 @@ impl ArtifactsPage {
                         .when(headed, |d| {
                             d.child(
                                 div()
-                                    .id(("artifacts-heading", i))
+                                    .id(("quilts-heading", i))
                                     .role(Role::Heading)
-                                    .text_size(px(fs_md()))
+                                    .text_size(px(fs_lg()))
                                     .font_weight(FontWeight::MEDIUM)
                                     .child(heading.clone()),
                             )
                         })
                         .child(
                             div()
-                                .id(("artifacts-items", i))
+                                .id(("quilts-items", i))
                                 .role(Role::List)
-                                .aria_label(if headed {
-                                    heading
-                                } else {
-                                    "Artifacts".to_owned()
-                                })
+                                .aria_label(if headed { heading } else { "Quilts".to_owned() })
                                 .flex()
                                 .when(self.grid, |d| d.flex_wrap().gap(px(20.)))
                                 .when(!self.grid, gpui::Styled::flex_col)
@@ -484,21 +586,19 @@ impl ArtifactsPage {
             .size_full()
             .child(
                 div()
-                    .id("artifacts-gallery")
+                    .id("quilts-gallery")
                     .size_full()
                     .overflow_y_scroll()
                     .track_scroll(&self.gallery_scroll)
                     .child(
                         div()
-                            .mx_auto()
-                            .max_w(px(MAX_WIDTH))
                             .px(px(32.))
                             .py(px(28.))
                             .flex()
                             .flex_col()
                             .gap(px(24.))
-                            .child(self.top(t, window, cx))
-                            .child(self.new_tiles(t, cx))
+                            .child(self.top(sad, t, window, cx))
+                            .child(self.kind_tiles(t, cx))
                             .when(!self.list.is_empty(), |d| {
                                 d.child(self.filters(t, cx)).children(self.places(t, cx))
                             })
@@ -510,7 +610,20 @@ impl ArtifactsPage {
     }
 }
 
-/// The mark of a pinned artifact.
+/// Notes where the card or row it is put in was drawn, under `id` in `spots`.
+fn spot(spots: &Rc<RefCell<HashMap<String, Bounds<Pixels>>>>, id: &str) -> impl IntoElement {
+    let (spots, id) = (Rc::clone(spots), id.to_owned());
+    canvas(
+        move |bounds, _, _| {
+            spots.borrow_mut().insert(id, bounds);
+        },
+        |_, (), _, _| {},
+    )
+    .absolute()
+    .inset_0()
+}
+
+/// The mark of a pinned quilt.
 fn pin_marker(t: &Theme) -> Div {
     div()
         .flex_none()

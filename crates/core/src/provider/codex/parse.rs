@@ -99,9 +99,9 @@ pub(super) fn codex_item(
             );
             let mut started = tool_started(message_id, ToolStart::new(id, "MCP", summary));
             if let Parsed::Event(AgentEvent::ToolStarted { tool, .. }) = &mut started
-                && crate::artifacts::is_artifact_call(tool)
+                && crate::quilts::is_quilt_call(tool)
             {
-                crate::artifacts::fill_in(tool, &item["arguments"]);
+                crate::quilts::fill_in(tool, &item["arguments"]);
             }
             out.push(started);
             if completed {

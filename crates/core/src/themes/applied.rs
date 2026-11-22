@@ -195,6 +195,10 @@ impl Settings {
         if matches!(&self.chat_background, ChatBackground::Scene { id: shown } if shown == id) {
             self.chat_background = ChatBackground::None;
         }
+        if matches!(&self.quilts_background, Some(ChatBackground::Scene { id: shown }) if shown == id)
+        {
+            self.quilts_background = None;
+        }
         if self.orchestrator_backdrop == gone {
             self.orchestrator_backdrop = BackdropChoice::default();
         }

@@ -49,6 +49,7 @@ impl SettingsDialog {
             "code-theme" => themes::code_theme_pane(self, window, cx),
             "orchestrator-background" => themes::orchestrator_background_pane(self, window, cx),
             "chat-background" => themes::chat_background_pane(self, window, cx),
+            "quilts-background" => themes::quilts_background_pane(self, cx),
             "interface" => themes::interface_pane(self, window, cx),
             "shortcuts" => shortcuts::render(self, window, cx),
             "providers" => providers::render(self, window, cx),

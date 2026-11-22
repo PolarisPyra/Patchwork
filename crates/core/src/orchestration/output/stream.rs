@@ -171,7 +171,7 @@ pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str
         | AgentEvent::Notice { .. }
         | AgentEvent::OptionsChanged
         | AgentEvent::SettingsChanged
-        | AgentEvent::ArtifactsChanged
+        | AgentEvent::QuiltsChanged
         | AgentEvent::OpenChat
         | AgentEvent::RestartToUpdate
         | AgentEvent::Show { .. }
@@ -494,7 +494,7 @@ pub(in crate::orchestration) fn apply(thread: &mut Thread, event: &AgentEvent) {
         | AgentEvent::Notice { .. }
         | AgentEvent::OptionsChanged
         | AgentEvent::SettingsChanged
-        | AgentEvent::ArtifactsChanged
+        | AgentEvent::QuiltsChanged
         | AgentEvent::OpenChat
         | AgentEvent::RestartToUpdate
         | AgentEvent::Show { .. }

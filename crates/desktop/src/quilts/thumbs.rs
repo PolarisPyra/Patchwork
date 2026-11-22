@@ -1,4 +1,4 @@
-//! The pictures of artifacts' versions, shared by the gallery and the chats' artifact cards, and
+//! The pictures of quilts' versions, shared by the gallery and the chats' quilt cards, and
 //! taken one at a time off the UI thread the first time either asks.
 
 // Rust guideline compliant 2026-10-09
@@ -12,8 +12,8 @@ use patchwork_core::Core;
 
 use crate::ui::off_thread;
 
-/// A version, by its artifact's id and its number.
-type Key = (String, u32);
+/// A version, by its quilt's id and its number, drawn dark or light.
+type Key = (String, u32, bool);
 
 pub struct Thumbs {
     core: Arc<Core>,
@@ -35,19 +35,23 @@ impl Thumbs {
         }
     }
 
-    /// Version `n` of the artifact `id`'s picture: None while it is not taken yet, and Some(None)
-    /// when it could not be.
+    /// Version `n` of the quilt `id`'s picture for a dark theme when `dark`: None while it is
+    /// not taken yet, and Some(None) when it
+    /// could not be.
     #[expect(
         clippy::option_option,
         reason = "not taken yet and could not be taken are drawn differently"
     )]
-    pub fn get(&self, id: &str, n: u32) -> Option<Option<&PathBuf>> {
-        self.taken.get(&(id.to_owned(), n)).map(Option::as_ref)
+    pub fn get(&self, id: &str, n: u32, dark: bool) -> Option<Option<&PathBuf>> {
+        self.taken
+            .get(&(id.to_owned(), n, dark))
+            .map(Option::as_ref)
     }
 
-    /// Asks for version `n` of the artifact `id`'s picture, unless it is taken or asked for.
-    pub fn want(&mut self, id: &str, n: u32, cx: &mut Context<Self>) {
-        let key = (id.to_owned(), n);
+    /// Asks for version `n` of the quilt `id`'s picture for a dark theme when `dark`, unless
+    /// it is taken or asked for.
+    pub fn want(&mut self, id: &str, n: u32, dark: bool, cx: &mut Context<Self>) {
+        let key = (id.to_owned(), n, dark);
         if self.taken.contains_key(&key) || self.waiting.contains(&key) {
             return;
         }
@@ -63,15 +67,13 @@ impl Thumbs {
         let key = self.waiting.remove(0);
         self.taking = true;
         let core = Arc::clone(&self.core);
-        let (id, n) = key.clone();
+        let (id, n, dark) = key.clone();
         off_thread(
             cx,
-            move || core.artifact_thumbnail(&id, n),
+            move || core.quilt_thumbnail(&id, n, dark),
             move |this, taken, cx| {
                 let path = taken
-                    .inspect_err(
-                        |e| log::warn!(error:% = e; "no picture of an artifact: {{error}}"),
-                    )
+                    .inspect_err(|e| log::warn!(error:% = e; "no picture of a quilt: {{error}}"))
                     .ok();
                 this.taken.insert(key, path);
                 this.taking = false;

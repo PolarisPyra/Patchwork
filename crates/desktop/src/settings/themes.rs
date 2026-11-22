@@ -14,7 +14,9 @@ use patchwork_core::logging::THEME_LOG;
 use patchwork_core::settings::{LogLevel, Theme as ThemeSetting};
 use patchwork_core::themes::{CodeTheme, SavedScene, Scheme, Theme, Unreadable};
 
-pub(super) use self::backdrops::{chat_background_pane, orchestrator_background_pane};
+pub(super) use self::backdrops::{
+    quilts_background_pane, chat_background_pane, orchestrator_background_pane,
+};
 use self::cards::{Slot, add_card, grid, scheme_cards};
 use self::editor::{Editing, editor};
 use self::generator_pick::generator_row;
@@ -83,6 +85,8 @@ impl Kind {
 #[derive(Default)]
 pub struct ThemesState {
     picker: Option<Entity<BackgroundPicker>>,
+    /// The Quilts theme's picker, made on the first look at its pane.
+    quilts_picker: Option<Entity<BackgroundPicker>>,
     themes: Vec<Theme>,
     scenes: Vec<Arc<SavedScene>>,
     codes: Vec<CodeTheme>,

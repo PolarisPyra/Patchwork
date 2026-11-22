@@ -1,6 +1,6 @@
-//! An artifact's content as a whole web page the browser draws.
+//! A quilt's content as a whole web page the browser draws.
 //!
-//! The typed artifacts (docs, slides, sheets, designs, whiteboards) get their pages from
+//! The typed quilts (docs, slides, sheets, designs, whiteboards) get their pages from
 //! `typed`.
 //! A page and an SVG are drawn as they are, Markdown is turned into HTML here, and code is shown
 //! as text. A Mermaid diagram and a React component are drawn by scripts the page loads from
@@ -14,7 +14,7 @@ use std::fmt::Write as _;
 use pulldown_cmark::{Options, Parser, html};
 
 use super::typed;
-use super::types::ArtifactKind;
+use super::types::QuiltKind;
 
 /// The styles of the pages Patchwork wraps around content: Markdown, code, SVG and diagrams.
 const STYLE: &str = "\
@@ -52,7 +52,7 @@ const show = (e) => {
 window.addEventListener('error', (e) => show(e.error || e.message));
 try {
   let code = Babel.transform(source, {
-    filename: 'artifact.tsx',
+    filename: 'quilt.tsx',
     presets: [['react', { runtime: 'automatic' }], ['typescript', { isTSX: true, allExtensions: true }]],
   }).code;
   const shared = (s) => /^react(-dom)?(\/|$)/.test(s) || s.includes(':');
@@ -71,22 +71,22 @@ try {
 
 /// The page that shows `content` of `kind`, titled `title`.
 #[must_use]
-pub fn page(kind: ArtifactKind, content: &str, title: &str) -> String {
+pub fn page(kind: QuiltKind, content: &str, title: &str) -> String {
     let title = escape(title);
     match kind {
-        ArtifactKind::Svg => wrapped(&title, "center", content, ""),
-        ArtifactKind::Markdown => {
+        QuiltKind::Svg => wrapped(&title, "center", content, ""),
+        QuiltKind::Markdown => {
             let mut body = String::new();
             html::push_html(&mut body, Parser::new_ext(content, Options::all()));
             wrapped(&title, "", &body, "")
         }
-        ArtifactKind::Code => wrapped(
+        QuiltKind::Code => wrapped(
             &title,
             "",
             &format!("<pre><code>{}</code></pre>", escape(content)),
             "",
         ),
-        ArtifactKind::Mermaid => wrapped(
+        QuiltKind::Mermaid => wrapped(
             &title,
             "center",
             &format!(
@@ -98,13 +98,13 @@ pub fn page(kind: ArtifactKind, content: &str, title: &str) -> String {
                  mermaid.initialize({{startOnLoad:true}});</script>"
             ),
         ),
-        ArtifactKind::React => react(&title, content),
-        ArtifactKind::Html | ArtifactKind::Data => based(content),
-        ArtifactKind::Doc => typed::doc(&title, content),
-        ArtifactKind::Slides => typed::slides(&title, content),
-        ArtifactKind::Sheet => typed::sheet(&title, content),
-        ArtifactKind::Design => typed::design(&title, content),
-        ArtifactKind::Whiteboard => typed::whiteboard(&title, content),
+        QuiltKind::React => react(&title, content),
+        QuiltKind::Html | QuiltKind::Data => based(content),
+        QuiltKind::Doc => typed::doc(&title, content),
+        QuiltKind::Slides => typed::slides(&title, content),
+        QuiltKind::Sheet => typed::sheet(&title, content),
+        QuiltKind::Design => typed::design(&title, content),
+        QuiltKind::Whiteboard => typed::whiteboard(&title, content),
     }
 }
 

@@ -84,6 +84,7 @@ const INDEX: &[(&str, &[&str])] = &[
         &["Orchestrator theme", "Generate with"],
     ),
     ("chat-background", &["Chat theme", "Generate with"]),
+    ("quilts-background", &["Quilts theme"]),
     ("interface", &["Font"]),
     ("shortcuts", &["Keyboard shortcuts", "Reset all"]),
     (

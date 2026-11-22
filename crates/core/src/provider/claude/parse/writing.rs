@@ -1,4 +1,4 @@
-//! An artifact call while Claude writes its input, so its card can show the artifact's title
+//! A quilt call while Claude writes its input, so its card can show the quilt's title
 //! and how many lines are written before the call is whole.
 //!
 //! Claude streams a call's input as pieces of JSON that name the call only by its place in the
@@ -8,12 +8,12 @@
 
 use std::sync::{Mutex, PoisonError};
 
-use crate::artifacts::Written;
+use crate::quilts::Written;
 use crate::events::AgentEvent;
 use crate::provider::Parsed;
 use crate::threads::{EditLines, ToolCall};
 
-/// An artifact call being written.
+/// A quilt call being written.
 struct Writing {
     message_id: String,
     /// Its place among the message's content blocks.
@@ -25,7 +25,7 @@ struct Writing {
     written: Written,
 }
 
-/// The artifact calls being written, across every turn.
+/// The quilt calls being written, across every turn.
 static WRITING: Mutex<Vec<Writing>> = Mutex::new(Vec::new());
 
 /// Starts following the call `tool`, the `index`th block of message `message_id`.
