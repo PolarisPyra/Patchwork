@@ -51,6 +51,7 @@ pub fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, Error> {
                 }
             })
     }));
+    out.plan = crate::provider::antigravity::tier();
     out.updated_at = Some(now_ms());
     Ok(out)
 }

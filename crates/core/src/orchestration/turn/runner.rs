@@ -246,11 +246,11 @@ impl Runner {
             attachments,
             images,
         };
-        let line = provider::steer_input(turn.agent, prompt, session_id, turn_id.as_deref());
         // Under the stdin lock, so the reader cannot close stdin between the write and
         // recording that an answer is due.
         let mut stdin = turn.stdin.locked();
         if turn.idle.load(Ordering::SeqCst) {
+            let line = provider::resume_input(turn.agent, prompt, session_id, turn_id.as_deref());
             // The agent's last reply is over; this message starts the next one, and if the agent
             // can no longer take it, or was started with settings changed since, a new turn
             // replaces the idle process.
@@ -264,6 +264,7 @@ impl Runner {
             self.handed_over.locked().remove(message_id);
             return Delivery::NotRunning;
         }
+        let line = provider::steer_input(turn.agent, prompt, session_id, turn_id.as_deref());
         if let Some(line) = line
             && write_to(&mut stdin, &line)
         {

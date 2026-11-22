@@ -164,11 +164,12 @@ pub(in crate::orchestration) fn ingest(
             turn.last_output.store(now_ms(), Ordering::Relaxed);
         }
         let starts_reply = value["type"] == "system" && value["subtype"] == "init";
-        if ended
-            && turn.agent == AgentKind::Claude
-            && ((starts_reply && turn.idle.swap(false, Ordering::SeqCst))
-                || !turn.steers.locked().is_empty())
-        {
+        let claude_resumed = turn.agent == AgentKind::Claude
+            && starts_reply
+            && turn.idle.swap(false, Ordering::SeqCst);
+        let warm_reply = matches!(turn.agent, AgentKind::Claude | AgentKind::Antigravity)
+            && !turn.steers.locked().is_empty();
+        if ended && (claude_resumed || warm_reply) {
             turn.steers.locked().clear();
             turn.next_segment(&mut unsaved);
             segments.push(turn.message_id.clone());

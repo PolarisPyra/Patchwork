@@ -19,6 +19,11 @@ const CHECK_EVERY: Duration = Duration::from_secs(20);
 const LOGIN: &str = "org.freedesktop.login1";
 
 impl Core {
+    /// Stops every warm idle agent process so later turns start with current credentials.
+    pub fn retire_idle_agents(&self) {
+        self.runner.retire_all_idle();
+    }
+
     /// Locks a vault that has a password, and takes its secrets from everything that holds
     /// one: the terminal variables, the MCP servers, the chat apps, and every agent, whose
     /// running replies stop. It opens when the password is entered.

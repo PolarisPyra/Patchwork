@@ -30,44 +30,13 @@ const PROBE_CACHE_TTL: Duration = Duration::from_secs(5);
 /// JSON-RPC error code `agy acp` returns when the user is not signed in.
 pub(super) const AUTH_REQUIRED_CODE: i64 = -32000;
 
-/// First `agy` release that exposes all account models to every ACP client regardless of
-/// `clientInfo.name`. Older runtimes only offer non-Gemini models to allowlisted clients like Zed.
-const OPEN_MODEL_ACCESS_VERSION: (u32, u32, u32) = (1, 5, 1);
-
-/// ACP `clientInfo` for `initialize`: identifies as Patchwork on `agy >= 1.5.1`, and falls back
-/// to Zed on older or unparseable versions so non-Gemini models remain available.
+/// ACP `clientInfo` for `initialize`: always identifies honestly as Patchwork.
 pub(super) fn client_info() -> Value {
-    static INFO: OnceLock<Value> = OnceLock::new();
-    INFO.get_or_init(|| {
-        let parsed = antigravity_bin()
-            .map(|bin| cli_info::version(&bin))
-            .and_then(|v| parse_semver(&v));
-        if parsed.is_some_and(|v| v >= OPEN_MODEL_ACCESS_VERSION) {
-            json!({
-                "name": "patchwork",
-                "title": "Patchwork",
-                "version": crate::VERSION,
-            })
-        } else {
-            json!({
-                "name": "zed",
-                "version": "0.0.0",
-            })
-        }
+    json!({
+        "name": "patchwork",
+        "title": "Patchwork",
+        "version": crate::VERSION,
     })
-    .clone()
-}
-
-fn parse_semver(raw: &str) -> Option<(u32, u32, u32)> {
-    let word = raw
-        .split_whitespace()
-        .map(|w| w.trim_start_matches('v'))
-        .find(|w| w.starts_with(|c: char| c.is_ascii_digit()))?;
-    let mut parts = word.split(['.', '-', '+']);
-    let major = parts.next()?.parse().ok()?;
-    let minor = parts.next()?.parse().ok()?;
-    let patch = parts.next()?.parse().ok()?;
-    Some((major, minor, patch))
 }
 
 /// Suffix on a model id and the reasoning effort it maps to.
@@ -191,6 +160,15 @@ pub fn auth(status: &mut AgentStatus) {
             status.signed_in = false;
             status.detail = reason;
         }
+    }
+}
+
+/// The signed-in Antigravity plan tier (e.g. "Google AI Pro"), from the cached ACP probe.
+#[must_use]
+pub(crate) fn tier() -> Option<String> {
+    match probe_acp_cached() {
+        AcpProbe::SignedIn { tier, .. } => tier.filter(|s| !s.is_empty()),
+        AcpProbe::AuthRequired | AcpProbe::Unavailable(_) => None,
     }
 }
 

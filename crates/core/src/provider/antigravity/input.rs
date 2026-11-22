@@ -235,13 +235,24 @@ fn prompt_blocks(text: &str, images: &[Image]) -> Vec<Value> {
     blocks
 }
 
+/// Sends a new prompt into an idle, already-initialized ACP session (uses `PROMPT_REQUEST` so
+/// its completion ends the turn cleanly).
+#[must_use]
+pub fn prompt_input(session_id: &str, text: &str, images: &[Image]) -> String {
+    prompt_request(PROMPT_REQUEST, session_id, text, images)
+}
+
 /// Sends a steering follow-up into the running ACP session (`agy acp` 1.5.0+ supports mid-turn
 /// `session/prompt`).
 #[must_use]
 pub fn steer_input(session_id: &str, text: &str, images: &[Image]) -> String {
+    prompt_request(STEER_REQUEST, session_id, text, images)
+}
+
+fn prompt_request(id: u64, session_id: &str, text: &str, images: &[Image]) -> String {
     json!({
         "jsonrpc": "2.0",
-        "id": STEER_REQUEST,
+        "id": id,
         "method": "session/prompt",
         "params": {
             "sessionId": session_id,

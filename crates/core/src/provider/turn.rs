@@ -167,6 +167,29 @@ pub fn steer_input(
     }
 }
 
+/// The stdin line that starts the next turn on an idle warm agent process.
+#[must_use]
+pub fn resume_input(
+    agent: AgentKind,
+    prompt: Prompt<'_>,
+    session_id: Option<&str>,
+    turn_id: Option<&str>,
+) -> Option<String> {
+    if agent == AgentKind::Antigravity {
+        let Prompt {
+            text,
+            attachments,
+            images,
+        } = prompt;
+        return Some(antigravity::prompt_input(
+            session_id?,
+            &prompt_text(text, attachments),
+            images,
+        ));
+    }
+    steer_input(agent, prompt, session_id, turn_id)
+}
+
 /// The stdin line that stops the agent's reply without ending its process, for agents that can.
 /// Codex needs the id of the turn it is running.
 #[must_use]
