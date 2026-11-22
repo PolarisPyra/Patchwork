@@ -31,18 +31,19 @@ impl Turn {
         self.emit(event);
     }
 
-    /// Streams reasoning like `stream_text`; it is stored as one block when it ends.
+    /// Streams reasoning like `stream_text`, keeping the in-memory store in sync so reloads
+    /// mid-turn do not drop it; it is persisted to disk when it ends.
     pub(in crate::orchestration) fn stream_thinking(
         &self,
         event: AgentEvent,
         unsaved: &mut Unsaved,
     ) {
         self.save_only_text(unsaved);
-        if let AgentEvent::Thinking { text, .. } = &event {
-            if unsaved.thinking.is_empty() {
-                unsaved.thinking_since = now_ms();
-            }
-            unsaved.thinking.push_str(text);
+        if let AgentEvent::Thinking { .. } = &event {
+            self.core
+                .store
+                .update_unsaved(&self.chat_id, |t| apply(t, &event));
+            unsaved.thinking = true;
         }
         self.emit(event);
     }
@@ -73,18 +74,25 @@ impl Turn {
         }
     }
 
-    /// Saves the reasoning block that streamed since `thinking_since`; it ends now.
+    /// Saves the reasoning block that streamed and marks it ended.
     pub(in crate::orchestration) fn save_thinking(&self, unsaved: &mut Unsaved) {
-        if unsaved.thinking.is_empty() {
+        if !std::mem::take(&mut unsaved.thinking) {
             return;
         }
-        let event = AgentEvent::Thinking {
-            message_id: self.message_id.clone(),
-            text: std::mem::take(&mut unsaved.thinking),
-            started_at: Some(unsaved.thinking_since),
-            ended_at: Some(now_ms()),
-        };
-        if let Err(e) = save_event(&self.core, &self.chat_id, &event) {
+        let saved = self
+            .core
+            .store
+            .update_message(&self.chat_id, Some(&self.message_id), |chat| {
+                if let Some(msg) = chat
+                    .messages
+                    .iter_mut()
+                    .find(|m| m.id == self.message_id)
+                    .map(Arc::make_mut)
+                {
+                    end_thinking(msg);
+                }
+            });
+        if let Err(e) = saved {
             log::warn!(error:% = e; "failed to save agent reasoning: {{error}}");
         }
     }
@@ -128,13 +136,11 @@ fn settle_late(core: &Core, chat_id: &str, mut event: AgentEvent) -> AgentEvent 
     event
 }
 
-/// Streamed output not yet stored: whether text is in memory only, or a block of reasoning and
-/// when it started.
+/// Streamed output not yet stored: whether text or reasoning is in memory only.
 #[derive(Default)]
 pub(in crate::orchestration) struct Unsaved {
     pub(in crate::orchestration) text: bool,
-    pub(in crate::orchestration) thinking: String,
-    pub(in crate::orchestration) thinking_since: u64,
+    pub(in crate::orchestration) thinking: bool,
 }
 
 /// Applies `event` to the stored chat. Removing a message moves the ones after it, so

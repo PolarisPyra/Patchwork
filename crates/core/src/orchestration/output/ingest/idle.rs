@@ -24,10 +24,12 @@ pub(super) fn can_idle(turn: &Turn, goal: Option<&Goal>, stream_error: Option<&S
     stream_error.is_none() && !turn.cancelled.load(Ordering::SeqCst) && stays_up(turn, goal)
 }
 
-/// Whether the agent's process can stay up once its reply has ended. Only Claude keeps its process
-/// between messages. An active goal ends the turn instead, so the goal is settled and carried on.
+/// Whether the agent's process can stay up once its reply has ended. Claude and Antigravity ACP
+/// keep their process warm between messages so the next turn skips cold startup. An active goal
+/// ends the turn instead, so the goal is settled and carried on.
 pub(super) fn stays_up(turn: &Turn, goal: Option<&Goal>) -> bool {
-    turn.agent == AgentKind::Claude && !goal.is_some_and(|g| g.status == GoalStatus::Active)
+    matches!(turn.agent, AgentKind::Claude | AgentKind::Antigravity)
+        && !goal.is_some_and(|g| g.status == GoalStatus::Active)
 }
 
 /// Completes the replies not yet completed, with the files they changed, and marks the turn

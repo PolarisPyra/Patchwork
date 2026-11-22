@@ -91,6 +91,8 @@ impl SettingsDialog {
                 Ok(()) => {
                     d.providers.antigravity_auth = None;
                     d.drop_fields(AUTH_CODE_FIELD);
+                    d.core.retire_idle_agents();
+                    d.core.usage.invalidate(AgentKind::Antigravity);
                     d.providers.status.remove(&AgentKind::Antigravity);
                     d.detect(AgentKind::Antigravity, cx);
                 }
@@ -120,6 +122,8 @@ impl SettingsDialog {
             |d, done, cx| match done {
                 Ok(()) => {
                     d.providers.antigravity_auth = None;
+                    d.core.retire_idle_agents();
+                    d.core.usage.invalidate(AgentKind::Antigravity);
                     d.providers.status.remove(&AgentKind::Antigravity);
                     d.detect(AgentKind::Antigravity, cx);
                 }

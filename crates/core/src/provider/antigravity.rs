@@ -13,8 +13,9 @@ pub use client::{
     antigravity_bin, auth, command, configured_model, home, info, models, parse_acp_models,
     parse_models,
 };
+pub(crate) use client::tier;
 #[doc(inline)]
-pub use input::{approval_reply, interrupt, steer_input, turn_args, turn_env, turn_input};
+pub use input::{approval_reply, interrupt, prompt_input, steer_input, turn_args, turn_env, turn_input};
 #[doc(inline)]
 pub use login::{LoginSession, sign_out, start_login};
 #[doc(inline)]

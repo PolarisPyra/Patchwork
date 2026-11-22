@@ -100,6 +100,11 @@ pub struct UsageCache {
 }
 
 impl UsageCache {
+    /// Drops cached usage for `kind` so the next read fetches fresh numbers.
+    pub fn invalidate(&self, kind: AgentKind) {
+        self.entries.locked().remove(&kind);
+    }
+
     /// The usage last known for `kind`, without asking the provider. None before any is known.
     #[must_use]
     pub fn known(&self, kind: AgentKind) -> Option<ProviderUsage> {
