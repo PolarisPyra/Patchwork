@@ -221,6 +221,9 @@ impl Panel {
     pub fn hide(&mut self, cx: &mut Context<Self>) {
         self.visible = false;
         self.menu = None;
+        // Focus asked for while the shell starts is dropped with the panel, so it does not take
+        // the keys from the composer later.
+        self.focus_terminal = false;
         self.follow_output(false, cx);
         cx.notify();
     }
