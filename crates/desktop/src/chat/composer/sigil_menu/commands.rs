@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 use std::ops::Range;
 use patchwork_core::provider::{AgentKind, ProviderSlashCommand};
-use crate::ui::sigils::{SigilKind, Sigils, default_sigil};
+use patchwork_ui::sigils::{SigilKind, Sigils, default_sigil};
 
 /// Most files the menu offers at once.
 pub(super) const FILE_LIMIT: usize = 8;

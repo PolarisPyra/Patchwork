@@ -7,8 +7,8 @@
 use gpui::{Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px, relative};
 use patchwork_core::threads::{BackgroundTask, TaskStatus};
 
-use crate::ui::theme::{fs_sm, radius, Theme};
-use crate::ui::{button, icon_button, now_ms, spinner, tooltip};
+use patchwork_ui::theme::{fs_sm, radius, Theme};
+use patchwork_ui::{button, icon_button, now_ms, spinner, tooltip};
 use crate::workspace::Workspace;
 
 /// What each kind of task the agents report is called here. Any other kind is shown as it comes.

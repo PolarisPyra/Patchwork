@@ -10,9 +10,9 @@ use patchwork_core::threads::AccessMode;
 use patchwork_core::workspace::{DiffSide, FileChange};
 
 use crate::sidebar::graph;
-use crate::ui::menu::Menu;
-use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme, theme};
-use crate::ui::{button, icon, list_scrollbar, scrollbar, tooltip};
+use patchwork_ui::menu::Menu;
+use patchwork_ui::theme::{fs_md, fs_sm, radius_sm, Theme, theme};
+use patchwork_ui::{button, icon, list_scrollbar, scrollbar, tooltip};
 use super::list::{Entry, Group};
 use super::repo::REPO_MENU;
 use super::rows::reply_files;

@@ -7,9 +7,9 @@ use patchwork_core::provider::ModelOption;
 use patchwork_core::threads::Granular;
 
 use super::state::{Part, Slot, agent_of, edit, pick_of, set_agent};
-use crate::chat::composer::{effort_label, efforts};
-use crate::ui::menu::{Menu, MenuItem};
-use crate::ui::{AGENT_KINDS, agent_label};
+use patchwork_ui::effort_label;
+use patchwork_ui::menu::{Menu, MenuItem};
+use patchwork_ui::{AGENT_KINDS, agent_label};
 use crate::workspace::Workspace;
 
 /// A menu row that makes `change` to the open card's settings.
@@ -89,7 +89,8 @@ impl Workspace {
             let default = choice(&this, "Default", current.is_none(), move |v| {
                 edit(v, slot, |p| p.effort = None);
             });
-            let levels = efforts(agent, model.as_deref(), models)
+            let levels = agent
+                .model_efforts(model.as_deref(), models)
                 .into_iter()
                 .map(|level| {
                     let checked = current.as_deref() == Some(level.as_str());
@@ -101,7 +102,7 @@ impl Workspace {
         }
         // A model keeps the effort only when it takes that level.
         let to_model = |id: Option<String>| {
-            let takes = efforts(agent, id.as_deref(), models);
+            let takes = agent.model_efforts(id.as_deref(), models);
             move |v: &mut Granular| {
                 edit(v, slot, |p| {
                     p.model.clone_from(&id);

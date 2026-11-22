@@ -8,8 +8,8 @@ use std::sync::Arc;
 use gpui::{FontWeight, Role, deferred, div, prelude::*, px};
 
 use super::state::Workspace;
-use crate::ui::theme::{radius, radius_sm, Theme};
-use crate::ui::{BtnKind, btn, button, icon, popup_shadow};
+use patchwork_ui::theme::{radius, radius_sm, Theme};
+use patchwork_ui::{BtnKind, btn, button, icon, popup_shadow};
 
 impl Workspace {
     /// Says how many replies wait to be resumed, which shows the card.

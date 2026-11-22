@@ -11,9 +11,9 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+base64 = { workspace = true, default-features = true }
 # RFC 3339 timestamps, as agent CLIs record them.
 chrono = { workspace = true, features = ["alloc"] }
-base64 = { workspace = true, default-features = true }
 libc = { workspace = true, default-features = true }
 log = { workspace = true, default-features = true }
 # The launcher icon is drawn from the app's SVG.
@@ -34,6 +34,19 @@ winreg = { workspace = true, default-features = true }
 # The job object a command runs in, which ends everything it started, and telling running
 # programs that the user's PATH changed.
 windows-sys = { workspace = true, default-features = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+
+# The system credential store. On Linux it is the Secret Service through oo7, which GPUI already
+# builds; elsewhere the Keychain and the Credential Manager.
+[target.'cfg(target_os = "linux")'.dependencies]
+async-io = { workspace = true, optional = true }
+oo7 = { workspace = true, optional = true, features = ["async-std", "native_crypto"] }
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+keyring = { workspace = true, optional = true }
+
+[features]
+# The helper Patchwork copies to SSH hosts is built without it: it never keeps a key.
+keychain = ["dep:async-io", "dep:oo7", "keyring/apple-native", "keyring/windows-native"]
 
 [lints]
 workspace = true

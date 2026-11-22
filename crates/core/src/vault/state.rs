@@ -3,7 +3,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use crate::system::Locked;
+use crate::system::{Locked, keychain};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
@@ -113,16 +113,12 @@ pub(super) fn set_status(status: Status) {
     *STATUS.locked() = status;
 }
 
-fn key_entry() -> keyring::Result<keyring::Entry> {
-    keyring::Entry::new(SERVICE, KEY_ENTRY)
-}
-
 /// The wrapping key of a vault that exists, from where `method` keeps it.
 fn wrapping_key(method: Method, config: &Path) -> Result<Zeroizing<[u8; KEY_LEN]>, Error> {
     let text = match method {
-        Method::Keychain => key_entry()
-            .and_then(|e| e.get_password())
-            .map_err(|e| format!("The system keychain did not give the vault's key: {e}"))?,
+        Method::Keychain => keychain::get(SERVICE, KEY_ENTRY)
+            .map_err(|e| format!("The system keychain did not give the vault's key: {e}"))?
+            .ok_or("The system keychain no longer has the vault's key")?,
         Method::File => {
             let path = config.join(KEY_FILE);
             std::fs::read_to_string(&path)
@@ -140,24 +136,21 @@ fn wrapping_key(method: Method, config: &Path) -> Result<Zeroizing<[u8; KEY_LEN]
 ///
 /// Returns an error when the system has no credential store, or its key is damaged.
 pub(super) fn keychain_key() -> Result<Zeroizing<[u8; KEY_LEN]>, Error> {
-    let entry = key_entry().map_err(|e| no_keychain(&e))?;
-    let text = match entry.get_password() {
-        Ok(text) => Zeroizing::new(text),
-        Err(keyring::Error::NoEntry) => {
-            let text = Zeroizing::new(STANDARD.encode(new_key().as_ref()));
-            entry.set_password(&text).map_err(|e| no_keychain(&e))?;
-            // A store that takes a key and cannot give it back would lock the vault for good.
-            entry
-                .get_password()
-                .map(Zeroizing::new)
-                .map_err(|e| no_keychain(&e))?
-        }
-        Err(e) => return Err(no_keychain(&e)),
+    let text = if let Some(text) = keychain::get(SERVICE, KEY_ENTRY).map_err(|e| no_keychain(&e))? {
+        Zeroizing::new(text)
+    } else {
+        let text = Zeroizing::new(STANDARD.encode(new_key().as_ref()));
+        keychain::set(SERVICE, KEY_ENTRY, &text).map_err(|e| no_keychain(&e))?;
+        // A store that takes a key and cannot give it back would lock the vault for good.
+        keychain::get(SERVICE, KEY_ENTRY)
+            .map_err(|e| no_keychain(&e))?
+            .map(Zeroizing::new)
+            .ok_or("The system keychain did not keep the vault's key")?
     };
     decode_key(&text).map_err(|_damaged| "The vault's key in the system keychain is damaged".into())
 }
 
-fn no_keychain(e: &keyring::Error) -> Error {
+fn no_keychain(e: &crate::system::Error) -> Error {
     format!("The system keychain cannot keep the vault's key: {e}").into()
 }
 

@@ -31,7 +31,7 @@ use crate::chat::prompts::Answering;
 use crate::chat::queue::{ChatDrafts, QueuedEdit};
 use crate::orchestrator::{Orchestrator, OrchestratorBackdrop};
 use crate::workspace::add_project::AddProject;
-use crate::ui::menu::Menu;
+use patchwork_ui::menu::Menu;
 use crate::workspace::palette::Palette;
 use crate::sidebar::changes::ChangesView;
 use crate::sidebar::menu::{ContextMenu, Renaming, SortUndo};
@@ -223,7 +223,7 @@ pub struct Workspace {
     pub(crate) android: Option<Entity<crate::android::AndroidPanel>>,
     /// The terminal and Output panel under the chat, whether it shows, its height, and the drag
     /// of its handle: where it started and the height then.
-    pub(super) panel: Entity<crate::panel::Panel>,
+    pub(super) panel: Entity<patchwork_sidecar::panel::Panel>,
     pub(super) panel_open: bool,
     pub(super) panel_height: f32,
     pub(super) panel_resizing: Option<(f32, f32)>,
@@ -285,7 +285,7 @@ pub struct Workspace {
     pub(super) palette: Option<Entity<Palette>>,
     pub(super) palette_return: Option<FocusHandle>,
     /// Settings, while open.
-    pub(super) settings_dialog: Option<Entity<crate::settings::SettingsDialog>>,
+    pub(super) settings_dialog: Option<Entity<patchwork_settings::SettingsDialog>>,
     /// The version whose update card the user closed.
     pub(super) update_dismissed: Option<String>,
     /// How many replies the last session cut off wait to be resumed, with Settings set to ask.
@@ -494,7 +494,7 @@ impl Workspace {
             granular_dialog: None,
             credentials: super::credential::Credentials::default(),
             onboarding: None,
-            title: crate::APP_TITLE.into(),
+            title: patchwork_ui::APP_TITLE.into(),
             machine_menu: None,
             machine_menu_dismissed: None,
             context_menu: None,
@@ -585,7 +585,7 @@ impl Workspace {
         let focus = self.focus.clone();
         // Following the system, the app changes palette when the system does.
         cx.observe_window_appearance(window, |_, window, cx| {
-            crate::ui::theme::follow(window.appearance(), cx);
+            patchwork_ui::theme::follow(window.appearance(), cx);
         })
         .detach();
         cx.on_focus(&focus, window, |_, _, cx| {
@@ -640,7 +640,7 @@ impl Workspace {
         }
         self.ticking = true;
         // Once a second, the finest step the elapsed times on screen show.
-        crate::ui::after(cx, Duration::from_secs(1), |this, cx| {
+        patchwork_ui::after(cx, Duration::from_secs(1), |this, cx| {
             this.ticking = false;
             cx.notify();
         });
@@ -660,7 +660,7 @@ pub(super) fn end_thinking(parts: &mut [Part]) {
     if let Some(Part::Thinking { ended_at, .. }) = parts.last_mut()
         && ended_at.is_none()
     {
-        *ended_at = Some(crate::ui::now_ms());
+        *ended_at = Some(patchwork_ui::now_ms());
     }
 }
 

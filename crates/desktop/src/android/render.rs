@@ -11,9 +11,9 @@ use patchwork_core::Error;
 use patchwork_core::android::{self, Sdk};
 
 use super::state::AndroidPanel;
-use crate::ui::menu::Menu;
-use crate::ui::theme::{font_mono, fs_lg, fs_sm, fs_xs, radius, Theme, theme};
-use crate::ui::{BtnKind, btn, button, icon, icon_button, input_box, scrollbar, spinner, tooltip};
+use patchwork_ui::menu::Menu;
+use patchwork_ui::theme::{font_mono, fs_lg, fs_sm, fs_xs, radius, Theme, theme};
+use patchwork_ui::{BtnKind, btn, button, icon, icon_button, input_box, scrollbar, spinner, tooltip};
 
 /// What dismissing an alert does.
 pub(super) type Dismiss = fn(&mut AndroidPanel);

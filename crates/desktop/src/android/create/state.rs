@@ -12,7 +12,7 @@ use patchwork_core::Error;
 use patchwork_core::android::{self, HardwareProfile, InstallEvent, SystemImage};
 
 use crate::android::state::AndroidPanel;
-use crate::ui::text_area::{Submitted, TextArea};
+use patchwork_ui::text_area::{Submitted, TextArea};
 
 /// The flow's two steps.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -62,7 +62,7 @@ impl AndroidPanel {
         let name = cx.new(|cx| {
             let mut field = TextArea::new("", "Device name", cx);
             field.single_line = true;
-            field.placeholder_color = Some(crate::ui::theme::input_placeholder());
+            field.placeholder_color = Some(patchwork_ui::theme::input_placeholder());
             field
         });
         cx.subscribe_in(&name, window, |this, _, _: &Submitted, _, cx| {
@@ -89,7 +89,7 @@ impl AndroidPanel {
         self.failure = None;
 
         let for_profiles = sdk.clone();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || android::profiles(&for_profiles),
             move |this, listed, cx| {
@@ -123,7 +123,7 @@ impl AndroidPanel {
         })
         .detach();
 
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || android::available_images(&sdk),
             move |this, fetched, cx| {

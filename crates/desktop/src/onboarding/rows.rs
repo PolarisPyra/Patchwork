@@ -3,8 +3,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
-use crate::ui::theme::{fs_lg, fs_md, fs_sm, radius, radius_sm, Theme};
-use crate::ui::{icon, mix};
+use patchwork_ui::theme::{fs_lg, fs_md, fs_sm, radius, radius_sm, Theme};
+use patchwork_ui::{icon, mix};
 
 /// A step's small heading.
 pub(super) fn heading(text: &'static str) -> Div {

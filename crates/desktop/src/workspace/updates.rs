@@ -8,8 +8,8 @@ use gpui::{App, FontWeight, PromptLevel, Role, Window, deferred, div, prelude::*
 use patchwork_core::Core;
 use patchwork_core::updates::{RELEASES_URL, RestartResult, UpdateState, restart_path};
 
-use crate::ui::theme::{radius, radius_sm, Theme};
-use crate::ui::{BtnKind, btn, button, icon, popup_shadow};
+use patchwork_ui::theme::{radius, radius_sm, Theme};
+use patchwork_ui::{BtnKind, btn, button, icon, popup_shadow};
 use super::state::Workspace;
 
 /// Restarts into the installed update. Replies that are running resume after it; when Settings

@@ -6,9 +6,9 @@
 use gpui::{AnyElement, Div, Hsla, Role, SharedString, div, prelude::*, px};
 use patchwork_core::threads::{Message, ReviewStatus, TurnReview};
 
-use crate::ui::markdown::markdown;
-use crate::ui::theme::{fs_sm, fs_xs, radius, Theme};
-use crate::ui::{BtnKind, agent_label, btn, button, icon, spinner, tooltip};
+use patchwork_ui::markdown::markdown;
+use patchwork_ui::theme::{fs_sm, fs_xs, radius, Theme};
+use patchwork_ui::{BtnKind, agent_label, btn, button, icon, spinner, tooltip};
 use crate::workspace::Workspace;
 
 fn status_icon(status: ReviewStatus, t: &Theme) -> AnyElement {

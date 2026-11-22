@@ -4,7 +4,7 @@
 
 use gpui::{Entity, FocusHandle, Pixels, Point, SharedString};
 use patchwork_core::gateway::Platform;
-use crate::ui::text_area::TextArea;
+use patchwork_ui::text_area::TextArea;
 
 /// A row the menu or the name field acts on.
 #[derive(Clone, PartialEq, Eq)]

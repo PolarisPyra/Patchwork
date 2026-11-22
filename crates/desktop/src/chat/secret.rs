@@ -11,9 +11,9 @@ use gpui::{AnyElement, Entity, FontWeight, Role, SharedString, div, prelude::*, 
 use patchwork_core::secrets::SecretStatus;
 use patchwork_core::threads::{Approval, ApprovalStatus};
 
-use crate::ui::text_area::{Changed, Submitted, TextArea};
-use crate::ui::theme::{font_mono, fs_sm, radius, radius_sm, Theme};
-use crate::ui::{BtnKind, btn, icon};
+use patchwork_ui::text_area::{Changed, Submitted, TextArea};
+use patchwork_ui::theme::{font_mono, fs_sm, radius, radius_sm, Theme};
+use patchwork_ui::{BtnKind, btn, icon};
 use crate::workspace::Workspace;
 
 /// The fields of the secrets the agent waits on, and the answers on their way, by request.
@@ -66,7 +66,7 @@ impl Workspace {
                 let mut field = TextArea::new(placeholder.unwrap_or_default(), title, cx);
                 field.single_line = true;
                 field.masked = true;
-                field.placeholder_color = Some(crate::ui::theme::input_placeholder());
+                field.placeholder_color = Some(patchwork_ui::theme::input_placeholder());
                 field
             });
             let key = id.clone();

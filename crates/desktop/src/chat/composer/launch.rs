@@ -8,11 +8,12 @@ use patchwork_core::provider::AgentKind;
 use patchwork_core::settings::Settings;
 use patchwork_core::threads::NewThread;
 
-use super::menus::{Menu, Pick, Row, effort_label, efforts};
+use super::menus::{Menu, Pick, Row};
+use patchwork_ui::effort_label;
 use super::model_picker::ordered;
 use super::state::{Composer, LaunchProject};
-use crate::ui::icon;
-use crate::ui::theme::theme;
+use patchwork_ui::icon;
+use patchwork_ui::theme::theme;
 
 impl Composer {
     /// The agent and model a request's new chat gets: the ones picked on the Orchestrator page,
@@ -53,7 +54,7 @@ impl Composer {
     /// Orchestrator page has it.
     fn launch_effort(&self, settings: &Settings) -> Option<String> {
         let (agent, model) = self.launch_pick(settings);
-        let levels = efforts(agent, model.as_deref(), self.models_of(agent));
+        let levels = agent.model_efforts(model.as_deref(), self.models_of(agent));
         self.draft.effort.clone().filter(|e| levels.contains(e))
     }
 
@@ -62,7 +63,10 @@ impl Composer {
     #[must_use]
     pub fn launch_effort_name(&self, settings: &Settings) -> Option<String> {
         let (agent, model) = self.launch_pick(settings);
-        if efforts(agent, model.as_deref(), self.models_of(agent)).is_empty() {
+        if agent
+            .model_efforts(model.as_deref(), self.models_of(agent))
+            .is_empty()
+        {
             return None;
         }
         let effort = self.launch_effort(settings);

@@ -10,10 +10,10 @@ use gpui::{
 
 use super::menus::below;
 use super::state::{GranularDialog, GranularScope, Part, Slot, agent_of, pick_of};
-use crate::chat::composer::effort_label;
-use crate::ui::dialog;
-use crate::ui::theme::{fs_md, fs_sm, radius, Theme, theme};
-use crate::ui::{BtnKind, agent_label, agent_logo, btn, button, icon, icon_button};
+use patchwork_ui::effort_label;
+use patchwork_ui::dialog;
+use patchwork_ui::theme::{fs_md, fs_sm, radius, Theme, theme};
+use patchwork_ui::{BtnKind, agent_label, agent_logo, btn, button, icon, icon_button};
 use crate::workspace::Workspace;
 
 /// The height of every select on the card.

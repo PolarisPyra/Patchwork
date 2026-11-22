@@ -17,9 +17,9 @@ use patchwork_core::{Core, Error};
 
 use crate::canvas::CanvasTab;
 use crate::chat::goal::strip_action;
-use crate::ui::menu::{Dismissed, Menu, MenuItem};
-use crate::ui::theme::{Theme, fs_sm, fs_xs, radius_sm};
-use crate::ui::{button, icon, icon_button, tooltip};
+use patchwork_ui::menu::{Dismissed, Menu, MenuItem};
+use patchwork_ui::theme::{Theme, fs_sm, fs_xs, radius_sm};
+use patchwork_ui::{button, icon, icon_button, tooltip};
 use crate::workspace::{Workspace, is_working};
 
 /// The tallest the list of files grows before it scrolls.

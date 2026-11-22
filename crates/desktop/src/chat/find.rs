@@ -14,11 +14,11 @@ use gpui::{
 };
 use patchwork_core::threads::{Message, Role as MessageRole, Thread};
 
-use crate::ui::markdown::{FindIn, find_in};
-use crate::ui::text_area::{Changed, Submitted, SubmittedBack, TextArea};
+use patchwork_ui::markdown::{FindIn, find_in};
+use patchwork_ui::text_area::{Changed, Submitted, SubmittedBack, TextArea};
 use crate::chat::timeline::{Step, steps_of};
-use crate::ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
-use crate::ui::{button, icon};
+use patchwork_ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
+use patchwork_ui::{button, icon};
 use crate::workspace::Workspace;
 
 /// Room kept above a revealed match, for the controls floating over the transcript's top.
@@ -100,7 +100,7 @@ impl Workspace {
             let field = cx.new(|cx| {
                 let mut field = TextArea::new("Find", "Find in chat", cx);
                 field.single_line = true;
-                field.placeholder_color = Some(crate::ui::theme::input_placeholder());
+                field.placeholder_color = Some(patchwork_ui::theme::input_placeholder());
                 field
             });
             // The newest match first, since a chat is read from its end.

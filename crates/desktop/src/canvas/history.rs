@@ -10,8 +10,8 @@ use patchwork_core::workspace::{self as ws, BlameRange, FileRevision};
 
 use super::body::centered;
 use super::state::{Canvas, CanvasTab};
-use crate::ui::theme::{Theme, font_ui, fs_sm, radius};
-use crate::ui::{format_date, icon, icon_button, spinner, tooltip};
+use patchwork_ui::theme::{Theme, font_ui, fs_sm, radius};
+use patchwork_ui::{format_date, icon, icon_button, spinner, tooltip};
 
 /// How many of a file's commits are read at once.
 const PAGE: usize = 100;
@@ -70,7 +70,7 @@ impl Canvas {
             _ => 0,
         };
         let (root, seq) = (self.root.clone(), self.load_seq);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || ws::file_log(&root, &path, skip, PAGE).map_err(|e| e.to_string()),
             move |this, read, cx| {
@@ -308,7 +308,7 @@ impl Canvas {
             .children(rows)
             .when(self.history_more, |d| {
                 d.child(
-                    crate::ui::button("more-history", SharedString::from("Show older commits"))
+                    patchwork_ui::button("more-history", SharedString::from("Show older commits"))
                         .mt(px(6.))
                         .py(px(6.))
                         .px(px(10.))

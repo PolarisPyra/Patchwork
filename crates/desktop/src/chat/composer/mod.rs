@@ -14,5 +14,4 @@ mod send;
 mod sigil_menu;
 mod state;
 
-pub use menus::{effort_label, efforts};
 pub use state::{Composer, Picks};

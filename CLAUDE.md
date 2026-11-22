@@ -5,18 +5,23 @@ Native desktop app in Rust: the UI is drawn with GPUI, over its core in `crates/
 ## Layout
 
 - Cargo workspace:
-  - `crates/desktop` (package `patchwork`): the app. It calls `Core` directly.
+  - `crates/desktop` (package `patchwork`): the app: the window and the features drawn in it. It calls `Core` directly.
+  - `crates/ui` (`patchwork-ui`): what two or more UI crates use: the controls, theme, assets, the app's actions, and the shared menus, dialogs and text tools.
+  - `crates/settings` (`patchwork-settings`): the Settings dialog and its panes.
+  - `crates/sidecar` (`patchwork-sidecar`): the side windows: the panel (terminal, Output, Screen) and the browser.
   - `crates/core` (`patchwork-core`): providers, persistence, usage, thread import.
-  - `crates/system` (`patchwork-system`): the machine-level helpers and the one `Error`. It knows nothing of threads or providers; the core re-exports it as `crate::system`.
+  - `crates/android` (`patchwork-android`): the Android tools: SDK, emulators, devices, running an app. It reads the app's settings and state through its `Host` trait, which `Core` implements in `core/src/android.rs`; the app calls it through `core.android()`.
+  - `crates/system` (`patchwork-system`): the machine-level helpers, the credential store (`keychain.rs`), and the one `Error`. It knows nothing of threads or providers; the core re-exports it as `crate::system`.
   - `crates/remote` (`patchwork-remote`): the helper Patchwork runs on a machine reached over SSH. The app's end of that connection is `crates/system/src/ssh/`.
 - The app's version is `[workspace.package] version` in the root `Cargo.toml`.
 
-### `crates/desktop/src`
+### The UI crates
 
-- `src/` holds `main.rs` and folders, never loose files. A folder is one piece of UI (`chat`, `sidebar`, `settings`, `canvas`, `panel`, `workspace`, `onboarding`), with its state and entry view in their own files (`state.rs`, `render.rs`, `view.rs`). A sub-feature takes the same shape one level down: `chat/composer/`, `settings/{providers,extensions,mcp}/`.
-- `ui/` holds only what two or more features use: the shared controls in `ui/controls.rs` (`button`, `icon_button`, `spinner`, `scrollbar`, …), the colours and sizes in `ui/theme/`, the embedded icons and fonts in `ui/assets.rs`, and the shared menus, dialogs and text tools.
-- New code goes in the feature that uses it. Move it up into `ui/` once a second feature needs it, and down into the feature when only one is left.
-- `ui/assets.rs` embeds the fonts, icons and provider logos in the root `assets/`.
+- `crates/desktop/src` holds `main.rs` and folders, never loose files. A folder is one piece of UI (`chat`, `sidebar`, `canvas`, `quilts`, `android`, `bots`, `orchestrator`, `workspace`, `onboarding`), with its state and entry view in their own files (`state.rs`, `render.rs`, `view.rs`). A sub-feature takes the same shape one level down: `chat/composer/`. Settings is `crates/settings` (`src/{providers,extensions,mcp}/`), and the panel and browser are `crates/sidecar/src/{panel,browser}/`; each is laid out the same way.
+- `crates/ui/src` holds only what two or more features use: the shared controls in `controls.rs` (`button`, `icon_button`, `spinner`, `scrollbar`, …), the colours and sizes in `theme/`, the embedded icons and fonts in `assets.rs`, the app's actions in `actions.rs`, and the shared menus, dialogs and text tools. Callers write `patchwork_ui::theme`.
+- New code goes in the feature that uses it. Move it up into `crates/ui` once a second feature needs it, and down into the feature when only one is left. `crates/ui` knows no feature: it reads only `patchwork-core`.
+- `crates/ui/src/assets.rs` embeds the fonts, icons and provider logos in the root `assets/`.
+- An inherent `impl Workspace` must sit in the crate that defines `Workspace`, so a feature that adds methods to it stays in `crates/desktop`.
 
 ### `crates/core/src`
 
@@ -24,8 +29,9 @@ Native desktop app in Rust: the UI is drawn with GPUI, over its core in `crates/
 - Machine-level helpers that no domain owns live in `crates/system`, which the core reads as `crate::system`: the command and environment programs run with, login shells, the home folder and path resolution, opening files on the desktop.
 - A domain's files may reach down to `crate::system`, `logging/` and other domains' types, never up into `orchestration/` or a `Core` operation; `persistence/` stores what it is given and decides nothing.
 - An area that exists on both sides keeps the same name on each: `crates/core/src/threads/`, `crates/desktop/src/sidebar/` reads `crate::threads`.
+- A lib crate's `pub` items are its API, so the workspace lints ask them for `Debug`, `#[must_use]` and a short first doc paragraph. Keep an item `pub(crate)` unless another crate uses it.
 
-### Both crates
+### Every crate
 
 - A module is one file until it passes about 600 lines or has two clear concerns. Then it becomes `name/mod.rs` plus one file per concern, and `mod.rs` re-exports the public items so callers keep their paths: `provider/claude/{config,input,parse,launch,cli}.rs`, `chat/composer/`.
 - `mod.rs` is the folder's index and never holds code: only `//!` docs, `mod` lines (with their `#[cfg(test)]`), and `use`/`pub use` re-exports. No functions, types, consts, statics, macros, impls or inline `mod x { … }` blocks; those go in a named file beside it, and a sub-folder gets its own `mod.rs`. See `AGENTS.md`.

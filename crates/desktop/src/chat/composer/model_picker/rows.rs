@@ -6,9 +6,9 @@ use gpui::{Entity, FocusHandle, prelude::*};
 use patchwork_core::Core;
 use patchwork_core::provider::{AgentKind, ModelOption};
 use crate::chat::composer::Composer;
-use crate::ui::AGENT_KINDS;
-use crate::ui::text_area::TextArea;
-use crate::ui::{agent_label, api_model_place, api_provider_name};
+use patchwork_ui::AGENT_KINDS;
+use patchwork_ui::text_area::TextArea;
+use patchwork_ui::{agent_label, api_model_place, api_provider_name};
 
 /// Where the starred models are kept, as `agent:model` keys.
 pub(super) const FAVORITES_KEY: &str = "patchwork-model-favorites";

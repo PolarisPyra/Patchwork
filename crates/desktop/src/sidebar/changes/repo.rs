@@ -11,10 +11,10 @@ use patchwork_core::workspace::{CommitOptions, RepoAction};
 
 use super::pickers::{Pick, StashPick};
 use super::state::{ChangesView, GitAction};
-use crate::ui::menu::MenuItem;
-use crate::ui::text_area::{Changed, Submitted, TextArea};
-use crate::ui::theme::{Theme, fs_md, radius_sm};
-use crate::ui::{button, icon, tooltip};
+use patchwork_ui::menu::MenuItem;
+use patchwork_ui::text_area::{Changed, Submitted, TextArea};
+use patchwork_ui::theme::{Theme, fs_md, radius_sm};
+use patchwork_ui::{button, icon, tooltip};
 
 /// What marks the repository's menus among the view's menus.
 pub(super) const REPO_MENU: &str = "repository";

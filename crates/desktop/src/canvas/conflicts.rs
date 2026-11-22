@@ -7,8 +7,8 @@ use gpui::{AnyElement, Hsla, Role, ScrollStrategy, SharedString, div, prelude::*
 use patchwork_core::workspace::{Conflict, Take, resolve_conflict};
 
 use super::state::Canvas;
-use crate::ui::theme::{Theme, font_ui, fs_xs, radius_sm};
-use crate::ui::{button, icon_button, tooltip};
+use patchwork_ui::theme::{Theme, font_ui, fs_xs, radius_sm};
+use patchwork_ui::{button, icon_button, tooltip};
 
 impl Canvas {
     /// The conflict line `i` is in, and its place among the file's conflicts.

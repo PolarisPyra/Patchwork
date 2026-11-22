@@ -6,8 +6,8 @@ use std::sync::Arc;
 use gpui::{
     AnyElement, KeyDownEvent, Role, SharedString, Window, anchored, deferred, div, prelude::*, px,
 };
-use crate::ui::theme::{radius, radius_sm, theme};
-use crate::ui::{icon, popup_shadow};
+use patchwork_ui::theme::{radius, radius_sm, theme};
+use patchwork_ui::{icon, popup_shadow};
 use crate::workspace::Workspace;
 
 impl Workspace {
@@ -128,7 +128,7 @@ impl Workspace {
 
     /// Asks for the folder a moved project is in now, and points the project there.
     pub(super) fn change_project_folder(&mut self, project_id: String, cx: &mut Context<Self>) {
-        crate::ui::pick_paths(
+        patchwork_ui::pick_paths(
             cx,
             gpui::PathPromptOptions {
                 files: false,

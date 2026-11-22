@@ -8,7 +8,7 @@ use std::sync::Arc;
 use gpui::{PromptLevel, Window, prelude::*};
 use crate::chat::composer::Composer;
 use crate::chat::composer::menus::Menu;
-use crate::ui::sigils::{SigilKind, Sigils};
+use patchwork_ui::sigils::{SigilKind, Sigils};
 
 impl Composer {
     /// Up or Down while the menu has the keys.
@@ -167,7 +167,7 @@ impl Composer {
         let chat = workspace.read(cx).thread.as_ref().map(|thread| {
             let detail = format!(
                 "Clear {}? Its messages are deleted and the agent forgets this conversation.",
-                crate::ui::display_title(&thread.title)
+                patchwork_ui::display_title(&thread.title)
             );
             (thread.id.clone(), detail)
         });

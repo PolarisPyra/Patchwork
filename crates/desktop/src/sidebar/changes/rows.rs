@@ -6,8 +6,8 @@ use std::sync::Arc;
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
 use patchwork_core::workspace::{DiffSide, FileChange, RepoAction};
 
-use crate::ui::theme::{fs_md, fs_sm, radius_sm, Theme};
-use crate::ui::{base_name, button, dir_name, icon, tooltip};
+use patchwork_ui::theme::{fs_md, fs_sm, radius_sm, Theme};
+use patchwork_ui::{base_name, button, dir_name, icon, tooltip};
 use crate::workspace::Workspace;
 use super::state::ChangesView;
 

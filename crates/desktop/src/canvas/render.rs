@@ -4,7 +4,7 @@
 
 use gpui::{KeyDownEvent, Role, Window, div, prelude::*, px};
 use patchwork_core::threads::MessageStatus;
-use crate::ui::theme::{fs_sm, theme};
+use patchwork_ui::theme::{fs_sm, theme};
 use super::state::{Canvas, CanvasTab};
 
 impl Render for Canvas {

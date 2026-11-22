@@ -7,10 +7,10 @@ use super::steps::reply_step;
 use super::frame::head;
 use gpui::{Div, SharedString, div, prelude::*, px};
 use patchwork_core::threads::{Message, MessageStatus, Thread};
-use crate::ui::theme::{fs_md, fs_xs, radius_sm, Theme};
-use crate::ui::{button, icon};
+use patchwork_ui::theme::{fs_md, fs_xs, radius_sm, Theme};
+use patchwork_ui::{button, icon};
 use crate::workspace::Workspace;
-use crate::ui::markdown::{self, FindIn};
+use patchwork_ui::markdown::{self, FindIn};
 use crate::chat::timeline::{Step, fold_layout_of, is_goal_cleared_reply, shown, steps_of};
 use crate::chat::transcript::Piece;
 

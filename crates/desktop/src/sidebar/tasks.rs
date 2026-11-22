@@ -10,8 +10,8 @@ use gpui::{
 };
 use patchwork_core::projects::Project;
 use patchwork_core::threads::Thread;
-use crate::ui::theme::{fs_md, theme};
-use crate::ui::{button, icon, icon_button, scrollbar};
+use patchwork_ui::theme::{fs_md, theme};
+use patchwork_ui::{button, icon, icon_button, scrollbar};
 use crate::workspace::Workspace;
 use super::bots::bots_section;
 use super::render::{empty_row, section_label, twistie};
@@ -253,7 +253,7 @@ pub(super) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
             if tasks.is_empty() && folders.is_empty() {
                 children = children.child(
                     div()
-                        .h(px(crate::ui::theme::roomy(28.)))
+                        .h(px(patchwork_ui::theme::roomy(28.)))
                         .flex()
                         .items_center()
                         .pl(px(30.))

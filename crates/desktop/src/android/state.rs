@@ -18,8 +18,8 @@ use super::create::Create;
 use super::log::LogPane;
 use super::screen::DeviceScreen;
 use super::tools::Sheet;
-use crate::ui::menu::Menu;
-use crate::ui::text_area::{Submitted, TextArea};
+use patchwork_ui::menu::Menu;
+use patchwork_ui::text_area::{Submitted, TextArea};
 use crate::workspace::Workspace;
 
 /// How often the devices are read again while the panel is open: often enough that a phone
@@ -119,7 +119,7 @@ impl AndroidPanel {
         let sdk_field = cx.new(|cx| {
             let mut field = TextArea::new("Android SDK folder", "Android SDK folder", cx);
             field.single_line = true;
-            field.placeholder_color = Some(crate::ui::theme::input_placeholder());
+            field.placeholder_color = Some(patchwork_ui::theme::input_placeholder());
             field
         });
         cx.subscribe(&sdk_field, |this, _, _: &Submitted, cx| this.save_sdk(cx))
@@ -132,7 +132,7 @@ impl AndroidPanel {
                     break;
                 };
                 let snapshot = cx
-                    .background_spawn(async move { core.android_snapshot(&root) })
+                    .background_spawn(async move { core.android().snapshot(&root) })
                     .await;
                 if this
                     .update(cx, |this, cx| this.apply(snapshot, cx))
@@ -146,7 +146,7 @@ impl AndroidPanel {
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
         let panel = Self {
-            selected: core.android_device(&project_id),
+            selected: core.android().device(&project_id),
             workspace,
             core,
             project_id,
@@ -240,7 +240,7 @@ impl AndroidPanel {
             && let Some(sdk) = self.sdk().cloned()
         {
             self.acceleration_checked = true;
-            crate::ui::off_thread(
+            patchwork_ui::off_thread(
                 cx,
                 move || android::acceleration(&sdk),
                 move |this, checked, cx| {
@@ -275,9 +275,9 @@ impl AndroidPanel {
     /// Reads the SDK and devices now, rather than at the next poll, after something changed them.
     pub(super) fn refresh(&mut self, cx: &mut Context<Self>) {
         let (core, root) = (Arc::clone(&self.core), self.project.root.clone());
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
-            move || core.android_snapshot(&root),
+            move || core.android().snapshot(&root),
             AndroidPanel::apply,
         );
     }
@@ -292,7 +292,7 @@ impl AndroidPanel {
         self.sync_log(cx);
         let (core, project) = (Arc::clone(&self.core), self.project_id.clone());
         cx.background_spawn(async move {
-            if let Err(e) = core.set_android_device(&project, &key) {
+            if let Err(e) = core.android().set_device(&project, &key) {
                 log::warn!(error:% = e; "could not remember the device: {{error}}");
             }
         })
@@ -314,8 +314,8 @@ impl AndroidPanel {
         let task = cx.background_spawn({
             let name = name.clone();
             async move {
-                let booting = core.start_emulator(&root, &name, boot)?;
-                core.await_boot(&root, &booting)?;
+                let booting = core.android().start_emulator(&root, &name, boot)?;
+                core.android().await_boot(&root, &booting)?;
                 Ok::<_, Error>(booting.serial)
             }
         });
@@ -350,7 +350,7 @@ impl AndroidPanel {
         let name = avd.to_string();
         let task = cx.background_spawn({
             let serial = serial.clone();
-            async move { core.stop_emulator(&root, &serial) }
+            async move { core.android().stop_emulator(&root, &serial) }
         });
         cx.spawn(async move |this, cx| {
             let stopped = task.await;
@@ -377,7 +377,7 @@ impl AndroidPanel {
         let name = avd.to_string();
         let task = cx.background_spawn({
             let name = name.clone();
-            async move { core.delete_avd(&root, &name) }
+            async move { core.android().delete_avd(&root, &name) }
         });
         cx.spawn(async move |this, cx| {
             let deleted = task.await;
@@ -431,7 +431,7 @@ impl AndroidPanel {
         self.running_on = Some(serial.clone());
         let (core, project) = (Arc::clone(&self.core), self.project.clone());
         let variant = self.variant.clone();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || {
                 let target = RunTarget {
@@ -516,7 +516,7 @@ impl AndroidPanel {
     pub(super) fn save_sdk(&mut self, cx: &mut Context<Self>) {
         let path = self.sdk_field.read(cx).content.clone();
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.set_android_sdk(&path),
             move |this, saved, cx| {

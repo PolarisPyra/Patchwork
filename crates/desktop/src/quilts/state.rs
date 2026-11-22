@@ -17,10 +17,10 @@ use patchwork_core::Core;
 use patchwork_core::quilts::{Quilt, QuiltKind, QuiltVersion, ChangeRow, quilt_changes};
 
 use super::thumbs::Thumbs;
-use crate::browser::{BrowserView, PageErrorsChanged};
-use crate::ui::menu::Menu;
-use crate::ui::off_thread;
-use crate::ui::text_area::{Changed, TextArea};
+use patchwork_sidecar::browser::{BrowserView, PageErrorsChanged};
+use patchwork_ui::menu::Menu;
+use patchwork_ui::off_thread;
+use patchwork_ui::text_area::{Changed, TextArea};
 
 /// What the page asks the window to do.
 pub enum QuiltsEvent {
@@ -117,7 +117,7 @@ impl QuiltsPage {
         let search = cx.new(|cx| {
             let mut field = TextArea::new("Search quilts", "Search quilts", cx);
             field.single_line = true;
-            field.placeholder_color = Some(crate::ui::theme::input_placeholder());
+            field.placeholder_color = Some(patchwork_ui::theme::input_placeholder());
             field
         });
         cx.subscribe(&search, |_, _, _: &Changed, cx| cx.notify())
@@ -210,7 +210,7 @@ impl QuiltsPage {
                 } else {
                     this.close(cx);
                 }
-                let dark = crate::ui::theme::theme(cx).is_dark();
+                let dark = patchwork_ui::theme::theme(cx).is_dark();
                 this.thumbs.update(cx, |thumbs, cx| {
                     for a in this.list.iter().filter(|a| a.kind.drawn()) {
                         thumbs.want(&a.id, a.versions, dark, cx);

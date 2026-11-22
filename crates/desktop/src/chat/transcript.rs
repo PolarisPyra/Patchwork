@@ -12,11 +12,11 @@ use gpui::{
 use patchwork_core::orchestration::{Upkeep, upkeep};
 use patchwork_core::threads::{Message, MessageStatus, Part, Role as MessageRole, Thread};
 
-use crate::ui::theme::{fs_xs, Theme};
-use crate::ui::{format_tokens, list_scrollbar, spinner};
+use patchwork_ui::theme::{fs_xs, Theme};
+use patchwork_ui::{format_tokens, list_scrollbar, spinner};
 use crate::workspace::{Workspace, is_busy};
 
-use crate::ui::markdown::find_in;
+use patchwork_ui::markdown::find_in;
 use super::reply::{is_open, pieces_of, reply_piece};
 use super::timeline::{Step, steps_of};
 use super::{rail, user};
@@ -368,7 +368,7 @@ pub fn transcript(
         .flex_col()
         .flex_1()
         .min_h_0()
-        .child(crate::ui::selection::margin())
+        .child(patchwork_ui::selection::margin())
         .child(
             div()
                 .id("transcript")
@@ -380,10 +380,10 @@ pub fn transcript(
                 .flex_col()
                 // The rail's strips reach 44px in from the edge when they widen.
                 .when(rail::has_rail(w, &shown), |d| d.pr(px(28.)))
-                .text_size(px(crate::ui::theme::fs_md()))
+                .text_size(px(patchwork_ui::theme::fs_md()))
                 .child(rows),
         )
-        .child(crate::ui::selection::overlay(w.transcript_list.clone()))
+        .child(patchwork_ui::selection::overlay(w.transcript_list.clone()))
         .children(list_scrollbar(&w.transcript_list, 10., 2., t.border_strong))
         .children(rail)
 }

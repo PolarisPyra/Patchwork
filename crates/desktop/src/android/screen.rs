@@ -14,8 +14,8 @@ use gpui::{
 use patchwork_core::android::{ScreenFrame, ScreenInput, ScreenSender};
 use patchwork_core::{Error, Core};
 
-use crate::ui::theme::{fs_sm, theme};
-use crate::ui::{button, icon_button, spinner, tooltip};
+use patchwork_ui::theme::{fs_sm, theme};
+use patchwork_ui::{button, icon_button, spinner, tooltip};
 
 /// The frame around the screen, as wide on every side.
 const BEZEL: f32 = 10.;
@@ -75,7 +75,7 @@ impl DeviceScreen {
     ) -> Self {
         let opening = cx.background_spawn({
             let serial = serial.clone();
-            async move { core.android_screen(&root, &serial) }
+            async move { core.android().screen(&root, &serial) }
         });
         let stream = cx.spawn(async move |this, cx| {
             let mut screen = match opening.await {
@@ -224,7 +224,7 @@ impl DeviceScreen {
     }
 
     /// The text shown on the dark glass while there is no picture.
-    fn waiting(&self, t: &crate::ui::theme::Theme) -> AnyElement {
+    fn waiting(&self, t: &patchwork_ui::theme::Theme) -> AnyElement {
         match &self.error {
             Some(e) => div()
                 .id("screen-error")

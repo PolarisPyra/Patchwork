@@ -2,9 +2,9 @@
 
 ## Repo layout
 
-The repo is a Cargo workspace of `crates/system`, `crates/core`, `crates/desktop` and `crates/remote`:
+The repo is a Cargo workspace of `crates/system`, `crates/core`, `crates/android`, `crates/ui`, `crates/settings`, `crates/sidecar`, `crates/desktop` and `crates/remote`:
 
-- `crates/system` (`patchwork-system`) — the user's machine, with no knowledge of threads or providers: the programs Patchwork starts and their environment, login shells, paths, opening files on the desktop, machines reached over SSH (`ssh/`: the app's end of the connection, and the user's `~/.ssh/config`), and the one `Error`. The core re-exports it as `patchwork_core::system`.
+- `crates/system` (`patchwork-system`) — the user's machine, with no knowledge of threads or providers: the programs Patchwork starts and their environment, login shells, paths, opening files on the desktop, the system credential store (`keychain.rs`: the Secret Service through `oo7` on Linux, `keyring` elsewhere), machines reached over SSH (`ssh/`: the app's end of the connection, and the user's `~/.ssh/config`), and the one `Error`. The core re-exports it as `patchwork_core::system`.
 - `crates/core` — the backend, a Rust crate with no UI dependency
   - `src/lib.rs` — the module list, `Core`, and how it opens. Every other module is one domain, holding its wire types, its `impl Core` operations and its logic: a folder domain splits them into `types.rs` (re-exported from the folder) and one file per concern, named for what it does (`threads/{lifecycle,list,options}.rs`), and a one-file domain keeps them in that order:
   - `src/threads/` — threads and their messages; `src/projects.rs` — projects and their folders; `src/settings/` — the settings
@@ -22,10 +22,14 @@ The repo is a Cargo workspace of `crates/system`, `crates/core`, `crates/desktop
   - `src/logging/` — the debug logs
   - `src/events.rs` — the agent events the backend streams to the UI, which the provider parsers produce and `orchestration/` publishes
   - `src/backgrounds.rs` — chat backgrounds
+  - `src/android.rs` — `Core` as the Android tools' `Host`, `Core::android()`, and the two operations that write settings or build a terminal
+- `crates/android` (`patchwork-android`) — the Android tools: finding the SDK, virtual devices, emulators, connected phones, running an app, the screen stream and the agent's tools. It reads settings and saved state only through its `Host` trait.
 - `crates/desktop` — the app, drawn with GPUI (package `patchwork`). It calls `Core` directly and applies its agent events on the UI thread.
   - `src/main.rs` — opens the core and the window; `src/workspace/` — the window: its toolbar, regions and resizing
-  - `src/{chat,sidebar,settings,canvas,panel,onboarding}/` — UI, one folder per feature
-  - `src/ui/` — what the features share: the controls (`controls.rs`), the colours and sizes (`theme/`), the icons and fonts it embeds from `assets/` (`assets.rs`), the text field every input is (`text_area/`), Markdown (`markdown.rs`), the background presets and animated scenes (`backdrop/`), and the shared menus, dialogs and text tools
+  - `src/{chat,sidebar,canvas,quilts,android,bots,orchestrator,onboarding}/` — UI, one folder per feature
+- `crates/settings` (`patchwork-settings`) — the Settings dialog and its panes
+- `crates/sidecar` (`patchwork-sidecar`) — the side windows: `panel/` (the terminal, Output and Screen views) and `browser/` (web pages and quilts drawn by headless Chrome)
+- `crates/ui` (`patchwork-ui`) — what the UI crates share: the app's actions (`actions.rs`), the controls (`controls.rs`), the colours and sizes (`theme/`), the icons and fonts it embeds from `assets/` (`assets.rs`), the text field every input is (`text_area/`), Markdown (`markdown.rs`), the background presets and animated scenes (`backdrop/`), and the shared menus, dialogs and text tools
 
 ## Data model
 

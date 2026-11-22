@@ -37,7 +37,7 @@ impl Workspace {
         let thread = self.thread.as_ref().map(|t| t.id.clone());
         let (core, events) = (Arc::clone(&self.core), self.project_events.clone());
         let read = id.clone();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || {
                 let root = core.source_root(&read, thread.as_deref())?;
@@ -286,7 +286,7 @@ impl Workspace {
     pub fn add_dropped_folders(&mut self, paths: &[PathBuf], cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
         let paths = paths.to_vec();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || {
                 paths

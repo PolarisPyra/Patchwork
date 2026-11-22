@@ -12,8 +12,8 @@ use gpui::{
 };
 use patchwork_core::threads::{Role as MessageRole, StepStatus, Thread, ToolCall};
 
-use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_lg, Theme};
-use crate::ui::{
+use patchwork_ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_lg, Theme};
+use patchwork_ui::{
     agent_logo, button, compact_elapsed, full_elapsed, icon, now_ms, popup, popup_shadow, spinner,
 };
 use crate::workspace::{Workspace, is_working};
@@ -94,7 +94,7 @@ impl Workspace {
             return;
         }
         self.lineage.hovering = Some(id.clone());
-        crate::ui::after(cx, Duration::from_millis(HOVER_DELAY_MS), |this, cx| {
+        patchwork_ui::after(cx, Duration::from_millis(HOVER_DELAY_MS), |this, cx| {
             if this.lineage.hovering.as_ref() == Some(&id) {
                 this.lineage.details = Some(id);
                 cx.notify();

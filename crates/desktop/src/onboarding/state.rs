@@ -10,7 +10,7 @@ use patchwork_core::import::{ImportScan, ImportSource};
 use patchwork_core::provider::{AgentKind, AgentStatus};
 use patchwork_core::settings::Settings;
 use patchwork_core::system::browse;
-use crate::ui::text_area::{Changed, Submitted, TextArea};
+use patchwork_ui::text_area::{Changed, Submitted, TextArea};
 
 /// The agent CLIs setup offers, in the order it lists them (`CLI_KINDS`).
 pub(super) const AGENT_KINDS: [AgentKind; 4] = [
@@ -149,7 +149,7 @@ impl Onboarding {
         let name = cx.new(|cx| {
             let mut field = TextArea::new("my-project", "Project name", cx);
             field.single_line = true;
-            field.placeholder_color = Some(crate::ui::theme::input_placeholder());
+            field.placeholder_color = Some(patchwork_ui::theme::input_placeholder());
             field
         });
         cx.subscribe(&name, |_, _, _: &Changed, cx| cx.notify())
@@ -192,7 +192,7 @@ impl Onboarding {
             scroll: ScrollHandle::new(),
         };
         this.check(cx);
-        crate::ui::off_thread(cx, browse::machines, move |this, machines, cx| {
+        patchwork_ui::off_thread(cx, browse::machines, move |this, machines, cx| {
             let hosts = machines
                 .into_iter()
                 .filter(|m| !m.local)

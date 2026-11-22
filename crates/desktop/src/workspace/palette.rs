@@ -11,10 +11,10 @@ use gpui::{
 
 use patchwork_core::threads::{MessageStatus, Role as MessageRole};
 
-use crate::ui::text_area::{Arrow, Changed, Submitted, TextArea};
-use crate::settings::shortcuts::key_label;
-use crate::ui::theme::{font_mono, fs_lg, fs_md, fs_xs, radius, radius_lg, theme};
-use crate::ui::{display_title, icon, overflows, popup_shadow, scrollbar};
+use patchwork_ui::text_area::{Arrow, Changed, Submitted, TextArea};
+use patchwork_settings::key_label;
+use patchwork_ui::theme::{font_mono, fs_lg, fs_md, fs_xs, radius, radius_lg, theme};
+use patchwork_ui::{display_title, icon, overflows, popup_shadow, scrollbar};
 use crate::workspace::Workspace;
 
 /// What a row does when run.
@@ -174,7 +174,7 @@ impl Palette {
                 cx,
             );
             field.single_line = true;
-            field.placeholder_color = Some(crate::ui::theme::input_placeholder());
+            field.placeholder_color = Some(patchwork_ui::theme::input_placeholder());
             field
         });
         cx.subscribe(&search, |this, _, _: &Changed, cx| {

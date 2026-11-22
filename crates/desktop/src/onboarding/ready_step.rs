@@ -6,8 +6,8 @@ use gpui::{AnyElement, FontWeight, Role, SharedString, div, prelude::*, px};
 
 use super::{ImportResult, Onboarding};
 use super::rows::{heading, picked};
-use crate::ui::theme::{fs_lg, radius, Theme};
-use crate::ui::{agent_label, icon};
+use patchwork_ui::theme::{fs_lg, radius, Theme};
+use patchwork_ui::{agent_label, icon};
 
 fn describe_import(imported: Option<ImportResult>) -> String {
     let Some(imported) = imported.filter(|i| i.threads > 0) else {

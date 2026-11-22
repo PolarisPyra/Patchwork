@@ -8,8 +8,8 @@ use gpui::{
     prelude::*, px, relative, uniform_list,
 };
 use patchwork_core::threads::{Message, StepStatus};
-use crate::ui::theme::{font_mono, fs_md, fs_sm, Theme, theme};
-use crate::ui::{BtnKind, base_name, btn, icon, spinner, tooltip};
+use patchwork_ui::theme::{font_mono, fs_md, fs_sm, Theme, theme};
+use patchwork_ui::{BtnKind, base_name, btn, icon, spinner, tooltip};
 use super::state::{Canvas, CanvasTab};
 
 impl Canvas {
@@ -109,7 +109,10 @@ impl Canvas {
 
     pub(super) fn code_view(&self, t: &Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let theme = *t;
-        let (subtle, hover) = (t.text_subtle, crate::ui::mix(t.bg_hover, t.bg_editor, 40.));
+        let (subtle, hover) = (
+            t.text_subtle,
+            patchwork_ui::mix(t.bg_hover, t.bg_editor, 40.),
+        );
         uniform_list(
             "canvas-code",
             self.lines.len(),
@@ -298,7 +301,7 @@ pub(super) fn plan_view(message: Option<&Message>, t: &Theme) -> gpui::Div {
                 div()
                     .mt(px(24.))
                     .mb(px(8.))
-                    .text_size(px(crate::ui::theme::fs_xs()))
+                    .text_size(px(patchwork_ui::theme::fs_xs()))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(t.text_subtle)
                     .child("FILES CHANGED"),

@@ -8,9 +8,9 @@ use std::sync::Arc;
 use gpui::{Pixels, Point, PromptLevel, Window, prelude::*};
 
 use super::state::QuiltsPage;
-use crate::ui::menu::{Menu, MenuItem};
-use crate::ui::off_thread;
-use crate::ui::text_area::{Submitted, TextArea};
+use patchwork_ui::menu::{Menu, MenuItem};
+use patchwork_ui::off_thread;
+use patchwork_ui::text_area::{Submitted, TextArea};
 
 impl QuiltsPage {
     /// Opens the menu of the quilt `id` at `at`: pin or unpin, rename, and delete.

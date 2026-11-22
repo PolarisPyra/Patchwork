@@ -8,8 +8,8 @@ use std::sync::Arc;
 use gpui::{Div, FontWeight, div, prelude::*, px};
 
 use crate::chat::goal::strip_action;
-use crate::ui::theme::{fs_sm, fs_xs, radius_sm, Theme};
-use crate::ui::{icon, tooltip};
+use patchwork_ui::theme::{fs_sm, fs_xs, radius_sm, Theme};
+use patchwork_ui::{icon, tooltip};
 use crate::workspace::Workspace;
 
 /// How often a missing folder is looked for again.
@@ -75,7 +75,7 @@ impl Workspace {
             return;
         };
         let core = Arc::clone(&self.core);
-        crate::ui::pick_paths(
+        patchwork_ui::pick_paths(
             cx,
             gpui::PathPromptOptions {
                 files: false,
@@ -87,7 +87,7 @@ impl Workspace {
                 let Some(path) = paths.first().map(|p| p.to_string_lossy().into_owned()) else {
                     return;
                 };
-                crate::ui::off_thread(
+                patchwork_ui::off_thread(
                     cx,
                     move || core.relocate_project(&id, &path),
                     move |this, moved, cx| {

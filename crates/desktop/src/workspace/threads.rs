@@ -19,7 +19,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || change(&core),
             move |this, done, cx| {
@@ -218,7 +218,7 @@ impl Workspace {
                 .detach();
                 self.transcript_list.set_follow_mode(FollowMode::Tail);
                 self.opened_at = std::time::Instant::now();
-                crate::ui::after(cx, crate::chat::OPEN_HOLD, |_, cx| cx.notify());
+                patchwork_ui::after(cx, crate::chat::OPEN_HOLD, |_, cx| cx.notify());
                 if changed_project {
                     self.load_git(cx);
                 } else {
@@ -382,7 +382,7 @@ impl Workspace {
                     self.read_git(false, cx);
                 }
                 if let Some(dialog) = &self.settings_dialog {
-                    dialog.update(cx, crate::settings::SettingsDialog::refresh_costs);
+                    dialog.update(cx, patchwork_settings::SettingsDialog::refresh_costs);
                 }
             }
             _ => {}
@@ -441,7 +441,7 @@ impl Workspace {
                         }) => last.push_str(&text),
                         _ => message.parts.push(Part::Thinking {
                             text,
-                            started_at: started_at.unwrap_or_else(crate::ui::now_ms),
+                            started_at: started_at.unwrap_or_else(patchwork_ui::now_ms),
                             ended_at,
                         }),
                     }
@@ -459,7 +459,7 @@ impl Workspace {
         }
         self.reload_queued = true;
         // One frame at 60 Hz, so a burst of changes reloads the list once.
-        crate::ui::after(cx, Duration::from_millis(16), |this, cx| {
+        patchwork_ui::after(cx, Duration::from_millis(16), |this, cx| {
             this.reload_queued = false;
             this.reload(cx);
         });

@@ -7,7 +7,7 @@ use super::rows::row_key;
 use gpui::{Focusable, KeyDownEvent, Window, prelude::*};
 use patchwork_core::provider::AgentKind;
 use crate::chat::composer::Composer;
-use crate::ui::text_area::TextArea;
+use patchwork_ui::text_area::TextArea;
 
 impl Composer {
     /// Escape closes the picker, and Ctrl+1 to Ctrl+9 pick from the top of the list. Up, Down
@@ -93,7 +93,7 @@ impl Composer {
         cx.subscribe_in(
             &search,
             window,
-            |this, _, _: &crate::ui::text_area::Changed, _, cx| {
+            |this, _, _: &patchwork_ui::text_area::Changed, _, cx| {
                 this.highlight = 0;
                 cx.notify();
             },
@@ -102,7 +102,7 @@ impl Composer {
         cx.subscribe_in(
             &search,
             window,
-            |this, _, arrow: &crate::ui::text_area::Arrow, _, cx| {
+            |this, _, arrow: &patchwork_ui::text_area::Arrow, _, cx| {
                 let count = this.menu_picks.len();
                 if count > 0 {
                     this.highlight =
@@ -115,7 +115,7 @@ impl Composer {
         cx.subscribe_in(
             &search,
             window,
-            |this, _, _: &crate::ui::text_area::Submitted, window, cx| {
+            |this, _, _: &patchwork_ui::text_area::Submitted, window, cx| {
                 if let Some(pick) = this.menu_picks.get(this.highlight).cloned() {
                     this.apply(pick, window, cx);
                 }

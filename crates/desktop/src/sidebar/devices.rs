@@ -7,8 +7,8 @@ use gpui::{EventEmitter, FontWeight, Role, SharedString, Window, div, prelude::*
 use patchwork_core::system::browse::{self, Machine};
 use patchwork_core::system::device::{self, Kind};
 
-use crate::ui::theme::{fs_md, fs_sm, radius_sm, theme};
-use crate::ui::{button, icon, icon_button, kind_icon, spinner};
+use patchwork_ui::theme::{fs_md, fs_sm, radius_sm, theme};
+use patchwork_ui::{button, icon, icon_button, kind_icon, spinner};
 
 /// A device was picked: the SSH host's alias, or none for this computer.
 pub struct OpenDevice(pub Option<String>);
@@ -39,7 +39,7 @@ impl DevicesView {
         self.run += 1;
         let run = self.run;
         self.devices = None;
-        crate::ui::off_thread(cx, browse::machines, move |this, machines, cx| {
+        patchwork_ui::off_thread(cx, browse::machines, move |this, machines, cx| {
             if this.run != run {
                 return;
             }
@@ -111,7 +111,7 @@ impl Render for DevicesView {
                 };
                 button(SharedString::from(format!("device-{i}")), name.clone())
                     .role(Role::ListItem)
-                    .h(px(crate::ui::theme::roomy(28.)))
+                    .h(px(patchwork_ui::theme::roomy(28.)))
                     .gap(px(8.))
                     .mx(px(4.))
                     .px(px(8.))
@@ -176,7 +176,7 @@ impl Render for DevicesView {
                                 .id("device-none")
                                 .role(Role::ListItem)
                                 .aria_label("No remote devices available")
-                                .h(px(crate::ui::theme::roomy(28.)))
+                                .h(px(patchwork_ui::theme::roomy(28.)))
                                 .mx(px(4.))
                                 .px(px(8.))
                                 .flex()

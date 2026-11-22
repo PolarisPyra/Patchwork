@@ -7,8 +7,8 @@ use gpui::{Anchor, anchored, deferred};
 use super::render::{PILL_W, ink};
 use super::state::Orchestrator;
 use crate::chat::composer::Composer;
-use crate::ui::pill::pill_chip;
-use crate::ui::{agent_logo, icon};
+use patchwork_ui::pill::pill_chip;
+use patchwork_ui::{agent_logo, icon};
 
 /// A chip under the pill that opens a menu.
 fn launch_chip(id: &'static str, label: String, open: bool) -> gpui::Stateful<gpui::Div> {

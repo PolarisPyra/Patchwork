@@ -9,10 +9,10 @@ use gpui::{
 };
 use patchwork_core::bots::Bot;
 use patchwork_core::threads::{ApprovalStatus, Thread};
-use crate::ui::avatar::{Mood, avatar};
-use crate::ui::theme::fs_sm;
-use crate::ui::{agent_label, agent_logo, button, icon, icon_button, now_ms};
-use crate::ui::theme::{radius_sm, theme};
+use patchwork_ui::avatar::{Mood, avatar};
+use patchwork_ui::theme::fs_sm;
+use patchwork_ui::{agent_label, agent_logo, button, icon, icon_button, now_ms};
+use patchwork_ui::theme::{radius_sm, theme};
 use crate::workspace::{Workspace, is_busy};
 use super::render::{empty_row, section_label};
 use super::tree::{chat_app_presence, phone_mark, presence_word, thread_row};
@@ -115,7 +115,7 @@ pub(super) fn bots_section(
                 .aria_label(bot.name.clone())
                 .aria_selected(shown)
                 .tab_index(0)
-                .h(px(crate::ui::theme::roomy(52.)))
+                .h(px(patchwork_ui::theme::roomy(52.)))
                 .flex_none()
                 .flex()
                 .items_center()
@@ -227,9 +227,11 @@ pub(super) fn bots_section(
                         this.open_context_menu(target.clone(), e, window, cx);
                     }),
                 )
-                .on_action(cx.listener(move |this, _: &crate::DeleteChat, window, cx| {
-                    this.delete_bot(&delete, window, cx);
-                }))
+                .on_action(
+                    cx.listener(move |this, _: &patchwork_ui::DeleteChat, window, cx| {
+                        this.delete_bot(&delete, window, cx);
+                    }),
+                )
                 .into_any_element(),
         );
         let chat = chat.cloned();

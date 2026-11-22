@@ -8,8 +8,8 @@ use patchwork_core::android::SystemImage;
 use super::state::{Create, Install, Step};
 use crate::android::rows::radio_row;
 use crate::android::state::AndroidPanel;
-use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, Theme};
-use crate::ui::{BtnKind, badge, btn, checkbox, input_box, spinner};
+use patchwork_ui::theme::{font_mono, fs_sm, fs_xs, radius, Theme};
+use patchwork_ui::{BtnKind, badge, btn, checkbox, input_box, spinner};
 
 impl AndroidPanel {
     /// The flow drawn in place of the device list.

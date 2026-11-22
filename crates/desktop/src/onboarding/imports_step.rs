@@ -10,9 +10,9 @@ use patchwork_core::import::{ImportScan, ImportSource};
 
 use super::{IMPORTS_STEP, ImportProgress, ImportResult, Onboarding, OnboardingEvent};
 use super::rows::{choice_row, heading, key_id, row_end, tick};
-use crate::settings::projects::{import_sources, source_agent, source_label};
-use crate::ui::theme::{fs_sm, Theme};
-use crate::ui::{agent_logo, badge, spinner};
+use patchwork_settings::{import_sources, source_agent, source_label};
+use patchwork_ui::theme::{fs_sm, Theme};
+use patchwork_ui::{agent_logo, badge, spinner};
 
 impl Onboarding {
     pub(super) fn sources(&self) -> Vec<ImportSource> {
@@ -30,7 +30,7 @@ impl Onboarding {
         self.scans.clear();
         for kind in self.sources() {
             let core = Arc::clone(&self.core);
-            crate::ui::off_thread(
+            patchwork_ui::off_thread(
                 cx,
                 move || core.scan_imports(kind),
                 move |this, scan, cx| {

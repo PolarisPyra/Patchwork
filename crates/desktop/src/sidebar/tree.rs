@@ -12,9 +12,9 @@ use gpui::{
 };
 use patchwork_core::gateway::{ChatApps, Platform, Presence};
 use patchwork_core::threads::{ApprovalStatus, MessageStatus, Thread, WorktreeMark};
-use crate::ui::avatar::{Mood, avatar};
-use crate::ui::theme::{fs_sm, radius_sm, Theme, theme};
-use crate::ui::{
+use patchwork_ui::avatar::{Mood, avatar};
+use patchwork_ui::theme::{fs_sm, radius_sm, Theme, theme};
+use patchwork_ui::{
     agent_label, agent_logo, button, display_title, format_relative, icon, now_ms, spinner,
 };
 use crate::workspace::{Workspace, is_busy};
@@ -60,7 +60,7 @@ pub(super) fn tree_row(
         .tab_index(0)
         .mx(px(4.))
         .mb(px(2.))
-        .h(px(crate::ui::theme::roomy(28.)))
+        .h(px(patchwork_ui::theme::roomy(28.)))
         .flex_none()
         .flex()
         .items_center()
@@ -105,7 +105,7 @@ impl Workspace {
         }
         self.worktree_marks_key = Some(key);
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.worktree_marks(),
             move |this, marks, cx| {
@@ -263,7 +263,7 @@ pub(super) fn thread_row(
         .aria_selected(picked)
         .aria_label(label)
         .tab_index(0)
-        .h(px(crate::ui::theme::roomy(28.)))
+        .h(px(patchwork_ui::theme::roomy(28.)))
         .flex_none()
         .flex()
         .items_center()

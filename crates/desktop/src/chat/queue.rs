@@ -12,8 +12,8 @@ use gpui::{App, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, 
 use patchwork_core::threads::{Attachment, Message};
 
 use crate::chat::goal::strip_action;
-use crate::ui::theme::{fs_sm, fs_xs, radius_sm, Theme};
-use crate::ui::{button, icon, scrollbar, tooltip};
+use patchwork_ui::theme::{fs_sm, fs_xs, radius_sm, Theme};
+use patchwork_ui::{button, icon, scrollbar, tooltip};
 use crate::workspace::{Workspace, is_working};
 
 /// What is written and attached in the composer, unsent.
@@ -175,7 +175,7 @@ impl Workspace {
             return;
         };
         let (core, thread, id) = (Arc::clone(&self.core), thread.id.clone(), id.to_string());
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.steer_queued(&thread, &id),
             move |this, result, cx| {
@@ -195,7 +195,7 @@ impl Workspace {
         };
         self.steer_pressed = true;
         // Long enough for the pressed look to be seen.
-        crate::ui::after(cx, Duration::from_millis(150), |this, cx| {
+        patchwork_ui::after(cx, Duration::from_millis(150), |this, cx| {
             this.steer_pressed = false;
             cx.notify();
         });
@@ -208,7 +208,7 @@ impl Workspace {
             return;
         };
         let (core, thread) = (Arc::clone(&self.core), thread.id.clone());
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.resume_queued(&thread),
             move |this, result, cx| {

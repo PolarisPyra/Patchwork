@@ -14,9 +14,9 @@ use patchwork_core::threads::Thread;
 use super::menu::Target;
 use super::{empty_row, twistie};
 use super::tree::{indent_guide, tree_row};
-use crate::ui::avatar::{Mood, avatar};
-use crate::ui::theme::{fs_md, fs_sm, radius_sm, theme};
-use crate::ui::{agent_label, agent_logo, button, display_title, icon, scrollbar};
+use patchwork_ui::avatar::{Mood, avatar};
+use patchwork_ui::theme::{fs_md, fs_sm, radius_sm, theme};
+use patchwork_ui::{agent_label, agent_logo, button, display_title, icon, scrollbar};
 use crate::workspace::Workspace;
 
 pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl IntoElement {
@@ -312,7 +312,7 @@ fn bots_group(w: &Workspace, bots: &[&Bot], cx: &mut Context<Workspace>) -> Div 
             .role(Role::TreeItem)
             .aria_level(2)
             .aria_label(bot.name.clone())
-            .h(px(crate::ui::theme::roomy(28.)))
+            .h(px(patchwork_ui::theme::roomy(28.)))
             .flex_none()
             .flex()
             .items_center()
@@ -390,7 +390,7 @@ fn archived_row(
         .aria_selected(picked)
         .aria_label(title.clone())
         .tab_index(0)
-        .h(px(crate::ui::theme::roomy(28.)))
+        .h(px(patchwork_ui::theme::roomy(28.)))
         .flex_none()
         .flex()
         .items_center()

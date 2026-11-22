@@ -41,7 +41,7 @@ impl Workspace {
     /// Makes a bot and opens its page.
     pub fn new_bot(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.create_bot(),
             move |this, made, cx| match made {
@@ -187,7 +187,7 @@ impl Workspace {
     /// Renames bot `id` off the UI thread, and shows the new name in the list and on its page.
     pub fn rename_bot(&mut self, id: String, name: String, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.rename_bot(&id, &name),
             move |this, renamed, cx| {
@@ -207,7 +207,7 @@ impl Workspace {
     /// Moves bot `id` out of the sidebar when `archived`, or back into it, off the UI thread.
     pub fn set_bot_archived(&mut self, id: &str, archived: bool, cx: &mut Context<Self>) {
         let (core, id) = (Arc::clone(&self.core), id.to_string());
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.set_bot_archived(&id, archived),
             move |this, done, cx| {

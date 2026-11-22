@@ -8,7 +8,7 @@ use patchwork_core::Core;
 use patchwork_core::projects::Project;
 use patchwork_core::system::browse::{self, DirEntry, DirListing, Machine};
 use patchwork_core::system::ssh;
-use crate::ui::text_area::{Arrow, Changed, Submitted, TextArea};
+use patchwork_ui::text_area::{Arrow, Changed, Submitted, TextArea};
 
 /// The dialog closed: with the project it added, or with none.
 pub struct Closed(pub Option<Project>);
@@ -70,7 +70,7 @@ impl AddProject {
         let field = cx.new(|cx| {
             let mut field = TextArea::new("", "Folder path", cx);
             field.single_line = true;
-            field.placeholder_color = Some(crate::ui::theme::input_placeholder());
+            field.placeholder_color = Some(patchwork_ui::theme::input_placeholder());
             field
         });
         cx.subscribe(&field, |this, field, _: &Changed, cx| {
@@ -141,7 +141,7 @@ impl AddProject {
             follow: false,
         };
         dialog.browse(None, cx);
-        crate::ui::off_thread(cx, browse::machines, move |this, machines, cx| {
+        patchwork_ui::off_thread(cx, browse::machines, move |this, machines, cx| {
             // A picked host the SSH config no longer lists gives way to this computer.
             let listed = this
                 .host
@@ -170,7 +170,7 @@ impl AddProject {
             self.show(listing, cx);
         }
         self.loading = !shown;
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || match host {
                 Some(host) => browse::browse_host(&host, path.as_deref()),
@@ -216,7 +216,7 @@ impl AddProject {
         self.adding = true;
         self.error = None;
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.add_project(&path),
             move |this, added, cx| match added {

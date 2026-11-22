@@ -4,8 +4,8 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{Div, Window, div, prelude::*, px};
-use crate::ui::theme::{Theme, fs_sm, radius};
-use crate::ui::{button, icon, tooltip};
+use patchwork_ui::theme::{Theme, fs_sm, radius};
+use patchwork_ui::{button, icon, tooltip};
 use crate::workspace::Workspace;
 use super::find;
 use super::lineage;

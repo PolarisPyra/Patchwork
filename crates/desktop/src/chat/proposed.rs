@@ -12,10 +12,10 @@ use gpui::{
     prelude::*, px,
 };
 
-use crate::ui::markdown::markdown;
+use patchwork_ui::markdown::markdown;
 use crate::chat::plan::plan_title;
-use crate::ui::theme::{fs_md, fs_sm, radius, radius_sm, Theme};
-use crate::ui::{BtnKind, badge, btn, button, icon, popup_shadow, slug_file_name};
+use patchwork_ui::theme::{fs_md, fs_sm, radius, radius_sm, Theme};
+use patchwork_ui::{BtnKind, badge, btn, button, icon, popup_shadow, slug_file_name};
 use crate::workspace::Workspace;
 
 /// How tall a collapsed plan is drawn.
@@ -60,7 +60,7 @@ impl Workspace {
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         self.proposed.copied = Some(key.clone());
         // How long "Copied" shows before the button goes back to its icon.
-        crate::ui::after(cx, Duration::from_millis(1500), move |this, cx| {
+        patchwork_ui::after(cx, Duration::from_millis(1500), move |this, cx| {
             if this.proposed.copied.as_ref() == Some(&key) {
                 this.proposed.copied = None;
                 cx.notify();
@@ -129,7 +129,7 @@ pub fn proposed_plan(
             .role(Role::MenuItem)
             .aria_label(label)
             .tab_index(0)
-            .focus_visible(crate::ui::focus_ring)
+            .focus_visible(patchwork_ui::focus_ring)
             .cursor_pointer()
             .flex()
             .w_full()

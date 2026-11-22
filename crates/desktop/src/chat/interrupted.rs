@@ -11,8 +11,8 @@ use gpui::{Div, Role, div, prelude::*, px};
 use patchwork_core::Core;
 use patchwork_core::threads::{Message, Thread};
 
-use crate::ui::theme::{fs_sm, Theme};
-use crate::ui::{BtnKind, btn, now_ms, resets_in};
+use patchwork_ui::theme::{fs_sm, Theme};
+use patchwork_ui::{BtnKind, btn, now_ms, resets_in};
 use crate::workspace::{Workspace, is_working};
 
 impl Workspace {
@@ -22,7 +22,7 @@ impl Workspace {
             return;
         };
         let (core, thread) = (Arc::clone(&self.core), thread.id.clone());
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.resume_turn(&thread),
             move |this, result, cx| {

@@ -14,10 +14,10 @@ use gpui::{
 use patchwork_core::android::{Device, NetworkSpeed, StateAction, WifiDevice};
 
 use super::state::AndroidPanel;
-use crate::ui::menu::MenuItem;
-use crate::ui::text_area::{Submitted, TextArea};
-use crate::ui::theme::{font_mono, fs_sm, radius, Theme};
-use crate::ui::{BtnKind, btn, button, icon, icon_button, input_box, spinner, tooltip};
+use patchwork_ui::menu::MenuItem;
+use patchwork_ui::text_area::{Submitted, TextArea};
+use patchwork_ui::theme::{font_mono, fs_sm, radius, Theme};
+use patchwork_ui::{BtnKind, btn, button, icon, icon_button, input_box, spinner, tooltip};
 
 /// How often the network is asked which phones announce themselves while pairing is open.
 const FIND_EVERY: Duration = Duration::from_secs(2);
@@ -55,7 +55,7 @@ fn field(
     let field = cx.new(|cx| {
         let mut field = TextArea::new(placeholder, label, cx);
         field.single_line = true;
-        field.placeholder_color = Some(crate::ui::theme::input_placeholder());
+        field.placeholder_color = Some(patchwork_ui::theme::input_placeholder());
         field
     });
     cx.subscribe(&field, |this, _, _: &Submitted, cx| this.submit_sheet(cx))
@@ -88,7 +88,7 @@ impl AndroidPanel {
                         let _ = this.update(cx, |this, cx| {
                             let root = this.project.root.clone();
                             this.device_action("Rotating", None, cx, move |core| {
-                                core.android_rotate(&root, &serial)
+                                core.android().rotate(&root, &serial)
                             });
                         });
                     }
@@ -127,7 +127,7 @@ impl AndroidPanel {
                             "Setting the network speed",
                             Some(format!("Network: {}", speed.label())),
                             cx,
-                            move |core| core.android_set_network(&root, &serial, speed),
+                            move |core| core.android().set_network(&root, &serial, speed),
                         );
                     });
                 });
@@ -181,9 +181,9 @@ impl AndroidPanel {
         };
         let (core, root) = (Arc::clone(&self.core), self.project.root.clone());
         let serial = serial.clone();
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
-            move || core.android_saved_states(&root, &serial),
+            move || core.android().saved_states(&root, &serial),
             move |this, read, cx| {
                 let Some(Sheet::States { names, .. }) = &mut this.sheet else {
                     return;
@@ -211,7 +211,7 @@ impl AndroidPanel {
             StateAction::Delete => ("Deleting the state", format!("Deleted {name}")),
         };
         self.device_action(doing, Some(done), cx, move |core| {
-            core.android_saved_state(&root, &serial, action, &name)
+            core.android().saved_state(&root, &serial, action, &name)
         });
     }
 
@@ -227,7 +227,7 @@ impl AndroidPanel {
                     break;
                 };
                 let read = cx
-                    .background_spawn(async move { core.android_wifi_devices(&root) })
+                    .background_spawn(async move { core.android().wifi_devices(&root) })
                     .await;
                 let open = this.update(cx, |this, cx| {
                     let Some(Sheet::Pair { found, .. }) = &mut this.sheet else {
@@ -265,7 +265,7 @@ impl AndroidPanel {
             "Connecting to the phone",
             Some(format!("Connected to {address}")),
             cx,
-            move |core| core.android_connect(&root, &address),
+            move |core| core.android().connect(&root, &address),
         );
     }
 
@@ -291,7 +291,10 @@ impl AndroidPanel {
                     "Setting the location",
                     Some(format!("Location: {latitude}, {longitude}")),
                     cx,
-                    move |core| core.android_set_location(&root, &serial, latitude, longitude),
+                    move |core| {
+                        core.android()
+                            .set_location(&root, &serial, latitude, longitude)
+                    },
                 );
             }
             Some(Sheet::States { name, .. }) => {
@@ -307,7 +310,7 @@ impl AndroidPanel {
                 let address = address.read(cx).content.trim().to_string();
                 let code = code.read(cx).content.trim().to_string();
                 let root = self.project.root.clone();
-                self.pair(cx, move |core| core.android_pair(&root, &address, &code));
+                self.pair(cx, move |core| core.android().pair(&root, &address, &code));
             }
             None => {}
         }
@@ -323,7 +326,7 @@ impl AndroidPanel {
         self.failure = None;
         self.notice = None;
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || act(&core),
             move |this, paired, cx| {

@@ -7,9 +7,9 @@ use patchwork_core::workspace::{GitCommit, RepoAction};
 
 use super::repo::{Ask, item};
 use super::state::ChangesView;
-use crate::ui::menu::MenuItem;
-use crate::ui::spinner;
-use crate::ui::theme::{Theme, fs_sm};
+use patchwork_ui::menu::MenuItem;
+use patchwork_ui::spinner;
+use patchwork_ui::theme::{Theme, fs_sm};
 
 /// How far a commit's details sit in from the graph's edge.
 const DETAIL_INSET: f32 = 28.;

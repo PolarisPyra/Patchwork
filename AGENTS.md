@@ -1,6 +1,6 @@
 # Agent instructions
 
-For any coding agent working in this repo. `CLAUDE.md` holds the layout, the commands, the design and accessibility rules, and the full git rules; read it too. This file holds how the Rust in `crates/core` and `crates/desktop` is written.
+For any coding agent working in this repo. `CLAUDE.md` holds the layout, the commands, the design and accessibility rules, and the full git rules; read it too. This file holds how the Rust in the workspace's crates is written.
 
 The lints in the root `Cargo.toml` already catch `unwrap()`, `println!`, undocumented `unsafe`, missing `Debug`, and most style questions. This file is for what a lint cannot see.
 

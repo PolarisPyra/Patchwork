@@ -5,11 +5,11 @@
 use std::ops::Range;
 use gpui::{Div, Role, SharedString, StyledText, div, prelude::*, px};
 use patchwork_core::threads::{Message, MessageStatus, StepStatus};
-use crate::ui::theme::{font_mono, fs_md, fs_sm, fs_xs, radius_sm, Theme};
-use crate::ui::{button, icon, spinner};
+use patchwork_ui::theme::{font_mono, fs_md, fs_sm, fs_xs, radius_sm, Theme};
+use patchwork_ui::{button, icon, spinner};
 use crate::workspace::Workspace;
-use crate::ui::markdown::{self, FindIn, markdown, markdown_part};
-use crate::ui::selection::{Kind, selectable, text_id};
+use patchwork_ui::markdown::{self, FindIn, markdown, markdown_part};
+use patchwork_ui::selection::{Kind, selectable, text_id};
 use crate::chat::timeline::{
     CommandResult, Entry, Step, action_of, command_result, details_of, entry_active, entry_label,
     lines_of, steps_of, work_key,

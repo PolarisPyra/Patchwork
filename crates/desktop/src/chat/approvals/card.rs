@@ -10,9 +10,9 @@ use patchwork_core::permissions::{Effect, PermissionRule, PermissionScope};
 use patchwork_core::system::new_id;
 use patchwork_core::threads::{Approval, ApprovalStatus, Message};
 use crate::chat::secret::secret_card;
-use crate::settings::permissions::{kind_label, scope_name};
-use crate::ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
-use crate::ui::{button, icon, popup};
+use patchwork_settings::{kind_label, scope_name};
+use patchwork_ui::theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
+use patchwork_ui::{button, icon, popup};
 use crate::workspace::Workspace;
 
 /// How the last request of a kind was allowed, which the Allow button offers first.
@@ -222,7 +222,7 @@ pub(super) fn rule_menu(
             .role(Role::MenuItem)
             .aria_label(label.clone())
             .tab_index(0)
-            .focus_visible(crate::ui::focus_ring)
+            .focus_visible(patchwork_ui::focus_ring)
             .flex()
             .items_center()
             .rounded(px(radius_sm()))

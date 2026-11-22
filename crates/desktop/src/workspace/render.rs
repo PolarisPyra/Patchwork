@@ -10,9 +10,9 @@ use gpui::{
 };
 use crate::chat::backdrop::quilts_scheme;
 use crate::chat::scheme::in_scheme;
-use crate::ui::menu::Menu;
-use crate::ui::theme::{font_ui, fs_md, radius, radius_sm, STATUSBAR_H, Theme, theme};
-use crate::ui::{button, display_title, icon};
+use patchwork_ui::menu::Menu;
+use patchwork_ui::theme::{font_ui, fs_md, radius, radius_sm, STATUSBAR_H, Theme, theme};
+use patchwork_ui::{button, display_title, icon};
 use super::state::{Page, Place, SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
 use super::bars;
 
@@ -36,14 +36,18 @@ impl Render for Workspace {
             .and_then(|id| self.bots.iter().find(|b| &b.id == id));
         let title = match (&self.thread, bot) {
             _ if self.page == Page::Orchestrator => {
-                format!("{} - Orchestrator mode", crate::APP_TITLE)
+                format!("{} - Orchestrator mode", patchwork_ui::APP_TITLE)
             }
-            _ if self.page == Page::Quilts => format!("{} - Quilts", crate::APP_TITLE),
-            (_, Some(bot)) => format!("{} - {}", crate::APP_TITLE, bot.name),
+            _ if self.page == Page::Quilts => format!("{} - Quilts", patchwork_ui::APP_TITLE),
+            (_, Some(bot)) => format!("{} - {}", patchwork_ui::APP_TITLE, bot.name),
             (Some(thread), None) => {
-                format!("{} - {}", crate::APP_TITLE, display_title(&thread.title))
+                format!(
+                    "{} - {}",
+                    patchwork_ui::APP_TITLE,
+                    display_title(&thread.title)
+                )
             }
-            (None, None) => crate::APP_TITLE.into(),
+            (None, None) => patchwork_ui::APP_TITLE.into(),
         };
         if title != self.title {
             window.set_window_title(&title);
@@ -113,17 +117,19 @@ impl Render for Workspace {
             }))
             // Tab with nothing in particular focused jumps to the composer, as "Jump to the
             // composer" says; from any control it moves on.
-            .on_action(cx.listener(|this, _: &crate::FocusNext, window, cx| {
-                let composer_shown = this.composer_shown();
-                if this.page == Page::Orchestrator && this.focus.is_focused(window) {
-                    this.orchestrator.update(cx, |o, cx| o.focus(window, cx));
-                } else if composer_shown && this.focus.is_focused(window) {
-                    let editor = this.composer.read(cx).editor.clone();
-                    window.focus(&gpui::Focusable::focus_handle(editor.read(cx), cx), cx);
-                } else {
-                    window.focus_next(cx);
-                }
-            }))
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::FocusNext, window, cx| {
+                    let composer_shown = this.composer_shown();
+                    if this.page == Page::Orchestrator && this.focus.is_focused(window) {
+                        this.orchestrator.update(cx, |o, cx| o.focus(window, cx));
+                    } else if composer_shown && this.focus.is_focused(window) {
+                        let editor = this.composer.read(cx).editor.clone();
+                        window.focus(&gpui::Focusable::focus_handle(editor.read(cx), cx), cx);
+                    } else {
+                        window.focus_next(cx);
+                    }
+                }),
+            )
             // Escape that nothing closed with it, such as a menu or a dialog, takes the focus off
             // whatever has it: the chat box, a field, a button. Tab brings the chat box back.
             .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, window, cx| {
@@ -172,9 +178,9 @@ impl Render for Workspace {
                     cx.stop_propagation();
                 }
             }))
-            .on_action(|_: &crate::FocusPrev, window, cx| window.focus_prev(cx))
-            .on_action(cx.listener(|this, _: &crate::GoBack, _, cx| this.go_back(cx)))
-            .on_action(cx.listener(|this, _: &crate::GoForward, _, cx| this.go_forward(cx)))
+            .on_action(|_: &patchwork_ui::FocusPrev, window, cx| window.focus_prev(cx))
+            .on_action(cx.listener(|this, _: &patchwork_ui::GoBack, _, cx| this.go_back(cx)))
+            .on_action(cx.listener(|this, _: &patchwork_ui::GoForward, _, cx| this.go_forward(cx)))
             // The mouse's side buttons go back and forward, as in a browser.
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Back),
@@ -185,8 +191,8 @@ impl Render for Workspace {
                 cx.listener(|this, _: &MouseDownEvent, _, cx| this.go_forward(cx)),
             )
             .on_action(cx.listener(
-                |this, _: &crate::ui::selection::CopySelection, window, cx| {
-                    use crate::ui::selection::{Owner, clear, copy, has_marks, owner};
+                |this, _: &patchwork_ui::selection::CopySelection, window, cx| {
+                    use patchwork_ui::selection::{Owner, clear, copy, has_marks, owner};
                     let chat = owner(cx) == Owner::Chat && has_marks(cx);
                     // The terminal has its own Ctrl+C: it copies or interrupts.
                     if this.panel.read(cx).terminal_focused(window) {
@@ -204,7 +210,7 @@ impl Render for Workspace {
                 },
             ))
             .on_action(cx.listener(
-                |this, _: &crate::ui::selection::SelectAllText, window, cx| {
+                |this, _: &patchwork_ui::selection::SelectAllText, window, cx| {
                     // The terminal takes Ctrl+A for the start of the line.
                     let Some(thread) = &this.thread else {
                         cx.propagate();
@@ -216,76 +222,92 @@ impl Render for Workspace {
                     }
                     // The whole chat is more than is drawn: it copies as its transcript.
                     let text = crate::sidebar::thread_markdown(thread);
-                    crate::ui::selection::select_all(text.clone(), text, window, cx);
+                    patchwork_ui::selection::select_all(text.clone(), text, window, cx);
                 },
             ))
-            .on_action(|_: &crate::ui::selection::ClearSelection, window, cx| {
+            .on_action(|_: &patchwork_ui::selection::ClearSelection, window, cx| {
                 // Escape still does what else it does where the keys are.
-                crate::ui::selection::clear(window, cx);
+                patchwork_ui::selection::clear(window, cx);
                 cx.propagate();
             })
-            .on_action(cx.listener(|this, _: &crate::TogglePalette, window, cx| {
-                this.toggle_palette(window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &crate::NewChat, window, cx| {
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::TogglePalette, window, cx| {
+                    this.toggle_palette(window, cx);
+                }),
+            )
+            .on_action(cx.listener(|this, _: &patchwork_ui::NewChat, window, cx| {
                 let project = this.project().map(|p| p.id.clone());
                 this.new_thread_in(project, None, window, cx);
             }))
-            .on_action(cx.listener(|this, _: &crate::FindInChat, window, cx| {
-                if this.thread.is_some() {
-                    this.open_find(window, cx);
-                }
-            }))
-            .on_action(cx.listener(|this, _: &crate::OpenSettings, window, cx| {
-                if this.settings_dialog.is_none() {
-                    this.open_settings(None, window, cx);
-                }
-            }))
             .on_action(
-                cx.listener(|this, _: &crate::ShowOrchestrator, window, cx| {
+                cx.listener(|this, _: &patchwork_ui::FindInChat, window, cx| {
+                    if this.thread.is_some() {
+                        this.open_find(window, cx);
+                    }
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::OpenSettings, window, cx| {
+                    if this.settings_dialog.is_none() {
+                        this.open_settings(None, window, cx);
+                    }
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::ShowOrchestrator, window, cx| {
                     // Typing then goes to the pill, as after a click on its icon.
                     window.focus(&this.focus, cx);
                     this.go_to(&Place::Orchestrator, cx);
                 }),
             )
-            .on_action(cx.listener(|this, _: &crate::ShowTasks, _, cx| {
+            .on_action(cx.listener(|this, _: &patchwork_ui::ShowTasks, _, cx| {
                 this.view = Some(View::Tasks);
                 this.page = Page::Chats;
                 this.peeking = false;
                 cx.notify();
             }))
-            .on_action(cx.listener(|this, _: &crate::ShowChanges, _, cx| {
+            .on_action(cx.listener(|this, _: &patchwork_ui::ShowChanges, _, cx| {
                 this.view = Some(View::Changes);
                 this.page = Page::Chats;
                 this.peeking = false;
                 cx.notify();
             }))
-            .on_action(cx.listener(|this, _: &crate::ShowQuilts, _, cx| {
+            .on_action(cx.listener(|this, _: &patchwork_ui::ShowQuilts, _, cx| {
                 this.show_quilts_page(cx);
             }))
-            .on_action(cx.listener(|this, _: &crate::ShowArchived, _, cx| {
+            .on_action(cx.listener(|this, _: &patchwork_ui::ShowArchived, _, cx| {
                 this.view = Some(View::Archived);
                 this.page = Page::Chats;
                 this.peeking = false;
                 cx.notify();
             }))
-            .on_action(cx.listener(|this, _: &crate::ToggleTerminal, window, cx| {
-                this.toggle_terminal(window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &crate::NewTerminal, window, cx| {
-                this.new_terminal(window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &crate::TogglePanel, window, cx| {
-                this.toggle_panel(window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &crate::ToggleOutput, window, cx| {
-                this.toggle_output(window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &crate::DeleteChat, window, cx| {
-                if !this.covered() {
-                    this.delete_selected(window, cx);
-                }
-            }))
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::ToggleTerminal, window, cx| {
+                    this.toggle_terminal(window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::NewTerminal, window, cx| {
+                    this.new_terminal(window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::TogglePanel, window, cx| {
+                    this.toggle_panel(window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::ToggleOutput, window, cx| {
+                    this.toggle_output(window, cx);
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::DeleteChat, window, cx| {
+                    if !this.covered() {
+                        this.delete_selected(window, cx);
+                    }
+                }),
+            )
             .relative()
             .size_full()
             .flex()
@@ -415,7 +437,7 @@ impl Render for Workspace {
                     .as_ref()
                     .map(|m| Menu::view(m, bars::machine_menu_at())),
             )
-            .children(crate::ui::selection::menu(cx))
+            .children(patchwork_ui::selection::menu(cx))
             .into_any_element()
     }
 }
@@ -532,8 +554,8 @@ impl Workspace {
                     .py(px(8.))
                     .pr(px(8.))
                     .pl(px(12.))
-                    .text_size(px(crate::ui::theme::fs_sm()))
-                    .shadow(crate::ui::popup_shadow(t))
+                    .text_size(px(patchwork_ui::theme::fs_sm()))
+                    .shadow(patchwork_ui::popup_shadow(t))
                     .role(Role::Alert)
                     .child(div().min_w_0().child(error))
                     .child(
@@ -598,7 +620,7 @@ impl Workspace {
                 cx.background_executor().timer(ERROR_HOLD).await;
             }
             let slide = this.update(cx, |this, cx| {
-                let slide = !crate::ui::theme::applied(cx).reduce_motion;
+                let slide = !patchwork_ui::theme::applied(cx).reduce_motion;
                 this.error_leaving = slide;
                 cx.notify();
                 slide

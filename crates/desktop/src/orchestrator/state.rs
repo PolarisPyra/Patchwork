@@ -14,11 +14,11 @@ use gpui::{
 use patchwork_core::orchestration::{Dispatched, Target};
 use patchwork_core::threads::{Ask, Attachment, asks};
 
-use crate::ui::backdrop::Flight;
+use patchwork_ui::backdrop::Flight;
 use crate::chat::composer::Composer;
-use crate::ui::display_title;
-use crate::ui::menu::Menu;
-use crate::ui::text_area::{Arrow, BackspaceEmpty, Changed, Submitted, Tabbed, TextArea};
+use patchwork_ui::display_title;
+use patchwork_ui::menu::Menu;
+use patchwork_ui::text_area::{Arrow, BackspaceEmpty, Changed, Submitted, Tabbed, TextArea};
 use crate::workspace::Workspace;
 
 /// The most requests the page lists. Older ones leave it; their chats stay in the task list.

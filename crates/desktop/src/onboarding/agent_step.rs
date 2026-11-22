@@ -10,8 +10,8 @@ use patchwork_core::provider::AgentKind;
 
 use super::{AGENT_KINDS, Onboarding, Probe};
 use super::rows::{choice_row, heading, key_id, picked, row_end, tick};
-use crate::ui::theme::{fs_sm, radius, Theme};
-use crate::ui::{BtnKind, agent_label, agent_logo, badge, btn, button, icon, spinner};
+use patchwork_ui::theme::{fs_sm, radius, Theme};
+use patchwork_ui::{BtnKind, agent_label, agent_logo, badge, btn, button, icon, spinner};
 
 impl Onboarding {
     /// Detects every agent at once; run again, it shows a CLI installed during setup.
@@ -24,7 +24,7 @@ impl Onboarding {
     /// Detects one agent.
     fn detect(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
         self.probes.entry(kind).or_default().checking = true;
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || patchwork_core::provider::detect_agent(kind),
             move |this, status, cx| {
@@ -48,7 +48,7 @@ impl Onboarding {
         self.installing.insert(kind);
         self.install_errors.remove(&kind);
         let core = Arc::clone(&self.core);
-        crate::ui::off_thread(
+        patchwork_ui::off_thread(
             cx,
             move || core.install_cli(kind),
             move |this, installed, cx| {

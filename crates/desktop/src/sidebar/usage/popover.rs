@@ -11,8 +11,8 @@ use super::state::peak;
 use super::state::limited_until;
 use gpui::{AnyElement, FontWeight, Role, SharedString, deferred, div, prelude::*, px, relative};
 use patchwork_core::provider::AgentKind;
-use crate::ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
-use crate::ui::{
+use patchwork_ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
+use patchwork_ui::{
     agent_label, agent_logo, button, icon, now_ms, popup_shadow, resets_in, spinner, tooltip,
 };
 use crate::workspace::Workspace;
@@ -299,7 +299,7 @@ pub(super) fn usage_header(
     } else {
         usage
             .and_then(|u| u.plan.clone())
-            .map(|plan| crate::ui::badge(plan, t).into_any_element())
+            .map(|plan| patchwork_ui::badge(plan, t).into_any_element())
     };
     div()
         .flex()
@@ -362,7 +362,7 @@ pub(super) fn agent_usage(
                 3.5,
                 t,
                 div()
-                    .text_size(px(crate::ui::theme::fs(11.)))
+                    .text_size(px(patchwork_ui::theme::fs(11.)))
                     .font_weight(FontWeight::MEDIUM)
                     .child(format!("{}%", w.used_percent.round())),
             ))
