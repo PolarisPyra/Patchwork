@@ -3,6 +3,15 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.135] - 2026-11-22
+
+## What's Changed
+* fix(panel): pressing Enter in the composer no longer sends keys to the terminal by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/291
+* refactor(app): pages and dialogs get their own crates, and bots are agents everywhere by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/292
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.134...26.11.135
+
 ## [26.11.134] - 2026-11-22
 
 ## What's Changed
