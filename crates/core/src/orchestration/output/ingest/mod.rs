@@ -11,3 +11,4 @@ mod tests;
 mod unprompted;
 
 pub(in crate::orchestration) use read::ingest;
+pub(in crate::orchestration) use unprompted::Wake;

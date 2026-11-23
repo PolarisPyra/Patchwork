@@ -190,11 +190,14 @@ pub(in crate::orchestration) fn ingest(
     // changes how it reports something shows up in the agent log.
     let mut logged_kinds: HashSet<String> = HashSet::new();
 
-    let lines = Lines::read(stdout);
+    let lines = Lines::read(stdout, &turn.wake);
     let mut unprompted = Unprompted::No;
     loop {
         let line = match lines.next(&unprompted) {
-            Next::Line(line) => line,
+            Next::Line(line) => Some(line),
+            // The idle agent was sent a message, and its reply starts here; the agent may say
+            // nothing for a while, as Antigravity does all through `/compact`.
+            Next::Woken => None,
             Next::Closed => break,
             // Antigravity has stopped working by itself, so the reply it started ends. A message
             // sent meanwhile that it has yet to answer keeps the reply open for that answer.
@@ -210,19 +213,24 @@ pub(in crate::orchestration) fn ingest(
         };
         let source =
             |turn: &Turn| Source::agent(turn.agent, pid, &turn.chat_id, Some(&turn.message_id));
-        if AGENT_LOG.logs(LogLevel::Error) {
-            AGENT_LOG.line("out", &source(&turn), &line);
-        }
-        let Ok(value) = serde_json::from_str::<Value>(&line) else {
-            if logged_kinds.insert("unparsed".into()) {
-                AGENT_LOG.write(
-                    LogLevel::Warning,
-                    "unparsed",
-                    &source(&turn),
-                    Data::Outline(line),
-                );
+        let value = if let Some(line) = line.as_deref() {
+            if AGENT_LOG.logs(LogLevel::Error) {
+                AGENT_LOG.line("out", &source(&turn), line);
             }
-            continue;
+            let Ok(value) = serde_json::from_str::<Value>(line) else {
+                if logged_kinds.insert("unparsed".into()) {
+                    AGENT_LOG.write(
+                        LogLevel::Warning,
+                        "unparsed",
+                        &source(&turn),
+                        Data::Outline(line.to_owned()),
+                    );
+                }
+                continue;
+            };
+            value
+        } else {
+            Value::Null
         };
         // A message Claude took after it had already ended its reply (while a background
         // subagent kept it running) is answered from here on, below that message. So is
@@ -255,6 +263,9 @@ pub(in crate::orchestration) fn ingest(
             segments.push(turn.message_id.clone());
             (has_text, last_was_text) = (false, false);
             ended = false;
+        }
+        if line.is_none() {
+            continue;
         }
         // A subagent's frames name the call that started it; they also go to its own thread.
         if turn.agent == AgentKind::Claude
