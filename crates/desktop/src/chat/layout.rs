@@ -318,9 +318,10 @@ pub(crate) fn usage_line(chat: &Chat, warn_above: u64, t: &Theme) -> Div {
         write += usage.cache_write;
         output += usage.output;
     }
-    let large = last.context > warn_above;
+    let context = chat.current_context();
+    let large = context.is_some_and(|c| c > warn_above);
     line.text_color(if large { t.warning } else { t.text_muted })
-        .child(
+        .children(context.map(|c| {
             div()
                 .flex()
                 .items_center()
@@ -329,9 +330,9 @@ pub(crate) fn usage_line(chat: &Chat, warn_above: u64, t: &Theme) -> Div {
                 .child(if large {
                     format!("Context over {}", format_tokens(warn_above))
                 } else {
-                    format!("Context {}", format_tokens(last.context))
-                }),
-        )
+                    format!("Context {}", format_tokens(c))
+                })
+        }))
         .child(format!("Cache read {} tokens", format_tokens(read)))
         .child(format!("Cache write {} tokens", format_tokens(write)))
         .child(format!("Input {} tokens", format_tokens(input)))

@@ -42,8 +42,12 @@ pub(in crate::orchestration) fn message_usage(
         }
         if r.top_level {
             total.context = r.usage.context;
-            total.first_token_ms = r.usage.first_token_ms;
-            total.output_per_second = r.usage.output_per_second;
+            if r.usage.first_token_ms.is_some() {
+                total.first_token_ms = r.usage.first_token_ms;
+            }
+            if r.usage.output_per_second.is_some() {
+                total.output_per_second = r.usage.output_per_second;
+            }
         }
     }
     total
@@ -59,9 +63,12 @@ pub(in crate::orchestration) fn record_request(
     top_level: bool,
     current: &str,
 ) -> String {
-    if let Some(request) = requests.iter_mut().find(|r| r.id == request_id) {
+    if let Some(pos) = requests.iter().position(|r| r.id == request_id) {
+        let mut request = requests.remove(pos);
         request.usage = usage;
-        return request.message_id.clone();
+        let message_id = request.message_id.clone();
+        requests.push(request);
+        return message_id;
     }
     requests.push(Request {
         id: request_id,

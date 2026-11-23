@@ -319,6 +319,19 @@ pub(super) fn parse_session_update(
                 out.push(tool_finished(message_id, id, failed, &output));
             }
         }
+        Some("usage_update") => {
+            if let Some(used) = update["used"].as_u64().filter(|&n| n > 0) {
+                out.push(Parsed::RequestUsage {
+                    request_id: format!("acp-context-{message_id}"),
+                    usage: TokenUsage {
+                        context: used,
+                        ..Default::default()
+                    },
+                    top_level: true,
+                    model: None,
+                });
+            }
+        }
         _ => {}
     }
 }

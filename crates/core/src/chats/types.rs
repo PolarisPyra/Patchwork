@@ -276,6 +276,40 @@ impl Chat {
             .filter(|m| m.role == Role::Assistant)
             .filter(|m| matches!(m.status, MessageStatus::Interrupted | MessageStatus::Error))
     }
+
+    /// Current context size in tokens, reset after a completed `/compact`.
+    #[must_use]
+    pub fn current_context(&self) -> Option<u64> {
+        let mut latest = None;
+        let mut after_compact = false;
+        for m in &self.messages {
+            if m.queued {
+                continue;
+            }
+            if m.role == Role::User && m.text.trim() == "/compact" {
+                after_compact = true;
+                continue;
+            }
+            if after_compact {
+                after_compact = false;
+                if m.role == Role::Assistant && m.status == MessageStatus::Complete {
+                    // A completed /compact clears the pre-compaction context. Keep the reply's
+                    // context only when it reflects post-compaction usage (such as an ACP
+                    // `usage_update`), not the pre-compaction input tokens read to summarize it.
+                    latest = m
+                        .usage
+                        .as_ref()
+                        .filter(|u| u.context > 0 && (u.input == 0 || u.context < u.input))
+                        .map(|u| u.context);
+                    continue;
+                }
+            }
+            if let Some(usage) = &m.usage {
+                latest = Some(usage.context);
+            }
+        }
+        latest
+    }
 }
 
 /// What filled the window when the app last closed, to open again at the next launch.
