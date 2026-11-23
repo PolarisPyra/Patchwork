@@ -172,11 +172,8 @@ fn handle_response(
                         cache_read: cached_read,
                         cache_write: cached_write,
                         output: output_tokens,
-                        context: if input_tokens > 0 {
-                            input_tokens
-                        } else {
-                            total_tokens
-                        },
+                        // These counts are summed over the turn's model calls, so they say
+                        // nothing of the context; `usage_update` reports that.
                         ..Default::default()
                     },
                     top_level: true,
