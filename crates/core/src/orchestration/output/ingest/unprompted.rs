@@ -1,16 +1,18 @@
 //! Antigravity at work with no prompt open. Once a command it moved to the background ends, it
 //! goes on by itself, and nothing marks when it stops; its output is read with a timeout, so
-//! the reply it started ends once it goes quiet.
+//! the reply it started ends once it goes quiet. The wait also gives way to a running swarm,
+//! whose files are reread on a timer.
 
 // Rust guideline compliant 2026-10-09
 
+use std::cell::Cell;
 use std::collections::HashSet;
 use std::io::BufReader;
 use std::process::ChildStdout;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::events::AgentEvent;
 use crate::orchestration::turn::process::next_line;
@@ -22,7 +24,11 @@ const QUIET_END: Duration = Duration::from_secs(45);
 
 /// The agent's stdout, read on a thread of its own so that waiting for a line can time out.
 #[derive(Debug)]
-pub(super) struct Lines(Receiver<Input>);
+pub(super) struct Lines {
+    received: Receiver<Input>,
+    /// When the reader last got something, which the agent's silence is counted from.
+    last: Cell<Instant>,
+}
 
 /// What reaches the reader of the agent's output.
 #[derive(Debug)]
@@ -56,6 +62,8 @@ pub(super) enum Next {
     Woken,
     /// The agent said nothing for `QUIET_END`.
     Quiet,
+    /// The `tick` the reader asked for came first.
+    Tick,
     /// The output has ended or cannot be read.
     Closed,
 }
@@ -76,23 +84,38 @@ impl Lines {
             // So the reader finds the output closed once this thread's sender goes.
             wake.0.locked().take();
         });
-        Self(received)
+        Self {
+            received,
+            last: Cell::new(Instant::now()),
+        }
     }
 
-    /// The next line. While `unprompted` waits for the agent to go quiet, `Quiet` once it has.
-    pub(super) fn next(&self, unprompted: &Unprompted) -> Next {
-        let input = if unprompted.waits_for_quiet() {
-            match self.0.recv_timeout(QUIET_END) {
+    /// The next line. While `unprompted` waits for the agent to go quiet, `Quiet` once it has,
+    /// and `Tick` once `tick` passes with nothing read.
+    pub(super) fn next(&self, unprompted: &Unprompted, tick: Option<Duration>) -> Next {
+        let quiet = unprompted
+            .waits_for_quiet()
+            .then(|| QUIET_END.saturating_sub(self.last.get().elapsed()));
+        let wait = match (quiet, tick) {
+            (Some(quiet), Some(tick)) => Some(quiet.min(tick)),
+            (quiet, tick) => quiet.or(tick),
+        };
+        let input = if let Some(wait) = wait {
+            match self.received.recv_timeout(wait) {
                 Ok(input) => input,
-                Err(RecvTimeoutError::Timeout) => return Next::Quiet,
+                Err(RecvTimeoutError::Timeout) if quiet.is_some_and(|quiet| quiet <= wait) => {
+                    return Next::Quiet;
+                }
+                Err(RecvTimeoutError::Timeout) => return Next::Tick,
                 Err(RecvTimeoutError::Disconnected) => return Next::Closed,
             }
         } else {
-            match self.0.recv() {
+            match self.received.recv() {
                 Ok(input) => input,
                 Err(_) => return Next::Closed,
             }
         };
+        self.last.set(Instant::now());
         match input {
             Input::Line(line) => Next::Line(line),
             Input::Woken => Next::Woken,

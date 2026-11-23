@@ -1,8 +1,7 @@
-//! The work of the sub agents `invoke_subagent` starts, read from the transcripts agy keeps.
+//! The work of agy's sub agents and swarm workers, read from the transcripts agy keeps.
 //!
-//! The call returns as soon as its sub agents start, naming each one's conversation, and they
-//! work on alone. Their steps are not sent over ACP, so they are read from the transcript agy
-//! writes for each conversation.
+//! The call that starts them returns at once, and they work on alone. Their steps are not sent
+//! over ACP, so they are read from the transcript agy writes for each conversation.
 
 // Rust guideline compliant 2026-11-23
 
@@ -10,14 +9,16 @@ use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde_json::Value;
 
 use crate::events::AgentEvent;
 use crate::provider::{Parsed, ToolStart, text_delta, tool_finished, tool_started};
 
-use super::client::home;
-use super::parse::tool_summary;
+use super::cli::home;
+use super::tool_fields::tool_summary;
 
 /// The most sub agents one call is followed for.
 const MAX_CHILDREN: usize = 16;
@@ -27,6 +28,9 @@ const MAX_READ_BYTES: u64 = 1024 * 1024;
 
 /// The agy profiles a conversation's folder may be in.
 const PROFILES: [&str; 3] = ["antigravity-cli", "antigravity-acp", "antigravity"];
+
+/// Where a conversation's transcript is, under its folder.
+const TRANSCRIPT: &str = ".system_generated/logs/transcript.jsonl";
 
 /// The transcripts of the sub agents a finished `invoke_subagent` call's `output` names.
 #[must_use]
@@ -40,32 +44,52 @@ pub fn child_transcripts(output: &str) -> Vec<Transcript> {
         .filter_map(|(at, _)| {
             let rest = output[at + KEY.len()..].trim_start().strip_prefix('"')?;
             let id = &rest[..rest.find('"')?];
-            let valid = !id.is_empty()
-                && id.len() <= 64
-                && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
-            if !valid {
+            if !is_conversation_id(id) {
                 return None;
             }
             PROFILES
                 .iter()
-                .map(|profile| {
-                    home.join(profile)
-                        .join("brain")
-                        .join(id)
-                        .join(".system_generated/logs/transcript.jsonl")
-                })
+                .map(|profile| home.join(profile).join("brain").join(id).join(TRANSCRIPT))
                 .find(|path| path.is_file())
-                .map(|path| Transcript::new(id, path))
+                .map(|path| Transcript::new(id, path, Ends::Answered))
         })
         .take(MAX_CHILDREN)
         .collect()
 }
 
-/// One sub agent's transcript, read as it grows.
+/// Whether `id` can be a conversation id, so it is safe to put in a path.
+pub(super) fn is_conversation_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
+
+/// The folder of conversation `id` in the profile `agy acp` runs with.
+pub(super) fn conversation_dir(id: &str) -> Option<PathBuf> {
+    if !is_conversation_id(id) {
+        return None;
+    }
+    Some(home()?.join("antigravity-cli").join("brain").join(id))
+}
+
+/// The transcript of conversation `id`, in the profile `agy acp` runs with.
+pub(super) fn transcript_path(id: &str) -> Option<PathBuf> {
+    Some(conversation_dir(id)?.join(TRANSCRIPT))
+}
+
+/// When a transcript has nothing more to follow.
+#[derive(Debug)]
+enum Ends {
+    /// A sub agent stops once it answers with nothing left running.
+    Answered,
+    /// A swarm worker answers, parks, and is woken again, until the swarm kills it.
+    Killed(Arc<AtomicBool>),
+}
+
+/// One sub agent's or swarm worker's transcript, read as it grows.
 #[derive(Debug)]
 pub struct Transcript {
     id: String,
     path: PathBuf,
+    ends: Ends,
     offset: u64,
     /// The end of the last read, up to a line not yet complete.
     partial: Vec<u8>,
@@ -76,10 +100,11 @@ pub struct Transcript {
 }
 
 impl Transcript {
-    fn new(id: &str, path: PathBuf) -> Self {
+    fn new(id: &str, path: PathBuf, ends: Ends) -> Self {
         Self {
             id: id.into(),
             path,
+            ends,
             offset: 0,
             partial: Vec::new(),
             open: VecDeque::new(),
@@ -87,10 +112,24 @@ impl Transcript {
         }
     }
 
-    /// Whether it stopped with an answer and has no call still running.
+    /// A swarm worker's transcript, followed until `killed` is set.
+    pub(super) fn worker(id: &str, killed: Arc<AtomicBool>) -> Option<Self> {
+        Some(Self::new(id, transcript_path(id)?, Ends::Killed(killed)))
+    }
+
+    /// Whether it has nothing more to follow.
     #[must_use]
     pub fn is_done(&self) -> bool {
-        self.answered && self.open.is_empty()
+        match &self.ends {
+            Ends::Answered => self.answered && self.open.is_empty(),
+            Ends::Killed(killed) => killed.load(Ordering::SeqCst),
+        }
+    }
+
+    /// Whether going quiet for a long time means it has stopped. A parked worker is quiet too.
+    #[must_use]
+    pub fn ends_when_quiet(&self) -> bool {
+        matches!(self.ends, Ends::Answered)
     }
 
     /// The events for the steps written since the last read, under `message_id`.

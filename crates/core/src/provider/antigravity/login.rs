@@ -16,7 +16,7 @@ use crate::provider::{AgentKind, agent_command};
 use crate::system::Locked;
 use crate::system::processes::running::{SIGKILL, signal_process_group};
 
-use super::client::{client_info, invalidate_probe_cache};
+use super::probe::{client_info, invalidate_probe_cache};
 
 /// How long `agy acp --login` gets to print the Google sign-in link.
 const LOGIN_URL_TIMEOUT: Duration = Duration::from_secs(30);

@@ -203,8 +203,8 @@ pub(in crate::orchestration) fn ingest(
     let mut turn_requests = 0;
     // Claude's task list, shown as the plan of whichever reply changes it.
     let mut claude_tasks = provider::claude::TaskList::default();
-    // Antigravity's native ACP swarm tracker (`_antigravity/swarm` + `members.json` fallback).
-    let mut antigravity_swarm = provider::antigravity::SwarmState::default();
+    // Antigravity's swarm workers, read from the files agy keeps while a swarm runs.
+    let mut antigravity_swarm = provider::antigravity::Swarm::default();
     // Antigravity's running tool calls, so an update that leaves fields out keeps the earlier ones.
     let mut antigravity_calls = provider::antigravity::ToolCalls::default();
     let mut commands = Commands::Unlisted(None);
@@ -222,11 +222,17 @@ pub(in crate::orchestration) fn ingest(
     loop {
         turn.calls_open
             .store(!open_calls.is_empty(), Ordering::Relaxed);
-        let line = match lines.next(&unprompted) {
+        // A tick rereads a running swarm's files, and says nothing about the agent itself.
+        let mut tick = false;
+        let line = match lines.next(&unprompted, antigravity_swarm.poll_every()) {
             Next::Line(line) => Some(line),
             // The idle agent was sent a message, and its reply starts here; the agent may say
             // nothing for a while, as Antigravity does all through `/compact`.
             Next::Woken => None,
+            Next::Tick => {
+                tick = true;
+                None
+            }
             Next::Closed => break,
             // Antigravity has stopped working by itself, so the reply it started ends. A message
             // sent meanwhile that it has yet to answer keeps the reply open for that answer.
@@ -268,7 +274,7 @@ pub(in crate::orchestration) fn ingest(
         // subagent kept it running) is answered from here on, below that message. So is
         // a reply an idle Claude starts on its own, such as once a background command ends.
         // Claude's `tool_progress` only says a call is still running, which a stuck one is too.
-        if value["type"] != "tool_progress" {
+        if value["type"] != "tool_progress" && !tick {
             turn.last_output.store(now_ms(), Ordering::Relaxed);
         }
         let starts_reply = value["type"] == "system" && value["subtype"] == "init";
@@ -277,7 +283,7 @@ pub(in crate::orchestration) fn ingest(
             && turn.idle.swap(false, Ordering::SeqCst);
         let warm_reply = matches!(turn.agent, AgentKind::Claude | AgentKind::Antigravity)
             && !turn.steers.locked().is_empty();
-        if (ended || unprompted.is_working()) && (claude_resumed || warm_reply) {
+        if !tick && (ended || unprompted.is_working()) && (claude_resumed || warm_reply) {
             let mut steers = turn.steers.locked();
             // Antigravity is stopped for a steer, so only the message that resumed it is taken now.
             if turn.agent == AgentKind::Antigravity {
@@ -296,7 +302,7 @@ pub(in crate::orchestration) fn ingest(
             (has_text, last_was_text) = (false, false);
             ended = false;
         }
-        if line.is_none() {
+        if line.is_none() && !tick {
             continue;
         }
         // A subagent's frames name the call that started it; they also go to its own thread.
@@ -323,32 +329,6 @@ pub(in crate::orchestration) fn ingest(
             }
             continue;
         }
-        // Antigravity ACP sends native swarm roster/board notifications on `_antigravity/swarm`,
-        // and routes child worker `session/update` frames tagged with `childSessionId` /
-        // `workerSessionId` to each worker's child thread.
-        if turn.agent == AgentKind::Antigravity
-            && value.get("id").is_none()
-            && value["method"].as_str() == Some("session/update")
-            && let Some(child_target) =
-                provider::antigravity::extract_child_target(&value, turn.session_id.as_deref())
-        {
-            let key = format!(
-                "{}{}",
-                provider::antigravity::SWARM_TASK_PREFIX,
-                child_target.child_session_id
-            );
-            let child_key = if children.contains_key(&key) {
-                key.as_str()
-            } else {
-                child_target.child_session_id.as_str()
-            };
-            if let Some(child) = children.get_mut(child_key) {
-                let events =
-                    provider::antigravity::subagent_events(&value, &turn.spec(), &child.message_id);
-                publish_child(&turn, child, events);
-            }
-            continue;
-        }
         // Once a command it moved to the background ends, idle Antigravity goes on working by
         // itself. That work is a reply of its own, which ends once it goes quiet. Messages sent
         // meanwhile still go to it as new prompts, which it answers once it is done.
@@ -367,42 +347,41 @@ pub(in crate::orchestration) fn ingest(
         if replaying && value.get("id").is_none() && value["method"] == "session/update" {
             continue;
         }
-        let mut parsed = if turn.agent == AgentKind::Antigravity
-            && value.get("id").is_none()
-            && value["method"].as_str() == Some("_antigravity/swarm")
-        {
-            antigravity_swarm.apply_notification(&value["params"], &turn.message_id)
+        let mut parsed = if tick {
+            antigravity_swarm.poll(
+                turn.session_id.as_deref().unwrap_or_default(),
+                &turn.message_id,
+            )
         } else {
             provider::parse_line(turn.agent, &value, &turn.spec(), &turn.message_id)
         };
         if turn.agent == AgentKind::Antigravity
-            && value["method"].as_str() == Some("session/update")
-            && matches!(
-                value["params"]["update"]["name"].as_str(),
-                Some("swarm" | "post_message" | "read_board" | "swarm_wait")
-            )
+            && value["method"] == "session/update"
+            && let Some(tool) = value["params"]["update"]["name"].as_str()
         {
-            antigravity_swarm.note_swarm_tool();
+            antigravity_swarm.note_tool(tool);
+            // The workers a swarm call added are shown under it straight away.
             if matches!(
                 value["params"]["update"]["status"].as_str(),
                 Some("completed" | "failed")
-            ) && let Some(sid) = turn.session_id.as_deref()
-            {
-                parsed.extend(antigravity_swarm.poll_disk_fallback(sid, &turn.message_id));
+            ) {
+                parsed.extend(antigravity_swarm.poll(
+                    turn.session_id.as_deref().unwrap_or_default(),
+                    &turn.message_id,
+                ));
             }
         }
+        // Before the reply's end decides whether to close the agent's input, so workers at work
+        // hold it open.
         if turn.agent == AgentKind::Antigravity
             && parsed.iter().any(|p| matches!(p, Parsed::Finished))
-            && let Some(sid) = turn.session_id.as_deref()
         {
-            // Run the disk fallback BEFORE `Parsed::Finished` decides whether to close stdin, so
-            // released `agy` 1.5.x builds without `_antigravity/swarm` keep swarm workers alive.
-            let fallback = antigravity_swarm.poll_disk_fallback(sid, &turn.message_id);
-            if !fallback.is_empty() {
-                let mut combined = fallback;
-                combined.extend(parsed);
-                parsed = combined;
-            }
+            let mut polled = antigravity_swarm.poll(
+                turn.session_id.as_deref().unwrap_or_default(),
+                &turn.message_id,
+            );
+            polled.append(&mut parsed);
+            parsed = polled;
         }
         if turn.agent == AgentKind::Claude
             && let Some(steps) = claude_tasks.read(&value)
@@ -414,7 +393,7 @@ pub(in crate::orchestration) fn ingest(
         }
         // A subagent's frames went to its own thread above.
         let routed = turn.agent == AgentKind::Claude && value["parent_tool_use_id"].is_string();
-        if parsed.is_empty() && !routed && AGENT_LOG.logs(LogLevel::Debug) {
+        if parsed.is_empty() && !routed && !tick && AGENT_LOG.logs(LogLevel::Debug) {
             let kind = line_kind(&value);
             if logged_kinds.insert(kind.clone()) {
                 AGENT_LOG.write(LogLevel::Debug, "ignored", &source(&turn), Data::Text(kind));
@@ -849,7 +828,13 @@ pub(in crate::orchestration) fn ingest(
                                     && let Some(child) = open_child(&turn, tool)
                                 {
                                     tool.child_chat_id = Some(child.chat_id.clone());
-                                    children.insert(tool.id.clone(), child);
+                                    // A swarm worker's chat follows its transcript from the start.
+                                    if let Some(transcript) = antigravity_swarm.transcript(&tool.id)
+                                    {
+                                        follow_agy_children(&turn, child, vec![transcript]);
+                                    } else {
+                                        children.insert(tool.id.clone(), child);
+                                    }
                                 }
                                 mark_call(&turn, tool);
                             }
@@ -909,7 +894,7 @@ pub(in crate::orchestration) fn ingest(
         }
         // Between calls is where a reply that filled the window stops to compact.
         if call_ended && turn.agent == AgentKind::Antigravity {
-            let busy = !open_calls.is_empty() || antigravity_swarm.has_live_work();
+            let busy = !open_calls.is_empty() || antigravity_swarm.is_holding();
             compaction.stop_if_due(&turn, busy);
         }
     }
@@ -929,7 +914,7 @@ pub(in crate::orchestration) fn ingest(
     if turn.agent == AgentKind::Antigravity
         && !turn.cancelled.load(Ordering::SeqCst)
         && stream_error.is_none()
-        && antigravity_swarm.has_live_work()
+        && antigravity_swarm.is_holding()
     {
         stream_error = Some("Antigravity exited while swarm workers were still running.".into());
     }

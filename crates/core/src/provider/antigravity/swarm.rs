@@ -1,115 +1,325 @@
-//! Native Antigravity ACP swarm tracking (`_antigravity/swarm`), disk fallback (`members.json`),
-//! worker subagent routing, and clean swarm tool presentation.
+//! agy's swarms: the workers a coordinator adds, read from the files agy keeps, and how the
+//! swarm's tool calls are shown.
+//!
+//! agy sends nothing about a swarm over ACP. Its roster is `members.json` in the coordinator's
+//! `swarm` folder, and each worker's steps are in its own conversation's transcript, so both are
+//! reread on a timer while a swarm runs. A worker's state comes from its transcript, as agy's own
+//! swarm board decides it: the roster's `wake_mode` is only a fallback.
 
-// Rust guideline compliant 2026-11-22
+// Rust guideline compliant 2026-11-23
 
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant, SystemTime};
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
 use crate::chats::{BackgroundTask, SubAgent, TaskStatus};
-use crate::events::AgentEvent;
-use crate::provider::{Parsed, ToolStart, TurnSpec, one_line, tool_finished, tool_started};
+use crate::provider::{Parsed, TaskEvent, ToolStart, one_line, tool_finished, tool_started};
 use crate::system::now_ms;
 
-use super::client::home;
-use super::parse::parse_session_update;
+use super::children::{Transcript, conversation_dir, is_conversation_id, transcript_path};
 
-/// Prefix for synthetic tool/task ids representing swarm workers (`swarm:<conversationId>`).
+/// Prefix of the ids of the calls that stand for swarm workers (`swarm:<conversationId>`).
 pub const SWARM_TASK_PREFIX: &str = "swarm:";
 
-/// Synthetic task id holding stdin open while the coordinator waits on a board wake.
-const COORDINATOR_WAKE_TASK: &str = "swarm:coordinator";
+/// How often a running swarm's roster and its workers' transcripts are reread.
+pub const SWARM_POLL: Duration = Duration::from_secs(2);
 
-/// Housekeeping roles whose periodic pulses must not hold a swarm turn open.
-const HOUSEKEEPING_ROLES: &[&str] = &["monitor", "narrator"];
+/// The background task listed while workers are at work. It keeps the agent's input open, so a
+/// reply that would otherwise close it does not end the swarm under them, and keeps an idle
+/// coordinator from being retired or a quiet one from being taken for stalled.
+const HOLD_TASK: &str = "swarm:hold";
+
+/// A working worker whose transcript has not moved for this long is stuck, as agy's board
+/// reports it, and no longer holds the swarm open.
+const STUCK: Duration = Duration::from_secs(10 * 60);
+
+/// The most of a transcript's end read to decide whether its worker's turn has ended. A single
+/// step longer than this reads as mid-turn until the next step is written.
+const MAX_TAIL_BYTES: u64 = 256 * 1024;
+
+/// The largest `members.json` read (4 MiB).
+const MAX_MEMBERS_FILE_BYTES: u64 = 4 * 1024 * 1024;
 
 /// Upper bound on batch swarm worker launches parsed from untrusted tool input.
 const MAX_SWARM_ADD_LAUNCHES: usize = 64;
 
-/// Maximum board report characters attached to a worker subagent result.
-const MAX_BOARD_REPORT_CHARS: usize = 8_000;
-
-/// Maximum `members.json` file size read during the disk fallback (4 MiB).
-const MAX_MEMBERS_FILE_BYTES: u64 = 4 * 1024 * 1024;
-
-/// Capabilities metadata advertising native Antigravity swarm notification support.
-pub(super) fn capabilities_meta() -> Value {
-    json!({"antigravity": {"swarm": true}})
+/// One reply's view of agy's swarm.
+#[derive(Debug, Default)]
+pub struct Swarm {
+    /// The coordinator called a swarm tool, so its roster is reread.
+    running: bool,
+    /// The hold task is open.
+    held: bool,
+    /// Workers by conversation id.
+    workers: HashMap<String, Worker>,
 }
 
-/// Child worker metadata attached to an ACP notification or permission request.
-#[derive(Debug, Clone)]
-pub struct ChildTarget {
-    pub child_session_id: String,
-    pub worker_label: Option<String>,
+/// A worker on the roster.
+#[derive(Debug)]
+struct Worker {
+    /// Set once the swarm kills it, which ends its chat.
+    killed: Arc<AtomicBool>,
+    /// A monitor or narrator, whose periodic pulses do not hold the swarm open.
+    housekeeping: bool,
+    /// When it was first seen, for a worker that never writes a transcript.
+    seen_at: Instant,
+    /// The transcript's length and change time when `ended` was last decided.
+    read: Option<(u64, SystemTime)>,
+    /// Its transcript's newest step ends a turn.
+    ended: bool,
 }
 
-/// Extracts child worker routing metadata from an ACP notification or permission request.
-#[must_use]
-pub fn extract_child_target(v: &Value, own_session_id: Option<&str>) -> Option<ChildTarget> {
-    let params = &v["params"];
-    let candidates = [
-        &params["_meta"],
-        &params["update"]["_meta"],
-        &params["toolCall"]["_meta"],
-    ];
-    for candidate in candidates {
-        let ag = &candidate["antigravity"];
-        if !ag.is_object() {
-            continue;
+impl Swarm {
+    /// Notes a call of tool `name`; a swarm tool means the swarm's files are worth reading.
+    pub fn note_tool(&mut self, name: &str) {
+        if matches!(name, "swarm" | "post_message" | "read_board" | "swarm_wait") {
+            self.running = true;
         }
-        let swarm = &ag["swarm"];
-        let child_id = ag["childSessionId"]
-            .as_str()
-            .or_else(|| swarm["workerSessionId"].as_str())
-            .map(str::trim)
-            .filter(|s| !s.is_empty());
-        if let Some(child_id) = child_id {
-            let worker_name = swarm["workerName"]
+    }
+
+    /// How long to wait for output before rereading the swarm, while one runs.
+    #[must_use]
+    pub fn poll_every(&self) -> Option<Duration> {
+        self.running.then_some(SWARM_POLL)
+    }
+
+    /// Whether workers are at work, so the agent's input stays open.
+    #[must_use]
+    pub fn is_holding(&self) -> bool {
+        self.held
+    }
+
+    /// The transcript the chat of the worker call `tool_id` stands for follows.
+    #[must_use]
+    pub fn transcript(&self, tool_id: &str) -> Option<Transcript> {
+        let id = tool_id.strip_prefix(SWARM_TASK_PREFIX)?;
+        let worker = self.workers.get(id)?;
+        Transcript::worker(id, Arc::clone(&worker.killed))
+    }
+
+    /// Rereads coordinator `session_id`'s roster: a call under `message_id` for each worker
+    /// added, an end to the chat of each one killed, and the hold opened or closed.
+    pub fn poll(&mut self, session_id: &str, message_id: &str) -> Vec<Parsed> {
+        if !self.running {
+            return Vec::new();
+        }
+        let Some(roster) = read_roster(session_id) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        let mut working = false;
+        for (name, member) in roster["members"].as_object().into_iter().flatten() {
+            let Some(id) = member["conversation_id"]
                 .as_str()
-                .or_else(|| ag["agentName"].as_str())
-                .map(|s| s.trim().trim_start_matches('@'))
-                .filter(|s| !s.is_empty());
-            let role = ag["role"].as_str().map(str::trim).filter(|s| !s.is_empty());
-            let worker_label = worker_name
-                .map(|n| format!("@{n}"))
-                .or_else(|| role.map(String::from));
-            return Some(ChildTarget {
-                child_session_id: child_id.to_string(),
-                worker_label,
-            });
+                .filter(|id| is_conversation_id(id))
+            else {
+                continue;
+            };
+            let role = role_of(name, member);
+            if role == "coordinator" {
+                continue;
+            }
+            let killed = member["killed"].as_bool() == Some(true);
+            let worker = match self.workers.entry(id.into()) {
+                Entry::Occupied(entry) => entry.into_mut(),
+                // One killed before it was seen has nothing to show.
+                Entry::Vacant(_) if killed => continue,
+                Entry::Vacant(entry) => {
+                    out.extend(added(id, name, &role, member, message_id));
+                    entry.insert(Worker {
+                        killed: Arc::new(AtomicBool::new(false)),
+                        housekeeping: matches!(role.as_str(), "monitor" | "narrator"),
+                        seen_at: Instant::now(),
+                        read: None,
+                        ended: false,
+                    })
+                }
+            };
+            if killed {
+                worker.killed.store(true, Ordering::SeqCst);
+            } else if !worker.housekeeping {
+                working |= worker.holds(id, member["wake_mode"].as_str().unwrap_or_default());
+            }
         }
+        if working != self.held {
+            self.held = working;
+            out.push(Parsed::Task(if working {
+                hold_started()
+            } else {
+                TaskEvent::Ended {
+                    task_id: HOLD_TASK.into(),
+                    status: TaskStatus::Done,
+                    summary: None,
+                    output: None,
+                }
+            }));
+        }
+        out
     }
-    // Fallback: a `session/update` whose `sessionId` differs from the root conversation id.
-    if let (Some(own), Some(sid)) = (own_session_id, params["sessionId"].as_str())
-        && !sid.is_empty()
-        && sid != own
-    {
-        return Some(ChildTarget {
-            child_session_id: sid.to_string(),
-            worker_label: None,
-        });
-    }
-    None
 }
 
-/// Maps a child worker's ACP `session/update` notification into events for its child chat.
-#[must_use]
-pub fn subagent_events(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<AgentEvent> {
-    if v["method"].as_str() != Some("session/update") {
-        return Vec::new();
+impl Worker {
+    /// Whether it is at work: mid-turn by its transcript and not stuck. One a board post has
+    /// rung (`wake_mode` `working`) is waiting until its run resumes, which it is about to.
+    fn holds(&mut self, id: &str, wake_mode: &str) -> bool {
+        let rung = wake_mode == "working";
+        let meta =
+            transcript_path(id).and_then(|path| Some((std::fs::metadata(&path).ok()?, path)));
+        let Some((meta, path)) = meta else {
+            // No transcript yet: the roster says, as agy falls back to it.
+            return rung && self.seen_at.elapsed() < STUCK;
+        };
+        let changed = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+        let read = (meta.len(), changed);
+        if self.read != Some(read) {
+            self.read = Some(read);
+            self.ended = tail(&path).is_some_and(|tail| turn_ended(&tail));
+        }
+        let stuck = changed.elapsed().is_ok_and(|quiet| quiet > STUCK);
+        (!self.ended || rung) && !stuck
     }
-    let mut parsed = Vec::new();
-    parse_session_update(&v["params"]["update"], spec, message_id, &mut parsed);
-    parsed
-        .into_iter()
-        .filter_map(|p| match p {
-            Parsed::Event(event) => Some(event),
-            _ => None,
-        })
-        .collect()
+}
+
+/// The call that stands for worker `name` (conversation `id`), finished at once as agy's call
+/// that added it was; its chat then follows the worker's transcript.
+fn added(id: &str, name: &str, role: &str, member: &Value, message_id: &str) -> [Parsed; 2] {
+    let tool_id = format!("{SWARM_TASK_PREFIX}{id}");
+    let title = member_title(name, role);
+    let subagent = SubAgent {
+        kind: if role.is_empty() { "worker" } else { role }.into(),
+        description: title.clone(),
+        model: member["model"]
+            .as_str()
+            .filter(|m| !m.is_empty())
+            .map(String::from),
+        prompt: None,
+    };
+    [
+        tool_started(
+            message_id,
+            ToolStart {
+                id: &tool_id,
+                name: "Agent",
+                summary: title,
+                subagent: Some(subagent),
+                parent: None,
+            },
+        ),
+        tool_finished(message_id, &tool_id, false, ""),
+    ]
+}
+
+fn hold_started() -> TaskEvent {
+    TaskEvent::Started {
+        task: BackgroundTask {
+            tool_id: HOLD_TASK.into(),
+            task_id: Some(HOLD_TASK.into()),
+            run_id: None,
+            kind: "agent".into(),
+            description: "Swarm workers".into(),
+            status: TaskStatus::Running,
+            started_at: now_ms(),
+            summary: None,
+            output: None,
+            cut_off: false,
+        },
+        task_id: HOLD_TASK.into(),
+        top_level: true,
+        backgrounded: true,
+    }
+}
+
+/// A member's role, or the one its name gives a monitor or narrator on older rosters.
+fn role_of(name: &str, member: &Value) -> String {
+    let role = member["role"].as_str().map(str::trim).unwrap_or_default();
+    if !role.is_empty() && role != "worker" {
+        return role.to_ascii_lowercase();
+    }
+    let base = name.rsplit_once('-').map_or(name, |(base, n)| {
+        if n.chars().all(|c| c.is_ascii_digit()) && !n.is_empty() {
+            base
+        } else {
+            name
+        }
+    });
+    match base {
+        "monitor" | "narrator" => base.into(),
+        _ => role.into(),
+    }
+}
+
+fn member_title(name: &str, role: &str) -> String {
+    let handle = format!("@{}", one_line(name.trim_start_matches('@')));
+    if role.is_empty() || role == "worker" {
+        handle
+    } else {
+        format!("{handle} ({role})")
+    }
+}
+
+/// The swarm roster of coordinator `session_id`.
+fn read_roster(session_id: &str) -> Option<Value> {
+    let path = conversation_dir(session_id)?.join(".system_generated/swarm/members.json");
+    let meta = std::fs::metadata(&path).ok()?;
+    if !meta.is_file() || meta.len() > MAX_MEMBERS_FILE_BYTES {
+        return None;
+    }
+    serde_json::from_str(&std::fs::read_to_string(&path).ok()?).ok()
+}
+
+/// The complete lines at the end of a transcript, up to `MAX_TAIL_BYTES`, plus a torn last line.
+fn tail(path: &Path) -> Option<String> {
+    let mut file = File::open(path).ok()?;
+    let len = file.metadata().ok()?.len();
+    let start = len.saturating_sub(MAX_TAIL_BYTES);
+    file.seek(SeekFrom::Start(start)).ok()?;
+    let mut bytes = Vec::new();
+    file.take(MAX_TAIL_BYTES).read_to_end(&mut bytes).ok()?;
+    let text = String::from_utf8_lossy(&bytes);
+    // A read from the middle starts partway through a line.
+    let text = if start > 0 {
+        text.split_once('\n').map_or("", |(_, rest)| rest)
+    } else {
+        &text
+    };
+    Some(text.to_owned())
+}
+
+/// Whether a transcript's newest step ends a turn, as agy's swarm board decides it: an answer
+/// that called nothing, or the results of calls that included `swarm_wait` once its own result
+/// is `DONE`. Anything newer, such as a system message, user input, a model error being retried,
+/// or a torn last line, means the worker is mid-turn.
+fn turn_ended(tail: &str) -> bool {
+    // Whether each result after the newest answer is `DONE`, newest first.
+    let mut results = Vec::new();
+    for line in tail.lines().rev().filter(|line| !line.trim().is_empty()) {
+        let Ok(step) = serde_json::from_str::<Value>(line) else {
+            return false;
+        };
+        match step["type"].as_str() {
+            Some("GENERIC") => {
+                results.push(step["status"] == "DONE");
+                continue;
+            }
+            Some("PLANNER_RESPONSE") => {}
+            _ => return false,
+        }
+        let calls = step["tool_calls"].as_array().map_or(&[][..], Vec::as_slice);
+        if calls.is_empty() {
+            return results.is_empty();
+        }
+        results.reverse();
+        let wait = calls.iter().position(|call| call["name"] == "swarm_wait");
+        return wait.is_some_and(|wait| results.len() >= calls.len() && results[wait]);
+    }
+    false
 }
 
 /// Formats `swarm`, `post_message`, `read_board`, and `swarm_wait` tool calls cleanly.
@@ -251,442 +461,4 @@ pub(super) fn invoke_subagent_descriptor(args: &Value) -> Option<SubAgent> {
         model: None,
         prompt: first["Prompt"].as_str().map(String::from),
     })
-}
-
-/// Lifecycle of a single tracked swarm worker inside one turn.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WorkerPhase {
-    Running,
-    Parked,
-    Finished,
-}
-
-#[derive(Debug, Clone)]
-struct TrackedMember {
-    name: String,
-    phase: WorkerPhase,
-    saw_idle_or_report: bool,
-    latest_report: Option<String>,
-}
-
-/// Per-turn state tracking Antigravity native `_antigravity/swarm` notifications and
-/// `swarm/members.json` fallback so swarm turns stay active until all workers report.
-#[derive(Debug, Default)]
-pub struct SwarmState {
-    native_protocol: bool,
-    saw_swarm_tool: bool,
-    coordinator_held: bool,
-    members: HashMap<String, TrackedMember>,
-    finished_ids: HashSet<String>,
-    latest_posts: HashMap<String, String>,
-}
-
-impl SwarmState {
-    /// Marks that this turn called a `swarm` tool, enabling the disk fallback on older builds.
-    pub fn note_swarm_tool(&mut self) {
-        self.saw_swarm_tool = true;
-    }
-
-    /// Whether any non-housekeeping swarm worker or coordinator wake is currently active.
-    #[must_use]
-    pub fn has_live_work(&self) -> bool {
-        self.coordinator_held
-            || self
-                .members
-                .values()
-                .any(|m| m.phase == WorkerPhase::Running)
-    }
-
-    /// Applies one `_antigravity/swarm` JSON-RPC notification and returns Patchwork events and
-    /// background task updates.
-    pub fn apply_notification(&mut self, params: &Value, message_id: &str) -> Vec<Parsed> {
-        self.native_protocol = true;
-        let mut out = Vec::new();
-
-        // Capture latest board posts per worker handle.
-        for post in params["posts"].as_array().into_iter().flatten() {
-            let Some(agent) = post["agent"]
-                .as_str()
-                .map(|s| s.trim().trim_start_matches('@').to_ascii_lowercase())
-                .filter(|s| !s.is_empty() && s != "coordinator")
-            else {
-                continue;
-            };
-            if let Some(text) = post["text"]
-                .as_str()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-            {
-                self.latest_posts
-                    .insert(agent, clip_chars(text, MAX_BOARD_REPORT_CHARS));
-            }
-        }
-
-        let mut live_task_ids: Vec<String> = Vec::new();
-        let mut any_non_housekeeping_running = false;
-
-        for member in params["members"].as_array().into_iter().flatten() {
-            let Some(conv_id) = member["conversationId"]
-                .as_str()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-            else {
-                continue;
-            };
-            let role = member["role"]
-                .as_str()
-                .map_or("worker", str::trim)
-                .to_ascii_lowercase();
-            if role == "coordinator" {
-                continue;
-            }
-            let housekeeping = HOUSEKEEPING_ROLES.contains(&role.as_str());
-            let name = member["name"]
-                .as_str()
-                .map(|s| s.trim().trim_start_matches('@'))
-                .filter(|s| !s.is_empty())
-                .unwrap_or(conv_id);
-            let name_key = name.to_ascii_lowercase();
-            let state = member["state"]
-                .as_str()
-                .map(str::trim)
-                .unwrap_or_default()
-                .to_ascii_lowercase();
-            let tool_id = format!("{SWARM_TASK_PREFIX}{conv_id}");
-            let title = format_member_title(name, &role, member["addedBy"].as_str());
-            let report = self.latest_posts.get(&name_key).cloned();
-
-            // Do not recreate an already-finished worker from replayed rosters.
-            if self.finished_ids.contains(conv_id) {
-                continue;
-            }
-
-            let is_new = !self.members.contains_key(conv_id);
-            if is_new {
-                // A recreated worker with a reused name must not inherit an old report.
-                if self
-                    .members
-                    .values()
-                    .any(|m| m.name.eq_ignore_ascii_case(name) && m.phase == WorkerPhase::Finished)
-                {
-                    self.latest_posts.remove(&name_key);
-                }
-                let subagent = SubAgent {
-                    kind: if role.is_empty() {
-                        "worker".into()
-                    } else {
-                        role.clone()
-                    },
-                    description: title.clone(),
-                    model: member["modelLabel"]
-                        .as_str()
-                        .or_else(|| member["model"].as_str())
-                        .map(String::from),
-                    prompt: member["brief"].as_str().map(String::from),
-                };
-                out.push(tool_started(
-                    message_id,
-                    ToolStart {
-                        id: &tool_id,
-                        name: "Agent",
-                        summary: title.clone(),
-                        subagent: Some(subagent),
-                        parent: None,
-                    },
-                ));
-                self.members.insert(
-                    conv_id.to_string(),
-                    TrackedMember {
-                        name: name.to_string(),
-                        phase: WorkerPhase::Parked,
-                        saw_idle_or_report: false,
-                        latest_report: None,
-                    },
-                );
-            }
-
-            let Some(tracked) = self.members.get_mut(conv_id) else {
-                continue;
-            };
-            if let Some(ref text) = report {
-                tracked.saw_idle_or_report = true;
-                tracked.latest_report = Some(text.clone());
-            }
-
-            match state.as_str() {
-                "working" => {
-                    if !housekeeping {
-                        any_non_housekeeping_running = true;
-                        live_task_ids.push(tool_id.clone());
-                    }
-                    if tracked.phase != WorkerPhase::Running {
-                        tracked.phase = WorkerPhase::Running;
-                        if !housekeeping {
-                            out.push(Parsed::Task(crate::provider::TaskEvent::Started {
-                                task: BackgroundTask {
-                                    tool_id: tool_id.clone(),
-                                    task_id: Some(tool_id.clone()),
-                                    run_id: None,
-                                    kind: "agent".into(),
-                                    description: title,
-                                    status: TaskStatus::Running,
-                                    started_at: now_ms(),
-                                    summary: None,
-                                    output: None,
-                                    cut_off: false,
-                                },
-                                task_id: tool_id,
-                                top_level: true,
-                                backgrounded: true,
-                            }));
-                        }
-                    }
-                }
-                "waiting" | "stopped" => {
-                    tracked.saw_idle_or_report = true;
-                    if tracked.phase == WorkerPhase::Running {
-                        tracked.phase = WorkerPhase::Parked;
-                        if !housekeeping {
-                            out.push(Parsed::Task(crate::provider::TaskEvent::Ended {
-                                task_id: tool_id,
-                                status: TaskStatus::Done,
-                                summary: tracked.latest_report.as_deref().map(one_line),
-                                output: tracked.latest_report.clone(),
-                            }));
-                        }
-                    }
-                }
-                "failed" => {
-                    tracked.phase = WorkerPhase::Finished;
-                    self.finished_ids.insert(conv_id.to_string());
-                    let failure = member["failure"]
-                        .as_str()
-                        .map(String::from)
-                        .or_else(|| tracked.latest_report.clone())
-                        .unwrap_or_else(|| "Swarm worker failed".into());
-                    out.push(Parsed::Task(crate::provider::TaskEvent::Ended {
-                        task_id: tool_id.clone(),
-                        status: TaskStatus::Failed,
-                        summary: Some(one_line(&failure)),
-                        output: Some(failure.clone()),
-                    }));
-                    out.push(tool_finished(message_id, &tool_id, true, &failure));
-                }
-                "killed" => {
-                    let completed =
-                        tracked.saw_idle_or_report || member["hadActivity"].as_bool() == Some(true);
-                    tracked.phase = WorkerPhase::Finished;
-                    self.finished_ids.insert(conv_id.to_string());
-                    let output = tracked.latest_report.clone().unwrap_or_default();
-                    out.push(Parsed::Task(crate::provider::TaskEvent::Ended {
-                        task_id: tool_id.clone(),
-                        status: if completed {
-                            TaskStatus::Done
-                        } else {
-                            TaskStatus::Stopped
-                        },
-                        summary: (!output.is_empty()).then(|| one_line(&output)),
-                        output: (!output.is_empty()).then_some(output.clone()),
-                    }));
-                    out.push(tool_finished(message_id, &tool_id, !completed, &output));
-                }
-                _ => {}
-            }
-        }
-
-        let coordinator_busy = params["coordinatorPendingWake"].as_bool() == Some(true)
-            || params["coordinatorWorking"].as_bool() == Some(true);
-        let hold = any_non_housekeeping_running || coordinator_busy;
-        if hold {
-            live_task_ids.push(COORDINATOR_WAKE_TASK.to_string());
-            if !self.coordinator_held {
-                self.coordinator_held = true;
-                out.push(Parsed::Task(crate::provider::TaskEvent::Started {
-                    task: BackgroundTask {
-                        tool_id: COORDINATOR_WAKE_TASK.into(),
-                        task_id: Some(COORDINATOR_WAKE_TASK.into()),
-                        run_id: None,
-                        kind: "agent".into(),
-                        description: "Swarm coordinator".into(),
-                        status: TaskStatus::Running,
-                        started_at: now_ms(),
-                        summary: None,
-                        output: None,
-                        cut_off: false,
-                    },
-                    task_id: COORDINATOR_WAKE_TASK.into(),
-                    top_level: true,
-                    backgrounded: false,
-                }));
-            }
-        } else if self.coordinator_held {
-            self.coordinator_held = false;
-            out.push(Parsed::Task(crate::provider::TaskEvent::Ended {
-                task_id: COORDINATOR_WAKE_TASK.into(),
-                status: TaskStatus::Done,
-                summary: None,
-                output: None,
-            }));
-        }
-
-        out.push(Parsed::Task(crate::provider::TaskEvent::Level {
-            live: live_task_ids,
-        }));
-        out
-    }
-
-    /// Disk fallback for released `agy` 1.5.x builds that do not emit `_antigravity/swarm`:
-    /// reads `swarm/members.json` under `~/.gemini` to keep active swarm workers alive.
-    pub fn poll_disk_fallback(&mut self, session_id: &str, message_id: &str) -> Vec<Parsed> {
-        if self.native_protocol || !self.saw_swarm_tool || session_id.is_empty() {
-            return Vec::new();
-        }
-        let Some(raw) = read_members_file(session_id) else {
-            return Vec::new();
-        };
-        let Ok(roster) = serde_json::from_str::<Value>(&raw) else {
-            return Vec::new();
-        };
-        let Some(members) = roster["members"].as_object() else {
-            return Vec::new();
-        };
-
-        let mut out = Vec::new();
-        let mut live_task_ids = Vec::new();
-        for (name, member) in members {
-            let Some(conv_id) = member["conversation_id"]
-                .as_str()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-            else {
-                continue;
-            };
-            let role = member["role"]
-                .as_str()
-                .unwrap_or("worker")
-                .to_ascii_lowercase();
-            if role == "coordinator" || HOUSEKEEPING_ROLES.contains(&role.as_str()) {
-                continue;
-            }
-            let killed = member["desired_state"].as_str() == Some("KILLED")
-                || member["phase"].as_str() == Some("KILLED");
-            let parked = matches!(member["wake_mode"].as_str(), Some("mentions" | "anything"));
-            let tool_id = format!("{SWARM_TASK_PREFIX}{conv_id}");
-            let title = format_member_title(name, &role, None);
-
-            if !self.members.contains_key(conv_id) && !self.finished_ids.contains(conv_id) {
-                out.push(tool_started(
-                    message_id,
-                    ToolStart {
-                        id: &tool_id,
-                        name: "Agent",
-                        summary: title.clone(),
-                        subagent: Some(SubAgent {
-                            kind: role.clone(),
-                            description: title.clone(),
-                            model: None,
-                            prompt: None,
-                        }),
-                        parent: None,
-                    },
-                ));
-                self.members.insert(
-                    conv_id.to_string(),
-                    TrackedMember {
-                        name: name.clone(),
-                        phase: WorkerPhase::Parked,
-                        saw_idle_or_report: false,
-                        latest_report: None,
-                    },
-                );
-            }
-            let Some(tracked) = self.members.get_mut(conv_id) else {
-                continue;
-            };
-            if killed {
-                if tracked.phase != WorkerPhase::Finished {
-                    tracked.phase = WorkerPhase::Finished;
-                    self.finished_ids.insert(conv_id.to_string());
-                    out.push(Parsed::Task(crate::provider::TaskEvent::Ended {
-                        task_id: tool_id.clone(),
-                        status: TaskStatus::Done,
-                        summary: None,
-                        output: None,
-                    }));
-                    out.push(tool_finished(message_id, &tool_id, false, ""));
-                }
-            } else if !parked {
-                live_task_ids.push(tool_id.clone());
-                if tracked.phase != WorkerPhase::Running {
-                    tracked.phase = WorkerPhase::Running;
-                    out.push(Parsed::Task(crate::provider::TaskEvent::Started {
-                        task: BackgroundTask {
-                            tool_id: tool_id.clone(),
-                            task_id: Some(tool_id.clone()),
-                            run_id: None,
-                            kind: "agent".into(),
-                            description: title,
-                            status: TaskStatus::Running,
-                            started_at: now_ms(),
-                            summary: None,
-                            output: None,
-                            cut_off: false,
-                        },
-                        task_id: tool_id,
-                        top_level: true,
-                        backgrounded: true,
-                    }));
-                }
-            }
-        }
-        out.push(Parsed::Task(crate::provider::TaskEvent::Level {
-            live: live_task_ids,
-        }));
-        out
-    }
-}
-
-fn format_member_title(name: &str, role: &str, added_by: Option<&str>) -> String {
-    let handle = format!("@{}", name.trim_start_matches('@'));
-    let role_suffix = if !role.is_empty() && role != "worker" {
-        format!(" ({role})")
-    } else {
-        String::new()
-    };
-    let parent_suffix = added_by
-        .map(|s| s.trim().trim_start_matches('@'))
-        .filter(|s| !s.is_empty() && *s != "coordinator")
-        .map_or_else(String::new, |by| format!(" via @{by}"));
-    format!("{handle}{role_suffix}{parent_suffix}")
-}
-
-fn read_members_file(session_id: &str) -> Option<String> {
-    if session_id.contains(['/', '\\', '\0']) || session_id == "." || session_id == ".." {
-        return None;
-    }
-    let root = home()?;
-    for app_dir in ["antigravity-cli", "antigravity-acp"] {
-        let path: PathBuf = root
-            .join(app_dir)
-            .join("brain")
-            .join(session_id)
-            .join(".system_generated")
-            .join("swarm")
-            .join("members.json");
-        let Ok(meta) = std::fs::metadata(&path) else {
-            continue;
-        };
-        if meta.is_file() && meta.len() <= MAX_MEMBERS_FILE_BYTES {
-            return std::fs::read_to_string(&path).ok();
-        }
-    }
-    None
-}
-
-fn clip_chars(text: &str, max: usize) -> String {
-    if text.chars().count() <= max {
-        text.to_string()
-    } else {
-        text.chars().take(max).collect()
-    }
 }

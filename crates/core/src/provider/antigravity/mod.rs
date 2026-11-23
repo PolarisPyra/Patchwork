@@ -4,25 +4,32 @@
 
 mod calls;
 mod children;
-mod client;
+mod cli;
+mod dispatch;
 mod edits;
 mod errors;
 mod input;
 mod login;
-mod parse;
+mod models;
+mod permission_prompts;
+mod probe;
 mod questions;
+mod replies;
+mod session_updates;
 mod swarm;
+mod tool_fields;
 
 #[doc(inline)]
 pub use calls::ToolCalls;
 #[doc(inline)]
 pub use children::{Transcript, child_transcripts};
 #[doc(inline)]
-pub use client::{
-    antigravity_bin, auth, command, configured_model, home, info, known_defaults, models,
-    parse_acp_models, parse_models,
-};
-pub(crate) use client::tier;
+pub use cli::{antigravity_bin, command, home, info};
+#[doc(inline)]
+pub use models::{models, parse_acp_models, parse_models};
+#[doc(inline)]
+pub use probe::{auth, configured_model, known_defaults};
+pub(crate) use probe::tier;
 #[doc(inline)]
 pub use input::{
     Wanted, approval_reply, configure, interrupt, prompt_input, turn_args, turn_env, turn_input,
@@ -30,6 +37,8 @@ pub use input::{
 #[doc(inline)]
 pub use login::{LoginSession, sign_out, start_login};
 #[doc(inline)]
-pub use parse::{CONTEXT_REQUEST, background_task, is_work, parse};
+pub use dispatch::{background_task, is_work, parse};
 #[doc(inline)]
-pub use swarm::{ChildTarget, SWARM_TASK_PREFIX, SwarmState, extract_child_target, subagent_events};
+pub use session_updates::CONTEXT_REQUEST;
+#[doc(inline)]
+pub use swarm::{SWARM_POLL, SWARM_TASK_PREFIX, Swarm};
