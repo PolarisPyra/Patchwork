@@ -8,7 +8,6 @@ use gpui::{
     AnyElement, ClickEvent, Div, Focusable, PathBuilder, Stateful, Window, canvas, div, point,
     prelude::*, px,
 };
-use patchwork_core::chats::Chat;
 use patchwork_ui::controls::pill::pill_chip;
 use patchwork_ui::theme::Theme;
 use patchwork_ui::{above, icon};
@@ -271,12 +270,4 @@ pub(super) fn fill_ring(fill: f32, t: &Theme) -> AnyElement {
     .size(px(16.))
     .flex_none()
     .into_any_element()
-}
-
-/// The chat's context now, from the last reply that reported it.
-pub(super) fn context_of(chat: &Chat) -> Option<u64> {
-    chat.messages
-        .iter()
-        .rev()
-        .find_map(|m| m.usage.as_ref().map(|u| u.context))
 }

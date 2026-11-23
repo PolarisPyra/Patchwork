@@ -343,11 +343,25 @@ pub fn transcript(
     let busy = is_busy(chat);
     // The context size in force just before each row, for a compacted divider to compare against.
     let mut latest = None;
+    let mut after_compact = false;
     let before: Vec<Option<u64>> = shown
         .iter()
         .map(|m| {
             let was = latest;
-            if let Some(usage) = &m.usage {
+            if m.role == MessageRole::User && m.text.trim() == "/compact" {
+                after_compact = true;
+            } else if after_compact {
+                after_compact = false;
+                if m.role == MessageRole::Assistant && m.status == MessageStatus::Complete {
+                    latest = m
+                        .usage
+                        .as_ref()
+                        .filter(|u| u.context > 0 && (u.input == 0 || u.context < u.input))
+                        .map(|u| u.context);
+                } else if let Some(usage) = &m.usage {
+                    latest = Some(usage.context);
+                }
+            } else if let Some(usage) = &m.usage {
                 latest = Some(usage.context);
             }
             was

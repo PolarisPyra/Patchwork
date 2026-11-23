@@ -15,7 +15,7 @@ use patchwork_ui::{agent_logo, button, format_tokens, icon, tooltip};
 use crate::workspace::{Workspace, is_busy, is_working};
 use super::menus::{Menu, access_of, compact_label};
 use patchwork_ui::effort_label;
-use super::chips::{chip, context_of, fill_ring};
+use super::chips::{chip, fill_ring};
 use super::send::queue_by_default;
 use super::draft::Composer;
 
@@ -89,7 +89,9 @@ impl Render for Composer {
         let limit = if effective > 0 { Some(effective) } else { full };
         // How full the context is against where it compacts, as the Compact chip's ring.
         let context = limit.map(|limit| {
-            let tokens = chat.and_then(context_of).unwrap_or(0);
+            let tokens = chat
+                .and_then(patchwork_core::chats::Chat::current_context)
+                .unwrap_or(0);
             let used = tokens as f32 / limit as f32;
             let detail = format!(
                 "Context: {} of {} tokens before it compacts",

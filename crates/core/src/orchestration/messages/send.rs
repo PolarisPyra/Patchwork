@@ -458,15 +458,7 @@ impl Core {
         if window == 0 {
             return false;
         }
-        for m in chat.messages.iter().rev() {
-            if m.role == Role::User && m.text.trim() == "/compact" {
-                return false;
-            }
-            if let Some(usage) = &m.usage {
-                return usage.context >= window;
-            }
-        }
-        false
+        chat.current_context().is_some_and(|c| c >= window)
     }
 
     /// Stops the running turn by interrupting the agent, so its session records the stop and an
