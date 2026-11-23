@@ -1,7 +1,7 @@
-//! What the card holds and what its buttons do: whose settings they are, the three agents it
-//! sets, and opening, saving, resetting and closing it.
+//! What the card holds and what its buttons do: whose settings they are, the orchestrator
+//! and executor it sets, and opening, saving, resetting and closing it.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -21,21 +21,36 @@ pub enum GranularScope {
     Project(String),
 }
 
-/// One of the three agents the card sets.
+/// One of the two agents the card sets.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Slot {
+    /// The chat's own agent, which plans, decides and reviews.
     Main,
-    Fallback,
-    Review,
+    /// The agent its sub agents run on.
+    Executor,
 }
 
 impl Slot {
-    /// The slot's name, which is unique among the three for a screen reader.
+    /// The slot's name, which is unique between the two for a screen reader.
     pub(super) fn name(self) -> &'static str {
         match self {
-            Slot::Main => "Agent",
-            Slot::Fallback => "Fallback",
-            Slot::Review => "Reviewer",
+            Slot::Main => "Orchestrator",
+            Slot::Executor => "Executor",
+        }
+    }
+
+    /// What the slot's agent does.
+    pub(super) fn description(self) -> &'static str {
+        match self {
+            Slot::Main => {
+                "Plans the work, makes design decisions, and reviews the result. Pick a top-tier \
+                 model. You can also pick one per conversation from the Orchestrator row in the \
+                 model menu."
+            }
+            Slot::Executor => {
+                "Carries out the plan: searches, edits, builds, and tests. Pick a faster, cheaper \
+                 model."
+            }
         }
     }
 }
@@ -98,7 +113,7 @@ impl std::fmt::Debug for GranularDialog {
 
 impl EventEmitter<GranularEvent> for GranularDialog {}
 
-/// The agent the slot's pick runs on. None for a fallback or reviewer not picked.
+/// The agent the slot's pick runs on. None for an executor not picked.
 pub(super) fn agent_of(value: &Granular, slot: Slot) -> Option<AgentKind> {
     pick_of(value, slot).map(|p| p.agent)
 }
@@ -106,8 +121,7 @@ pub(super) fn agent_of(value: &Granular, slot: Slot) -> Option<AgentKind> {
 pub(super) fn pick_of(value: &Granular, slot: Slot) -> Option<&AgentPick> {
     match slot {
         Slot::Main => Some(&value.main),
-        Slot::Fallback => value.reserves.fallback.as_ref(),
-        Slot::Review => value.reserves.review.as_ref(),
+        Slot::Executor => value.reserves.executor.as_ref(),
     }
 }
 
@@ -115,8 +129,7 @@ pub(super) fn pick_of(value: &Granular, slot: Slot) -> Option<&AgentPick> {
 pub(super) fn edit(value: &mut Granular, slot: Slot, change: impl FnOnce(&mut AgentPick)) {
     let held = match slot {
         Slot::Main => Some(&mut value.main),
-        Slot::Fallback => value.reserves.fallback.as_mut(),
-        Slot::Review => value.reserves.review.as_mut(),
+        Slot::Executor => value.reserves.executor.as_mut(),
     };
     if let Some(pick) = held {
         change(pick);
@@ -127,17 +140,11 @@ pub(super) fn edit(value: &mut Granular, slot: Slot, change: impl FnOnce(&mut Ag
 pub(super) fn set_agent(value: &mut Granular, slot: Slot, pick: Option<AgentPick>) {
     match (slot, pick) {
         (Slot::Main, Some(pick)) if pick.agent != value.main.agent => value.main = pick,
-        (Slot::Fallback, pick)
+        (Slot::Executor, pick)
             if pick.as_ref().map(|p| p.agent)
-                != value.reserves.fallback.as_ref().map(|f| f.agent) =>
+                != value.reserves.executor.as_ref().map(|e| e.agent) =>
         {
-            value.reserves.fallback = pick;
-        }
-        (Slot::Review, pick)
-            if pick.as_ref().map(|p| p.agent)
-                != value.reserves.review.as_ref().map(|r| r.agent) =>
-        {
-            value.reserves.review = pick;
+            value.reserves.executor = pick;
         }
         _ => {}
     }
@@ -315,8 +322,7 @@ impl GranularDialog {
         match slot {
             Slot::Main if main.agent == value.main.agent => value.main = main,
             Slot::Main => set_agent(value, slot, Some(main)),
-            Slot::Fallback => set_agent(value, slot, None),
-            Slot::Review => value.reserves.review = None,
+            Slot::Executor => value.reserves.executor = None,
         }
         self.error = None;
         cx.notify();

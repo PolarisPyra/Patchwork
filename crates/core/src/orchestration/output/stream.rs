@@ -1,6 +1,6 @@
 //! Streaming agent output to the frontend, and saving events onto the stored chat.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use std::sync::Arc;
 use crate::Error;
@@ -191,7 +191,6 @@ pub(in crate::orchestration) fn event_message(event: &AgentEvent) -> Option<&str
         | AgentEvent::FileTouched { message_id, .. }
         | AgentEvent::TurnRecorded { message_id, .. }
         | AgentEvent::ChecksRecorded { message_id, .. }
-        | AgentEvent::ReviewRecorded { message_id, .. }
         | AgentEvent::ApprovalRequested { message_id, .. }
         | AgentEvent::ApprovalResolved { message_id, .. }
         | AgentEvent::SecretResolved { message_id, .. }
@@ -401,7 +400,6 @@ pub(in crate::orchestration) fn apply(chat: &mut Chat, event: &AgentEvent) {
         }
         AgentEvent::TurnRecorded { turn, .. } => msg.turn = Some(turn.clone()),
         AgentEvent::ChecksRecorded { checks, .. } => msg.checks = Some(checks.clone()),
-        AgentEvent::ReviewRecorded { review, .. } => msg.review = Some(review.clone()),
         AgentEvent::ApprovalRequested { approval, .. } => {
             end_thinking(msg);
             msg.parts.push(Part::Approval {

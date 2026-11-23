@@ -229,7 +229,6 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         // them: a stopped turn, or one that changed nothing, leaves the project as it was.
         if crate::checks::worth_checking(&turn.core.store, &turn.chat_id, last, status) {
             turn.core.check_after_turn(&turn.chat_id, last);
-            turn.core.review_after_turn(&turn.chat_id, last);
         }
     }
     // On a thread of its own, so a slow hook does not hold up the next turn.
@@ -270,15 +269,6 @@ pub(in crate::orchestration) fn finish(turn: Turn, segments: &[String], end: Tur
         if let Err(e) = saved {
             log::warn!(error:% = e; "could not keep the conversation for the next turn: {{error}}");
         }
-    }
-
-    // A chat whose agent ran out of usage goes on in its fallback.
-    if !cancelled
-        && status == MessageStatus::Error
-        && unanswered.is_empty()
-        && turn.core.fall_back(&turn.chat_id)
-    {
-        return;
     }
 
     // Unanswered steers have already been delivered, so clear their pending UI state

@@ -1,6 +1,6 @@
 //! The shape of the app's settings.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -152,10 +152,8 @@ pub struct Settings {
     pub confirm_answers: bool,
     /// Enter steers a running reply instead of queueing the message for after it.
     pub steer_while_working: bool,
-    /// Each chat picks the model and effort of its agent, its fallback and their sub agents.
+    /// Each chat picks the agent, model and effort of its orchestrator and its executor.
     pub granular_chats: bool,
-    /// No reply is reviewed by the agent a granular chat picks as its reviewer.
-    pub review_off: bool,
     /// Agents are not given Patchwork's tools to start, message and wait on other chats.
     pub chat_tools_off: bool,
     /// Patchwork's own agent carries on calling tools for as long as it takes, instead of stopping

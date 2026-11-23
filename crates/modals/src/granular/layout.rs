@@ -1,7 +1,6 @@
-//! Drawing the card: rows for the chat's agent, the agent that reviews its replies, and its
-//! fallback, and the buttons under them.
+//! Drawing the card: panels for the orchestrator and its executor, and the buttons under them.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use gpui::{
     AnyElement, FontWeight, KeyDownEvent, MouseButton, Role, SharedString, Stateful, Window, div,
@@ -65,9 +64,7 @@ fn select(
 }
 
 impl GranularDialog {
-    /// One panel of the card: an agent with its model and effort, over those of the sub agents
-    /// it starts. `main` is the slot of the agent and `sub` the slot of its sub agents, if it
-    /// starts any.
+    /// One panel of the card: the agent of slot `main`, with its model, effort and what it does.
     fn panel(&self, main: Slot, t: &Theme, cx: &mut Context<Self>) -> AnyElement {
         let dialog = self;
         let value = &dialog.value;
@@ -192,6 +189,12 @@ impl GranularDialog {
             )
             .child(
                 div()
+                    .text_size(px(fs_sm()))
+                    .text_color(t.text_muted)
+                    .child(main.description()),
+            )
+            .child(
+                div()
                     .flex()
                     .flex_col()
                     .gap(px(6.))
@@ -207,8 +210,6 @@ impl Render for GranularDialog {
         let dialog = &*self;
         let t = *theme(cx);
         let viewport = window.viewport_size();
-        // Settings → Chat can turn review off for every chat, and then there is nothing to pick.
-        let reviewer = (!self.settings.review_off).then(|| dialog.panel(Slot::Review, &t, cx));
         // Stacked, the card can outgrow the window, so its panels scroll under the title.
         let panels = div()
             .id("granular-panels")
@@ -218,8 +219,7 @@ impl Render for GranularDialog {
             .max_h(viewport.height - px(180.))
             .overflow_y_scroll()
             .child(dialog.panel(Slot::Main, &t, cx))
-            .children(reviewer)
-            .child(dialog.panel(Slot::Fallback, &t, cx));
+            .child(dialog.panel(Slot::Executor, &t, cx));
         let project = matches!(dialog.scope, GranularScope::Project(_));
         let save = if dialog.first.is_some() {
             "Send"

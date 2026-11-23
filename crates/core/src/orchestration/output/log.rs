@@ -4,7 +4,7 @@
 //! and Trace, the text the person and the agent wrote. Streamed text is left to the agent's own
 //! traffic, which the chat's log also takes.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use std::fmt::Write as _;
 use crate::logging::{Data, Source, CHAT_LOG};
@@ -273,10 +273,6 @@ fn describe(event: &AgentEvent) -> Option<(LogLevel, &'static str, Option<&str>,
                 checks.duration_ms
             );
             (Info, "checks", Some(message_id), text)
-        }
-        AgentEvent::ReviewRecorded { message_id, review } => {
-            let text = format!("{:?} by {:?}", review.status, review.agent);
-            (Info, "review", Some(message_id), text)
         }
         AgentEvent::TurnCompleted {
             message_id,

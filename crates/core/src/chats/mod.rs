@@ -23,7 +23,7 @@ pub use messages::{
 };
 #[doc(inline)]
 pub use granular::{AgentPick, Granular, Reserves};
-pub(crate) use granular::{fall_back, fallback_of, project_key, reviewer_of, sub_agent_of};
+pub(crate) use granular::{project_key, sub_agent_of};
 #[doc(inline)]
 pub use lifecycle::NewChat;
 #[doc(inline)]

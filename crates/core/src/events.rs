@@ -1,6 +1,6 @@
 //! What the backend streams to the UI while agents work.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use std::collections::HashMap;
 
@@ -10,7 +10,7 @@ use crate::permissions::RuleRef;
 use crate::provider::ProviderSlashCommand;
 use crate::chats::{
     Approval, BackgroundTask, Goal, Message, MessageStatus, PlanStep, Refusal, Chat, TokenUsage,
-    ToolCall, TurnChecks, TurnReview, TurnTrees,
+    ToolCall, TurnChecks, TurnTrees,
 };
 
 /// An agent event, which the app applies on its UI thread.
@@ -205,11 +205,6 @@ pub enum AgentEvent {
     ChecksRecorded {
         message_id: String,
         checks: TurnChecks,
-    },
-    /// The chat's reviewer started, or came to something, for the reply whose turn it reviews.
-    ReviewRecorded {
-        message_id: String,
-        review: TurnReview,
     },
     /// Terminal event for a turn. `status` is complete | error | cancelled.
     TurnCompleted {

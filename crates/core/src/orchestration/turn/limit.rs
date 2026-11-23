@@ -10,7 +10,6 @@ use crate::system::Locked;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::orchestration::turn::start::{Starting, TurnRequest};
 use crate::system::now_ms;
 use serde::{Deserialize, Serialize};
 
@@ -30,13 +29,6 @@ const MARGIN_MS: u64 = 60_000;
 
 /// How often the waits are checked. A reset is hours away, so half a minute late is unseen.
 const CHECK_EVERY: Duration = Duration::from_secs(30);
-
-/// What a fallback is told in place of a message from the user. It says what was lost, as a
-/// resumed turn's note does.
-const TAKEOVER: &str = "The agent that was working on this ran out of usage, and you are taking \
-    over from it. The conversation so far is above. Any command, subagent, or background task \
-    that was running then has stopped, and its result is lost. Check what was already done, then \
-    carry on with the task from where it left off. Do not start it over.";
 
 /// When the last of the used-up windows in `usage` resets, in Unix epoch milliseconds. None
 /// while no window is used up and still to reset.
@@ -282,63 +274,6 @@ impl Core {
         if let Err(e) = saved {
             log::warn!(error:% = e; "could not save what is left of the usage limit warnings: {{error}}");
         }
-    }
-
-    /// Carries a turn that failed while its agent was out of usage on in the chat's fallback, and
-    /// returns whether it did. The fallback is given the conversation, in a session of its own.
-    pub(in crate::orchestration) fn fall_back(self: &Arc<Self>, chat_id: &str) -> bool {
-        // Held from here to the fallback's turn: the check below asks the provider, and a message
-        // sent meanwhile would start a turn of its own on the agent this moves the chat off.
-        let Ok(claim) = Starting::claim(&self.runner, chat_id) else {
-            return false;
-        };
-        let settings = self.store.settings();
-        let Some(chat) = self.store.chat(chat_id) else {
-            return false;
-        };
-        let failed = chat
-            .resumable_reply()
-            .is_some_and(|m| m.status == MessageStatus::Error);
-        if !failed || crate::chats::fallback_of(&self.store, &settings, &chat).is_none() {
-            return false;
-        }
-        // Asked of the provider, since the turn may not have reported the limit it stopped on.
-        if used_up_until(&self.usage.get(chat.agent, true)).is_none() {
-            return false;
-        }
-        let Some(to) = crate::chats::fall_back(&self.store, &settings, &chat) else {
-            return false;
-        };
-        crate::logging::CHAT_LOG.text(
-            crate::settings::LogLevel::Info,
-            chat_id,
-            "chat",
-            format!(
-                "{:?} is out of usage: fell back to {:?}, model {}",
-                chat.agent,
-                to.agent,
-                to.model.as_deref().unwrap_or("default")
-            ),
-        );
-        let started = self.runner.start_claimed(
-            self,
-            TurnRequest {
-                chat_id: chat_id.into(),
-                text: TAKEOVER.into(),
-                attachments: Vec::new(),
-                images: Vec::new(),
-                resumes: true,
-            },
-            claim,
-        );
-        // The chat stays on its fallback, which its Resume button then starts.
-        if let Err(e) = &started {
-            log::warn!(
-                chat = chat_id, error:% = e;
-                "could not carry {{chat}} on in its fallback: {{error}}"
-            );
-        }
-        started.is_ok()
     }
 
     /// When the chat's turn is set to resume, if it is waiting for a limit to reset.
