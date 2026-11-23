@@ -3,6 +3,14 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.143] - 2026-11-23
+
+## What's Changed
+* fix(antigravity): model, effort and mode changes apply without restarting agy, and Full Access stops asking by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/309
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.142...26.11.143
+
 ## [26.11.142] - 2026-11-23
 
 ## What's Changed
