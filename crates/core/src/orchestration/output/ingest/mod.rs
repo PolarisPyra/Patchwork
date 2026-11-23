@@ -3,6 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 mod approvals;
+mod compaction;
 mod idle;
 mod read;
 #[cfg(test)]

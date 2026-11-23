@@ -493,6 +493,7 @@ impl Runner {
         let controls = Controls::default();
         let idle = Arc::new(AtomicBool::new(false));
         let alone = Arc::new(AtomicBool::new(false));
+        let compacting = Arc::new(AtomicBool::new(false));
         let turn = Turn {
             core: Arc::clone(core),
             chat_id: chat_id.clone(),
@@ -511,6 +512,7 @@ impl Runner {
             controls: Arc::clone(&controls),
             idle: Arc::clone(&idle),
             alone: Arc::clone(&alone),
+            compacting: Arc::clone(&compacting),
             last_output: Arc::new(AtomicU64::new(now_ms())),
             root,
             session_id,
@@ -550,6 +552,7 @@ impl Runner {
                 controls,
                 idle,
                 alone,
+                compacting,
                 stale: AtomicBool::new(false),
                 root: turn.root.clone(),
                 attribution,

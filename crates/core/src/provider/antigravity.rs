@@ -19,6 +19,6 @@ pub use input::{approval_reply, interrupt, prompt_input, turn_args, turn_env, tu
 #[doc(inline)]
 pub use login::{LoginSession, sign_out, start_login};
 #[doc(inline)]
-pub use parse::{background_task, is_work, parse};
+pub use parse::{CONTEXT_REQUEST, background_task, is_work, parse};
 #[doc(inline)]
 pub use swarm::{ChildTarget, SWARM_TASK_PREFIX, SwarmState, extract_child_target, subagent_events};

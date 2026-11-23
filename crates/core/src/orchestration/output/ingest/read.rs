@@ -75,6 +75,7 @@ use crate::orchestration::output::usage::record_request;
 use crate::orchestration::output::usage::Request;
 use crate::orchestration::output::usage::TURN_OUTPUT;
 use super::approvals;
+use super::compaction::{After, Compaction};
 use super::idle::{can_idle, go_idle, stays_up};
 
 /// Completes the replies a steer moved the turn on from, and counts them in `completed`, which is
@@ -180,6 +181,10 @@ pub(in crate::orchestration) fn ingest(
     // Antigravity's native ACP swarm tracker (`_antigravity/swarm` + `members.json` fallback).
     let mut antigravity_swarm = provider::antigravity::SwarmState::default();
     let mut commands = Commands::Unlisted(None);
+    // Patchwork's compaction of an Antigravity reply that fills the window, and the calls
+    // running, which it waits for.
+    let mut compaction = Compaction::default();
+    let mut open_calls: HashSet<String> = HashSet::new();
 
     // Kinds of output the parser had no use for, logged once each per turn, so a CLI that
     // changes how it reports something shows up in the agent log.
@@ -368,6 +373,7 @@ pub(in crate::orchestration) fn ingest(
                 AGENT_LOG.write(LogLevel::Debug, "ignored", &source(&turn), Data::Text(kind));
             }
         }
+        let mut call_ended = false;
         for item in parsed {
             let Some(item) = approvals::screen(&turn, item) else {
                 continue;
@@ -407,6 +413,8 @@ pub(in crate::orchestration) fn ingest(
                 Parsed::Check { .. } => {}
                 Parsed::Finished => {
                     ended = true;
+                    // A call the finished reply left open runs in the background, if at all.
+                    open_calls.clear();
                     unprompted.set(Unprompted::No, &turn.alone);
                     // Stop interrupted the agent and it ended its reply. Claude stays up for the
                     // next message, as after any reply; Codex exits once its stdin closes. Until
@@ -423,7 +431,25 @@ pub(in crate::orchestration) fn ingest(
                             // What it left running toward a goal or in the background stops too.
                             terminate(pid, Arc::clone(&turn.exited));
                         }
+                        compaction.stopped(&turn);
                         continue;
+                    }
+                    match compaction.finished(&turn, &value, stream_error.is_some(), &mut unsaved) {
+                        After::Compact(line) => {
+                            match &mut commands {
+                                Commands::Listed => {
+                                    write_line(&turn.stdin, &line);
+                                }
+                                Commands::Unlisted(waiting) => *waiting = Some(line),
+                            }
+                            ended = false;
+                            continue;
+                        }
+                        After::GoesOn => {
+                            ended = false;
+                            continue;
+                        }
+                        After::Ends => {}
                     }
                     let steered = !turn.steers.locked().is_empty();
                     // Claude ends its reply to take the steering messages, then answers them.
@@ -561,6 +587,11 @@ pub(in crate::orchestration) fn ingest(
                     top_level,
                     model,
                 } => {
+                    if turn.agent == AgentKind::Antigravity
+                        && request_id.starts_with(provider::antigravity::CONTEXT_REQUEST)
+                    {
+                        compaction.usage(usage.context, turn.compact_window);
+                    }
                     if usage.cost_micros.is_none() {
                         let model = model.or_else(|| {
                             fallback_model
@@ -677,6 +708,9 @@ pub(in crate::orchestration) fn ingest(
                                 continue;
                             }
                             tool_owner.insert(tool.id.clone(), message_id.clone());
+                            if tool.parent.is_none() {
+                                open_calls.insert(tool.id.clone());
+                            }
                             let task = match turn.agent {
                                 AgentKind::Codex => provider::codex::background_task(tool),
                                 AgentKind::Antigravity if tool.parent.is_none() => {
@@ -704,6 +738,7 @@ pub(in crate::orchestration) fn ingest(
                             is_error,
                             output,
                         } => {
+                            call_ended |= open_calls.remove(tool_id.as_str());
                             if let Some(name) =
                                 repeats.finished(tool_id, *is_error, output.as_deref())
                                 && stream_error.is_none()
@@ -749,6 +784,11 @@ pub(in crate::orchestration) fn ingest(
                     }
                 }
             }
+        }
+        // Between calls is where a reply that filled the window stops to compact.
+        if call_ended && turn.agent == AgentKind::Antigravity {
+            let busy = !open_calls.is_empty() || antigravity_swarm.has_live_work();
+            compaction.stop_if_due(&turn, busy);
         }
     }
     // The stream has closed, whether the turn finished, failed, or was cancelled.

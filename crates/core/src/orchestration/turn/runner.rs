@@ -292,6 +292,12 @@ impl Runner {
             self.handed_over.locked().remove(message_id);
             return Delivery::NotRunning;
         }
+        // Patchwork stopped the reply to compact it, and a stop now would stop the compaction:
+        // the message goes once it ends, as a steer's would.
+        if turn.compacting.load(Ordering::SeqCst) {
+            turn.steers.locked().push_back(follow_up);
+            return Delivery::Steered;
+        }
         let line = provider::steer_input(turn.agent, prompt, session_id, turn_id.as_deref());
         if let Some(line) = line
             && write_to(&mut stdin, &line)
