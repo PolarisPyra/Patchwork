@@ -22,6 +22,9 @@ use super::input::{
 };
 use super::swarm::{extract_child_target, format_swarm_tool, invoke_subagent_descriptor};
 
+/// How the request id of a context report (`usage_update`) starts.
+pub const CONTEXT_REQUEST: &str = "acp-context-";
+
 /// Maps one JSON-RPC line from `agy acp` into Patchwork events, approvals, or follow-up writes.
 #[must_use]
 pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
@@ -428,7 +431,7 @@ pub(super) fn parse_session_update(
         Some("usage_update") => {
             if let Some(used) = update["used"].as_u64().filter(|&n| n > 0) {
                 out.push(Parsed::RequestUsage {
-                    request_id: format!("acp-context-{message_id}"),
+                    request_id: format!("{CONTEXT_REQUEST}{message_id}"),
                     usage: TokenUsage {
                         context: used,
                         ..Default::default()

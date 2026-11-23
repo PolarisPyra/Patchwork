@@ -154,9 +154,11 @@ impl Runner {
         };
         let line = provider::steer_input(turn.agent, prompt, session_id, turn_id.as_deref());
         let mut stdin = turn.stdin.locked();
-        if line
-            .as_deref()
-            .is_some_and(|line| write_to(&mut stdin, line))
+        // As in `steer`: during Patchwork's compaction the message waits for it to end.
+        if turn.compacting.load(Ordering::SeqCst)
+            || line
+                .as_deref()
+                .is_some_and(|line| write_to(&mut stdin, line))
         {
             turn.steers.locked().push_back(follow_up);
             true

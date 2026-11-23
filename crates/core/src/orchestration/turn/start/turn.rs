@@ -57,6 +57,9 @@ pub(in crate::orchestration) struct Turn {
     /// Antigravity is at work on a reply it started by itself, while the chat counts as idle.
     /// Retiring the agent waits for that work to end.
     pub(in crate::orchestration) alone: Arc<AtomicBool>,
+    /// Patchwork stopped the Antigravity reply to compact it. A steer meanwhile waits for the
+    /// compaction to end instead of stopping it.
+    pub(in crate::orchestration) compacting: Arc<AtomicBool>,
     /// When the agent last said anything (ms since epoch), which `watch` reads to tell the user
     /// a reply has gone quiet.
     pub(in crate::orchestration) last_output: Arc<AtomicU64>,
