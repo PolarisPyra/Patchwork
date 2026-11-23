@@ -155,11 +155,9 @@ pub fn steer_input(
             &prompt_text(text, attachments),
             attachments,
         )),
-        AgentKind::Antigravity => Some(antigravity::steer_input(
-            session_id?,
-            &prompt_text(text, attachments),
-            images,
-        )),
+        // `agy` drops a reply it is given a prompt during and may ignore that prompt, so a
+        // steer stops the reply instead, and the reader sends the steer once it has stopped.
+        AgentKind::Antigravity => Some(antigravity::interrupt(session_id?)),
         // `opencode run` reads one message per run; later ones start the next turn.
         AgentKind::OpenCode => opencode::uses_serve()
             .then(|| opencode::steer_line(&prompt_text(text, attachments), attachments)),

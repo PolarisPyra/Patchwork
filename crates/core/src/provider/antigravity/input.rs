@@ -30,9 +30,6 @@ pub(super) const EFFORT_REQUEST: u64 = 5;
 /// Request id of `session/prompt`.
 pub(super) const PROMPT_REQUEST: u64 = 6;
 
-/// Request id of mid-turn steering `session/prompt`.
-pub(super) const STEER_REQUEST: u64 = 7;
-
 /// Command-line arguments for an Antigravity ACP turn (`agy acp --stdio`).
 #[must_use]
 pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
@@ -203,19 +200,15 @@ pub(super) fn begin(spec: &TurnSpec, session_id: &str, session_result: &Value) -
         ));
     }
 
-    let blocks = prompt_blocks(&prompt(spec), spec.images);
-    out.push(Parsed::Send(
-        json!({
-            "jsonrpc": "2.0",
-            "id": PROMPT_REQUEST,
-            "method": "session/prompt",
-            "params": {
-                "sessionId": session_id,
-                "prompt": blocks,
-            },
-        })
-        .to_string(),
-    ));
+    let text = prompt(spec);
+    let line = prompt_request(PROMPT_REQUEST, session_id, &text, spec.images);
+    // `agy` runs a slash command sent before it lists its commands as plain chat, so a
+    // `/compact` that starts a resumed session waits for that list.
+    out.push(if text.trim_start().starts_with('/') {
+        Parsed::SendAfterCommands(line)
+    } else {
+        Parsed::Send(line)
+    });
     out
 }
 
@@ -240,13 +233,6 @@ fn prompt_blocks(text: &str, images: &[Image]) -> Vec<Value> {
 #[must_use]
 pub fn prompt_input(session_id: &str, text: &str, images: &[Image]) -> String {
     prompt_request(PROMPT_REQUEST, session_id, text, images)
-}
-
-/// Sends a steering follow-up into the running ACP session (`agy acp` 1.5.0+ supports mid-turn
-/// `session/prompt`).
-#[must_use]
-pub fn steer_input(session_id: &str, text: &str, images: &[Image]) -> String {
-    prompt_request(STEER_REQUEST, session_id, text, images)
 }
 
 fn prompt_request(id: u64, session_id: &str, text: &str, images: &[Image]) -> String {

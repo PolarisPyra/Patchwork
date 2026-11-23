@@ -237,12 +237,13 @@ impl Core {
             orchestration::publish(self, &chat_id, AgentEvent::GoalUpdated { goal: Some(goal) });
         }
         // Antigravity has no setting for when it compacts, so a chat over its compact window
-        // compacts first, and the message waits for it in the queue.
+        // compacts first, and the message waits for it in the queue. A message sent while it
+        // compacts waits too: steering would stop the compaction.
         let queue = if self.compacts_first(&chat_id, &text) {
             self.deliver(chat_id.clone(), "/compact".into(), Vec::new(), false, None)?;
             true
         } else {
-            queue
+            queue || self.compacting(&chat_id)
         };
         // Checked before the message is stored, so a refused message leaves no trace.
         let mut msg = user_message(&text, attachments.clone());
@@ -459,6 +460,24 @@ impl Core {
             return false;
         }
         chat.current_context().is_some_and(|c| c >= window)
+    }
+
+    /// Whether the Antigravity reply under way answers `/compact`. A steer would stop it, so
+    /// messages sent meanwhile wait for it in the queue.
+    pub(crate) fn compacting(&self, chat_id: &str) -> bool {
+        let Some(chat) = self.store.chat(chat_id) else {
+            return false;
+        };
+        chat.agent == AgentKind::Antigravity
+            && self.runner.is_running(chat_id)
+            && chat
+                .messages
+                .iter()
+                .rev()
+                .find(|m| m.role == Role::User && !m.queued)
+                .is_some_and(|m| {
+                    orchestration::upkeep(&m.text) == Some(orchestration::Upkeep::Compact)
+                })
     }
 
     /// Stops the running turn by interrupting the agent, so its session records the stop and an

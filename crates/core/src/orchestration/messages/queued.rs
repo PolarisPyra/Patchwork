@@ -174,8 +174,14 @@ impl Core {
     /// # Errors
     ///
     /// Returns an error when the chat or the message is unknown, or when the message is no longer
-    /// queued or could not be sent to the running turn.
+    /// queued or could not be sent to the running turn, or while Antigravity compacts the chat.
     pub fn steer_queued(&self, chat_id: &str, message_id: &str) -> Result<(), Error> {
+        // A steer would stop the compaction, and the message is sent once it ends anyway.
+        if self.compacting(chat_id) {
+            return Err(
+                "Antigravity is compacting this chat; the message goes once it ends".into(),
+            );
+        }
         let chat = self.chat(chat_id)?;
         let Some(message) = chat.messages.iter().find(|m| m.id == message_id) else {
             return Err("Message not found".into());

@@ -6,7 +6,8 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use crate::chats::{PlanStep, TokenUsage};
+use crate::chats::{BackgroundTask, PlanStep, Refusal, TaskStatus, TokenUsage, ToolCall};
+use crate::system::now_ms;
 use crate::events::AgentEvent;
 use crate::permissions::{PermissionKind, Target};
 use crate::provider::{
@@ -17,7 +18,7 @@ use crate::provider::{
 use super::client::AUTH_REQUIRED_CODE;
 use super::input::{
     EFFORT_REQUEST, INIT_REQUEST, MODE_REQUEST, MODEL_REQUEST, PROMPT_REQUEST, SESSION_REQUEST,
-    STEER_REQUEST, begin,
+    begin,
 };
 use super::swarm::{extract_child_target, format_swarm_tool, invoke_subagent_descriptor};
 
@@ -27,7 +28,7 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
     let mut out = Vec::new();
     match (v.get("id"), v["method"].as_str()) {
         // Response to one of our JSON-RPC requests.
-        (Some(id), None) => handle_response(id, v, spec, &mut out),
+        (Some(id), None) => handle_response(id, v, spec, message_id, &mut out),
         // Server-initiated request (such as `session/request_permission`).
         (Some(_), Some(_)) => out.push(handle_server_request(v, spec)),
         // Server notification (`session/update`).
@@ -39,7 +40,54 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
     out
 }
 
-fn handle_response(id: &Value, v: &Value, spec: &TurnSpec, out: &mut Vec<Parsed>) {
+/// The task a shell command call runs, listed under the background when the reply ends while
+/// it still runs: Antigravity answers its prompt once a long command moves to the background.
+#[must_use]
+pub fn background_task(tool: &ToolCall) -> Option<BackgroundTask> {
+    if !matches!(
+        tool.name.as_str(),
+        "run_command" | "execute_command" | "shell" | "execute"
+    ) {
+        return None;
+    }
+    Some(BackgroundTask {
+        tool_id: tool.id.clone(),
+        task_id: None,
+        run_id: None,
+        kind: "command".into(),
+        description: tool.summary.clone(),
+        status: TaskStatus::Running,
+        started_at: tool.started_at.unwrap_or_else(now_ms),
+        summary: None,
+        output: None,
+        cut_off: false,
+    })
+}
+
+/// Whether `line` shows Antigravity at work: text, a thought, a plan, or a call running.
+///
+/// It sends these too when it goes on working after answering its prompt. A call that only
+/// ends, such as a background command, is not work.
+#[must_use]
+pub fn is_work(line: &Value) -> bool {
+    let update = &line["params"]["update"];
+    let ends_call = matches!(update["status"].as_str(), Some("completed" | "failed"));
+    line.get("id").is_none()
+        && line["method"] == "session/update"
+        && match update["sessionUpdate"].as_str() {
+            Some("agent_message_chunk" | "agent_thought_chunk" | "plan") => true,
+            Some("tool_call" | "tool_call_update") => !ends_call,
+            _ => false,
+        }
+}
+
+fn handle_response(
+    id: &Value,
+    v: &Value,
+    spec: &TurnSpec,
+    message_id: &str,
+    out: &mut Vec<Parsed>,
+) {
     let error = v.get("error").filter(|e| !e.is_null());
     let error_msg = error.and_then(|e| e["message"].as_str());
     let error_code = error.and_then(|e| e["code"].as_i64());
@@ -63,9 +111,9 @@ fn handle_response(id: &Value, v: &Value, spec: &TurnSpec, out: &mut Vec<Parsed>
                     ),
                     Parsed::Finished,
                 ]);
-            } else if spec.session_id.is_some() {
-                // Resuming a missing/expired ACP session lets Patchwork start a fresh one with
-                // the conversation transcript.
+            } else if spec.session_id.is_some() && session_missing(msg) {
+                // A session agy no longer has is started afresh, given the conversation so far.
+                // Other failures are shown, so a passing one does not replace the session.
                 out.extend([Parsed::SessionLost, Parsed::Finished]);
             } else {
                 out.extend([Parsed::Error(msg.into()), Parsed::Finished]);
@@ -96,14 +144,6 @@ fn handle_response(id: &Value, v: &Value, spec: &TurnSpec, out: &mut Vec<Parsed>
         if let Some(msg) = error_msg {
             out.extend([Parsed::Error(msg.into()), Parsed::Finished]);
         }
-        return;
-    }
-
-    if id == STEER_REQUEST {
-        out.push(match error_msg {
-            Some(msg) => Parsed::SteerRejected(msg.into()),
-            None => Parsed::Steered,
-        });
         return;
     }
 
@@ -141,8 +181,66 @@ fn handle_response(id: &Value, v: &Value, spec: &TurnSpec, out: &mut Vec<Parsed>
                 });
             }
         }
+        out.extend(stop_reason(result["stopReason"].as_str(), message_id));
         out.push(Parsed::Finished);
     }
+}
+
+/// Whether a `session/resume` error says agy has no such session. agy 1.5 answers an unknown
+/// id with `Failed to read session <id>; retry, or load it with session/load`.
+fn session_missing(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    [
+        "failed to read session",
+        "not found",
+        "no such session",
+        "does not exist",
+    ]
+    .iter()
+    .any(|term| lower.contains(term))
+}
+
+/// The usage-limit error agy writes into the reply as text, such as `⚠ Individual quota
+/// reached. … Resets in 1h12m40s.`, before ending it as a normal reply.
+fn limit_notice(text: &str) -> Option<&str> {
+    let notice = text
+        .trim()
+        .strip_prefix('⚠')?
+        .trim_start_matches('\u{fe0f}')
+        .trim();
+    let lower = notice.to_lowercase();
+    [
+        "quota",
+        "resource_exhausted",
+        "429",
+        "exhausted your capacity",
+        "rate limit",
+    ]
+    .iter()
+    .any(|term| lower.contains(term))
+    .then_some(notice)
+}
+
+/// What a reply's ACP `stopReason` adds before it ends: nothing for a normal end or a stop.
+fn stop_reason(reason: Option<&str>, message_id: &str) -> Option<Parsed> {
+    let error = match reason? {
+        "refusal" => {
+            return Some(Parsed::Event(AgentEvent::Refused {
+                message_id: message_id.into(),
+                refusal: Refusal {
+                    category: None,
+                    explanation: "Antigravity declined to continue this reply.".into(),
+                },
+            }));
+        }
+        "max_tokens" => "Antigravity's reply reached the model's output limit and was cut off.",
+        "max_turn_requests" => {
+            "Antigravity reached its limit of model requests for one reply. Send a message to \
+             continue."
+        }
+        _ => return None,
+    };
+    Some(Parsed::Error(error.into()))
 }
 
 fn handle_server_request(v: &Value, spec: &TurnSpec) -> Parsed {
@@ -161,9 +259,15 @@ fn handle_server_request(v: &Value, spec: &TurnSpec) -> Parsed {
     let tool = &params["toolCall"];
     let options = params["options"].as_array().map_or(&[][..], Vec::as_slice);
 
-    let allow_option = options
-        .iter()
-        .find(|o| matches!(o["kind"].as_str(), Some("allow_once" | "allow_always")))
+    // Patchwork asks about each call, so a one-off answer is preferred; a lasting one only
+    // when agy offers nothing else.
+    let kind = |kind: &str| {
+        options
+            .iter()
+            .find(move |o| o["kind"].as_str() == Some(kind))
+    };
+    let allow_option = kind("allow_once")
+        .or_else(|| kind("allow_always"))
         .or_else(|| {
             options
                 .iter()
@@ -171,9 +275,8 @@ fn handle_server_request(v: &Value, spec: &TurnSpec) -> Parsed {
         })
         .and_then(|o| o["optionId"].as_str())
         .unwrap_or("allow");
-    let deny_option = options
-        .iter()
-        .find(|o| matches!(o["kind"].as_str(), Some("reject_once" | "reject_always")))
+    let deny_option = kind("reject_once")
+        .or_else(|| kind("reject_always"))
         .or_else(|| {
             options
                 .iter()
@@ -241,7 +344,10 @@ pub(super) fn parse_session_update(
             if update["content"]["type"].as_str() == Some("text")
                 && let Some(text) = update["content"]["text"].as_str().filter(|t| !t.is_empty())
             {
-                out.push(text_delta(message_id, text));
+                out.push(
+                    limit_notice(text)
+                        .map_or_else(|| text_delta(message_id, text), |e| Parsed::Error(e.into())),
+                );
             }
         }
         Some("agent_thought_chunk") => {

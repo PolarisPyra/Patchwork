@@ -131,22 +131,44 @@ impl Runner {
 
     /// Stops every idle agent, as `retire_idle` does.
     pub fn retire_all_idle(&self) {
-        let chats: Vec<String> = {
-            let turns = self.turns.locked();
-            turns.keys().cloned().collect()
-        };
-        for chat_id in chats {
+        for chat_id in self.chats() {
             self.retire_idle(&chat_id);
         }
     }
 
+    /// Stops every idle agent now, as `replace_idle` does, even Antigravity at work by itself.
+    pub(in crate::orchestration) fn stop_all_idle(&self) {
+        for chat_id in self.chats() {
+            self.replace_idle(&chat_id);
+        }
+    }
+
+    /// The chats with an agent process up.
+    fn chats(&self) -> Vec<String> {
+        self.turns.locked().keys().cloned().collect()
+    }
+
     /// Stops the chat's idle agent, and the shell commands it left running, so a turn that
-    /// needs a process of its own can start. A turn that is replying is left to finish, and is
-    /// not used again once it is idle.
+    /// needs a process of its own can start. A turn that is replying, or Antigravity at work by
+    /// itself, is left to finish, and is not used again once it is idle.
     pub fn retire_idle(&self, chat_id: &str) {
+        self.stop_idle(chat_id, false);
+    }
+
+    /// Stops the chat's idle agent for a turn that starts now, even Antigravity at work by
+    /// itself, which would otherwise run on beside the new process.
+    pub(crate) fn replace_idle(&self, chat_id: &str) {
+        self.stop_idle(chat_id, true);
+    }
+
+    /// Stops the chat's idle agent. Antigravity at work by itself is stopped only when
+    /// `even_alone`; otherwise, as a replying agent, it is marked not to be used again.
+    fn stop_idle(&self, chat_id: &str, even_alone: bool) {
         let mut turns = self.turns.locked();
         match turns.get(chat_id) {
-            Some(turn) if turn.idle.load(Ordering::SeqCst) => {}
+            Some(turn)
+                if turn.idle.load(Ordering::SeqCst)
+                    && (even_alone || !turn.alone.load(Ordering::SeqCst)) => {}
             Some(turn) => {
                 turn.stale.store(true, Ordering::SeqCst);
                 return;
@@ -250,6 +272,12 @@ impl Runner {
         // recording that an answer is due.
         let mut stdin = turn.stdin.locked();
         if turn.idle.load(Ordering::SeqCst) {
+            // Antigravity at work by itself in a process that is not used again: the message
+            // waits for that work to end, then starts a new process.
+            if turn.stale.load(Ordering::SeqCst) && turn.alone.load(Ordering::SeqCst) {
+                turn.queue.locked().push(follow_up);
+                return Delivery::Queued;
+            }
             let line = provider::resume_input(turn.agent, prompt, session_id, turn_id.as_deref());
             // The agent's last reply is over; this message starts the next one, and if the agent
             // can no longer take it, or was started with settings changed since, a new turn
