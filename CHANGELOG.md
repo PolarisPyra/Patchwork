@@ -3,6 +3,17 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.139] - 2026-11-23
+
+## What's Changed
+* docs(agents): unify agent instructions into AGENTS.md by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/299
+* ci(release): auto-version manual releases and skip pre-push on tags by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/300
+* ci: speed up CI and release builds and add prebuilt Linux CI image by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/301
+* fix(chat): reset context ring and warning after compacting by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/302
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.138...26.11.139
+
 ## [26.11.138] - 2026-11-22
 
 ## What's Changed
