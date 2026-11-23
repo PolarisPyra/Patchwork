@@ -3,6 +3,15 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.141] - 2026-11-23
+
+## What's Changed
+* fix(antigravity): the context ring shows agy's real context instead of dropping after each reply by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/306
+* fix(antigravity): a message sent to an idle agy shows as working right away, through /compact too by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/307
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.140...26.11.141
+
 ## [26.11.140] - 2026-11-23
 
 ## What's Changed
