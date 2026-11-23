@@ -3,6 +3,17 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.144] - 2026-11-23
+
+## What's Changed
+* chore(deps): update cookie, heapless and rustix past their security advisories by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/310
+* feat(granular): chats get an orchestrator that plans and reviews and an executor that does the work, replacing the reviewer and fallback by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/311
+* fix(antigravity): sub agent work shows in its own chat, edits show line counts, and titles come from agy by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/312
+* fix(build): Windows and Mac builds and the SSH helper compile again by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/313
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.143...26.11.144
+
 ## [26.11.143] - 2026-11-23
 
 ## What's Changed
