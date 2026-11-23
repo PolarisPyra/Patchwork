@@ -1,7 +1,7 @@
 //! Settings → Chat: how a chat is answered and steered, how many steps and tokens a turn of
 //! Patchwork's own agent may take, and what a launch does with replies the last session cut off.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use gpui::{AnyElement, div, prelude::*};
 use patchwork_core::settings::{ResumeAtLaunch, Settings};
@@ -32,7 +32,7 @@ type Flag = (
     fn(&Settings) -> bool,
     fn(&mut Settings, bool),
 );
-const FLAGS: [Flag; 6] = [
+const FLAGS: [Flag; 5] = [
     (
         "confirm-answers",
         "Click answers twice to send",
@@ -50,12 +50,6 @@ const FLAGS: [Flag; 6] = [
         "Granular chats",
         |s| s.granular_chats,
         |s, on| s.granular_chats = on,
-    ),
-    (
-        "cross-model-review",
-        "Cross-model review",
-        |s| !s.review_off,
-        |s, on| s.review_off = !on,
     ),
     (
         "chat-tools",

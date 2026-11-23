@@ -51,7 +51,7 @@ pub(in crate::orchestration) fn mark_call(turn: &Turn, tool: &mut ToolCall) {
     let store = &turn.core.store;
     let Some(pick) = store
         .chat(&turn.chat_id)
-        .and_then(|chat| sub_agent_of(&chat))
+        .and_then(|chat| sub_agent_of(store, &chat))
     else {
         return;
     };
@@ -175,7 +175,7 @@ impl Runner {
             .store
             .chat(chat_id)
             .ok_or("This chat is no longer here")?;
-        let pick = sub_agent_of(&parent)
+        let pick = sub_agent_of(&core.store, &parent)
             .ok_or("This chat's sub agents run on its own agent; start one with your own tool")?;
         // Only Patchwork's own agent is offered the background, and the tool that ends it.
         let background = ask.background && parent.agent == AgentKind::Api;

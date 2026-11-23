@@ -1,6 +1,6 @@
 //! The card's dropdowns: the rows each offers, and opening and closing them.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use gpui::{Entity, SharedString, WeakEntity, Window, anchored, deferred, div, point, prelude::*, px};
 use patchwork_core::chats::Granular;
@@ -51,7 +51,7 @@ impl GranularDialog {
         let pick = pick_of(value, slot);
         if part == Part::Agent {
             let current = pick.map(|p| p.agent);
-            let none = matches!(slot, Slot::Fallback | Slot::Review).then(|| {
+            let none = (slot == Slot::Executor).then(|| {
                 choice(&this, "None", current.is_none(), move |v| {
                     set_agent(v, slot, None);
                 })

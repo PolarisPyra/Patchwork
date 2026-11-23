@@ -1,6 +1,6 @@
 //! The `chats`, `messages` and `folders` tables.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -107,7 +107,7 @@ pub(super) fn chat_state_keys(chat_id: &str) -> [String; 14] {
         // Where its next Claude turn picks its session up after an undo or a fork, which
         // `chats/lifecycle.rs` keeps.
         format!("claude-resume-point:{chat_id}"),
-        // Its fallback and sub agents, which `chats/granular.rs` keeps.
+        // Its executor, which `chats/granular.rs` keeps.
         format!("granular:{chat_id}"),
         compact_window_key(chat_id),
         background_key(chat_id),

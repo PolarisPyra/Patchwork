@@ -1,6 +1,6 @@
 //! The picker drawn: the providers down the left, the search field over the models, and the Legacy models panel.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use super::rows::WIDTH;
 use super::rows::HEIGHT;
@@ -397,11 +397,22 @@ impl Composer {
                                             .child(search),
                                     ),
                             )
+                            // The chat's own agent plans and reviews; its executor is set in
+                            // the granular settings.
+                            .child(
+                                div()
+                                    .px(px(12.))
+                                    .pt(px(8.))
+                                    .text_size(px(fs_sm()))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(t.text_subtle)
+                                    .child("Orchestrator"),
+                            )
                             .child(
                                 div()
                                     .id("model-options")
                                     .role(Role::ListBox)
-                                    .aria_label("Models")
+                                    .aria_label("Orchestrator models")
                                     .flex_1()
                                     .min_h_0()
                                     .overflow_y_scroll()

@@ -1,17 +1,18 @@
 //! The tool a chat's agent starts a sub agent on another agent with.
 //!
-//! A CLI only runs its own models, so a chat whose sub agents are set to another agent (see
-//! `granular`) is offered [`TOOL`] on Patchwork's own server. Patchwork runs the work as a chat of
+//! A CLI only runs its own models, so a chat given an executor (see `granular`) is offered
+//! [`TOOL`] on Patchwork's own server. Patchwork runs the work as a chat of
 //! that agent's, and hands its answer back as the tool's result.
 //!
 //! Patchwork's own agent has no sub agents of its own, so it is offered the tool in every chat, and
 //! its sub agents run on itself unless the chat names another agent.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use serde_json::{Value, json};
 
 use super::granular::{AgentPick, sub_agent_of};
+use crate::provider::AgentKind;
 use crate::{Error, Core};
 
 /// The tool a chat's agent starts a sub agent on another agent with.
@@ -41,22 +42,34 @@ pub fn shown(summary: &str) -> &str {
     }
 }
 
-/// What Patchwork's own agent is told the tool does, for sub agents that run at `pick`.
-fn description(pick: &AgentPick) -> String {
+/// What the chat's agent is told the tool does, for sub agents that run at `pick`. Only
+/// Patchwork's own agent, `own`, can leave one working in the background.
+fn description(pick: &AgentPick, own: bool) -> String {
     let model = pick
         .model
         .as_deref()
         .map(|model| format!(" ({model})"))
         .unwrap_or_default();
+    let agent = if own && pick.agent == AgentKind::Api {
+        format!("a fresh run of this agent{model}")
+    } else {
+        format!("the executor, {:?}{model}", pick.agent)
+    };
+    let common = format!(
+        "Hand a self-contained piece of work to a sub agent and wait for its answer: {agent}, with \
+         the same tools, working in the same folder. You plan the work, make the design decisions \
+         and review the result; the sub agent carries the plan out: searches, edits, builds and \
+         tests. It sees nothing of this conversation, so the prompt must hold everything it needs, \
+         and only its last reply comes back."
+    );
+    if !own {
+        return format!("{common} Use it instead of sub agents of your own.");
+    }
     // Patchwork's own agent runs its calls one at a time and has no sub agents of its own.
     format!(
-        "Hand a self-contained piece of work to a sub agent and wait for its answer: a fresh run \
-         of this agent{model}, with the same tools, working in the same folder. It sees nothing of \
-         this conversation, so the prompt must hold everything it needs, and only its last reply \
-         comes back. Use it for work whose steps would crowd this conversation, such as searching \
-         a large codebase or researching a question. Your calls run one at a time, so to carry on \
-         with your own work while it runs, set run_in_background: the call then returns its id at \
-         once, and {RESULT} gives its answer when you need it."
+        "{common} Your calls run one at a time, so to carry on with your own work while it runs, \
+         set run_in_background: the call then returns its id at once, and {RESULT} gives its \
+         answer when you need it."
     )
 }
 
@@ -91,23 +104,28 @@ impl Ask {
 }
 
 impl Core {
-    /// The tools as Patchwork's own server lists them for the chat's agent: [`TOOL`] and
-    /// [`RESULT`] for Patchwork's own agent, and none for a CLI, which runs its sub agents itself.
+    /// The tools as Patchwork's own server lists them for the chat's agent: [`TOOL`] when its sub
+    /// agents run on Patchwork's side, and [`RESULT`] too for Patchwork's own agent. None for a CLI
+    /// that runs its sub agents itself.
     pub(crate) fn delegate_tools(&self, chat_id: &str) -> Vec<Value> {
         let Some(chat) = self.store.chat(chat_id) else {
             return Vec::new();
         };
-        let Some(pick) = sub_agent_of(&chat) else {
+        let Some(pick) = sub_agent_of(&self.store, &chat) else {
             return Vec::new();
         };
+        let own = chat.agent == AgentKind::Api;
         let mut run = json!({
             "name": TOOL,
-            "description": description(&pick),
+            "description": description(&pick, own),
             "inputSchema": {"type": "object", "properties": {
                 "description": {"type": "string", "description": "What the sub agent does, in a few words."},
                 "prompt": {"type": "string", "description": "The whole task, with everything the sub agent needs to know."}
             }, "required": ["description", "prompt"]},
         });
+        if !own {
+            return vec![run];
+        }
         run["inputSchema"]["properties"]["run_in_background"] = json!({
             "type": "boolean",
             "description": "Return at once with the sub agent's id, and carry on while it works.",

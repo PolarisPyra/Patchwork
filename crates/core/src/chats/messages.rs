@@ -1,6 +1,6 @@
 //! A message and what it carries: its parts, tool calls, approvals, attachments and usage.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use crate::Error;
 use std::collections::HashMap;
@@ -482,8 +482,8 @@ pub struct Message {
     /// files. None for older replies, and for projects with nothing to run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checks: Option<TurnChecks>,
-    /// What the chat's reviewer, another agent or model, made of the files the turn changed.
-    /// None when the chat has no reviewer, and for replies that changed nothing.
+    /// What a reviewer, another agent or model, made of the files the turn changed, kept from
+    /// when chats had reviewers. None for every reply since.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub review: Option<TurnReview>,
     /// Claude's id for the reply's last message, where its session can resume once the replies

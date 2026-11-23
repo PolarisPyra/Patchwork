@@ -1,16 +1,15 @@
-//! Granular chats: the model and effort of a chat's own agent, of the fallback that takes over
-//! when that agent's provider is out of usage, and of the agent that reviews what a reply changed.
+//! Granular chats: the agent, model and effort of a chat's orchestrator, its own agent that
+//! plans, decides and reviews, and of the executor its sub agents run on to carry the plan out.
 //!
 //! A chat's picks are its own; a project's are given to every chat in it, and to each new one.
 //! They only act while granular chats are on in Settings.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use serde::{Deserialize, Serialize};
 
 use crate::persistence::Store;
 use crate::provider::AgentKind;
-use crate::settings::Settings;
 use crate::chats::Chat;
 use crate::{Error, Core};
 
@@ -29,34 +28,25 @@ pub struct AgentPick {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Reserves {
-    /// Takes the chat over when its agent's provider is out of usage.
-    pub fallback: Option<AgentPick>,
-    /// Reviews the files each reply changed, as a second opinion from another model.
-    pub review: Option<AgentPick>,
+    /// Runs the chat's sub agents, which search, edit, build and test.
+    pub executor: Option<AgentPick>,
 }
 
 /// Everything a granular chat runs with.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Granular {
+    /// The chat's own agent, which plans the work and reviews the result.
     pub main: AgentPick,
     #[serde(flatten)]
     pub reserves: Reserves,
 }
 
 impl Granular {
-    /// Drops the picks that could never act: a fallback or reviewer that is the chat's own agent
-    /// and model.
+    /// Drops an executor that is the orchestrator itself, which its sub agents run on anyway.
     fn tidy(&mut self) {
-        let Reserves { fallback, review } = &mut self.reserves;
-        let main = &self.main;
-        let same = |pick: &AgentPick| pick.agent == main.agent && pick.model == main.model;
-        if fallback.as_ref().is_some_and(same) {
-            *fallback = None;
-        }
-        // A review by the model that wrote the changes is no second opinion.
-        if review.as_ref().is_some_and(same) {
-            *review = None;
+        if self.reserves.executor.as_ref() == Some(&self.main) {
+            self.reserves.executor = None;
         }
     }
 }
@@ -87,74 +77,23 @@ fn save(store: &Store, chat_id: &str, reserves: &Reserves) -> Result<(), Error> 
     store.set_state(&chat_key(chat_id), &json)
 }
 
-/// Where the chat's `run_sub_agent` calls run: Patchwork's own agent, which has no sub agents
-/// of its own, runs them on itself at its own model.
-pub(crate) fn sub_agent_of(chat: &Chat) -> Option<AgentPick> {
-    if chat.agent != AgentKind::Api || chat.parent.is_some() {
+/// Where the chat's `run_sub_agent` calls run: the executor picked for it while granular chats
+/// are on, else, for Patchwork's own agent, which has no sub agents of its own, on itself at its
+/// own model. None leaves a CLI to run its sub agents itself.
+pub(crate) fn sub_agent_of(store: &Store, chat: &Chat) -> Option<AgentPick> {
+    if chat.parent.is_some() {
         return None;
     }
-    Some(AgentPick {
+    if store.settings().granular_chats
+        && let Some(executor) = saved(store, &chat.id).executor
+    {
+        return Some(executor);
+    }
+    (chat.agent == AgentKind::Api).then(|| AgentPick {
         agent: AgentKind::Api,
         model: chat.model.clone(),
         effort: chat.effort.clone(),
     })
-}
-
-/// The agent that reviews the files the chat's replies change, if it has one other than the
-/// model that changed them and review is on.
-pub(crate) fn reviewer_of(store: &Store, settings: &Settings, chat: &Chat) -> Option<AgentPick> {
-    if !settings.granular_chats || settings.review_off || chat.parent.is_some() {
-        return None;
-    }
-    saved(store, &chat.id)
-        .review
-        .filter(|r| r.agent != chat.agent || r.model != chat.model)
-}
-
-/// The agent that takes the chat over when its own is out of usage, if it has one.
-pub(crate) fn fallback_of(store: &Store, settings: &Settings, chat: &Chat) -> Option<AgentPick> {
-    if !settings.granular_chats || chat.parent.is_some() {
-        return None;
-    }
-    saved(store, &chat.id)
-        .fallback
-        .filter(|f| f.agent != chat.agent || f.model != chat.model)
-}
-
-/// Moves the chat to its fallback, which is told the conversation on its next turn, and returns
-/// the fallback. None when the chat has none to move to.
-pub(crate) fn fall_back(store: &Store, settings: &Settings, chat: &Chat) -> Option<AgentPick> {
-    let fallback = fallback_of(store, settings, chat)?;
-    let reserves = saved(store, &chat.id);
-    let to = fallback.clone();
-    let moved = store.update_chat(&chat.id, |t| {
-        t.agent = to.agent;
-        t.model = to.model;
-        t.effort = to.effort;
-        // The session belongs to the agent that ran out.
-        t.session_id = None;
-        t.context_pending = !t.messages.is_empty();
-    });
-    if let Err(e) = moved {
-        log::warn!(
-            chat = chat.id.as_str(), error:% = e;
-            "could not move {{chat}} to its fallback: {{error}}"
-        );
-        return None;
-    }
-    // A fallback is used once. The chat has moved either way: reserves left as they were name a
-    // fallback it is now on, which is no fallback.
-    let left = Reserves {
-        fallback: None,
-        review: reserves.review,
-    };
-    if let Err(e) = save(store, &chat.id, &left) {
-        log::warn!(
-            chat = chat.id.as_str(), error:% = e;
-            "could not save what {{chat}} has left behind its fallback: {{error}}"
-        );
-    }
-    Some(fallback)
 }
 
 impl Core {

@@ -1,7 +1,7 @@
-//! Waiting on another chat's turn: a sub agent's, a reviewer's, or a chat an agent started or
+//! Waiting on another chat's turn: a sub agent's, or a chat an agent started or
 //! messaged, until it ends with a reply.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
