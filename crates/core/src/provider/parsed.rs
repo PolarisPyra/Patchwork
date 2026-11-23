@@ -94,6 +94,8 @@ pub enum Parsed {
     SessionLost,
     /// Write this line to the agent's stdin.
     Send(String),
+    /// Write this line to the agent's stdin once it has listed its slash commands.
+    SendAfterCommands(String),
     /// The API agent calls a tool of an MCP server, which Patchwork keeps running; the result
     /// goes back to its stdin as `api::mcp_reply`.
     McpCall {

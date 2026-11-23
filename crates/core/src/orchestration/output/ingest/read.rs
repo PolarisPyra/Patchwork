@@ -4,7 +4,6 @@
 
 use crate::system::Locked;
 use std::collections::{HashMap, HashSet};
-use std::io::BufReader;
 use std::process::Child;
 use std::process::ChildStdout;
 use std::sync::Arc;
@@ -55,11 +54,14 @@ use crate::orchestration::tasks::background::Background;
 use crate::orchestration::goal;
 use crate::orchestration::turn::process::exit_error;
 use crate::orchestration::turn::process::last_lines;
-use crate::orchestration::turn::process::next_line;
+use super::unprompted::{Lines, Next, Unprompted};
 use crate::orchestration::turn::process::terminate;
 use crate::orchestration::turn::process::with_remedy;
 use crate::orchestration::turn::stuck::{LOOP_LIMIT, Repeats};
 use crate::orchestration::turn::process::write_line;
+use crate::orchestration::turn::process::write_to;
+use crate::orchestration::messages::queue::FollowUp;
+use crate::chats::Attachment;
 use crate::orchestration::output::stream::publish;
 use crate::orchestration::output::stream::Unsaved;
 use crate::orchestration::tasks::delegate::mark_call;
@@ -88,6 +90,50 @@ fn close_steered_segment(turn: &Turn, segments: &[String], completed: &mut usize
         });
     }
     *completed = segments.len();
+}
+
+/// Sends the steering messages Antigravity stopped its reply for, as one prompt that starts its
+/// next reply. False when there were none or the agent can no longer take them, in which case
+/// they wait as queued messages for the turn's end to send.
+fn send_steers(turn: &Turn) -> bool {
+    // Under the stdin lock, as `steer` writes its stop, so a steer either goes in this prompt or
+    // stops the reply to it and goes in the next.
+    let mut stdin = turn.stdin.locked();
+    let steers: Vec<FollowUp> = turn.steers.locked().drain(..).collect();
+    if steers.is_empty() {
+        return false;
+    }
+    let text = steers
+        .iter()
+        .map(|f| f.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let attachments: Vec<Attachment> = steers
+        .iter()
+        .flat_map(|f| f.attachments.iter().cloned())
+        .collect();
+    let images: Vec<provider::Image> = steers
+        .iter()
+        .flat_map(|f| f.images.iter().cloned())
+        .collect();
+    let prompt = provider::Prompt {
+        text: &text,
+        attachments: &attachments,
+        images: &images,
+    };
+    let line = provider::resume_input(turn.agent, prompt, turn.session_id.as_deref(), None);
+    if line.is_some_and(|line| write_to(&mut stdin, &line)) {
+        return true;
+    }
+    drop(stdin);
+    turn.queue.locked().extend(steers);
+    false
+}
+
+/// Whether the agent has listed its slash commands yet, with the line waiting until it has.
+enum Commands {
+    Unlisted(Option<String>),
+    Listed,
 }
 
 /// Reads the agent's stdout until it closes, then records the final status.
@@ -133,13 +179,30 @@ pub(in crate::orchestration) fn ingest(
     let mut claude_tasks = provider::claude::TaskList::default();
     // Antigravity's native ACP swarm tracker (`_antigravity/swarm` + `members.json` fallback).
     let mut antigravity_swarm = provider::antigravity::SwarmState::default();
+    let mut commands = Commands::Unlisted(None);
 
     // Kinds of output the parser had no use for, logged once each per turn, so a CLI that
     // changes how it reports something shows up in the agent log.
     let mut logged_kinds: HashSet<String> = HashSet::new();
 
-    let mut stdout = BufReader::new(stdout);
-    while let Some(line) = next_line(&mut stdout) {
+    let lines = Lines::read(stdout);
+    let mut unprompted = Unprompted::No;
+    loop {
+        let line = match lines.next(&unprompted) {
+            Next::Line(line) => line,
+            Next::Closed => break,
+            // Antigravity has stopped working by itself, so the reply it started ends. A message
+            // sent meanwhile that it has yet to answer keeps the reply open for that answer.
+            Next::Quiet => {
+                if turn.steers.locked().is_empty() {
+                    // Before the reply ends, so the messages it sends on find the agent idle.
+                    unprompted.set(Unprompted::No, &turn.alone);
+                    go_idle(&turn, &segments, &mut completed, &mut unsaved, false, None);
+                    ended = true;
+                }
+                continue;
+            }
+        };
         let source =
             |turn: &Turn| Source::agent(turn.agent, pid, &turn.chat_id, Some(&turn.message_id));
         if AGENT_LOG.logs(LogLevel::Error) {
@@ -169,8 +232,20 @@ pub(in crate::orchestration) fn ingest(
             && turn.idle.swap(false, Ordering::SeqCst);
         let warm_reply = matches!(turn.agent, AgentKind::Claude | AgentKind::Antigravity)
             && !turn.steers.locked().is_empty();
-        if ended && (claude_resumed || warm_reply) {
-            turn.steers.locked().clear();
+        if (ended || unprompted.is_working()) && (claude_resumed || warm_reply) {
+            let mut steers = turn.steers.locked();
+            // Antigravity is stopped for a steer, so only the message that resumed it is taken now.
+            if turn.agent == AgentKind::Antigravity {
+                steers.pop_front();
+            } else {
+                steers.clear();
+            }
+            drop(steers);
+            // The reply Antigravity started by itself ends where its answer to the message starts.
+            if unprompted.is_working() {
+                close_steered_segment(&turn, &segments, &mut completed);
+                unprompted.set(Unprompted::No, &turn.alone);
+            }
             turn.next_segment(&mut unsaved);
             segments.push(turn.message_id.clone());
             (has_text, last_was_text) = (false, false);
@@ -225,6 +300,20 @@ pub(in crate::orchestration) fn ingest(
                 publish_child(&turn, child, events);
             }
             continue;
+        }
+        // Once a command it moved to the background ends, idle Antigravity goes on working by
+        // itself. That work is a reply of its own, which ends once it goes quiet. Messages sent
+        // meanwhile still go to it as new prompts, which it answers once it is done.
+        if turn.agent == AgentKind::Antigravity
+            && ended
+            && turn.idle.load(Ordering::SeqCst)
+            && provider::antigravity::is_work(&value)
+        {
+            turn.next_segment(&mut unsaved);
+            segments.push(turn.message_id.clone());
+            (has_text, last_was_text) = (false, false);
+            ended = false;
+            unprompted.set(Unprompted::Working(HashSet::new()), &turn.alone);
         }
         let mut parsed = if turn.agent == AgentKind::Antigravity
             && value.get("id").is_none()
@@ -287,6 +376,12 @@ pub(in crate::orchestration) fn ingest(
                 Parsed::Send(line) => {
                     write_line(&turn.stdin, &line);
                 }
+                Parsed::SendAfterCommands(line) => match &mut commands {
+                    Commands::Listed => {
+                        write_line(&turn.stdin, &line);
+                    }
+                    Commands::Unlisted(waiting) => *waiting = Some(line),
+                },
                 Parsed::McpCall {
                     id,
                     server,
@@ -312,6 +407,7 @@ pub(in crate::orchestration) fn ingest(
                 Parsed::Check { .. } => {}
                 Parsed::Finished => {
                     ended = true;
+                    unprompted.set(Unprompted::No, &turn.alone);
                     // Stop interrupted the agent and it ended its reply. Claude stays up for the
                     // next message, as after any reply; Codex exits once its stdin closes. Until
                     // the agent is idle or has exited, Stop still sends SIGTERM if it hangs.
@@ -331,8 +427,17 @@ pub(in crate::orchestration) fn ingest(
                     }
                     let steered = !turn.steers.locked().is_empty();
                     // Claude ends its reply to take the steering messages, then answers them.
-                    if steered && turn.agent == AgentKind::Claude {
-                        turn.steers.locked().clear();
+                    // Antigravity's reply was stopped for them, and they start its next one.
+                    let answers_steers = steered
+                        && match turn.agent {
+                            AgentKind::Claude => {
+                                turn.steers.locked().clear();
+                                true
+                            }
+                            AgentKind::Antigravity => send_steers(&turn),
+                            AgentKind::Codex | AgentKind::OpenCode | AgentKind::Api => false,
+                        };
+                    if answers_steers {
                         close_steered_segment(&turn, &segments, &mut completed);
                         turn.next_segment(&mut unsaved);
                         segments.push(turn.message_id.clone());
@@ -344,9 +449,10 @@ pub(in crate::orchestration) fn ingest(
                     // The finished turn can no longer be steered; until Codex starts the
                     // next one, messages wait for the run to end.
                     *turn.native.locked() = None;
-                    // Codex's calls still open are what its turn left running, so they are listed
+                    // Codex's calls still open are what its turn left running, and Antigravity's
+                    // commands still open are ones it moved to the background, so they are listed
                     // under the background now.
-                    if turn.agent == AgentKind::Codex {
+                    if matches!(turn.agent, AgentKind::Codex | AgentKind::Antigravity) {
                         for event in background.list_unreported(&turn.message_id) {
                             publish_event(&turn, &mut children, &mut unsaved, event);
                         }
@@ -427,8 +533,13 @@ pub(in crate::orchestration) fn ingest(
                     }
                     turn.session_id = Some(id);
                 }
-                Parsed::SlashCommands(commands) => {
-                    turn.publish(AgentEvent::SlashCommandsUpdated { commands });
+                Parsed::SlashCommands(listed) => {
+                    turn.publish(AgentEvent::SlashCommandsUpdated { commands: listed });
+                    if let Commands::Unlisted(Some(line)) =
+                        std::mem::replace(&mut commands, Commands::Listed)
+                    {
+                        write_line(&turn.stdin, &line);
+                    }
                 }
                 Parsed::Task(event) => {
                     for event in background.apply(event, &turn.message_id) {
@@ -537,6 +648,7 @@ pub(in crate::orchestration) fn ingest(
                     if turn.cancelled.load(Ordering::SeqCst) => {}
                 Parsed::Event(mut event) => {
                     steer_reply_empty = false;
+                    unprompted.track(&event);
                     if let AgentEvent::Thinking { .. } = &event {
                         turn.stream_thinking(event, &mut unsaved);
                         continue;
@@ -565,9 +677,14 @@ pub(in crate::orchestration) fn ingest(
                                 continue;
                             }
                             tool_owner.insert(tool.id.clone(), message_id.clone());
-                            if turn.agent == AgentKind::Codex
-                                && let Some(task) = provider::codex::background_task(tool)
-                            {
+                            let task = match turn.agent {
+                                AgentKind::Codex => provider::codex::background_task(tool),
+                                AgentKind::Antigravity if tool.parent.is_none() => {
+                                    provider::antigravity::background_task(tool)
+                                }
+                                _ => None,
+                            };
+                            if let Some(task) = task {
                                 background.start_unreported(task);
                             }
                             if matches!(
@@ -614,7 +731,11 @@ pub(in crate::orchestration) fn ingest(
                         let finished = match &event {
                             AgentEvent::ToolFinished {
                                 tool_id, is_error, ..
-                            } if turn.agent == AgentKind::Codex => {
+                            } if matches!(
+                                turn.agent,
+                                AgentKind::Codex | AgentKind::Antigravity
+                            ) =>
+                            {
                                 Some((tool_id.clone(), *is_error))
                             }
                             _ => None,
@@ -643,6 +764,15 @@ pub(in crate::orchestration) fn ingest(
         && antigravity_swarm.has_live_work()
     {
         stream_error = Some("Antigravity exited while swarm workers were still running.".into());
+    }
+    // `agy acp` exits only when its stdin closes, so an exit with a prompt still unanswered is a
+    // failure even with a clean exit code. Work it started on its own may end with it.
+    if turn.agent == AgentKind::Antigravity
+        && !turn.cancelled.load(Ordering::SeqCst)
+        && stream_error.is_none()
+        && ((!ended && !turn.idle.load(Ordering::SeqCst)) || !turn.steers.locked().is_empty())
+    {
+        stream_error = Some("Antigravity exited before it finished replying.".into());
     }
     // The agent process is gone, and the tasks it started go with it.
     for event in background.stop_all() {

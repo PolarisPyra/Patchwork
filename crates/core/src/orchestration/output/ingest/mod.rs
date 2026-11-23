@@ -7,5 +7,6 @@ mod idle;
 mod read;
 #[cfg(test)]
 mod tests;
+mod unprompted;
 
 pub(in crate::orchestration) use read::ingest;

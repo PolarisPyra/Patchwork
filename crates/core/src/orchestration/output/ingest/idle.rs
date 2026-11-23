@@ -109,7 +109,11 @@ pub(super) fn go_idle(
     // Under the turns lock, where `steer` reads these flags: a message sent while the reply was
     // wrapping up is in the queue taken here, not left in one nobody drains.
     let turns = turn.core.runner.turns.locked();
-    let queued = std::mem::take(&mut *turn.queue.locked());
+    let mut queued = std::mem::take(&mut *turn.queue.locked());
+    // A steer that stopped Antigravity as its reply ended stopped nothing, so it goes first.
+    if turn.agent == AgentKind::Antigravity {
+        queued.splice(0..0, turn.steers.locked().drain(..));
+    }
     let mut handed_over = turn.core.runner.handed_over.locked();
     for message in &queued {
         handed_over.remove(&message.message_id);

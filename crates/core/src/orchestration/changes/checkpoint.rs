@@ -502,8 +502,8 @@ impl Core {
         if other_running {
             return Err("Another task is working in this folder. Stop it before restoring".into());
         }
-        // An idle agent still holds the session being undone.
-        self.runner.retire_idle(chat_id);
+        // An idle agent still holds the session being undone, and may still be at work in it.
+        self.runner.replace_idle(chat_id);
         let chat = self.chat(chat_id)?;
         let start = chat
             .messages

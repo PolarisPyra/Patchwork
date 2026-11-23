@@ -15,10 +15,10 @@ pub use client::{
 };
 pub(crate) use client::tier;
 #[doc(inline)]
-pub use input::{approval_reply, interrupt, prompt_input, steer_input, turn_args, turn_env, turn_input};
+pub use input::{approval_reply, interrupt, prompt_input, turn_args, turn_env, turn_input};
 #[doc(inline)]
 pub use login::{LoginSession, sign_out, start_login};
 #[doc(inline)]
-pub use parse::parse;
+pub use parse::{background_task, is_work, parse};
 #[doc(inline)]
 pub use swarm::{ChildTarget, SWARM_TASK_PREFIX, SwarmState, extract_child_target, subagent_events};

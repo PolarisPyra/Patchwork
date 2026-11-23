@@ -37,7 +37,7 @@ impl Core {
         for chat_id in self.runner.running() {
             self.stop_turn(&chat_id, false);
         }
-        self.runner.retire_all_idle();
+        self.runner.stop_all_idle();
         Ok(())
     }
 

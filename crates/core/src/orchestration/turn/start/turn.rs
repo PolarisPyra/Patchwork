@@ -54,6 +54,9 @@ pub(in crate::orchestration) struct Turn {
     pub(in crate::orchestration) queue: Queue,
     pub(in crate::orchestration) controls: Controls,
     pub(in crate::orchestration) idle: Arc<AtomicBool>,
+    /// Antigravity is at work on a reply it started by itself, while the chat counts as idle.
+    /// Retiring the agent waits for that work to end.
+    pub(in crate::orchestration) alone: Arc<AtomicBool>,
     /// When the agent last said anything (ms since epoch), which `watch` reads to tell the user
     /// a reply has gone quiet.
     pub(in crate::orchestration) last_output: Arc<AtomicU64>,

@@ -56,6 +56,9 @@ pub(in crate::orchestration) struct RunningTurn {
     /// The agent has finished its reply and stays up only for shell commands it left running;
     /// the chat counts as idle, and the next message starts a new reply in this process.
     pub(in crate::orchestration) idle: Arc<AtomicBool>,
+    /// Antigravity is at work on a reply it started by itself, while the chat counts as idle.
+    /// Retiring the agent waits for that work to end.
+    pub(in crate::orchestration) alone: Arc<AtomicBool>,
     /// The chat's settings changed while the agent was replying, so it is not used again once
     /// idle: the next message starts a new process with the settings as they are now.
     pub(in crate::orchestration) stale: AtomicBool,

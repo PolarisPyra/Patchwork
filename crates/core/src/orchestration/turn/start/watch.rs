@@ -25,6 +25,7 @@ pub(super) struct Watched {
     pub(super) scope: Option<String>,
     pub(super) exited: Arc<AtomicBool>,
     pub(super) idle: Arc<AtomicBool>,
+    pub(super) alone: Arc<AtomicBool>,
     pub(super) pending: Pending,
     pub(super) last_output: Arc<AtomicU64>,
 }
@@ -51,6 +52,10 @@ pub(super) fn watch(w: &Watched) {
         }
         if !w.idle.load(Ordering::SeqCst) {
             tell_quiet(w);
+            continue;
+        }
+        // Antigravity at work by itself is not idle, though no message waits on it.
+        if w.alone.load(Ordering::SeqCst) {
             continue;
         }
         // Idle time counts from the last reply, as idle compaction counts it.

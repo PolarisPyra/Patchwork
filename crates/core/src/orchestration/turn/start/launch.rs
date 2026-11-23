@@ -74,7 +74,7 @@ impl Runner {
             return Err(ALREADY_REPLYING.into());
         }
         // A turn of its own (a /goal, a compaction) replaces an idle agent process.
-        self.retire_idle(&chat_id);
+        self.replace_idle(&chat_id);
         let (
             agent,
             root,
@@ -492,6 +492,7 @@ impl Runner {
         let queue = Queue::default();
         let controls = Controls::default();
         let idle = Arc::new(AtomicBool::new(false));
+        let alone = Arc::new(AtomicBool::new(false));
         let turn = Turn {
             core: Arc::clone(core),
             chat_id: chat_id.clone(),
@@ -509,6 +510,7 @@ impl Runner {
             queue: Arc::clone(&queue),
             controls: Arc::clone(&controls),
             idle: Arc::clone(&idle),
+            alone: Arc::clone(&alone),
             last_output: Arc::new(AtomicU64::new(now_ms())),
             root,
             session_id,
@@ -547,6 +549,7 @@ impl Runner {
                 queue,
                 controls,
                 idle,
+                alone,
                 stale: AtomicBool::new(false),
                 root: turn.root.clone(),
                 attribution,
@@ -570,6 +573,7 @@ impl Runner {
             scope: turn.scope.clone(),
             exited: Arc::clone(&turn.exited),
             idle: Arc::clone(&turn.idle),
+            alone: Arc::clone(&turn.alone),
             pending: Arc::clone(&turn.pending),
             last_output: Arc::clone(&turn.last_output),
         };

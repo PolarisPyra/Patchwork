@@ -226,8 +226,8 @@ impl Core {
             }
             drop(watch);
             for chat_id in &chats {
-                // An idle agent still runs in the old folder.
-                self.runner.retire_idle(chat_id);
+                // An idle agent still runs in the old folder, and may still be at work there.
+                self.runner.replace_idle(chat_id);
                 self.store.update_chat(chat_id, |t| {
                     t.session_id = None;
                     t.context_pending = !t.messages.is_empty();
