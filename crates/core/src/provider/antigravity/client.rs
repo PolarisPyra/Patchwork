@@ -1,7 +1,8 @@
 //! Locating `agy`, probing auth and models over ACP (`agy acp`), and running diagnostics.
 
-// Rust guideline compliant 2026-11-22
+// Rust guideline compliant 2026-11-23
 
+use std::collections::HashMap;
 use std::io::{BufReader, Write};
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
@@ -67,10 +68,28 @@ enum AcpProbe {
     SignedIn {
         tier: Option<String>,
         default_model: Option<String>,
+        default_effort: Option<String>,
         models: Vec<ModelOption>,
     },
     AuthRequired,
     Unavailable(String),
+}
+
+/// The oldest agy whose ACP server reports the settings, modes and updates Patchwork reads.
+const MIN_VERSION: &str = "1.5.0";
+
+/// Whether `version`, as `agy --version` prints it, is older than `MIN_VERSION`. A version
+/// that cannot be read is let through.
+fn is_older_than_minimum(version: &str) -> bool {
+    let parts = |text: &str| -> Option<Vec<u32>> {
+        let number = text.split_whitespace().next()?.trim_start_matches('v');
+        let number = number.split(['-', '+']).next()?;
+        number.split('.').map(|part| part.parse().ok()).collect()
+    };
+    match (parts(version), parts(MIN_VERSION)) {
+        (Some(have), Some(need)) => have < need,
+        _ => false,
+    }
 }
 
 /// Cached ACP probe so `detect_agent`, `configured_model`, and `models` share one launch.
@@ -194,6 +213,24 @@ pub fn configured_model() -> Option<String> {
     }
 }
 
+/// The model and thinking level agy picks itself, from its last probe however old.
+///
+/// Reads only what a probe already found, so it never waits on `agy`; `None` before any probe.
+#[must_use]
+pub fn known_defaults() -> Option<(String, Option<String>)> {
+    match probe_cache().locked().as_ref() {
+        Some((
+            _,
+            AcpProbe::SignedIn {
+                default_model: Some(model),
+                default_effort,
+                ..
+            },
+        )) => Some((model.clone(), default_effort.clone())),
+        _ => None,
+    }
+}
+
 /// The models the CLI offers, from `agy acp` (falling back to `agy models`), grouped by base
 /// model with their supported reasoning efforts.
 #[must_use]
@@ -201,12 +238,29 @@ pub fn models() -> Vec<ModelOption> {
     if let AcpProbe::SignedIn { models, .. } = probe_acp_cached()
         && !models.is_empty()
     {
-        return models;
+        return distinct_labels(models);
     }
     let Some(listed) = probe(AgentKind::Antigravity, &["models"]).filter(|p| p.success) else {
         return Vec::new();
     };
-    parse_models(&listed.stdout)
+    distinct_labels(parse_models(&listed.stdout))
+}
+
+/// Names each model whose label another shares with its id as well, so the picker tells them
+/// apart.
+fn distinct_labels(mut models: Vec<ModelOption>) -> Vec<ModelOption> {
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    for model in &models {
+        *counts.entry(model.label.clone()).or_default() += 1;
+    }
+    for model in &mut models {
+        if counts.get(&model.label).is_some_and(|&n| n > 1)
+            && let Some(id) = &model.id
+        {
+            model.label = format!("{} ({id})", model.label);
+        }
+    }
+    models
 }
 
 /// Reads the cached ACP probe or runs a fresh one. Callers arriving while a probe runs wait for
@@ -238,6 +292,15 @@ fn run_acp_probe() -> AcpProbe {
     let Ok(mut cmd) = agent_command(AgentKind::Antigravity) else {
         return AcpProbe::Unavailable("Antigravity CLI is not installed".into());
     };
+    if let Some(path) = antigravity_bin() {
+        let version = cli_info::version(&path);
+        if is_older_than_minimum(&version) {
+            return AcpProbe::Unavailable(format!(
+                "Antigravity CLI {version} is too old. Run `agy update` to get {MIN_VERSION} \
+                 or newer."
+            ));
+        }
+    }
     let cwd = home_dir().unwrap_or_else(|| PathBuf::from("."));
     cmd.args(["acp", "--stdio"])
         .current_dir(&cwd)
@@ -340,9 +403,18 @@ fn run_acp_probe() -> AcpProbe {
         .as_str()
         .map(String::from);
     let (default_model, models) = parse_acp_models(result);
+    let default_effort = result["configOptions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|opt| opt["id"].as_str() == Some("thought_level"))
+        .and_then(|opt| opt["currentValue"].as_str())
+        .filter(|v| !v.is_empty())
+        .map(String::from);
     AcpProbe::SignedIn {
         tier,
         default_model,
+        default_effort,
         models,
     }
 }

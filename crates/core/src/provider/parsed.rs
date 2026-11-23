@@ -105,6 +105,8 @@ pub enum Parsed {
     SendNext,
     /// The agent's settings as it now reports them (Antigravity's `configOptions`).
     AgentConfig(Value),
+    /// The mode Antigravity switched its session to on its own (`current_mode_update`).
+    AgentMode(String),
     /// The API agent calls a tool of an MCP server, which Patchwork keeps running; the result
     /// goes back to its stdin as `api::mcp_reply`.
     McpCall {
@@ -323,7 +325,7 @@ pub(super) fn edit_lines(name: &str, input: &Value) -> Option<EditLines> {
     }
 }
 
-fn changed_lines(old: &str, new: &str) -> EditLines {
+pub(super) fn changed_lines(old: &str, new: &str) -> EditLines {
     let old: Vec<&str> = old.lines().collect();
     let new: Vec<&str> = new.lines().collect();
     let head = old.iter().zip(&new).take_while(|(a, b)| a == b).count();

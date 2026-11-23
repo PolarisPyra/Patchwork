@@ -1,6 +1,6 @@
 //! Maps JSON-RPC messages from `agy acp` into Patchwork agent events and approvals.
 
-// Rust guideline compliant 2026-11-22
+// Rust guideline compliant 2026-11-23
 
 use std::path::Path;
 
@@ -16,6 +16,7 @@ use crate::provider::{
 };
 
 use super::client::auth_required;
+use super::edits::edit_lines;
 use super::errors::{QUOTA_MESSAGE, limit_notice, limit_window, logged_error};
 use super::questions::question;
 use super::input::{
@@ -394,7 +395,7 @@ pub(super) fn parse_session_update(
             let args = tool_args(update);
             let start = if let Some((swarm_name, swarm_summary)) = format_swarm_tool(name, args) {
                 ToolStart::new(id, swarm_name, swarm_summary)
-            } else if name == "invoke_subagent"
+            } else if is_subagent_call(update, name)
                 && let Some(subagent) = invoke_subagent_descriptor(args)
             {
                 let summary = subagent.description.clone();
@@ -408,7 +409,11 @@ pub(super) fn parse_session_update(
             } else {
                 ToolStart::new(id, name, tool_summary(update, args, spec.root))
             };
-            out.push(tool_started(message_id, start));
+            let mut started = tool_started(message_id, start);
+            if let Parsed::Event(AgentEvent::ToolStarted { tool, .. }) = &mut started {
+                tool.lines = edit_lines(update);
+            }
+            out.push(started);
 
             let status = update["status"].as_str();
             if matches!(status, Some("completed" | "failed")) {
@@ -446,6 +451,11 @@ pub(super) fn parse_session_update(
             // A compaction that failed ends with whatever agy says next.
             _ => {}
         },
+        Some("current_mode_update") => {
+            if let Some(mode) = update["currentModeId"].as_str().filter(|m| !m.is_empty()) {
+                out.push(Parsed::AgentMode(mode.into()));
+            }
+        }
         Some("config_option_update") => {
             if update["configOptions"].is_array() {
                 out.push(Parsed::AgentConfig(update["configOptions"].clone()));
@@ -469,6 +479,21 @@ pub(super) fn parse_session_update(
     }
 }
 
+/// Whether the call starts one of agy's sub agents. agy may name it only in its title, which an
+/// MCP tool of the same name shares but marks as MCP.
+fn is_subagent_call(update: &Value, name: &str) -> bool {
+    const NAMES: [&str; 2] = ["invoke_subagent", "start_subagent"];
+    let titled = update["title"]
+        .as_str()
+        .and_then(|t| {
+            t.strip_prefix("Running ")
+                .or_else(|| t.strip_prefix("Run "))
+        })
+        .map(|t| t.trim_end_matches('?'))
+        .is_some_and(|t| NAMES.contains(&t));
+    (NAMES.contains(&name) || titled) && update["_meta"]["is_mcp_tool_call"] != true
+}
+
 fn tool_args(tool: &Value) -> &Value {
     if tool["rawInput"].is_object() {
         &tool["rawInput"]
@@ -483,7 +508,7 @@ fn arg_str<'a>(args: &'a Value, keys: &[&str]) -> Option<&'a str> {
         .filter(|s| !s.is_empty())
 }
 
-fn tool_summary(tool: &Value, args: &Value, root: &str) -> String {
+pub(super) fn tool_summary(tool: &Value, args: &Value, root: &str) -> String {
     let path = arg_str(
         args,
         &[
@@ -599,6 +624,10 @@ fn permission_call(tool: &Value, root: &str) -> (String, String, Option<Target>)
                 .map(|p| relative(root, p))
                 .collect::<Vec<_>>()
                 .join(", ")
+        };
+        let detail = match edit_lines(tool) {
+            Some(lines) => format!("{detail} (+{} −{})", lines.added, lines.removed),
+            None => detail,
         };
         let target = (!paths.is_empty()).then(|| Target::new(PermissionKind::Edit, paths));
         return ("Edit files".into(), detail, target);

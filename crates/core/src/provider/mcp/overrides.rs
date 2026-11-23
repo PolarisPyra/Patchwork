@@ -1,6 +1,6 @@
 //! The arguments that hand a CLI Patchwork's own server and the servers it shares, for one turn.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use std::collections::BTreeMap;
 use serde_json::Value;
@@ -40,6 +40,16 @@ pub fn opencode_config(chat_id: &str) -> Option<Value> {
         "enabled": true,
         "timeout": OWN_TIMEOUT_SECS * 1000,
     }}}))
+}
+
+/// Patchwork's own server as an ACP `mcpServers` list, for the agent of `chat_id`. Empty when
+/// it cannot be reached. The agent finds the servers it shares in its own config.
+#[must_use]
+pub fn acp_servers(chat_id: &str) -> Value {
+    let Some((exe, args)) = own_server(chat_id) else {
+        return Value::Array(Vec::new());
+    };
+    serde_json::json!([{"name": mcp::OWN_SERVER, "command": exe, "args": args, "env": []}])
 }
 
 /// Builds the arguments that give a CLI turn Patchwork's MCP server.

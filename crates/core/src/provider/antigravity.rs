@@ -1,8 +1,11 @@
 //! Antigravity (`agy acp`, Agent Client Protocol JSON-RPC over stdio).
 
-// Rust guideline compliant 2026-11-22
+// Rust guideline compliant 2026-11-23
 
+mod calls;
+mod children;
 mod client;
+mod edits;
 mod errors;
 mod input;
 mod login;
@@ -11,9 +14,13 @@ mod questions;
 mod swarm;
 
 #[doc(inline)]
+pub use calls::ToolCalls;
+#[doc(inline)]
+pub use children::{Transcript, child_transcripts};
+#[doc(inline)]
 pub use client::{
-    antigravity_bin, auth, command, configured_model, home, info, models, parse_acp_models,
-    parse_models,
+    antigravity_bin, auth, command, configured_model, home, info, known_defaults, models,
+    parse_acp_models, parse_models,
 };
 pub(crate) use client::tier;
 #[doc(inline)]

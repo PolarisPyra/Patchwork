@@ -1,6 +1,6 @@
 //! Watching a started agent: telling the chat when it goes quiet, and noticing when it exits.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use crate::system::Locked;
 use super::running::Pending;
@@ -16,6 +16,8 @@ use crate::chats::Role;
 use crate::orchestration::turn::process::IDLE_LIMIT;
 use crate::orchestration::turn::process::WATCH_EVERY;
 use crate::orchestration::turn::process::QUIET_AFTER;
+use crate::orchestration::turn::process::{STALL_LIMIT, terminate};
+use crate::provider::AgentKind;
 
 /// What `watch` checks one agent process by.
 pub(super) struct Watched {
@@ -28,11 +30,15 @@ pub(super) struct Watched {
     pub(super) alone: Arc<AtomicBool>,
     pub(super) pending: Pending,
     pub(super) last_output: Arc<AtomicU64>,
+    pub(super) agent: AgentKind,
+    pub(super) calls_open: Arc<AtomicBool>,
+    pub(super) stalled: Arc<AtomicBool>,
 }
 
 /// Watches one agent process until it ends. It retires the agent once it has been idle for
 /// `IDLE_LIMIT` with no shell commands of its own still running; tells the user when a reply has
-/// said nothing for `QUIET_AFTER`; and ends the turn of an agent that exited while something it
+/// said nothing for `QUIET_AFTER`; stops an Antigravity reply that has said nothing for
+/// `STALL_LIMIT` with nothing running; and ends the turn of an agent that exited while something it
 /// started still holds its output open. A reply runs as long as it needs.
 pub(super) fn watch(w: &Watched) {
     loop {
@@ -52,6 +58,12 @@ pub(super) fn watch(w: &Watched) {
         }
         if !w.idle.load(Ordering::SeqCst) {
             tell_quiet(w);
+            if stalled(w) {
+                log::warn!(pid = w.pid; "Antigravity said nothing for the stall limit; stopping it");
+                w.stalled.store(true, Ordering::SeqCst);
+                terminate(w.pid, Arc::clone(&w.exited));
+                return;
+            }
             continue;
         }
         // Antigravity at work by itself is not idle, though no message waits on it.
@@ -105,6 +117,32 @@ fn tell_quiet(w: &Watched) {
             since,
         },
     });
+}
+
+/// Whether the Antigravity reply under way has said nothing for `STALL_LIMIT` while nothing
+/// it waits on runs: no call, no task in the background, and no approval for the user.
+fn stalled(w: &Watched) -> bool {
+    let stall_ms = u64::try_from(STALL_LIMIT.as_millis()).unwrap_or(u64::MAX);
+    let since = w.last_output.load(Ordering::Relaxed);
+    if w.agent != AgentKind::Antigravity
+        || now_ms().saturating_sub(since) < stall_ms
+        || w.calls_open.load(Ordering::Relaxed)
+        || !w.pending.locked().is_empty()
+    {
+        return false;
+    }
+    w.core.store.chat(&w.chat_id).is_some_and(|chat| {
+        let reply = chat
+            .messages
+            .iter()
+            .rev()
+            .find(|m| m.role == Role::Assistant && m.status == MessageStatus::Streaming);
+        reply.is_some_and(|reply| now_ms().saturating_sub(since.max(reply.created_at)) >= stall_ms)
+            && chat
+                .messages
+                .iter()
+                .all(|m| m.background.iter().all(|task| !task.status.is_live()))
+    })
 }
 
 /// Whether the agent `pid` has exited and waits to be reaped.

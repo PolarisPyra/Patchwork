@@ -1,6 +1,6 @@
 //! What a turn sends an agent CLI: the turn's spec, its prompt and images, its arguments, environment and stdin, and the lines that steer, interrupt or answer it.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use crate::Error;
 use std::collections::HashMap;
@@ -182,6 +182,7 @@ pub fn resume_input(
         return Some(antigravity::prompt_input(
             session_id?,
             &prompt_text(text, attachments),
+            attachments,
             images,
         ));
     }
