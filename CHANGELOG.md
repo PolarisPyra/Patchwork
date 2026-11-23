@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.145] - 2026-11-23
+
+## What's Changed
+* chore: remove the test suite and the daily release build check by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/314
+* refactor(providers): flatten the Claude, OpenCode and API provider modules by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/315
+* fix(antigravity): swarm workers show up and stay open with released agy builds by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/316
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.144...26.11.145
+
 ## [26.11.144] - 2026-11-23
 
 ## What's Changed
