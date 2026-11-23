@@ -62,8 +62,15 @@ impl Core {
     /// `text` with how to talk over a chat app after it, in the chosen personality, for a chat run
     /// from a chat app that has no custom agent's role. It goes with the message that starts the
     /// agent's session, and again after the agent compacted its context on its own, since the
-    /// summary it goes on from can leave it out.
-    pub(crate) fn chat_app_voice(&self, chat_id: &str, text: String, fresh: bool) -> String {
+    /// summary it goes on from can leave it out. An `agent` that takes no persona gets no
+    /// personality.
+    pub(crate) fn chat_app_voice(
+        &self,
+        chat_id: &str,
+        text: String,
+        fresh: bool,
+        agent: AgentKind,
+    ) -> String {
         let (plain, compacted) = self.store.with_chats(|chats| {
             chats
                 .iter()
@@ -72,6 +79,9 @@ impl Core {
         });
         if !(fresh || compacted) || !plain || self.bound_conversations(chat_id).is_empty() {
             return text;
+        }
+        if !agent.takes_persona() {
+            return format!("{text}\n\n<chat-app>\n{CHAT_APP}\n</chat-app>");
         }
         let voice = self
             .store

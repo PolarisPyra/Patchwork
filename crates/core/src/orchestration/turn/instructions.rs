@@ -23,8 +23,11 @@ pub(crate) fn agent_instructions(settings: &Settings, agent: AgentKind) -> Strin
     .join("\n\n")
 }
 
-/// The system prompt the user gave `agent` in Settings, if any.
+/// The system prompt the user gave `agent` in Settings, if any and the agent may take one.
 pub(crate) fn system_prompt(settings: &Settings, agent: AgentKind) -> Option<&str> {
+    if !agent.takes_persona() {
+        return None;
+    }
     settings
         .system_prompts
         .get(&agent)

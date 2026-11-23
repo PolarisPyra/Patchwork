@@ -26,6 +26,13 @@ impl AgentKind {
         AgentKind::Api,
     ];
 
+    /// Whether the agent may be given a system prompt or a personality. Google's terms for
+    /// Antigravity do not allow changing its instructions.
+    #[must_use]
+    pub fn takes_persona(self) -> bool {
+        self != AgentKind::Antigravity
+    }
+
     /// The thinking levels the agent's CLI takes on every model, for a model whose own it does
     /// not report.
     #[must_use]
