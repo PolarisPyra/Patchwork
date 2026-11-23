@@ -6,6 +6,7 @@ use crate::Error;
 use crate::provider::AgentKind;
 use crate::chats::{AccessMode, Chat};
 use crate::Core;
+use std::sync::Arc;
 
 use super::lifecycle::note;
 
@@ -30,9 +31,14 @@ impl Core {
             return Ok(());
         }
         let effort = chat.effort.clone();
+        let live = self
+            .runner
+            .set_choice(id, agent, model.as_deref(), effort.as_deref());
         self.switch_agent(&chat, agent, model, effort)?;
-        // An idle agent was started with the old model.
-        self.runner.retire_idle(id);
+        // An idle agent that cannot change models was started with the old one.
+        if !live {
+            self.runner.retire_idle(id);
+        }
         Ok(())
     }
 
@@ -72,18 +78,20 @@ impl Core {
         Ok(())
     }
 
-    /// Takes effect from the chat's next turn.
+    /// Sets the chat's access mode, which its running reply follows from now on.
     ///
     /// # Errors
     ///
     /// Returns an error when the chat is unknown or the change cannot be saved.
-    pub fn set_chat_access_mode(&self, id: &str, mode: AccessMode) -> Result<(), Error> {
+    pub fn set_chat_access_mode(self: &Arc<Self>, id: &str, mode: AccessMode) -> Result<(), Error> {
         let chat = self.chat(id)?;
         self.store.update_chat(id, |t| t.access_mode = mode)?;
-        // An idle agent was started with the old setting.
+        // An idle agent that cannot change modes was started with the old one.
         if chat.access_mode != mode {
             note(id, format!("{mode:?} access"));
-            self.runner.retire_idle(id);
+            if !self.runner.set_access_mode(self, id, mode) {
+                self.runner.retire_idle(id);
+            }
         }
         Ok(())
     }
@@ -97,10 +105,15 @@ impl Core {
         let chat = self.chat(id)?;
         self.store
             .update_chat(id, |t| t.effort = effort.map(String::from))?;
-        // An idle agent was started with the old setting.
+        // An idle agent that cannot change effort was started with the old one.
         if chat.effort.as_deref() != effort {
             note(id, format!("effort {}", effort.unwrap_or("default")));
-            self.runner.retire_idle(id);
+            let live = self
+                .runner
+                .set_choice(id, chat.agent, chat.model.as_deref(), effort);
+            if !live {
+                self.runner.retire_idle(id);
+            }
         }
         Ok(())
     }

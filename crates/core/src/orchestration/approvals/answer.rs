@@ -14,7 +14,7 @@ use crate::events::AgentEvent;
 use crate::Core;
 use crate::permissions::{self, Decision, RuleRef, Target};
 use crate::provider;
-use crate::chats::{ApprovalStatus, Question, Chat};
+use crate::chats::{AccessMode, ApprovalStatus, Chat, Question};
 
 /// The user's answer to an approval request: whether it was allowed, any answers to questions,
 /// and the rule the user saved with it.
@@ -127,6 +127,56 @@ impl Runner {
             // The user may have answered it meanwhile.
             let _ = self.resolve(core, &chat_id, decision, true);
         }
+    }
+
+    /// Hands the chat's new access mode to its running turn, and answers the approvals waiting
+    /// there that Full Access runs without asking.
+    ///
+    /// True when the agent takes the mode at its next reply: Antigravity, unless it was started
+    /// in Full Access and the mode leaves it. Otherwise the agent needs a new process.
+    pub(crate) fn set_access_mode(
+        &self,
+        core: &Arc<Core>,
+        chat_id: &str,
+        mode: AccessMode,
+    ) -> bool {
+        let (waiting, live): (Vec<(String, Target, String)>, bool) = {
+            let turns = self.turns.locked();
+            let Some(turn) = turns.get(chat_id) else {
+                return false;
+            };
+            *turn.mode.locked() = mode;
+            let live = turn.agent == provider::AgentKind::Antigravity
+                && (mode == AccessMode::FullAccess || !turn.skips_permissions);
+            if mode != AccessMode::FullAccess {
+                return live;
+            }
+            let waiting = turn
+                .pending
+                .locked()
+                .iter()
+                // A permission hook decides for itself; only the agent's own requests are answered.
+                .filter(|(_, p)| p.reply.get("hook").is_none())
+                .filter_map(|(id, p)| Some((id.clone(), p.target.clone()?, p.root.clone())))
+                .collect();
+            (waiting, live)
+        };
+        for (approval_id, target, root) in waiting {
+            let blocked = core.agent_refuses(chat_id, std::path::Path::new(&root), &target);
+            if blocked || unasked(core, chat_id, &root, &target, false) != permissions::Unasked::Run
+            {
+                continue;
+            }
+            let decision = ApprovalDecision {
+                approval_id: &approval_id,
+                allow: true,
+                answers: HashMap::new(),
+                rule: None,
+            };
+            // The user may have answered it meanwhile.
+            let _ = self.resolve(core, chat_id, decision, true);
+        }
+        live
     }
 
     /// Sends an answer to a pending approval and records it; `auto` when a rule gave it.

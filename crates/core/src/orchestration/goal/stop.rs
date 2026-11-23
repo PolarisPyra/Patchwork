@@ -27,7 +27,7 @@ pub enum Upkeep {
 #[must_use]
 pub fn upkeep(text: &str) -> Option<Upkeep> {
     let text = text.trim();
-    if text == "/compact" {
+    if crate::provider::is_compact_command(text) {
         Some(Upkeep::Compact)
     } else if matches!(
         crate::provider::goal_command(text),

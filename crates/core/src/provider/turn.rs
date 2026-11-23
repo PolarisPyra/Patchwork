@@ -214,6 +214,14 @@ pub fn is_goal_command(text: &str) -> bool {
         .is_some_and(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
 }
 
+/// `/compact`, alone or with instructions for the summary.
+#[must_use]
+pub fn is_compact_command(text: &str) -> bool {
+    text.trim_start()
+        .strip_prefix("/compact")
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
+}
+
 /// What a `/goal` message asks: `/goal` alone shows the goal; `clear` (or one of Claude's aliases
 /// for it), `pause`, and `resume` act on it; anything else is a new objective.
 #[derive(Debug)]

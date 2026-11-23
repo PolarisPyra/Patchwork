@@ -6,7 +6,7 @@
 use crate::system::Locked;
 use crate::Error;
 use super::claim::Starting;
-use super::running::{NativeTurn, Pending, RunningTurn, TurnRequest};
+use super::running::{LiveSettings, NativeTurn, Pending, RunningTurn, Settings, TurnRequest};
 use super::turn::{Turn, assistant_message};
 use super::watch::{Watched, watch};
 use crate::orchestration::turn::end::{log_cli_version, turn_hooks};
@@ -28,6 +28,7 @@ use crate::events::AgentEvent;
 use crate::provider::AgentKind;
 use crate::system::now_ms;
 use crate::chats::Role;
+use crate::chats::AccessMode;
 use crate::logging::{AGENT_LOG, Data, Source};
 use crate::settings::LogLevel;
 use crate::source_control;
@@ -494,7 +495,14 @@ impl Runner {
         let idle = Arc::new(AtomicBool::new(false));
         let alone = Arc::new(AtomicBool::new(false));
         let compacting = Arc::new(AtomicBool::new(false));
+        let cancelling = Arc::new(AtomicBool::new(false));
         let compact_window = Arc::new(AtomicU64::new(compact_window));
+        let live_mode = Arc::new(Mutex::new(mode));
+        let settings: Settings = Arc::new(Mutex::new(LiveSettings {
+            model: model.clone(),
+            effort: effort.clone(),
+            ..LiveSettings::default()
+        }));
         let wake = Wake::default();
         let turn = Turn {
             core: Arc::clone(core),
@@ -515,6 +523,7 @@ impl Runner {
             idle: Arc::clone(&idle),
             alone: Arc::clone(&alone),
             compacting: Arc::clone(&compacting),
+            cancelling: Arc::clone(&cancelling),
             wake: wake.clone(),
             last_output: Arc::new(AtomicU64::new(now_ms())),
             root,
@@ -524,8 +533,9 @@ impl Runner {
             text,
             resumes,
             sent_context: sends_context,
-            mode,
+            mode: Arc::clone(&live_mode),
             effort,
+            settings: Arc::clone(&settings),
             compact_window: Arc::clone(&compact_window),
             unlimited_steps,
             token_limit,
@@ -556,6 +566,10 @@ impl Runner {
                 idle,
                 alone,
                 compacting,
+                cancelling,
+                mode: live_mode,
+                skips_permissions: mode == AccessMode::FullAccess,
+                settings,
                 compact_window,
                 wake,
                 stale: AtomicBool::new(false),

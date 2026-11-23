@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::system::Locked;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::process::Child;
 use std::process::ChildStdout;
 use std::sync::Arc;
@@ -102,6 +102,7 @@ fn send_steers(turn: &Turn) -> bool {
     // stops the reply to it and goes in the next.
     let mut stdin = turn.stdin.locked();
     let steers: Vec<FollowUp> = turn.steers.locked().drain(..).collect();
+    turn.cancelling.store(false, Ordering::SeqCst);
     if steers.is_empty() {
         return false;
     }
@@ -123,7 +124,13 @@ fn send_steers(turn: &Turn) -> bool {
         attachments: &attachments,
         images: &images,
     };
-    let line = provider::resume_input(turn.agent, prompt, turn.session_id.as_deref(), None);
+    let session_id = turn.session_id.as_deref();
+    let line = provider::resume_input(turn.agent, prompt, session_id, None).map(|line| {
+        let mode = *turn.mode.locked();
+        turn.settings
+            .locked()
+            .first_line(turn.agent, mode, session_id, line)
+    });
     if line.is_some_and(|line| write_to(&mut stdin, &line)) {
         return true;
     }
@@ -136,6 +143,18 @@ fn send_steers(turn: &Turn) -> bool {
 enum Commands {
     Unlisted(Option<String>),
     Listed,
+}
+
+/// Writes `item`, a `Send` or `SendAfterCommands`, to the agent, or keeps it until the agent
+/// has listed its slash commands.
+fn send(turn: &Turn, commands: &mut Commands, item: Parsed) {
+    match (item, commands) {
+        (Parsed::Send(line), _) | (Parsed::SendAfterCommands(line), Commands::Listed) => {
+            write_line(&turn.stdin, &line);
+        }
+        (Parsed::SendAfterCommands(line), Commands::Unlisted(waiting)) => *waiting = Some(line),
+        _ => {}
+    }
 }
 
 /// Reads the agent's stdout until it closes, then records the final status.
@@ -165,6 +184,8 @@ pub(in crate::orchestration) fn ingest(
     let mut repeats = Repeats::default();
     // The agent could not find the session the turn resumed, so the turn runs again without it.
     let mut session_lost = false;
+    // Antigravity is replaying the session the turn loads, until it answers the load.
+    let mut replaying = false;
     let goal = turn.core.store.chat(&turn.chat_id).and_then(|t| t.goal);
     // The agent reported its turn finished.
     let mut ended = false;
@@ -332,6 +353,10 @@ pub(in crate::orchestration) fn ingest(
             ended = false;
             unprompted.set(Unprompted::Working(HashSet::new()), &turn.alone);
         }
+        // The conversation a loaded session replays was shown before; only agy's answer counts.
+        if replaying && value.get("id").is_none() && value["method"] == "session/update" {
+            continue;
+        }
         let mut parsed = if turn.agent == AgentKind::Antigravity
             && value.get("id").is_none()
             && value["method"].as_str() == Some("_antigravity/swarm")
@@ -391,15 +416,28 @@ pub(in crate::orchestration) fn ingest(
                 continue;
             };
             match item {
-                Parsed::Send(line) => {
-                    write_line(&turn.stdin, &line);
+                item @ (Parsed::Send(_) | Parsed::SendAfterCommands(_)) => {
+                    send(&turn, &mut commands, item);
                 }
-                Parsed::SendAfterCommands(line) => match &mut commands {
-                    Commands::Listed => {
-                        write_line(&turn.stdin, &line);
+                Parsed::SendInOrder(lines) => {
+                    let mut lines = VecDeque::from(lines);
+                    let first = lines.pop_front();
+                    turn.settings.locked().chain = lines;
+                    if let Some(first) = first {
+                        send(&turn, &mut commands, first);
                     }
-                    Commands::Unlisted(waiting) => *waiting = Some(line),
-                },
+                }
+                Parsed::SendNext => {
+                    let next = turn.settings.locked().chain.pop_front();
+                    if let Some(next) = next {
+                        send(&turn, &mut commands, next);
+                    }
+                }
+                Parsed::AgentConfig(config) => {
+                    turn.settings.locked().reported = config;
+                    // The model may have changed, and prices what follows.
+                    fallback_model = None;
+                }
                 Parsed::McpCall {
                     id,
                     server,
@@ -425,6 +463,8 @@ pub(in crate::orchestration) fn ingest(
                 Parsed::Check { .. } => {}
                 Parsed::Finished => {
                     ended = true;
+                    // A refused setting ends the reply before its prompt is sent.
+                    turn.settings.locked().chain.clear();
                     // A call the finished reply left open runs in the background, if at all.
                     open_calls.clear();
                     unprompted.set(Unprompted::No, &turn.alone);
@@ -631,7 +671,10 @@ pub(in crate::orchestration) fn ingest(
                         let model = model.or_else(|| {
                             fallback_model
                                 .get_or_insert_with(|| {
-                                    crate::costs::turn_model(turn.agent, turn.model.as_deref())
+                                    crate::costs::turn_model(
+                                        turn.agent,
+                                        turn.settings.locked().model.as_deref(),
+                                    )
                                 })
                                 .clone()
                         });
@@ -663,7 +706,10 @@ pub(in crate::orchestration) fn ingest(
                         };
                         let model = fallback_model
                             .get_or_insert_with(|| {
-                                crate::costs::turn_model(turn.agent, turn.model.as_deref())
+                                crate::costs::turn_model(
+                                    turn.agent,
+                                    turn.settings.locked().model.as_deref(),
+                                )
                             })
                             .clone();
                         usage.cost_micros = crate::costs::priced(model.as_deref(), &usage);
@@ -681,6 +727,9 @@ pub(in crate::orchestration) fn ingest(
                     ended = false;
                     *turn.native.locked() = Some(id);
                 }
+                // Patchwork shows its own compaction of an Antigravity reply already.
+                Parsed::Compacting | Parsed::Compacted(_)
+                    if turn.agent == AgentKind::Antigravity && compaction.is_compacting() => {}
                 Parsed::Compacting => {
                     turn.save_text(&mut unsaved);
                     turn.publish(AgentEvent::Compacting {
@@ -709,6 +758,7 @@ pub(in crate::orchestration) fn ingest(
                     stream_error.get_or_insert(message);
                 }
                 Parsed::SessionLost => session_lost = true,
+                Parsed::Replaying(on) => replaying = on,
                 // A reply Stop interrupted ends as stopped, not as cut short by a steering message.
                 Parsed::Event(AgentEvent::MessageCutOff { .. })
                     if turn.cancelled.load(Ordering::SeqCst) => {}

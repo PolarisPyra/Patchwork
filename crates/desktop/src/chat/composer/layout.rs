@@ -85,7 +85,8 @@ impl Render for Composer {
         let full = self
             .models_of(agent)
             .and_then(|list| list.iter().find(|m| m.id == picks.model))
-            .and_then(|m| m.context_window);
+            .and_then(|m| m.context_window)
+            .or_else(|| chat.and_then(patchwork_core::chats::Chat::context_window));
         let limit = if effective > 0 { Some(effective) } else { full };
         // How full the context is against where it compacts, as the Compact chip's ring.
         let context = limit.map(|limit| {

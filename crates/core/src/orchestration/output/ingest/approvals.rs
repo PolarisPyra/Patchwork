@@ -45,7 +45,7 @@ pub(super) fn screen(turn: &Turn, item: Parsed) -> Option<Parsed> {
         );
         return None;
     }
-    let asks = turn.mode != crate::chats::AccessMode::FullAccess;
+    let asks = *turn.mode.locked() != crate::chats::AccessMode::FullAccess;
     // A tool the agent blocks goes on to be refused as an approval, where the chat shows why.
     let blocked = turn
         .core

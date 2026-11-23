@@ -11,6 +11,7 @@ use crate::chats::AccessMode;
 use crate::provider::{Image, Parsed, TurnSpec, prompt};
 
 use super::client::{client_info, strip_effort_suffix};
+use super::questions;
 use super::swarm;
 
 /// Request id of `initialize`.
@@ -18,6 +19,9 @@ pub(super) const INIT_REQUEST: u64 = 1;
 
 /// Request id of `session/new` or `session/resume`.
 pub(super) const SESSION_REQUEST: u64 = 2;
+
+/// Request id of `session/load`, for a session `session/resume` could not read.
+pub(super) const LOAD_REQUEST: &str = "session-load";
 
 /// Request id of `session/set_mode`.
 pub(super) const MODE_REQUEST: u64 = 3;
@@ -88,9 +92,17 @@ pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
     vec![init.to_string(), session.to_string()]
 }
 
+/// Builds `session/load` for `session_id`, which agy answers once it has replayed the session.
+pub(super) fn load_request(spec: &TurnSpec, session_id: &str) -> Value {
+    let mut request = session_request(spec, Some(session_id));
+    request["id"] = json!(LOAD_REQUEST);
+    request["method"] = json!("session/load");
+    request
+}
+
 /// Builds `session/new` or `session/resume` with workspace root and optional system prompt append.
 pub(super) fn session_request(spec: &TurnSpec, resume_id: Option<&str>) -> Value {
-    let mut params = json!({"cwd": spec.root});
+    let mut params = json!({"cwd": spec.root, "mcpServers": []});
     if let Some(text) = spec.instructions.filter(|t| !t.trim().is_empty()) {
         params["_meta"] = json!({"antigravity": {"systemPrompt": {"append": text}}});
     }
@@ -113,122 +125,120 @@ pub(super) fn session_request(spec: &TurnSpec, resume_id: Option<&str>) -> Value
     }
 }
 
-/// Configures mode, model, and effort once the session is ready, then sends `session/prompt`.
-pub(super) fn begin(spec: &TurnSpec, session_id: &str, session_result: &Value) -> Vec<Parsed> {
+/// What the chat wants agy's session to run with.
+#[derive(Debug, Clone, Copy)]
+pub struct Wanted<'a> {
+    pub model: Option<&'a str>,
+    pub effort: Option<&'a str>,
+    pub mode: AccessMode,
+}
+
+/// The requests that bring agy's session from `config`, its `configOptions`, to `wanted`.
+///
+/// They are in the order to send them, each once agy answers the one before: agy answers
+/// requests sent together out of order, and a later one can undo an earlier one.
+#[must_use]
+pub fn configure(session_id: &str, wanted: Wanted<'_>, config: &Value) -> Vec<String> {
+    let option = |id: &str| {
+        config
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|opt| opt["id"].as_str() == Some(id))
+    };
+    let current = |id: &str| option(id).and_then(|opt| opt["currentValue"].as_str());
+    let values = |id: &str| -> Vec<&str> {
+        option(id)
+            .and_then(|opt| opt["options"].as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|opt| opt["value"].as_str())
+            .collect()
+    };
+    let set = |id: u64, config_id: &str, value: &str| {
+        json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "session/set_config_option",
+            "params": {"sessionId": session_id, "configId": config_id, "value": value},
+        })
+        .to_string()
+    };
     let mut out = Vec::new();
 
-    // Pick the ACP session mode matching Patchwork's AccessMode.
-    let available_modes: Vec<&str> = session_result["modes"]["availableModes"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|m| m["id"].as_str())
-        .collect();
-    let current_mode = session_result["modes"]["currentModeId"].as_str();
-    let wanted_mode = match spec.mode {
-        AccessMode::FullAccess | AccessMode::Auto => {
-            if available_modes.contains(&"auto") {
-                "auto"
+    if let Some(model) = wanted.model {
+        let models = values("model");
+        // A model named with its effort is offered without it when agy sets effort apart.
+        let stripped = strip_effort_suffix(model);
+        let resolved =
+            if !models.contains(&model) && wanted.effort.is_some() && models.contains(&stripped) {
+                stripped
             } else {
-                "default"
-            }
+                model
+            };
+        if current("model") != Some(resolved) {
+            out.push(set(MODEL_REQUEST, "model", resolved));
         }
-        AccessMode::AutoAcceptEdits => {
-            if available_modes.contains(&"accept-edits") {
-                "accept-edits"
-            } else {
-                "default"
-            }
+    }
+
+    if let Some(effort) = wanted.effort
+        && current("thought_level") != Some(effort)
+    {
+        out.push(set(EFFORT_REQUEST, "thought_level", effort));
+    }
+
+    let modes = values("mode");
+    let offered = |mode: &'static str| {
+        if modes.contains(&mode) {
+            mode
+        } else {
+            "default"
         }
+    };
+    let mode = match wanted.mode {
+        AccessMode::FullAccess | AccessMode::Auto => offered("auto"),
+        AccessMode::AutoAcceptEdits => offered("accept-edits"),
         AccessMode::Supervised => "default",
     };
-    if current_mode != Some(wanted_mode) {
-        out.push(Parsed::Send(
+    if current("mode") != Some(mode) {
+        out.push(
             json!({
                 "jsonrpc": "2.0",
                 "id": MODE_REQUEST,
                 "method": "session/set_mode",
-                "params": {"sessionId": session_id, "modeId": wanted_mode},
+                "params": {"sessionId": session_id, "modeId": mode},
             })
             .to_string(),
-        ));
+        );
     }
+    out
+}
 
-    // Apply model selection only when it differs from the session's active value.
-    let config_options = session_result["configOptions"]
-        .as_array()
-        .map_or(&[][..], Vec::as_slice);
-    let model_config = config_options
-        .iter()
-        .find(|opt| opt["id"].as_str() == Some("model"));
-    let current_model = model_config.and_then(|opt| opt["currentValue"].as_str());
-    let model_options: Vec<&str> = model_config
-        .and_then(|opt| opt["options"].as_array())
+/// Sets up the new session's model, effort and mode, then sends `session/prompt`.
+pub(super) fn begin(spec: &TurnSpec, session_id: &str, session_result: &Value) -> Vec<Parsed> {
+    let config = &session_result["configOptions"];
+    let wanted = Wanted {
+        model: spec.model,
+        effort: spec.effort,
+        mode: spec.mode,
+    };
+    let mut lines: Vec<Parsed> = configure(session_id, wanted, config)
         .into_iter()
-        .flatten()
-        .filter_map(|opt| opt["value"].as_str())
+        .map(Parsed::Send)
         .collect();
-    if let Some(m) = spec.model {
-        let resolved = if model_options.contains(&m) {
-            m
-        } else {
-            let stripped = strip_effort_suffix(m);
-            if spec.effort.is_some() && model_options.contains(&stripped) {
-                stripped
-            } else {
-                m
-            }
-        };
-        if current_model != Some(resolved) {
-            out.push(Parsed::Send(
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": MODEL_REQUEST,
-                    "method": "session/set_config_option",
-                    "params": {
-                        "sessionId": session_id,
-                        "configId": "model",
-                        "value": resolved,
-                    },
-                })
-                .to_string(),
-            ));
-        }
-    }
-
-    // Apply thinking effort only when it differs from the session's active value.
-    let current_effort = config_options
-        .iter()
-        .find(|opt| opt["id"].as_str() == Some("thought_level"))
-        .and_then(|opt| opt["currentValue"].as_str());
-    if let Some(effort) = spec.effort
-        && current_effort != Some(effort)
-    {
-        out.push(Parsed::Send(
-            json!({
-                "jsonrpc": "2.0",
-                "id": EFFORT_REQUEST,
-                "method": "session/set_config_option",
-                "params": {
-                    "sessionId": session_id,
-                    "configId": "thought_level",
-                    "value": effort,
-                },
-            })
-            .to_string(),
-        ));
-    }
-
     let text = prompt(spec);
     let line = prompt_request(next_prompt_id(), session_id, &text, spec.images);
     // `agy` runs a slash command sent before it lists its commands as plain chat, so a
     // `/compact` that starts a resumed session waits for that list.
-    out.push(if text.trim_start().starts_with('/') {
+    lines.push(if text.trim_start().starts_with('/') {
         Parsed::SendAfterCommands(line)
     } else {
         Parsed::Send(line)
     });
-    out
+    vec![
+        Parsed::AgentConfig(config.clone()),
+        Parsed::SendInOrder(lines),
+    ]
 }
 
 /// Builds ACP content blocks for a prompt message and its base64-encoded image attachments.
@@ -277,20 +287,26 @@ pub fn interrupt(session_id: &str) -> String {
     .to_string()
 }
 
-/// Formats an ACP `session/request_permission` JSON-RPC response for an approval decision.
+/// Formats an ACP `session/request_permission` JSON-RPC response for an approval decision, or
+/// for the user's answer when agy asked a question.
 #[must_use]
 pub fn approval_reply(
     reply: &Value,
     allow: bool,
-    _answers: &HashMap<String, Vec<String>>,
+    answers: &HashMap<String, Vec<String>>,
 ) -> String {
     let id = &reply["id"];
     let cancelled = reply["cancel"].as_bool() == Some(true);
     let outcome = if cancelled {
         json!({"outcome": "cancelled"})
+    } else if reply["question"].is_string() {
+        match questions::picked(reply, allow, answers) {
+            Some(opt) => json!({"outcome": "selected", "optionId": opt}),
+            None => json!({"outcome": "cancelled"}),
+        }
     } else {
         let option_id = if allow {
-            reply["allow_option"].as_str().or(Some("allow"))
+            reply["allow_option"].as_str()
         } else {
             reply["deny_option"].as_str()
         };

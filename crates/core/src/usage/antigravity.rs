@@ -40,14 +40,20 @@ pub fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, Error> {
             .flatten()
             .map(move |bucket| {
                 let remaining = bucket["remaining_fraction"].as_f64().unwrap_or(1.0);
+                // Agy rounds what remains to a whole percent, so what is used is the rest of
+                // that, and the two always add up to 100.
+                let remaining_percent = (remaining * 100.0).round().clamp(0.0, 100.0);
                 UsageWindow {
                     label: format!(
                         "{} · {}",
                         group["name"].as_str().unwrap_or_default(),
                         bucket["window"].as_str().unwrap_or_default()
                     ),
-                    used_percent: ((1.0 - remaining) * 100.0).clamp(0.0, 100.0),
-                    resets_at: bucket["reset_time"].as_str().and_then(parse_rfc3339_ms),
+                    used_percent: 100.0 - remaining_percent,
+                    // A window nothing has used yet has no reset to wait for; agy names none.
+                    resets_at: (remaining < 1.0)
+                        .then(|| bucket["reset_time"].as_str().and_then(parse_rfc3339_ms))
+                        .flatten(),
                 }
             })
     }));

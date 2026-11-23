@@ -298,7 +298,8 @@ pub(in crate::orchestration) fn read_stderr_tail(stderr: ChildStderr, source: &S
     tail
 }
 
-/// The last few non-empty stderr lines, used as the error text when the CLI fails without a message.
+/// The last few non-empty stderr lines, used as the error text when the CLI fails without a
+/// message, with any keys or tokens in them hidden.
 pub(in crate::orchestration) fn last_lines(tail: &str) -> Option<String> {
     let mut lines: Vec<&str> = tail
         .lines()
@@ -307,5 +308,5 @@ pub(in crate::orchestration) fn last_lines(tail: &str) -> Option<String> {
         .take(3)
         .collect();
     lines.reverse();
-    (!lines.is_empty()).then(|| lines.join("\n"))
+    (!lines.is_empty()).then(|| crate::logging::redact(&lines.join("\n")))
 }

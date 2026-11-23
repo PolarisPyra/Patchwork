@@ -6,7 +6,7 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use crate::chats::{BackgroundTask, PlanStep, Refusal, TaskStatus, TokenUsage, ToolCall};
+use crate::chats::{BackgroundTask, PlanStep, TaskStatus, TokenUsage, ToolCall};
 use crate::system::now_ms;
 use crate::events::AgentEvent;
 use crate::permissions::{PermissionKind, Target};
@@ -15,10 +15,12 @@ use crate::provider::{
     step_status, summarize, text_delta, thinking, tool_finished, tool_started,
 };
 
-use super::client::AUTH_REQUIRED_CODE;
+use super::client::auth_required;
+use super::errors::{QUOTA_MESSAGE, limit_notice, limit_window, logged_error};
+use super::questions::question;
 use super::input::{
-    EFFORT_REQUEST, INIT_REQUEST, MODE_REQUEST, MODEL_REQUEST, PROMPT_REQUEST, SESSION_REQUEST,
-    begin,
+    EFFORT_REQUEST, INIT_REQUEST, LOAD_REQUEST, MODE_REQUEST, MODEL_REQUEST, PROMPT_REQUEST,
+    SESSION_REQUEST, begin, load_request,
 };
 use super::swarm::{extract_child_target, format_swarm_tool, invoke_subagent_descriptor};
 
@@ -31,7 +33,7 @@ pub fn parse(v: &Value, spec: &TurnSpec, message_id: &str) -> Vec<Parsed> {
     let mut out = Vec::new();
     match (v.get("id"), v["method"].as_str()) {
         // Response to one of our JSON-RPC requests.
-        (Some(id), None) => handle_response(id, v, spec, message_id, &mut out),
+        (Some(id), None) => handle_response(id, v, spec, &mut out),
         // Server-initiated request (such as `session/request_permission`).
         (Some(_), Some(_)) => out.push(handle_server_request(v, spec)),
         // Server notification (`session/update`).
@@ -84,13 +86,7 @@ pub fn is_work(line: &Value) -> bool {
         }
 }
 
-fn handle_response(
-    id: &Value,
-    v: &Value,
-    spec: &TurnSpec,
-    message_id: &str,
-    out: &mut Vec<Parsed>,
-) {
+fn handle_response(id: &Value, v: &Value, spec: &TurnSpec, out: &mut Vec<Parsed>) {
     let error = v.get("error").filter(|e| !e.is_null());
     let error_msg = error.and_then(|e| e["message"].as_str());
     let error_code = error.and_then(|e| e["code"].as_i64());
@@ -102,11 +98,13 @@ fn handle_response(
         return;
     }
 
-    if id == SESSION_REQUEST {
+    let loaded = id.as_str() == Some(LOAD_REQUEST);
+    if id == SESSION_REQUEST || loaded {
+        if loaded {
+            out.push(Parsed::Replaying(false));
+        }
         if let Some(msg) = error_msg {
-            if error_code == Some(AUTH_REQUIRED_CODE)
-                || msg.to_lowercase().contains("authentication")
-            {
+            if auth_required(error_code, msg) {
                 out.extend([
                     Parsed::Error(
                         "Antigravity authentication required. Sign in under Settings → Providers."
@@ -114,11 +112,18 @@ fn handle_response(
                     ),
                     Parsed::Finished,
                 ]);
-            } else if spec.session_id.is_some() && session_missing(msg) {
-                // A session agy no longer has is started afresh, given the conversation so far.
-                // Other failures are shown, so a passing one does not replace the session.
-                out.extend([Parsed::SessionLost, Parsed::Finished]);
+            } else if let Some(session_id) = spec.session_id.filter(|_| session_missing(msg)) {
+                if loaded {
+                    // A session agy can neither resume nor load is started afresh, given the
+                    // conversation so far.
+                    out.extend([Parsed::SessionLost, Parsed::Finished]);
+                } else {
+                    // agy loads a session it cannot resume, replaying its conversation first.
+                    let load = load_request(spec, session_id).to_string();
+                    out.extend([Parsed::Replaying(true), Parsed::Send(load)]);
+                }
             } else {
+                // Other failures are shown, so a passing one does not replace the session.
                 out.extend([Parsed::Error(msg.into()), Parsed::Finished]);
             }
             return;
@@ -138,20 +143,30 @@ fn handle_response(
         return;
     }
 
-    if id == MODE_REQUEST || id == EFFORT_REQUEST {
-        // Older or restricted models may reject optional mode/thought_level tweaks; keep going.
-        return;
-    }
-
-    if id == MODEL_REQUEST {
-        if let Some(msg) = error_msg {
+    if id == MODE_REQUEST || id == MODEL_REQUEST || id == EFFORT_REQUEST {
+        // A model agy refuses ends the turn rather than reply on another; a mode or effort it
+        // refuses leaves its own.
+        if id == MODEL_REQUEST
+            && let Some(msg) = error_msg
+        {
             out.extend([Parsed::Error(msg.into()), Parsed::Finished]);
+            return;
         }
+        let config = &v["result"]["configOptions"];
+        if config.is_array() {
+            out.push(Parsed::AgentConfig(config.clone()));
+        }
+        out.push(Parsed::SendNext);
         return;
     }
 
     if let Some(prompt_id) = id.as_u64().filter(|&n| n >= PROMPT_REQUEST) {
         if let Some(msg) = error_msg {
+            let msg = if auth_required(error_code, msg) {
+                "Antigravity authentication required. Sign in under Settings → Providers."
+            } else {
+                msg
+            };
             out.extend([Parsed::Error(msg.into()), Parsed::Finished]);
             return;
         }
@@ -181,7 +196,15 @@ fn handle_response(
                 });
             }
         }
-        out.extend(stop_reason(result["stopReason"].as_str(), message_id));
+        let reason = result["stopReason"].as_str();
+        // A failed model call ends the reply as `end_turn`, and a used-up quota as `refusal`;
+        // only agy's log says what failed and when a limit resets, so it goes first.
+        if matches!(reason, Some("end_turn" | "refusal"))
+            && let Some(session_id) = spec.session_id
+        {
+            out.extend(logged_error(session_id));
+        }
+        out.extend(stop_reason(reason));
         out.push(Parsed::Finished);
     }
 }
@@ -200,39 +223,13 @@ fn session_missing(message: &str) -> bool {
     .any(|term| lower.contains(term))
 }
 
-/// The usage-limit error agy writes into the reply as text, such as `⚠ Individual quota
-/// reached. … Resets in 1h12m40s.`, before ending it as a normal reply.
-fn limit_notice(text: &str) -> Option<&str> {
-    let notice = text
-        .trim()
-        .strip_prefix('⚠')?
-        .trim_start_matches('\u{fe0f}')
-        .trim();
-    let lower = notice.to_lowercase();
-    [
-        "quota",
-        "resource_exhausted",
-        "429",
-        "exhausted your capacity",
-        "rate limit",
-    ]
-    .iter()
-    .any(|term| lower.contains(term))
-    .then_some(notice)
-}
-
 /// What a reply's ACP `stopReason` adds before it ends: nothing for a normal end or a stop.
-fn stop_reason(reason: Option<&str>, message_id: &str) -> Option<Parsed> {
+///
+/// agy ends a reply with `refusal` only when the model's quota ran out; the quota notice it
+/// streamed before, when any, is kept over this one.
+fn stop_reason(reason: Option<&str>) -> Option<Parsed> {
     let error = match reason? {
-        "refusal" => {
-            return Some(Parsed::Event(AgentEvent::Refused {
-                message_id: message_id.into(),
-                refusal: Refusal {
-                    category: None,
-                    explanation: "Antigravity declined to continue this reply.".into(),
-                },
-            }));
-        }
+        "refusal" => QUOTA_MESSAGE,
         "max_tokens" => "Antigravity's reply reached the model's output limit and was cut off.",
         "max_turn_requests" => {
             "Antigravity reached its limit of model requests for one reply. Send a message to \
@@ -255,6 +252,10 @@ fn handle_server_request(v: &Value, spec: &TurnSpec) -> Parsed {
         );
     }
 
+    if let Some(question) = question(v) {
+        return question;
+    }
+
     let params = &v["params"];
     let tool = &params["toolCall"];
     let options = params["options"].as_array().map_or(&[][..], Vec::as_slice);
@@ -273,8 +274,7 @@ fn handle_server_request(v: &Value, spec: &TurnSpec) -> Parsed {
                 .iter()
                 .find(|o| o["optionId"].as_str() == Some("allow"))
         })
-        .and_then(|o| o["optionId"].as_str())
-        .unwrap_or("allow");
+        .and_then(|o| o["optionId"].as_str());
     let deny_option = kind("reject_once")
         .or_else(|| kind("reject_always"))
         .or_else(|| {
@@ -344,10 +344,13 @@ pub(super) fn parse_session_update(
             if update["content"]["type"].as_str() == Some("text")
                 && let Some(text) = update["content"]["text"].as_str().filter(|t| !t.is_empty())
             {
-                out.push(
-                    limit_notice(text)
-                        .map_or_else(|| text_delta(message_id, text), |e| Parsed::Error(e.into())),
-                );
+                match limit_notice(text) {
+                    Some(notice) => {
+                        out.push(Parsed::Error(notice.into()));
+                        out.extend(limit_window(notice));
+                    }
+                    None => out.push(text_delta(message_id, text)),
+                }
             }
         }
         Some("agent_thought_chunk") => {
@@ -425,12 +428,36 @@ pub(super) fn parse_session_update(
                 out.push(tool_finished(message_id, id, failed, &output));
             }
         }
+        // agy 1.5 compacts without saying so; a later one may report it.
+        Some("compaction_update") => match update["status"].as_str() {
+            Some("in_progress") => out.push(Parsed::Compacting),
+            Some("completed") => {
+                let summary: Vec<&str> = update["summary"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|block| block["text"].as_str())
+                    .filter(|text| !text.trim().is_empty())
+                    .collect();
+                out.push(Parsed::Compacted(
+                    (!summary.is_empty()).then(|| summary.join("\n")),
+                ));
+            }
+            // A compaction that failed ends with whatever agy says next.
+            _ => {}
+        },
+        Some("config_option_update") => {
+            if update["configOptions"].is_array() {
+                out.push(Parsed::AgentConfig(update["configOptions"].clone()));
+            }
+        }
         Some("usage_update") => {
             if let Some(used) = update["used"].as_u64().filter(|&n| n > 0) {
                 out.push(Parsed::RequestUsage {
                     request_id: format!("{CONTEXT_REQUEST}{message_id}"),
                     usage: TokenUsage {
                         context: used,
+                        context_window: update["size"].as_u64().filter(|&n| n > 0),
                         ..Default::default()
                     },
                     top_level: true,

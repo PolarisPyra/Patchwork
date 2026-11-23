@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::Mutex;
@@ -12,8 +12,9 @@ use serde_json::Value;
 use crate::orchestration::changes::attribution::SharedAttribution;
 use crate::permissions::Target;
 use crate::provider;
-use crate::provider::AgentKind;
-use crate::chats::Attachment;
+use crate::provider::antigravity;
+use crate::provider::{AgentKind, Parsed};
+use crate::chats::{AccessMode, Attachment};
 use crate::orchestration::turn::process::Interrupts;
 use crate::orchestration::turn::process::Stdin;
 use crate::orchestration::messages::queue::Queue;
@@ -63,6 +64,15 @@ pub(in crate::orchestration) struct RunningTurn {
     /// Patchwork stopped the Antigravity reply to compact it. A steer meanwhile waits for the
     /// compaction to end instead of stopping it.
     pub(in crate::orchestration) compacting: Arc<AtomicBool>,
+    /// Antigravity was sent a cancel for a steer and has yet to take the steers. A steer
+    /// meanwhile joins them instead of sending another cancel.
+    pub(in crate::orchestration) cancelling: Arc<AtomicBool>,
+    /// The chat's access mode, shared with the turn so a change applies to the reply under way.
+    pub(in crate::orchestration) mode: Arc<Mutex<AccessMode>>,
+    /// Antigravity was started with `--dangerously-skip-permissions`, which only a new process
+    /// drops.
+    pub(in crate::orchestration) skips_permissions: bool,
+    pub(in crate::orchestration) settings: Settings,
     /// Live compact window (0 when off), updated when the user changes it mid-turn or while idle.
     pub(in crate::orchestration) compact_window: Arc<AtomicU64>,
     /// Starts the reply to a message the idle agent was sent, before the agent says anything.
@@ -74,6 +84,49 @@ pub(in crate::orchestration) struct RunningTurn {
     pub(in crate::orchestration) root: String,
     /// Shared with the project's watcher, which adds files to the reply as they change.
     pub(in crate::orchestration) attribution: SharedAttribution,
+}
+
+/// The model and effort the chat wants, and what the agent last said it runs with. Antigravity
+/// takes changes in its session at its next reply, without a new process.
+#[derive(Default)]
+pub(in crate::orchestration) struct LiveSettings {
+    pub(in crate::orchestration) model: Option<String>,
+    pub(in crate::orchestration) effort: Option<String>,
+    /// The agent's settings as it last reported them.
+    pub(in crate::orchestration) reported: Value,
+    /// Lines waiting to be sent, each once the agent answers the one before.
+    pub(in crate::orchestration) chain: VecDeque<Parsed>,
+}
+
+/// One turn's live settings, shared by the turn and the runner.
+pub(in crate::orchestration) type Settings = Arc<Mutex<LiveSettings>>;
+
+impl LiveSettings {
+    /// The line that starts the agent's next reply with `prompt`. For Antigravity that is the
+    /// first request bringing its session to the chat's settings, with the rest and then the
+    /// prompt waiting in `chain`.
+    pub(in crate::orchestration) fn first_line(
+        &mut self,
+        agent: AgentKind,
+        mode: AccessMode,
+        session_id: Option<&str>,
+        prompt: String,
+    ) -> String {
+        let Some(session_id) = session_id.filter(|_| agent == AgentKind::Antigravity) else {
+            return prompt;
+        };
+        let wanted = antigravity::Wanted {
+            model: self.model.as_deref(),
+            effort: self.effort.as_deref(),
+            mode,
+        };
+        let mut lines = antigravity::configure(session_id, wanted, &self.reported).into_iter();
+        let Some(first) = lines.next() else {
+            return prompt;
+        };
+        self.chain = lines.chain([prompt]).map(Parsed::Send).collect();
+        first
+    }
 }
 
 /// What a new turn sends to the agent, and the chat it belongs to.

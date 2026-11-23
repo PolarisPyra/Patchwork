@@ -8,6 +8,7 @@ use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::provider::AgentKind;
 use crate::chats::{AccessMode, Chat};
 use crate::{Core, Error};
+use std::sync::Arc;
 
 /// The access modes, by the names a chat app gives them.
 pub(crate) const ACCESS: [(&str, AccessMode); 4] = [
@@ -25,7 +26,7 @@ impl Core {
     ///
     /// Returns an error when `value` is not one the option takes, or the change cannot be saved.
     pub(crate) fn set_chat_option(
-        &self,
+        self: &Arc<Self>,
         chat: &Chat,
         word: &str,
         value: &str,

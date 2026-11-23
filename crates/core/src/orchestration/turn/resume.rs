@@ -109,9 +109,20 @@ impl Core {
     /// failed, when a turn is already running, or when the turn cannot be started.
     pub fn resume_turn(self: &Arc<Self>, chat_id: &str) -> Result<(), Error> {
         let chat = self.chat(chat_id)?;
-        let Some(cut_off) = chat.resumable_reply().map(|m| m.status) else {
+        let Some(reply) = chat.resumable_reply() else {
             return Err("This reply ended as it should, so there is nothing to resume".into());
         };
+        let cut_off = reply.status;
+        // A cut-off `/compact` is asked again: told to carry on, the agent would go on with the
+        // task instead of summarizing.
+        let compact = chat
+            .messages
+            .iter()
+            .rev()
+            .skip_while(|m| m.id != reply.id)
+            .find(|m| m.role == Role::User && !m.queued)
+            .filter(|m| crate::provider::is_compact_command(&m.text))
+            .map(|m| m.text.trim().to_string());
         if self.runner.is_running(chat_id) {
             return Err("This chat already has a reply running".into());
         }
@@ -127,7 +138,7 @@ impl Core {
             self,
             TurnRequest {
                 chat_id: chat_id.into(),
-                text: note(cut_off),
+                text: compact.unwrap_or_else(|| note(cut_off)),
                 attachments: Vec::new(),
                 images: Vec::new(),
                 resumes: true,

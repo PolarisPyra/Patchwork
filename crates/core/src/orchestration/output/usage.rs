@@ -45,6 +45,9 @@ pub(in crate::orchestration) fn message_usage(
             if r.usage.context > 0 {
                 total.context = r.usage.context;
             }
+            if r.usage.context_window.is_some() {
+                total.context_window = r.usage.context_window;
+            }
             if r.usage.first_token_ms.is_some() {
                 total.first_token_ms = r.usage.first_token_ms;
             }
