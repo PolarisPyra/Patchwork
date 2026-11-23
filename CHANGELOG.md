@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.140] - 2026-11-23
+
+## What's Changed
+* fix(chat): a stopped compaction no longer shows "Context compacted" by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/303
+* fix(antigravity): steers, approvals, errors and agy's own work behave correctly by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/304
+* feat(antigravity): long replies compact themselves when they fill the context window by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/305
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.139...26.11.140
+
 ## [26.11.139] - 2026-11-23
 
 ## What's Changed
