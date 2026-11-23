@@ -1,6 +1,6 @@
 //! Starting and stopping the agent process, reading its output, and writing to its stdin.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use crate::system::Locked;
 use std::io::BufRead;
@@ -52,6 +52,10 @@ pub(in crate::orchestration) const WATCH_EVERY: Duration = Duration::from_secs(1
 /// How long a reply goes without output before the user is told: longer than a model takes to
 /// answer, shorter than a stuck command leaves them waiting before they look.
 pub(in crate::orchestration) const QUIET_AFTER: Duration = Duration::from_secs(3 * 60);
+
+/// How long an Antigravity reply may say nothing, with no call running and no approval open,
+/// before it is stopped: far longer than any model request, so only a prompt agy dropped is.
+pub(in crate::orchestration) const STALL_LIMIT: Duration = Duration::from_secs(15 * 60);
 
 /// The agent's stdin; None once the turn has finished.
 pub(in crate::orchestration) type Stdin = Arc<Mutex<Option<AgentStdin>>>;

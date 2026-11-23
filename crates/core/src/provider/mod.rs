@@ -17,7 +17,7 @@ pub use parsed::{TaskEvent, Parsed};
 pub(crate) use parsed::{clip, one_line, step_status};
 use parsed::{
     relative, ToolStart, tool_started, tool_finished, thinking, file_touched, text_delta,
-    summarize, edit_lines,
+    summarize, edit_lines, changed_lines,
 };
 #[doc(inline)]
 pub use probe::{Probe, probe, probe_until, probe_in, detect_agent, cli_version, list_models};

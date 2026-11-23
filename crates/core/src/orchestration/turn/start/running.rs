@@ -1,6 +1,6 @@
 //! What a turn that is running holds, and what one is asked to send.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -69,9 +69,6 @@ pub(in crate::orchestration) struct RunningTurn {
     pub(in crate::orchestration) cancelling: Arc<AtomicBool>,
     /// The chat's access mode, shared with the turn so a change applies to the reply under way.
     pub(in crate::orchestration) mode: Arc<Mutex<AccessMode>>,
-    /// Antigravity was started with `--dangerously-skip-permissions`, which only a new process
-    /// drops.
-    pub(in crate::orchestration) skips_permissions: bool,
     pub(in crate::orchestration) settings: Settings,
     /// Live compact window (0 when off), updated when the user changes it mid-turn or while idle.
     pub(in crate::orchestration) compact_window: Arc<AtomicU64>,

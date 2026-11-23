@@ -1,6 +1,6 @@
 //! Subagents a turn starts: their own threads, and moving them to the background.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use crate::system::Locked;
 use std::collections::HashMap;
@@ -30,6 +30,12 @@ use crate::orchestration::turn::start::Turn;
 
 /// Control requests waiting for the agent's answer, by request id.
 pub(in crate::orchestration) type Controls = Arc<Mutex<HashMap<String, mpsc::Sender<()>>>>;
+
+/// How often an agy sub agent's transcript is read for new steps.
+const TRANSCRIPT_POLL: Duration = Duration::from_secs(1);
+
+/// An agy sub agent whose transcript grows no further for this long is taken to be done.
+const TRANSCRIPT_IDLE: Duration = Duration::from_secs(10 * 60);
 
 /// How long a steer waits for Claude to move its foreground subagents to the background.
 pub(in crate::orchestration) const BACKGROUND_WAIT: Duration = Duration::from_secs(5);
@@ -159,4 +165,66 @@ pub(in crate::orchestration) fn finish_child(
             error: None,
         },
     );
+}
+
+/// Streams the steps of agy's sub agents into `child`'s chat from their `transcripts`, then ends
+/// it once each answered with nothing left running, the agent exited, or they went quiet.
+pub(in crate::orchestration) fn follow_agy_children(
+    turn: &Turn,
+    mut child: SubagentChat,
+    mut transcripts: Vec<provider::antigravity::Transcript>,
+) {
+    let core = Arc::clone(&turn.core);
+    let exited = Arc::clone(&turn.exited);
+    let root = crate::system::ssh::here(&turn.root).to_string();
+    let (chat_id, message_id) = (child.chat_id.clone(), child.message_id.clone());
+    let spawned = std::thread::Builder::new()
+        .name("agy-subagents".into())
+        .spawn(move || {
+            let mut last_step = Instant::now();
+            loop {
+                // A read after the agent exits picks up what it wrote last.
+                let stopping = exited.load(Ordering::SeqCst);
+                for transcript in &mut transcripts {
+                    for mut event in transcript.read_new(&child.message_id, &root) {
+                        last_step = Instant::now();
+                        if let AgentEvent::TextDelta { text, .. } = &mut event {
+                            if child.has_text {
+                                text.insert_str(0, "\n\n");
+                            }
+                            child.has_text = true;
+                        }
+                        publish(&core, &child.chat_id, event);
+                    }
+                }
+                let done = transcripts
+                    .iter()
+                    .all(provider::antigravity::Transcript::is_done);
+                if done || stopping || last_step.elapsed() > TRANSCRIPT_IDLE {
+                    break;
+                }
+                std::thread::sleep(TRANSCRIPT_POLL);
+            }
+            publish(
+                &core,
+                &child.chat_id,
+                AgentEvent::TurnCompleted {
+                    message_id: child.message_id,
+                    status: MessageStatus::Complete,
+                    error: None,
+                },
+            );
+        });
+    if let Err(e) = spawned {
+        log::warn!(error:% = e; "Could not follow agy's sub agents: {{error}}");
+        publish(
+            &turn.core,
+            &chat_id,
+            AgentEvent::TurnCompleted {
+                message_id,
+                status: MessageStatus::Complete,
+                error: None,
+            },
+        );
+    }
 }

@@ -2,7 +2,7 @@
 //! by itself, so Patchwork stops the reply between calls, sends `/compact`, and has the agent go
 //! on where it was, all within the same reply.
 
-// Rust guideline compliant 2026-11-22
+// Rust guideline compliant 2026-11-23
 
 use std::sync::atomic::Ordering;
 
@@ -122,7 +122,7 @@ impl Compaction {
                     message_id: turn.message_id.clone(),
                 });
                 *self = Self::Compacting(then);
-                After::Compact(antigravity::prompt_input(session_id, "/compact", &[]))
+                After::Compact(antigravity::prompt_input(session_id, "/compact", &[], &[]))
             }
             Self::Compacting(then) if !failed && !cancelled => {
                 turn.publish(AgentEvent::Compacted {
@@ -136,7 +136,10 @@ impl Compaction {
                 let goes_on = matches!(then, Then::Continue)
                     && turn.steers.locked().is_empty()
                     && turn.session_id.as_deref().is_some_and(|id| {
-                        write_to(&mut stdin, &antigravity::prompt_input(id, CONTINUE, &[]))
+                        write_to(
+                            &mut stdin,
+                            &antigravity::prompt_input(id, CONTINUE, &[], &[]),
+                        )
                     });
                 if goes_on { After::GoesOn } else { After::Ends }
             }

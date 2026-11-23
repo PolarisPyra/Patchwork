@@ -1,7 +1,7 @@
 //! Starting a turn: the agent's command, arguments and input built from the chat, its process
 //! spawned, and the watch that retires it once it has sat idle.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use crate::system::Locked;
 use crate::Error;
@@ -28,7 +28,6 @@ use crate::events::AgentEvent;
 use crate::provider::AgentKind;
 use crate::system::now_ms;
 use crate::chats::Role;
-use crate::chats::AccessMode;
 use crate::logging::{AGENT_LOG, Data, Source};
 use crate::settings::LogLevel;
 use crate::source_control;
@@ -526,6 +525,8 @@ impl Runner {
             cancelling: Arc::clone(&cancelling),
             wake: wake.clone(),
             last_output: Arc::new(AtomicU64::new(now_ms())),
+            calls_open: Arc::new(AtomicBool::new(false)),
+            stalled: Arc::new(AtomicBool::new(false)),
             root,
             session_id,
             model,
@@ -568,7 +569,6 @@ impl Runner {
                 compacting,
                 cancelling,
                 mode: live_mode,
-                skips_permissions: mode == AccessMode::FullAccess,
                 settings,
                 compact_window,
                 wake,
@@ -598,6 +598,9 @@ impl Runner {
             alone: Arc::clone(&turn.alone),
             pending: Arc::clone(&turn.pending),
             last_output: Arc::clone(&turn.last_output),
+            agent: turn.agent,
+            calls_open: Arc::clone(&turn.calls_open),
+            stalled: Arc::clone(&turn.stalled),
         };
         std::thread::spawn(move || watch(&watched));
         std::thread::spawn(move || ingest(turn, child, stdout, stderr_tail));

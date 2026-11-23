@@ -1,13 +1,13 @@
 //! What Patchwork sends `agy acp`: arguments, JSON-RPC handshake, prompts, steering, and replies.
 
-// Rust guideline compliant 2026-11-22
+// Rust guideline compliant 2026-11-23
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde_json::{Value, json};
 
-use crate::chats::AccessMode;
+use crate::chats::{AccessMode, Attachment, AttachmentKind};
 use crate::provider::{Image, Parsed, TurnSpec, prompt};
 
 use super::client::{client_info, strip_effort_suffix};
@@ -38,6 +38,9 @@ pub(super) const PROMPT_REQUEST: u64 = 6;
 /// Monotonic id generator so every `session/prompt` in a warm ACP process is distinct.
 static NEXT_PROMPT_ID: AtomicU64 = AtomicU64::new(PROMPT_REQUEST);
 
+/// Largest attached text file sent along with the prompt; a bigger one is left for agy to read.
+const MAX_TEXT_ATTACHMENT_BYTES: u64 = 1024 * 1024;
+
 fn next_prompt_id() -> u64 {
     NEXT_PROMPT_ID.fetch_add(1, Ordering::Relaxed)
 }
@@ -45,10 +48,9 @@ fn next_prompt_id() -> u64 {
 /// Command-line arguments for an Antigravity ACP turn (`agy acp --stdio`).
 #[must_use]
 pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
+    // Full Access runs as agy's "auto" mode with Patchwork answering what agy still asks, so the
+    // mode can change in the session without a new process.
     let mut args: Vec<String> = ["acp", "--stdio"].map(String::from).into();
-    if spec.mode == AccessMode::FullAccess {
-        args.push("--dangerously-skip-permissions".into());
-    }
     // Patchwork's permission hook (for deny rules even in FullAccess) and the user's hooks.
     if let Some(dir) = crate::provider::hooks::antigravity_dir(spec) {
         args.push(format!("--add-dir={}", dir.display()));
@@ -102,7 +104,13 @@ pub(super) fn load_request(spec: &TurnSpec, session_id: &str) -> Value {
 
 /// Builds `session/new` or `session/resume` with workspace root and optional system prompt append.
 pub(super) fn session_request(spec: &TurnSpec, resume_id: Option<&str>) -> Value {
-    let mut params = json!({"cwd": spec.root, "mcpServers": []});
+    // Patchwork's own tools run on this machine, which a remote agy cannot start.
+    let servers = if spec.host.is_some() {
+        json!([])
+    } else {
+        crate::provider::mcp::overrides::acp_servers(spec.chat_id)
+    };
+    let mut params = json!({"cwd": spec.root, "mcpServers": servers});
     if let Some(text) = spec.instructions.filter(|t| !t.trim().is_empty()) {
         params["_meta"] = json!({"antigravity": {"systemPrompt": {"append": text}}});
     }
@@ -227,7 +235,11 @@ pub(super) fn begin(spec: &TurnSpec, session_id: &str, session_result: &Value) -
         .map(Parsed::Send)
         .collect();
     let text = prompt(spec);
-    let line = prompt_request(next_prompt_id(), session_id, &text, spec.images);
+    let line = prompt_request(
+        next_prompt_id(),
+        session_id,
+        &prompt_blocks(&text, spec.attachments, spec.images),
+    );
     // `agy` runs a slash command sent before it lists its commands as plain chat, so a
     // `/compact` that starts a resumed session waits for that list.
     lines.push(if text.trim_start().starts_with('/') {
@@ -241,8 +253,10 @@ pub(super) fn begin(spec: &TurnSpec, session_id: &str, session_result: &Value) -
     ]
 }
 
-/// Builds ACP content blocks for a prompt message and its base64-encoded image attachments.
-fn prompt_blocks(text: &str, images: &[Image]) -> Vec<Value> {
+/// Builds ACP content blocks for a prompt: its text, the images, each attached text file's
+/// contents, and a link to each attached PDF. The text still lists every attachment's path, so a
+/// file left out here (too big, not text, or unreadable) is one agy can still open itself.
+fn prompt_blocks(text: &str, attachments: &[Attachment], images: &[Image]) -> Vec<Value> {
     let mut blocks = Vec::new();
     if !text.is_empty() {
         blocks.push(json!({"type": "text", "text": text}));
@@ -254,23 +268,68 @@ fn prompt_blocks(text: &str, images: &[Image]) -> Vec<Value> {
             "data": img.data,
         }));
     }
+    blocks.extend(
+        attachments
+            .iter()
+            .filter(|a| a.kind == AttachmentKind::File)
+            .filter_map(file_block),
+    );
     blocks
+}
+
+/// The content block for an attached file: a link for a PDF, which agy reads itself, or the
+/// text of a UTF-8 text file. None for any other file.
+fn file_block(attachment: &Attachment) -> Option<Value> {
+    let uri = url::Url::from_file_path(&attachment.path).ok()?.to_string();
+    let size = std::fs::metadata(&attachment.path).ok()?.len();
+    let pdf = std::path::Path::new(&attachment.path)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"));
+    if pdf {
+        return Some(json!({
+            "type": "resource_link",
+            "uri": uri,
+            "name": attachment.name,
+            "mimeType": "application/pdf",
+            "size": size,
+        }));
+    }
+    if size > MAX_TEXT_ATTACHMENT_BYTES {
+        return None;
+    }
+    let text = String::from_utf8(std::fs::read(&attachment.path).ok()?).ok()?;
+    if text.contains('\0') {
+        return None;
+    }
+    Some(json!({
+        "type": "resource",
+        "resource": {"uri": uri, "mimeType": "text/plain", "text": text},
+    }))
 }
 
 /// Sends a new prompt into an idle, already-initialized ACP session with a fresh request id.
 #[must_use]
-pub fn prompt_input(session_id: &str, text: &str, images: &[Image]) -> String {
-    prompt_request(next_prompt_id(), session_id, text, images)
+pub fn prompt_input(
+    session_id: &str,
+    text: &str,
+    attachments: &[Attachment],
+    images: &[Image],
+) -> String {
+    prompt_request(
+        next_prompt_id(),
+        session_id,
+        &prompt_blocks(text, attachments, images),
+    )
 }
 
-fn prompt_request(id: u64, session_id: &str, text: &str, images: &[Image]) -> String {
+fn prompt_request(id: u64, session_id: &str, blocks: &[Value]) -> String {
     json!({
         "jsonrpc": "2.0",
         "id": id,
         "method": "session/prompt",
         "params": {
             "sessionId": session_id,
-            "prompt": prompt_blocks(text, images),
+            "prompt": blocks,
         },
     })
     .to_string()

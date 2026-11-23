@@ -1,7 +1,7 @@
 //! Answering the approvals a turn waits on: by the user, or by the permission rules once they
 //! change.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use crate::system::Locked;
 use crate::Error;
@@ -132,8 +132,8 @@ impl Runner {
     /// Hands the chat's new access mode to its running turn, and answers the approvals waiting
     /// there that Full Access runs without asking.
     ///
-    /// True when the agent takes the mode at its next reply: Antigravity, unless it was started
-    /// in Full Access and the mode leaves it. Otherwise the agent needs a new process.
+    /// True when the agent takes the mode at its next reply, as Antigravity does. Otherwise the
+    /// agent needs a new process.
     pub(crate) fn set_access_mode(
         &self,
         core: &Arc<Core>,
@@ -146,8 +146,7 @@ impl Runner {
                 return false;
             };
             *turn.mode.locked() = mode;
-            let live = turn.agent == provider::AgentKind::Antigravity
-                && (mode == AccessMode::FullAccess || !turn.skips_permissions);
+            let live = turn.agent == provider::AgentKind::Antigravity;
             if mode != AccessMode::FullAccess {
                 return live;
             }

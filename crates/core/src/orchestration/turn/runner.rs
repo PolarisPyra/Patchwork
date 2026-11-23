@@ -1,7 +1,7 @@
 //! The `Runner`: the agent processes up in each chat, and handing a message to one, stopping
 //! one, or stopping them all.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use crate::system::Locked;
 use std::collections::{HashMap, HashSet};
@@ -244,14 +244,31 @@ impl Runner {
             return false;
         }
         let mut settings = turn.settings.locked();
-        // agy cannot go back to its own default, so that takes a new process.
-        if (model.is_none() && settings.model.is_some())
-            || (effort.is_none() && settings.effort.is_some())
-        {
+        // agy has no "back to your default", so going back names its default outright; with no
+        // probe yet to say what that is, a new process starts on it.
+        let model_back = model.is_none() && settings.model.is_some();
+        let effort_back = effort.is_none() && settings.effort.is_some();
+        let (default_model, default_effort) = if model_back || effort_back {
+            match provider::antigravity::known_defaults() {
+                Some((model, effort)) => (Some(model), effort),
+                None => return false,
+            }
+        } else {
+            (None, None)
+        };
+        if effort_back && default_effort.is_none() {
             return false;
         }
-        settings.model = model.map(String::from);
-        settings.effort = effort.map(String::from);
+        settings.model = match model {
+            Some(model) => Some(model.to_owned()),
+            None if model_back => default_model,
+            None => None,
+        };
+        settings.effort = match effort {
+            Some(effort) => Some(effort.to_owned()),
+            None if effort_back => default_effort,
+            None => None,
+        };
         true
     }
 

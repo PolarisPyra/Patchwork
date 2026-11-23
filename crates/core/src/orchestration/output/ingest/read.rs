@@ -1,6 +1,6 @@
 //! The loop that reads the agent's stdout for one turn and hands each event on.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use crate::system::Locked;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -66,6 +66,7 @@ use crate::orchestration::output::stream::publish;
 use crate::orchestration::output::stream::Unsaved;
 use crate::orchestration::tasks::delegate::mark_call;
 use crate::orchestration::tasks::subagents::finish_child;
+use crate::orchestration::tasks::subagents::follow_agy_children;
 use crate::orchestration::tasks::subagents::open_child;
 use crate::orchestration::tasks::subagents::SubagentChat;
 use crate::orchestration::turn::end::{TurnEnd, finish};
@@ -172,6 +173,8 @@ pub(in crate::orchestration) fn ingest(
     let mut steer_reply_empty = false;
     // Tool id → the message it was started in, which a steer may since have moved on from.
     let mut tool_owner: HashMap<String, String> = HashMap::new();
+    // The name and summary each Antigravity call was last shown with.
+    let mut tool_shown: HashMap<String, (String, String)> = HashMap::new();
     // The chats of the subagents still running, by the call that started each.
     let mut children: HashMap<String, SubagentChat> = HashMap::new();
     // The tasks the agent started, and which of them are listed under the background.
@@ -202,6 +205,8 @@ pub(in crate::orchestration) fn ingest(
     let mut claude_tasks = provider::claude::TaskList::default();
     // Antigravity's native ACP swarm tracker (`_antigravity/swarm` + `members.json` fallback).
     let mut antigravity_swarm = provider::antigravity::SwarmState::default();
+    // Antigravity's running tool calls, so an update that leaves fields out keeps the earlier ones.
+    let mut antigravity_calls = provider::antigravity::ToolCalls::default();
     let mut commands = Commands::Unlisted(None);
     // Patchwork's compaction of an Antigravity reply that fills the window, and the calls
     // running, which it waits for.
@@ -215,6 +220,8 @@ pub(in crate::orchestration) fn ingest(
     let lines = Lines::read(stdout, &turn.wake);
     let mut unprompted = Unprompted::No;
     loop {
+        turn.calls_open
+            .store(!open_calls.is_empty(), Ordering::Relaxed);
         let line = match lines.next(&unprompted) {
             Next::Line(line) => Some(line),
             // The idle agent was sent a message, and its reply starts here; the agent may say
@@ -235,7 +242,7 @@ pub(in crate::orchestration) fn ingest(
         };
         let source =
             |turn: &Turn| Source::agent(turn.agent, pid, &turn.chat_id, Some(&turn.message_id));
-        let value = if let Some(line) = line.as_deref() {
+        let mut value = if let Some(line) = line.as_deref() {
             if AGENT_LOG.logs(LogLevel::Error) {
                 AGENT_LOG.line("out", &source(&turn), line);
             }
@@ -254,6 +261,9 @@ pub(in crate::orchestration) fn ingest(
         } else {
             Value::Null
         };
+        if turn.agent == AgentKind::Antigravity {
+            antigravity_calls.merge(&mut value);
+        }
         // A message Claude took after it had already ended its reply (while a background
         // subagent kept it running) is answered from here on, below that message. So is
         // a reply an idle Claude starts on its own, such as once a background command ends.
@@ -437,6 +447,18 @@ pub(in crate::orchestration) fn ingest(
                     turn.settings.locked().reported = config;
                     // The model may have changed, and prices what follows.
                     fallback_model = None;
+                }
+                Parsed::AgentMode(mode) => {
+                    // So the next reply sets the chat's own mode again.
+                    let mut settings = turn.settings.locked();
+                    let option = settings.reported.as_array_mut().and_then(|options| {
+                        options
+                            .iter_mut()
+                            .find(|opt| opt["id"].as_str() == Some("mode"))
+                    });
+                    if let Some(option) = option {
+                        option["currentValue"] = serde_json::Value::String(mode);
+                    }
                 }
                 Parsed::McpCall {
                     id,
@@ -786,36 +808,51 @@ pub(in crate::orchestration) fn ingest(
                             has_text = true;
                         }
                         // Codex reports a tool when it starts and again when it completes;
-                        // only the first ToolStarted for an id is kept.
+                        // only the first ToolStarted for an id is kept. Antigravity's updates
+                        // can name or describe a call better than its start, so one that does
+                        // is shown again in place; a subagent's call keeps its chat.
                         AgentEvent::ToolStarted { tool, message_id } => {
                             repeats.started(tool);
-                            if tool_owner.contains_key(&tool.id) {
-                                continue;
-                            }
-                            tool_owner.insert(tool.id.clone(), message_id.clone());
-                            if tool.parent.is_none() {
-                                open_calls.insert(tool.id.clone());
-                            }
-                            let task = match turn.agent {
-                                AgentKind::Codex => provider::codex::background_task(tool),
-                                AgentKind::Antigravity if tool.parent.is_none() => {
-                                    provider::antigravity::background_task(tool)
+                            let shown = (turn.agent == AgentKind::Antigravity
+                                && tool.subagent.is_none())
+                            .then(|| (tool.name.clone(), tool.summary.clone()));
+                            if let Some(owner) = tool_owner.get(&tool.id) {
+                                let Some(shown) =
+                                    shown.filter(|shown| tool_shown.get(&tool.id) != Some(shown))
+                                else {
+                                    continue;
+                                };
+                                message_id.clone_from(owner);
+                                tool_shown.insert(tool.id.clone(), shown);
+                            } else {
+                                if let Some(shown) = shown {
+                                    tool_shown.insert(tool.id.clone(), shown);
                                 }
-                                _ => None,
-                            };
-                            if let Some(task) = task {
-                                background.start_unreported(task);
+                                tool_owner.insert(tool.id.clone(), message_id.clone());
+                                if tool.parent.is_none() {
+                                    open_calls.insert(tool.id.clone());
+                                }
+                                let task = match turn.agent {
+                                    AgentKind::Codex => provider::codex::background_task(tool),
+                                    AgentKind::Antigravity if tool.parent.is_none() => {
+                                        provider::antigravity::background_task(tool)
+                                    }
+                                    _ => None,
+                                };
+                                if let Some(task) = task {
+                                    background.start_unreported(task);
+                                }
+                                if matches!(
+                                    turn.agent,
+                                    AgentKind::Claude | AgentKind::Codex | AgentKind::Antigravity
+                                ) && tool.parent.is_none()
+                                    && let Some(child) = open_child(&turn, tool)
+                                {
+                                    tool.child_chat_id = Some(child.chat_id.clone());
+                                    children.insert(tool.id.clone(), child);
+                                }
+                                mark_call(&turn, tool);
                             }
-                            if matches!(
-                                turn.agent,
-                                AgentKind::Claude | AgentKind::Codex | AgentKind::Antigravity
-                            ) && tool.parent.is_none()
-                                && let Some(child) = open_child(&turn, tool)
-                            {
-                                tool.child_chat_id = Some(child.chat_id.clone());
-                                children.insert(tool.id.clone(), child);
-                            }
-                            mark_call(&turn, tool);
                         }
                         AgentEvent::ToolFinished {
                             tool_id,
@@ -881,6 +918,12 @@ pub(in crate::orchestration) fn ingest(
     // An idle agent changes files only through shell commands it left running; other changes
     // since its last reply are the user's own.
     let idle_untouched = turn.idle.load(Ordering::SeqCst) && !background.any_listed_live();
+    if turn.stalled.load(Ordering::SeqCst) && stream_error.is_none() {
+        stream_error = Some(
+            "Antigravity said nothing for 15 minutes, so its reply was stopped. Send a message to go on."
+                .into(),
+        );
+    }
     // If `agy acp` exited unexpectedly while swarm workers were still running, surface an error
     // instead of silently completing an unfinished swarm.
     if turn.agent == AgentKind::Antigravity
@@ -991,8 +1034,30 @@ fn publish_event(
         } => Some((tool_id.clone(), *is_error)),
         _ => None,
     };
+    // agy's sub agents work on after the call that starts them returns, so their chat follows
+    // their transcripts instead of ending with the call.
+    let transcripts = match &event {
+        AgentEvent::ToolFinished {
+            tool_id,
+            is_error: false,
+            output: Some(output),
+            ..
+        } if turn.agent == AgentKind::Antigravity
+            && children.contains_key(tool_id)
+            && crate::system::ssh::split(&turn.root).is_none() =>
+        {
+            provider::antigravity::child_transcripts(output)
+        }
+        _ => Vec::new(),
+    };
     turn.publish(event);
     if let Some((tool_id, failed)) = finished {
-        finish_child(turn, children, &tool_id, failed);
+        if !transcripts.is_empty()
+            && let Some(child) = children.remove(&tool_id)
+        {
+            follow_agy_children(turn, child, transcripts);
+        } else {
+            finish_child(turn, children, &tool_id, failed);
+        }
     }
 }

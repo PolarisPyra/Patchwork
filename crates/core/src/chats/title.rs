@@ -1,7 +1,7 @@
 //! Names a chat after what its first message is about, with a one-off call to a small model,
 //! which `ask` also makes for other short writing such as commit messages.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use crate::Error;
 use std::time::Duration;
@@ -57,9 +57,9 @@ fn runs_locally(model: Option<&str>) -> bool {
 }
 
 /// A title for a chat that starts with `message`: from the writer's model when it has one,
-/// else from the provider the chat runs on: Claude, Codex, or its API provider with `model`.
-/// Other agents use Claude, else Codex. With `local_only`, only a local model is asked. None when
-/// none answers.
+/// else from the provider the chat runs on: Claude, Codex, agy, or its API provider with `model`.
+/// agy falls back to Claude, else Codex, as other agents do. With `local_only`, only a local model
+/// is asked. None when none answers.
 pub fn generate(
     message: &str,
     agent: AgentKind,
@@ -125,6 +125,9 @@ pub(crate) fn ask(
     let answer = match agent {
         Some(AgentKind::Claude) => from_claude(&prompt, schema, &dir),
         Some(AgentKind::Codex) => from_codex(&prompt, schema, &dir, model),
+        Some(AgentKind::Antigravity) => from_agy(&prompt, schema, &dir, model)
+            .or_else(|| from_claude(&prompt, schema, &dir))
+            .or_else(|| from_codex(&prompt, schema, &dir, None)),
         _ => from_claude(&prompt, schema, &dir).or_else(|| from_codex(&prompt, schema, &dir, None)),
     };
     let _ = std::fs::remove_dir_all(&dir);
@@ -205,6 +208,77 @@ fn from_claude(prompt: &str, schema: &str, dir: &std::path::Path) -> Option<Valu
     }
     let mut value: Value = serde_json::from_str(&out.stdout).ok()?;
     Some(value["structured_output"].take()).filter(Value::is_object)
+}
+
+/// The longest agy hook or MCP config read; a larger one is taken as configured.
+const MAX_AGY_CONFIG_BYTES: u64 = 64_000;
+
+/// With the chat's model when it has one, at low effort. None when agy has hooks or MCP
+/// servers of its own, which would run for the call, or when the call writes a file.
+fn from_agy(
+    prompt: &str,
+    schema: &str,
+    dir: &std::path::Path,
+    model: Option<&str>,
+) -> Option<Value> {
+    let config = provider::antigravity::home()?.join("config");
+    if agy_configures(&config.join("hooks.json"), "hooks")
+        || agy_configures(&config.join("mcp_config.json"), "mcpServers")
+    {
+        return None;
+    }
+    let prompt = format!(
+        "Use only the input below. Do not use tools, read or write files, run commands, or ask \
+         questions.\nReturn only the requested JSON object.\n\n{prompt}"
+    );
+    let mut args = vec![
+        "-p",
+        &prompt,
+        "--output-format",
+        "json",
+        "--json-schema",
+        schema,
+        "--disable-slash-commands",
+        "--effort",
+        "low",
+    ];
+    if let Some(model) = model {
+        args.extend(["--model", model]);
+    }
+    let out = provider::probe_in(AgentKind::Antigravity, &args, dir, TIMEOUT)?;
+    if !out.success {
+        log::warn!(error = out.stderr.trim(); "a one-off model call failed: {{error}}");
+        return None;
+    }
+    if std::fs::read_dir(dir).ok()?.next().is_some() {
+        log::warn!("agy wrote files during a one-off model call, so its answer is not used");
+        return None;
+    }
+    let mut value: Value = serde_json::from_str(out.stdout.trim()).ok()?;
+    Some(value["structured_output"].take()).filter(Value::is_object)
+}
+
+/// Whether the agy config at `path` sets `key` to something, or is too large to read.
+fn agy_configures(path: &std::path::Path, key: &str) -> bool {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return false;
+    };
+    if meta.len() > MAX_AGY_CONFIG_BYTES {
+        return true;
+    }
+    let text = std::fs::read_to_string(path).unwrap_or_default();
+    if text.trim().is_empty() {
+        return false;
+    }
+    match serde_json::from_str::<Value>(&text) {
+        Ok(value) => match &value[key] {
+            Value::Null => false,
+            Value::Object(map) => !map.is_empty(),
+            Value::Array(list) => !list.is_empty(),
+            _ => true,
+        },
+        Err(_unreadable) => true,
+    }
 }
 
 /// With the chat's model when it has one, at low effort, else Codex's default model.

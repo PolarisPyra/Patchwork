@@ -1,7 +1,7 @@
 //! What the reader of an agent's output needs to save and publish one turn's events, and the
 //! empty reply its output streams into.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-23
 
 use crate::system::Locked;
 use super::running::{NativeTurn, Pending, Settings};
@@ -69,6 +69,10 @@ pub(in crate::orchestration) struct Turn {
     /// When the agent last said anything (ms since epoch), which `watch` reads to tell the user
     /// a reply has gone quiet.
     pub(in crate::orchestration) last_output: Arc<AtomicU64>,
+    /// The reply has calls still running, which may say nothing for as long as they run.
+    pub(in crate::orchestration) calls_open: Arc<AtomicBool>,
+    /// `watch` stopped the Antigravity reply for saying nothing for `STALL_LIMIT`.
+    pub(in crate::orchestration) stalled: Arc<AtomicBool>,
     pub(in crate::orchestration) root: String,
     pub(in crate::orchestration) session_id: Option<String>,
     pub(in crate::orchestration) model: Option<String>,
