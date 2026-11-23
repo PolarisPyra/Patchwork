@@ -287,6 +287,7 @@ impl Runner {
             {
                 turn.idle.store(false, Ordering::SeqCst);
                 turn.steers.locked().push_back(follow_up);
+                turn.wake.reply_due();
                 return Delivery::Resumed;
             }
             self.handed_over.locked().remove(message_id);

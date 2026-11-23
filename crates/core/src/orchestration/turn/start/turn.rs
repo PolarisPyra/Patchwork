@@ -5,6 +5,7 @@
 
 use crate::system::Locked;
 use super::running::{NativeTurn, Pending};
+use crate::orchestration::output::ingest::Wake;
 use crate::orchestration::turn::end::background_id;
 
 use std::sync::Arc;
@@ -60,6 +61,8 @@ pub(in crate::orchestration) struct Turn {
     /// Patchwork stopped the Antigravity reply to compact it. A steer meanwhile waits for the
     /// compaction to end instead of stopping it.
     pub(in crate::orchestration) compacting: Arc<AtomicBool>,
+    /// Starts the reply to a message the idle agent was sent, before the agent says anything.
+    pub(in crate::orchestration) wake: Wake,
     /// When the agent last said anything (ms since epoch), which `watch` reads to tell the user
     /// a reply has gone quiet.
     pub(in crate::orchestration) last_output: Arc<AtomicU64>,

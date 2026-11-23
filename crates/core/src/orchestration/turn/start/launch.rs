@@ -32,7 +32,7 @@ use crate::logging::{AGENT_LOG, Data, Source};
 use crate::settings::LogLevel;
 use crate::source_control;
 use crate::orchestration::changes::checkpoint;
-use crate::orchestration::output::ingest::ingest;
+use crate::orchestration::output::ingest::{Wake, ingest};
 use crate::orchestration::turn::process::AgentStdin;
 use crate::orchestration::turn::process::Interrupts;
 use crate::orchestration::turn::process::read_stderr_tail;
@@ -494,6 +494,7 @@ impl Runner {
         let idle = Arc::new(AtomicBool::new(false));
         let alone = Arc::new(AtomicBool::new(false));
         let compacting = Arc::new(AtomicBool::new(false));
+        let wake = Wake::default();
         let turn = Turn {
             core: Arc::clone(core),
             chat_id: chat_id.clone(),
@@ -513,6 +514,7 @@ impl Runner {
             idle: Arc::clone(&idle),
             alone: Arc::clone(&alone),
             compacting: Arc::clone(&compacting),
+            wake: wake.clone(),
             last_output: Arc::new(AtomicU64::new(now_ms())),
             root,
             session_id,
@@ -553,6 +555,7 @@ impl Runner {
                 idle,
                 alone,
                 compacting,
+                wake,
                 stale: AtomicBool::new(false),
                 root: turn.root.clone(),
                 attribution,

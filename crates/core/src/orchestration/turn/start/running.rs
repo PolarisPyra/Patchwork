@@ -18,6 +18,7 @@ use crate::orchestration::turn::process::Interrupts;
 use crate::orchestration::turn::process::Stdin;
 use crate::orchestration::messages::queue::Queue;
 use crate::orchestration::messages::queue::Steers;
+use crate::orchestration::output::ingest::Wake;
 use crate::orchestration::tasks::subagents::Controls;
 
 /// An approval waiting for the user.
@@ -62,6 +63,8 @@ pub(in crate::orchestration) struct RunningTurn {
     /// Patchwork stopped the Antigravity reply to compact it. A steer meanwhile waits for the
     /// compaction to end instead of stopping it.
     pub(in crate::orchestration) compacting: Arc<AtomicBool>,
+    /// Starts the reply to a message the idle agent was sent, before the agent says anything.
+    pub(in crate::orchestration) wake: Wake,
     /// The chat's settings changed while the agent was replying, so it is not used again once
     /// idle: the next message starts a new process with the settings as they are now.
     pub(in crate::orchestration) stale: AtomicBool,
