@@ -15,6 +15,8 @@ patchwork-system.workspace = true
 patchwork-android.workspace = true
 argon2 = { workspace = true, features = ["alloc", "zeroize"] }
 base64 = { workspace = true, default-features = true }
+# File URIs for Antigravity attachments on every platform, and for Linux screenshots.
+url = { workspace = true, default-features = true }
 serde_json = { workspace = true, default-features = true }
 toml = { workspace = true, default-features = true }
 serde = { workspace = true, default-features = true, features = ["derive", "rc"] }
@@ -74,7 +76,6 @@ windows-sys = { workspace = true, default-features = true, features = ["Win32_Fo
 [target.'cfg(target_os = "linux")'.dependencies]
 x11rb = { workspace = true, default-features = true, features = ["randr"] }
 zbus = { workspace = true, default-features = true }
-url = { workspace = true, default-features = true }
 
 [features]
 default = ["keychain"]
