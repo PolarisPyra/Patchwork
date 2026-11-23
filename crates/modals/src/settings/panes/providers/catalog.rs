@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
 use gpui::{Context, PathPromptOptions};
-use patchwork_core::provider::api::config::{self, ApiProvider, KeyChange, ProviderView};
+use patchwork_core::provider::api::{self, ApiProvider, KeyChange, ProviderView};
 use patchwork_core::provider::{AgentKind, AgentStatus, ModelOption};
 use crate::settings::SettingsDialog;
 use super::AntigravityAuth;
@@ -88,7 +88,7 @@ impl SettingsDialog {
     /// provider can run a task (`syncAgents`).
     pub(super) fn reload_providers(&mut self, cx: &mut Context<Self>) {
         self.run(
-            config::list,
+            api::list,
             |d, list, cx| {
                 patchwork_ui::reload_api_providers();
                 let usable = list
@@ -123,7 +123,7 @@ impl SettingsDialog {
     pub(super) fn save_provider(&mut self, provider: ApiProvider, cx: &mut Context<Self>) {
         self.providers.error = None;
         self.run(
-            move || config::save(provider, KeyChange::Keep),
+            move || api::save(provider, KeyChange::Keep),
             |d, saved, cx| match saved {
                 Ok(_) => d.reload_providers(cx),
                 Err(e) => d.providers.error = Some(e.to_string()),

@@ -54,7 +54,7 @@ impl Core {
         if cfg!(debug_assertions) {
             return 0;
         }
-        provider::api::config::old_copies(&names())
+        provider::api::old_copies(&names())
     }
 
     /// Removes those copies, and says how many.
@@ -67,7 +67,7 @@ impl Core {
         if cfg!(debug_assertions) {
             return Err("A debug build leaves the released app's stores alone".into());
         }
-        provider::api::config::remove_old_copies(&names())
+        provider::api::remove_old_copies(&names())
     }
 }
 
@@ -95,7 +95,7 @@ fn label(name: &str) -> String {
         .strip_suffix(":headers")
         .map_or((name, "API key"), |id| (id, "headers"));
     // A secret whose provider is gone has only an id, which says nothing to the user.
-    match provider::api::config::provider(id) {
+    match provider::api::provider(id) {
         Some(provider) => format!("{} {what}", provider.name),
         None if what == "headers" => "API headers".into(),
         None => what.into(),
@@ -111,7 +111,7 @@ pub(crate) fn take_old() {
         return;
     }
     let mut old: Vec<String> = Vec::new();
-    for provider in provider::api::config::providers() {
+    for provider in provider::api::providers() {
         old.push(format!("{}:headers", provider.id));
         old.push(provider.id);
     }
@@ -124,7 +124,7 @@ pub(crate) fn take_old() {
                 .map(|field| format!("gateway:{id}:{}", field.key)),
         );
     }
-    match provider::api::config::take_keys_file() {
+    match provider::api::take_keys_file() {
         Ok(0) => {}
         Ok(moved) => {
             log::info!(moved; "moved {{moved}} secrets from the old keys file into the vault");
@@ -133,7 +133,7 @@ pub(crate) fn take_old() {
     }
     let before = names().len();
     for name in &old {
-        let _ = provider::api::config::read_secret(name);
+        let _ = provider::api::read_secret(name);
     }
     // Listing the MCP servers reads each one's saved values.
     let _ = provider::mcp::list();

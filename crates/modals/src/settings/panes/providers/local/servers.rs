@@ -4,9 +4,7 @@
 
 use std::collections::HashMap;
 use gpui::{Global, prelude::*};
-use patchwork_core::provider::api::config::{
-    self, ApiModel, ApiProvider, DiscoveredServer, ProviderHealth,
-};
+use patchwork_core::provider::api::{self, ApiModel, ApiProvider, DiscoveredServer, ProviderHealth};
 use crate::settings::panes::providers::form;
 use crate::settings::SettingsDialog;
 
@@ -128,7 +126,7 @@ impl SettingsDialog {
     pub(super) fn probe_one(&mut self, id: String, cx: &mut Context<Self>) {
         let key = id.clone();
         self.run(
-            move || config::probe(&id),
+            move || api::probe(&id),
             move |d, result, cx| {
                 let health = result.unwrap_or_else(|e| ProviderHealth {
                     reachable: false,
@@ -152,7 +150,7 @@ impl SettingsDialog {
         cx: &mut Context<Self>,
     ) {
         self.run(
-            config::discover,
+            api::discover,
             |d, found, _| d.providers.local.found = Some(found),
             cx,
         );

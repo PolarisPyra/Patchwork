@@ -96,7 +96,7 @@ impl Core {
     /// Returns an error when the vault has no password, or the settings cannot be saved.
     pub(crate) fn shut_vault(self: &Arc<Self>) -> Result<(), Error> {
         lock()?;
-        provider::api::config::forget_secrets();
+        provider::api::forget_secrets();
         settings::forget(&self.store)?;
         provider::mcp::restart_changed();
         self.restart_gateway();

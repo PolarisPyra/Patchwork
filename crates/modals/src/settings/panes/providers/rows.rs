@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, Window, div, prelude::*, px};
-use patchwork_core::provider::api::config::{ApiProvider, ProviderView};
+use patchwork_core::provider::api::{ApiProvider, ProviderView};
 use patchwork_core::provider::{AgentKind, AgentStatus};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::switch;

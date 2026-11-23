@@ -25,7 +25,7 @@ use crate::provider::thinking;
 use crate::provider::tool_started;
 use crate::provider::ToolStart;
 
-use super::super::PLAN_CAPTURED;
+use super::input::PLAN_CAPTURED;
 use super::requests::claude_control_request;
 use super::tasks::{claude_ended_status, claude_task_status, subagent_of, tool_result};
 

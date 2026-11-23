@@ -10,7 +10,7 @@ use crate::chats::TaskStatus;
 use crate::provider::Parsed;
 use crate::provider::text_delta;
 use crate::provider::tool_finished;
-use super::{block_text, claude_tool_use};
+use super::stream::{block_text, claude_tool_use};
 
 /// What a subagent did in one of its frames (whole `assistant` and `user` messages that name the
 /// call that started it): its text, reasoning, and calls, for its own thread.
@@ -84,7 +84,7 @@ pub const SHELL_TASK: &str = "local_bash";
 
 /// A task's status as a task patch names it. A task that has not ended is running, pending, or
 /// paused; anything else has ended.
-pub(in crate::provider::claude) fn claude_task_status(status: &str) -> TaskStatus {
+pub(super) fn claude_task_status(status: &str) -> TaskStatus {
     match status {
         "running" => TaskStatus::Running,
         "pending" | "paused" => TaskStatus::Waiting,
@@ -93,7 +93,7 @@ pub(in crate::provider::claude) fn claude_task_status(status: &str) -> TaskStatu
 }
 
 /// How an ended task is named: completed, failed, or killed (stopped by the user or its process).
-pub(in crate::provider::claude) fn claude_ended_status(status: &str) -> TaskStatus {
+pub(super) fn claude_ended_status(status: &str) -> TaskStatus {
     match status {
         "completed" => TaskStatus::Done,
         "failed" => TaskStatus::Failed,

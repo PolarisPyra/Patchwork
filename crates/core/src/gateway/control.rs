@@ -20,7 +20,7 @@ use super::signal::Signal;
 use super::slack::Slack;
 use super::telegram::Telegram;
 use super::types::{Binding, Connector, PlatformSettings, Status};
-use crate::provider::api::config::{delete_secret, read_secret, store_secret};
+use crate::provider::api::{delete_secret, read_secret, store_secret};
 use crate::system::now_ms;
 use crate::vault;
 use crate::{Error, Core};

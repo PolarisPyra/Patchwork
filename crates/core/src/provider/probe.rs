@@ -200,8 +200,8 @@ pub fn list_models(kind: AgentKind) -> Vec<ModelOption> {
         AgentKind::Antigravity => (antigravity::configured_model(), antigravity::models()),
         AgentKind::OpenCode => (None, opencode::models()),
         AgentKind::Api => (
-            crate::provider::api::config::default_model(),
-            crate::provider::api::config::models(),
+            crate::provider::api::default_model(),
+            crate::provider::api::models(),
         ),
     };
     let default_model = default_model.filter(|m| !m.trim().is_empty());

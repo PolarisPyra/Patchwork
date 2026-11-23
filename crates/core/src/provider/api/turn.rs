@@ -15,7 +15,7 @@ use crate::provider::{Image, Parsed, ToolStart, TurnSpec};
 use crate::provider::{mcp, file_touched, prompt, text_delta, thinking, tool_finished, tool_started};
 
 pub fn auth(status: &mut AgentStatus) {
-    let providers = crate::provider::api::config::providers();
+    let providers = crate::provider::api::providers();
     let enabled = providers.iter().filter(|p| p.enabled).count();
     status.installed = enabled > 0;
     status.signed_in = status.installed;
@@ -40,10 +40,10 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
     let model = spec
         .model
         .map(String::from)
-        .or_else(crate::provider::api::config::default_model);
+        .or_else(crate::provider::api::default_model);
     let vision = spec.vision_model.and_then(|vision| match vision.agent {
         AgentKind::Api if model.as_deref() == Some(vision.model.as_str()) => None,
-        AgentKind::Api => crate::provider::api::config::connection(Some(&vision.model)).ok(),
+        AgentKind::Api => crate::provider::api::connection(Some(&vision.model)).ok(),
         // The agent runs the CLI itself, as the one the user located when they did.
         agent => Some(json!({
             "agent": agent,
@@ -52,7 +52,7 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         })),
     });
     let images_ok = vision.is_none();
-    let mut request = match crate::provider::api::config::connection(model.as_deref()) {
+    let mut request = match crate::provider::api::connection(model.as_deref()) {
         Ok(connection) => connection,
         Err(message) => return json!({"error": message}).to_string(),
     };
@@ -72,7 +72,7 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         (spec.attachments.is_empty() && spec.text.trim() == "/compact").then_some("compact");
     let fields = json!({
         "root": spec.root,
-        "sessionsDir": crate::provider::api::config::sessions_dir(),
+        "sessionsDir": crate::provider::api::sessions_dir(),
         "sessionId": spec.session_id,
         "text": prompt(spec),
         "images": images,

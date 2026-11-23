@@ -6,7 +6,7 @@
 
 use gpui::{AnyElement, Div, Role, Stateful, div, prelude::*, px};
 use patchwork_core::provider::AgentKind;
-use patchwork_core::provider::api::{config, servers};
+use patchwork_core::provider::api::{self, servers};
 use patchwork_core::chats::AttachmentKind;
 
 use super::Composer;
@@ -22,7 +22,7 @@ const MAX_OFFERED: usize = 3;
 /// for a model that is not on a local server.
 #[derive(Default)]
 pub(super) struct ModelHealth {
-    checked: Option<(String, Option<(String, config::ProviderHealth)>)>,
+    checked: Option<(String, Option<(String, api::ProviderHealth)>)>,
     finding: bool,
     error: Option<String>,
 }
@@ -53,8 +53,8 @@ impl Composer {
         patchwork_ui::off_thread(
             cx,
             move || {
-                let found = config::provider(&provider).filter(|p| p.local)?;
-                Some((found.name, config::probe(&provider).ok()?))
+                let found = api::provider(&provider).filter(|p| p.local)?;
+                Some((found.name, api::probe(&provider).ok()?))
             },
             move |this, health, cx| {
                 if let Some((checked, found)) = this.health.checked.as_mut()

@@ -8,7 +8,7 @@ use base64::Engine;
 use gpui::{AnyElement, Image, ImageFormat, IntoElement, SharedString, Styled, img, px};
 use patchwork_core::gateway::Platform;
 use patchwork_core::provider::AgentKind;
-use patchwork_core::provider::api::config::ApiProvider;
+use patchwork_core::provider::api::ApiProvider;
 use crate::controls::icons::{icon, mono_svg};
 
 /// An agent's mark. A one-colour mark takes the text colour.
@@ -92,7 +92,7 @@ pub(crate) fn api_providers() -> Arc<HashMap<String, ApiProvider>> {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     Arc::clone(cached.get_or_insert_with(|| {
         Arc::new(
-            patchwork_core::provider::api::config::providers()
+            patchwork_core::provider::api::providers()
                 .into_iter()
                 .map(|p| (p.id.clone(), p))
                 .collect(),

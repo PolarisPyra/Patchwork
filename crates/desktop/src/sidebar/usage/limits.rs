@@ -127,7 +127,7 @@ impl Workspace {
         let shown = self.shown_usage_agents();
         self.load_usage(false, &shown, cx);
         let task = cx.background_spawn(async {
-            patchwork_core::provider::api::config::providers()
+            patchwork_core::provider::api::providers()
                 .iter()
                 .any(|p| p.enabled && !p.models.is_empty())
         });
