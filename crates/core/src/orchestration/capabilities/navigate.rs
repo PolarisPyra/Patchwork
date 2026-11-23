@@ -22,7 +22,8 @@ const CANDIDATES: usize = 8;
 
 /// The sections of Settings, by the id the window opens them with.
 const SECTIONS: &[&str] = &[
-    "general",
+    "chat",
+    "logs",
     "notifications",
     "updates",
     "themes",

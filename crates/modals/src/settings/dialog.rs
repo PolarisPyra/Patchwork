@@ -16,6 +16,7 @@ use super::controls::Field;
 use super::panes::extensions;
 use super::panes::gateway;
 use super::panes::general;
+use super::panes::logs;
 use super::panes::mcp;
 use super::panes::permissions;
 use super::panes::projects;
@@ -69,9 +70,14 @@ pub(super) const ENTRIES: &[Entry] = &[
         icon: "gear-six",
         panes: &[
             Pane {
-                id: "general",
-                label: "General",
-                icon: "gear-six",
+                id: "chat",
+                label: "Chat",
+                icon: "chat-circle",
+            },
+            Pane {
+                id: "logs",
+                label: "Logs",
+                icon: "file-text",
             },
             Pane {
                 id: "notifications",
@@ -90,19 +96,14 @@ pub(super) const ENTRIES: &[Entry] = &[
         icon: "palette",
         panes: &[
             Pane {
-                id: "themes",
-                label: "Window theme",
-                icon: "palette",
-            },
-            Pane {
-                id: "code-theme",
-                label: "Syntax theme",
-                icon: "code",
+                id: "interface",
+                label: "Interface",
+                icon: "desktop",
             },
             Pane {
                 id: "orchestrator-background",
                 label: "Orchestrator theme",
-                icon: "robot",
+                icon: "butterfly",
             },
             Pane {
                 id: "chat-background",
@@ -115,9 +116,14 @@ pub(super) const ENTRIES: &[Entry] = &[
                 icon: "code-block",
             },
             Pane {
-                id: "interface",
-                label: "Interface",
-                icon: "desktop",
+                id: "code-theme",
+                label: "Syntax theme",
+                icon: "code",
+            },
+            Pane {
+                id: "themes",
+                label: "Window theme",
+                icon: "palette",
             },
         ],
     },
@@ -276,6 +282,7 @@ pub struct SettingsDialog {
     /// Why the last save failed.
     pub(super) error: Option<String>,
     pub(super) general: general::GeneralState,
+    pub(super) logs: logs::LogsState,
     pub(super) worktrees: worktrees::WorktreesState,
     pub(super) shortcuts: shortcuts::ShortcutsState,
     pub(super) providers: providers::ProvidersState,
@@ -311,7 +318,7 @@ impl Focusable for SettingsDialog {
 }
 
 impl SettingsDialog {
-    /// Opens on the pane `section`, by id; None opens on General.
+    /// Opens on the pane `section`, by id; None opens on Chat.
     pub fn new(
         core: Arc<Core>,
         section: Option<&str>,
@@ -322,7 +329,7 @@ impl SettingsDialog {
         window.focus(&focus, cx);
         let section = section
             .and_then(entry_of)
-            .map_or("general", |(_, _, pane)| pane.id);
+            .map_or("chat", |(_, _, pane)| pane.id);
         Self {
             settings: core.settings(),
             core,
@@ -344,6 +351,7 @@ impl SettingsDialog {
             menu: None,
             error: None,
             general: general::GeneralState::default(),
+            logs: logs::LogsState::default(),
             worktrees: worktrees::WorktreesState::default(),
             shortcuts: shortcuts::ShortcutsState::default(),
             providers: providers::ProvidersState::default(),

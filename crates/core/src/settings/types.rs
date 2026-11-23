@@ -105,6 +105,9 @@ pub struct Settings {
     /// What shows behind the Quilts page. None is the background every chat shares.
     #[serde(alias = "artifactsBackground")]
     pub quilts_background: Option<ChatBackground>,
+    /// The Orchestrator, chats and Quilts show one background: picking it for one picks it
+    /// for all.
+    pub sync_backgrounds: bool,
     /// The theme whose colors the app is drawn in, by its id. None draws `theme`.
     pub theme_id: Option<String>,
     /// The color scheme `theme` System draws while the system is light, by its id. None is
@@ -152,6 +155,8 @@ pub struct Settings {
     pub confirm_answers: bool,
     /// Enter steers a running reply instead of queueing the message for after it.
     pub steer_while_working: bool,
+    /// Agents' thoughts show open in the transcript instead of waiting for a click.
+    pub show_thoughts: bool,
     /// Each chat picks the agent, model and effort of its orchestrator and its executor.
     pub granular_chats: bool,
     /// Agents are not given Patchwork's tools to start, message and wait on other chats.

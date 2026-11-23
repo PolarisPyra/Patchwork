@@ -117,7 +117,8 @@ impl BackgroundPicker {
         cx.notify();
     }
 
-    fn load_images(&mut self, cx: &mut Context<Self>) {
+    /// Lists the pictures and animated backgrounds again, as they are on disk.
+    pub fn load_images(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
         let task =
             cx.background_spawn(async move { (core.list_background_images(), core.list_scenes()) });

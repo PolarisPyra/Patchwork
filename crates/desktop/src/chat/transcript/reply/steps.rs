@@ -123,7 +123,9 @@ pub(super) fn entry_row(
     cx: &mut Context<Workspace>,
 ) -> Div {
     let key = work_key(m, entry);
-    let open = w.open_steps.contains(&key);
+    // With thoughts shown, a click closes a thought instead of opening it.
+    let shown = w.settings.show_thoughts && matches!(entry, Entry::Thinking { .. });
+    let open = w.open_steps.contains(&key) != shown;
     let label = entry_label(entry);
     // A reply that stopped leaves its last steps at rest.
     let active = m.status == MessageStatus::Streaming && entry_active(entry);

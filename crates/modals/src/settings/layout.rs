@@ -12,11 +12,11 @@ use patchwork_ui::theme::{fs_lg, theme};
 use patchwork_ui::{icon_button, overflows, scrollbar};
 use super::dialog::{SettingsDialog, SettingsEvent, entry_of};
 use super::panes::chat;
+use super::panes::logs;
 use super::controls;
 use super::panes::costs;
 use super::panes::extensions;
 use super::panes::gateway;
-use super::panes::general;
 use super::panes::notifications;
 use super::panes::mcp;
 use super::panes::permissions;
@@ -35,16 +35,8 @@ use super::panes::worktrees;
 impl SettingsDialog {
     pub(super) fn pane(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         match self.section {
-            "general" => {
-                let t = *theme(cx);
-                div()
-                    .flex()
-                    .flex_col()
-                    .child(general::render(self, cx))
-                    .child(controls::section_heading("Chat", false, &t))
-                    .child(chat::render(self, cx))
-                    .into_any_element()
-            }
+            "chat" => chat::render(self, cx),
+            "logs" => logs::render(self, cx),
             "themes" => themes::render(self, window, cx),
             "code-theme" => themes::code_theme_pane(self, window, cx),
             "orchestrator-background" => themes::orchestrator_background_pane(self, window, cx),

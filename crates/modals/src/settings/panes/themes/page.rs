@@ -20,7 +20,7 @@ use super::look::{accent_row, schedule_rows};
 use super::reading::code_theme_cards;
 use crate::settings::{SettingsDialog, SettingsEvent};
 use patchwork_ui::backdrop::PreviewFlight;
-use crate::settings::controls::{alert, section_heading, switch, token_row};
+use crate::settings::controls::{FieldKind, alert, section_heading, switch, token_row};
 use patchwork_ui::background_picker::BackgroundPicker;
 use patchwork_ui::theme::{fs_sm, theme};
 use patchwork_ui::{BtnKind, btn, icon_button, spinner};
@@ -85,6 +85,8 @@ pub struct ThemesState {
     /// The id of the color scheme a chat is writing, of the background, of the code theme and
     /// of the chat background.
     pub(super) writing: [Option<String>; 4],
+    /// What is typed in each kind's description, kept so a redraw does not clear it.
+    pub(super) drafts: [String; 4],
     pub(super) error: Option<String>,
 }
 
@@ -99,7 +101,14 @@ impl SettingsDialog {
                 let files = (core.list_code_themes(), core.unreadable_themes());
                 (core.list_themes(), core.list_scenes(), pictures, files)
             },
-            |d, (themes, scenes, pictures, (codes, unreadable)), _| {
+            |d, (themes, scenes, pictures, (codes, unreadable)), cx| {
+                // A background added or written from another pane shows in every picker.
+                for picker in [&d.themes.picker, &d.themes.quilts_picker]
+                    .into_iter()
+                    .flatten()
+                {
+                    picker.update(cx, BackgroundPicker::load_images);
+                }
                 d.themes.themes = themes;
                 d.themes.scenes = scenes.into_iter().map(Arc::new).collect();
                 d.themes.pictures = pictures;
@@ -118,15 +127,15 @@ impl SettingsDialog {
 
     /// Starts a chat whose agent writes what the field of `kind` describes.
     pub(super) fn generate_themed(&mut self, kind: Kind, cx: &mut Context<Self>) {
-        let Some(area) = self.field_area(kind.field()) else {
-            return;
-        };
-        let description = area.read(cx).content.trim().to_string();
+        let description = self.themes.drafts[kind as usize].trim().to_string();
         if description.is_empty() || self.themes.writing[kind as usize].is_some() {
             return;
         }
         self.themes.error = None;
-        area.update(cx, |area, cx| area.set_text("", cx));
+        self.themes.drafts[kind as usize].clear();
+        if let Some(area) = self.field_area(kind.field()) {
+            area.update(cx, |area, cx| area.set_text("", cx));
+        }
         // A code theme and a chat background are made for the kind of window that is showing.
         let scheme = if theme(cx).is_dark() {
             Scheme::Dark
@@ -253,17 +262,28 @@ pub(super) fn generator(
 ) -> AnyElement {
     let t = *theme(cx);
     let noun = kind.noun();
-    let describe = d.text_field(
-        kind.field(),
-        format!("Describe a {noun}"),
-        "",
-        placeholder,
-        None,
-        |_, _, _| {},
-        window,
-        cx,
-    );
-    d.on_submit(kind.field(), move |d, _, cx| d.generate_themed(kind, cx));
+    // A live field keeps each change in the draft, and Enter generates.
+    let draft = d.themes.drafts[kind as usize].clone();
+    let live = FieldKind {
+        live: true,
+        ..FieldKind::default()
+    };
+    let describe = d
+        .field(
+            kind.field(),
+            format!("Describe a {noun}"),
+            &draft,
+            placeholder,
+            live,
+            move |d, text, _| d.themes.drafts[kind as usize] = text,
+            window,
+            cx,
+        )
+        .w_full();
+    d.on_submit(kind.field(), move |d, text, cx| {
+        d.themes.drafts[kind as usize] = text;
+        d.generate_themed(kind, cx);
+    });
     let writing = d.themes.writing[kind as usize].clone();
     let busy = writing.is_some();
     let describe = div().flex_1().min_w_0().child(describe);

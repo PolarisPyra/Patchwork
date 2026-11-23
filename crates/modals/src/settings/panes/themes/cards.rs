@@ -423,7 +423,7 @@ pub(super) fn scheme_cards(
                     |s| {
                         slot.pick(s, &id, true);
                         if let Some(backdrop) = backdrop {
-                            *s.backdrop_mut(slot.windows()) = backdrop;
+                            s.pick_backdrop(slot.windows(), backdrop);
                         }
                     },
                     cx,

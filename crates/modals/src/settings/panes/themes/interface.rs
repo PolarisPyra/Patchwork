@@ -1,5 +1,5 @@
-//! Settings → Interface: how much room rows take, whether anything moves, and the font and size
-//! of the app's text. The font is picked from a list of the ones the computer has, narrowed by
+//! Settings → Interface: how much room rows take, whether anything moves, whether the pages
+//! share one background, the font and size of the app's text, and the app icon. The font is picked from a list of the ones the computer has, narrowed by
 //! what is typed, that opens under the font's select.
 
 // Rust guideline compliant 2026-10-09
@@ -16,7 +16,8 @@ use gpui::{
 use super::look::density_cards;
 use super::reading::{motion_row, text_size_cards};
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{FieldKind, select_box, token_row};
+use crate::settings::panes::general::app_icon_row;
+use crate::settings::controls::{FieldKind, select_box, switch_row, token_row};
 use patchwork_ui::text::text_area::Arrow;
 use patchwork_ui::theme::{FONT_UI, fs_md, radius_sm, theme};
 use patchwork_ui::{icon, popup, scrollbar};
@@ -325,6 +326,19 @@ fn font_list(
         .into_any_element()
 }
 
+/// The switch that has the Orchestrator, chats and Quilts show one background.
+fn sync_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
+    switch_row(
+        "sync-backgrounds",
+        "Sync backgrounds",
+        None,
+        d.settings.sync_backgrounds,
+        |d, on, cx| d.update(|s| s.set_sync_backgrounds(on), cx),
+        cx,
+    )
+    .into_any_element()
+}
+
 pub(crate) fn interface_pane(
     d: &mut SettingsDialog,
     window: &mut Window,
@@ -342,7 +356,9 @@ pub(crate) fn interface_pane(
         .flex_col()
         .child(density_cards(d, cx))
         .child(motion_row(d, cx))
+        .child(sync_row(d, cx))
         .child(font)
         .child(text_size_cards(d, cx))
+        .child(app_icon_row(d, cx))
         .into_any_element()
 }

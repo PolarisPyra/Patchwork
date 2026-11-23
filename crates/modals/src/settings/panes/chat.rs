@@ -32,7 +32,13 @@ type Flag = (
     fn(&Settings) -> bool,
     fn(&mut Settings, bool),
 );
-const FLAGS: [Flag; 5] = [
+const FLAGS: [Flag; 6] = [
+    (
+        "show-thoughts",
+        "Show thoughts",
+        |s| s.show_thoughts,
+        |s, on| s.show_thoughts = on,
+    ),
     (
         "confirm-answers",
         "Click answers twice to send",
