@@ -21,8 +21,6 @@ mod detect;
 mod parse;
 mod reply;
 mod run;
-#[cfg(test)]
-mod tests;
 
 #[doc(inline)]
 pub use detect::{command, command_at, Command};

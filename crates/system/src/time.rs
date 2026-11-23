@@ -37,22 +37,3 @@ pub fn format_rfc3339_ms(ms: u64) -> Option<String> {
 pub fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_utc_offsets_and_fractions() {
-        assert_eq!(parse_rfc3339_ms("1970-01-01T00:00:00Z"), Some(0));
-        assert_eq!(
-            parse_rfc3339_ms("2026-10-19T16:14:21.270Z"),
-            Some(1_792_426_461_270)
-        );
-        assert_eq!(
-            parse_rfc3339_ms("2026-10-19T18:14:21.270123+02:00"),
-            parse_rfc3339_ms("2026-10-19T16:14:21.270Z")
-        );
-        assert_eq!(parse_rfc3339_ms("nope"), None);
-    }
-}

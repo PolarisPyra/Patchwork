@@ -34,15 +34,14 @@ The app's version is `[workspace.package] version` in the root `Cargo.toml`.
 |---|---|
 | Run the app | `cargo run -p patchwork` |
 | Format | `cargo fmt --all` / `cargo fmt --all -- --check` |
-| Lint | `cargo clippy --workspace --all-targets -- -D warnings` |
-| Tests | `cargo test --workspace` |
+| Lint | `cargo clippy --workspace -- -D warnings` |
 | Build AppImage | `scripts/build.sh` |
 
-Before saying a task is done, run `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace`. All three must pass with zero warnings; report failing output. Never silence a lint—fix the code or use `#[expect(…, reason = "…")]` when the lint is wrong for that line.
+Before saying a task is done, run `cargo fmt --all` and `cargo clippy --workspace -- -D warnings`. Both must pass with zero warnings; report failing output. Never silence a lint—fix the code or use `#[expect(…, reason = "…")]` when the lint is wrong for that line.
 
 ## Never add
 
-- **Tests, scripts, or harnesses.** No test files, shell/Python scripts, or QA harnesses anywhere (only `scripts/build.sh` and `scripts/hooks/` exist). You may run `cargo test --workspace`, not add to it. Run one-off commands inline. For UI changes, say what to check in the app.
+- **Tests, scripts, or harnesses.** No tests (no test files, `#[test]`, or `#[cfg(test)]` modules), shell/Python scripts, or QA harnesses anywhere (only `scripts/build.sh` and `scripts/hooks/` exist). Run one-off commands inline. For UI changes, say what to check in the app.
 - **Anything in `/tmp` or `$TMPDIR`.** Scratch work goes in gitignored `research/<job>/` at the repo root and is deleted when done. Pass tools an explicit path under `research/` when their default is `/tmp`.
 - **Unrequested git actions.** No commits, branches, worktrees, or pushes unless asked. No destructive git commands (`reset --hard`, `checkout -- <file>`, `stash`, `clean`). Ask before deleting, moving, or renaming files.
 

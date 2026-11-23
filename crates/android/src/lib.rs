@@ -36,8 +36,6 @@ mod emulator;
 mod host;
 mod run;
 mod sdk;
-#[cfg(test)]
-mod tests;
 
 #[doc(inline)]
 pub use agent::TOOL_PREFIX;

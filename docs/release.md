@@ -99,10 +99,9 @@ gh run rerun <run-id> --failed                 # re-run the failed jobs
 
 ### Build checks
 
-A "Release build check" run builds the three apps and publishes nothing. One runs on `main` every
-day at 07:23 UTC, which keeps the Rust caches that tag runs restore fresh and shows a broken
-release build before a tag does ([CI and deploys](ci.md#caches)). A release never needs one
-first. To run one now, for example after changing a dependency or the workflow:
+A "Release build check" run builds the three apps and publishes nothing. It refreshes the Rust
+caches that tag runs restore and shows a broken release build before a tag does
+([CI and deploys](ci.md#caches)). A release never needs one first. To run one now, for example after changing a dependency or the workflow:
 
 ```sh
 gh workflow run release.yml -f mode=check --ref main

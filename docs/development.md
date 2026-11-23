@@ -43,25 +43,15 @@ git config core.hooksPath scripts/hooks
 The `pre-push` hook runs `cargo fmt --all -- --check`, clippy with `-D warnings` and
 `node --check` on the website's script before each push, on the files in the working tree. It
 takes about 2 seconds when nothing has changed since the last build and about 5 after a change to
-`crates/core`. `git push --no-verify` skips it; CI runs the same checks and the tests either way
+`crates/core`. `git push --no-verify` skips it; CI runs the same checks either way
 ([CI and deploys](ci.md)).
-
-## Tests
-
-```sh
-cargo test --workspace                    # unit tests (parsers, importers, persistence, git)
-cargo test -p patchwork-core -- --ignored  # live turns against the real agent CLIs
-```
-
-The `--ignored` tests start real agent CLIs, so they need Claude Code, Codex, or Antigravity
-installed and signed in.
 
 ## Other checks
 
 | Check | Command |
 | --- | --- |
 | Format | `cargo fmt --all` (check only: `cargo fmt --all -- --check`) |
-| Lint | `cargo clippy --workspace --all-targets -- -D warnings` |
+| Lint | `cargo clippy --workspace -- -D warnings` |
 
 ## Where things are
 

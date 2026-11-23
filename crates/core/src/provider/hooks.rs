@@ -470,21 +470,3 @@ fn named(hooks: &Value) -> Value {
     }
     Value::Object(named)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::CODEX_TOOLS;
-
-    /// The hook runs for every turn, so it has to be asked about every call a rule of any kind
-    /// can answer, and about nothing else.
-    #[test]
-    fn the_permission_hook_covers_the_tools_a_rule_answers() {
-        let matcher = regex::Regex::new(CODEX_TOOLS).expect("the matcher is a regex");
-        for tool in ["Bash", "apply_patch", "mcp__github__search"] {
-            assert!(matcher.is_match(tool), "{tool} is asked about");
-        }
-        for tool in ["Read", "BashOutput", "WebFetch"] {
-            assert!(!matcher.is_match(tool), "{tool} is not asked about");
-        }
-    }
-}

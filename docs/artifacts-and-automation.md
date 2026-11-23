@@ -88,5 +88,3 @@ the tool list and the approval rules can ask without a database read.
 - The tools are `computer_screenshot`, `computer_move`, `computer_click`, `computer_type`,
   `computer_key`, and `computer_scroll`. They are offered only when the setting is on, never in plan
   mode, and they ask under the `screen` permission kind unless a rule allows the screen.
-- `cargo test -p patchwork-core -- --ignored screenshot_captures_the_screen` takes a real
-  screenshot and checks the PNG header. It needs a display, so it is ignored by default.
