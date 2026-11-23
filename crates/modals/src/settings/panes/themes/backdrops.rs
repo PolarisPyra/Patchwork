@@ -69,7 +69,7 @@ impl SettingsDialog {
                                 d.themes.error = None;
                                 let slot = d.backdrop_slot(cx);
                                 d.update(
-                                    |s| *s.backdrop_mut(slot) = BackdropChoice::Image { file },
+                                    |s| s.pick_backdrop(slot, BackdropChoice::Image { file }),
                                     cx,
                                 );
                                 d.load_themes(cx);
@@ -177,7 +177,7 @@ pub(super) fn backdrop_cards(
                 move |d, cx| {
                     let choice = choice.clone();
                     let slot = d.backdrop_slot(cx);
-                    d.update(|s| *s.backdrop_mut(slot) = choice, cx);
+                    d.update(|s| s.pick_backdrop(slot, choice), cx);
                 },
                 cx,
             )
@@ -214,7 +214,10 @@ impl SettingsDialog {
                     Ok(file) => match &d.themes.picker {
                         Some(picker) => picker.update(cx, |p, cx| p.added(file, cx)),
                         None => {
-                            d.update(|s| s.chat_background = ChatBackground::Image { file }, cx);
+                            d.update(
+                                |s| s.pick_chat_background(ChatBackground::Image { file }),
+                                cx,
+                            );
                         }
                     },
                     Err(e) => d.themes.error = Some(e.to_string()),
@@ -246,7 +249,7 @@ fn picker(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> Entity<Ba
     cx.subscribe(&picker, |d, _, e: &PickerEvent, cx| match e {
         PickerEvent::Picked(Some(background)) => {
             let background = background.clone();
-            d.update(|s| s.chat_background = background, cx);
+            d.update(|s| s.pick_chat_background(background), cx);
         }
         PickerEvent::Picked(None) => {}
         PickerEvent::PicturesChanged => {
@@ -348,8 +351,9 @@ pub(crate) fn chat_background_pane(
                 .map(|e| alert("backgrounds-error", e, t.danger)),
         )
         .child(
+            // The same room above and below the cards as every grid of cards in Appearance.
             anchored(div().id("label-chat-background"), "Chat theme")
-                .pb(px(10.))
+                .py(px(10.))
                 .child(chat_background),
         )
         // The row that draws a picture comes right under the pictures, with no line between.
@@ -358,25 +362,39 @@ pub(crate) fn chat_background_pane(
         .into_any_element()
 }
 
-/// The Quilts theme's picker, made on the first look at its pane, showing the saved
-/// background. Its first choice is the background every chat shares.
+/// The Quilts theme's picker, made on the first look at its pane, showing the background the
+/// page shows: its own, else the one every chat shares.
 fn quilts_picker(
     d: &mut SettingsDialog,
     cx: &mut Context<SettingsDialog>,
 ) -> Entity<BackgroundPicker> {
-    let value = d.settings.quilts_background.clone();
-    let shared = Some(d.settings.chat_background.clone());
+    let value = Some(
+        d.settings
+            .quilts_background
+            .clone()
+            .unwrap_or_else(|| d.settings.chat_background.clone()),
+    );
     if let Some(picker) = &d.themes.quilts_picker {
-        picker.update(cx, |p, _| p.set_value(value, shared));
+        picker.update(cx, |p, _| p.set_value(value, None));
         return picker.clone();
     }
     let core = Arc::clone(&d.core);
-    let picker = cx.new(|cx| BackgroundPicker::new(core, "Quilts theme", value, None, shared, cx));
+    let picker = cx.new(|cx| {
+        BackgroundPicker::new(
+            core,
+            "Quilts theme",
+            value,
+            Some(ChatBackground::None),
+            None,
+            cx,
+        )
+    });
     cx.subscribe(&picker, |d, _, e: &PickerEvent, cx| match e {
-        PickerEvent::Picked(background) => {
+        PickerEvent::Picked(Some(background)) => {
             let background = background.clone();
-            d.update(|s| s.quilts_background = background, cx);
+            d.update(|s| s.pick_quilts_background(background), cx);
         }
+        PickerEvent::Picked(None) => {}
         PickerEvent::PicturesChanged => {
             d.settings = d.core.settings();
             d.themes.loaded = false;
@@ -394,6 +412,9 @@ pub(crate) fn quilts_background_pane(
     cx: &mut Context<SettingsDialog>,
 ) -> AnyElement {
     let t = *theme(cx);
+    if !d.themes.loaded {
+        d.load_themes(cx);
+    }
     let picker = quilts_picker(d, cx);
     div()
         .id("quilts-background-pane")
@@ -405,6 +426,10 @@ pub(crate) fn quilts_background_pane(
                 .clone()
                 .map(|e| alert("backgrounds-error", e, t.danger)),
         )
-        .child(anchored(div().id("label-quilts-background"), "Quilts theme").child(picker))
+        .child(
+            anchored(div().id("label-quilts-background"), "Quilts theme")
+                .py(px(10.))
+                .child(picker),
+        )
         .into_any_element()
 }

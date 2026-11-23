@@ -7,6 +7,7 @@ pub(super) mod costs;
 pub(super) mod extensions;
 pub(super) mod gateway;
 pub(super) mod general;
+pub(super) mod logs;
 pub(super) mod mcp;
 pub(super) mod notifications;
 pub(super) mod permissions;

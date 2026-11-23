@@ -8,6 +8,7 @@
 // Rust guideline compliant 2026-10-09
 
 mod applied;
+mod background_sync;
 mod code;
 mod contrast;
 mod foreign;

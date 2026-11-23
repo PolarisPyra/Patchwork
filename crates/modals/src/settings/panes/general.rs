@@ -1,56 +1,21 @@
-//! Settings → General: the app icon, which finished work raises a notification, and below them,
-//! how much each log records.
+//! The app icon picker of Settings → Interface, and the state the section list keeps.
 
 // Rust guideline compliant 2026-10-09
 
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
 use gpui::{AnyElement, FocusHandle, FontWeight, Role, SharedString, div, img, prelude::*, px};
-use patchwork_core::settings::{LogLevel, LoggingSettings};
 
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{
-    alert, anchored, choices, section_heading, switch_row, token_row, radio,
-};
+use crate::settings::controls::{anchored, radio};
 use patchwork_ui::theme::{radius_sm, theme};
-use patchwork_ui::{BtnKind, LOG_LEVELS, btn, dropdown_chip, tooltip};
+use patchwork_ui::tooltip;
 
-/// The log files Patchwork writes: their title, what each holds, and its field of the settings.
-type LogField = fn(&mut LoggingSettings) -> &mut LogLevel;
-const LOGS: [(&str, &str, LogField); 6] = [
-    ("Main", "Patchwork's own messages, in main.log", |l| {
-        &mut l.app
-    }),
-    (
-        "Window",
-        "The window's errors and warnings, in window.log",
-        |l| &mut l.window,
-    ),
-    ("Agents", "Each agent's runs, in agent-<agent>.log", |l| {
-        &mut l.agents
-    }),
-    ("Imports", "Each scan and import, in imports.log", |l| {
-        &mut l.imports
-    }),
-    (
-        "Themes",
-        "Each theme and background change, in themes.log",
-        |l| &mut l.themes,
-    ),
-    (
-        "Chats",
-        "Each chat with a warning or error, in chat-<id>.log",
-        |l| &mut l.chats,
-    ),
-];
-
-/// The pane's own state: what the log buttons are doing.
+/// The pane's own state.
 #[derive(Default)]
 pub struct GeneralState {
     /// The section list, so Up and Down move along it while it has focus.
     pub nav_focus: Option<FocusHandle>,
-    exporting: bool,
-    log_error: Option<String>,
 }
 
 /// One app icon of `assets/logos/manifest.json`.
@@ -59,7 +24,7 @@ struct Logo {
     name: String,
 }
 
-/// The app icon picked in General, as an asset path.
+/// The app icon picked in Settings, as an asset path.
 pub(in crate::settings) fn app_icon(s: &patchwork_core::settings::Settings) -> SharedString {
     let id = s.logo.clone().unwrap_or_else(|| logos().1.clone());
     SharedString::from(format!("app-icons/{id}.svg"))
@@ -103,60 +68,18 @@ fn logos() -> &'static (Vec<Logo>, String) {
     })
 }
 
-impl SettingsDialog {
-    /// Asks where to save a zip of the logs, and writes it there.
-    fn export_logs(&mut self, cx: &mut Context<Self>) {
-        let stamp = chrono::Local::now().format("%Y%m%dT%H%M%S");
-        let home = patchwork_core::system::files::paths::home_dir().unwrap_or_default();
-        let picked = cx.prompt_for_new_path(&home, Some(&format!("patchwork-logs-{stamp}.zip")));
-        let core = Arc::clone(&self.core);
-        cx.spawn(async move |this, cx| {
-            let Ok(Ok(Some(path))) = picked.await else {
-                return;
-            };
-            let _ = this.update(cx, |d, cx| {
-                d.general.log_error = None;
-                d.general.exporting = true;
-                cx.notify();
-            });
-            let exported = cx
-                .background_spawn(async move {
-                    let mut system = patchwork_core::logging::system::report().clone();
-                    system["settings"] = serde_json::json!(core.settings());
-                    patchwork_core::logging::export(&path, &system)
-                })
-                .await;
-            let _ = this.update(cx, |d, cx| {
-                d.general.exporting = false;
-                d.general.log_error = exported.err().map(|e| e.to_string());
-                cx.notify();
-            });
-        })
-        .detach();
-    }
-}
-
-pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
+/// The App icon row: every app icon, with the picked one marked.
+pub(in crate::settings) fn app_icon_row(
+    d: &mut SettingsDialog,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
     let t = *theme(cx);
-    let s = &d.settings;
     let (logos, default_logo) = logos();
-    let logo = s.logo.clone().unwrap_or_else(|| default_logo.clone());
-
-    let toggle_row = |id: &'static str,
-                      title: &'static str,
-                      desc: Option<&'static str>,
-                      on: bool,
-                      flip: fn(&mut patchwork_core::settings::Settings, bool),
-                      cx: &mut Context<SettingsDialog>| {
-        switch_row(
-            id,
-            title,
-            desc,
-            on,
-            move |d, on, cx| d.update(|s| flip(s, on), cx),
-            cx,
-        )
-    };
+    let logo = d
+        .settings
+        .logo
+        .clone()
+        .unwrap_or_else(|| default_logo.clone());
 
     let icons = div()
         .id("app-icons")
@@ -213,90 +136,11 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             )
         }));
 
-    let log_rows = LOGS.iter().enumerate().map(|(i, &(title, desc, field))| {
-        let mut logging = s.logging.clone();
-        let level = *field(&mut logging);
-        let current = LOG_LEVELS
-            .iter()
-            .find(|(l, _)| *l == level)
-            .map_or("", |(_, label)| label);
-        let key = SharedString::from(format!("log-{i}"));
-        let open = d.menu_open(&key);
-        token_row(title, Some(desc), &t).child(
-            dropdown_chip(
-                key.clone(),
-                format!("{title} log level: {current}"),
-                current,
-                open,
-                &t,
-            )
-            .on_click(choices(
-                key,
-                format!("{title} log level"),
-                LOG_LEVELS
-                    .iter()
-                    .map(|&(l, label)| (l, label.into()))
-                    .collect(),
-                level,
-                move |d, l, cx| d.update(|s| *field(&mut s.logging) = l, cx),
-                cx,
-            )),
-        )
-    });
-    let log_rows: Vec<_> = log_rows.collect();
-
-    let exporting = d.general.exporting;
-    div()
-        .flex()
-        .flex_col()
-        .child(section_heading("Appearance", true, &t))
-        .child(
-            anchored(div().id("row-app-icon"), "App icon")
-                .border_b_1()
-                .border_color(t.border)
-                .py(px(10.))
-                .child(div().font_weight(FontWeight::SEMIBOLD).child("App icon"))
-                .child(icons),
-        )
-        .child(section_heading("Logs", false, &t))
-        .children(log_rows)
-        .child(toggle_row(
-            "chat-menu",
-            "Open logs in chat menus",
-            None,
-            s.logging.chat_menu,
-            |s, on| s.logging.chat_menu = on,
-            cx,
-        ))
-        .child(
-            token_row("Log folder", None, &t)
-                .child(
-                    btn("export-logs", "Export…", BtnKind::Plain, exporting, &t)
-                        .child(if exporting {
-                            "Exporting…"
-                        } else {
-                            "Export…"
-                        })
-                        .when(!exporting, |b| {
-                            b.on_click(cx.listener(|d, _, _, cx| d.export_logs(cx)))
-                        }),
-                )
-                .child(
-                    btn("open-logs", "Open", BtnKind::Plain, false, &t)
-                        .child("Open")
-                        .on_click(|_, _, cx| match patchwork_core::logging::logs_folder() {
-                            Ok(folder) => cx.open_with_system(&folder),
-                            Err(e) => {
-                                log::warn!(error:% = e; "could not open the logs folder: {{error}}");
-                            }
-                        }),
-                ),
-        )
-        .children(
-            d.general
-                .log_error
-                .clone()
-                .map(|e| alert("log-error", e, t.danger)),
-        )
+    anchored(div().id("row-app-icon"), "App icon")
+        .border_b_1()
+        .border_color(t.border)
+        .py(px(10.))
+        .child(div().font_weight(FontWeight::SEMIBOLD).child("App icon"))
+        .child(icons)
         .into_any_element()
 }

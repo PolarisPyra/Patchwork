@@ -27,16 +27,13 @@ const MAX_HITS: usize = 10;
 /// The settings the search finds, by the pane that holds them. A name here is the row's title in
 /// its pane, so a row added to a pane is added here too.
 const INDEX: &[(&str, &[&str])] = &[
+    ("logs", &["Logs", "Open logs in chat menus", "Log folder"]),
     (
-        "general",
+        "chat",
         &[
-            "App icon",
-            "Logs",
-            "Open logs in chat menus",
-            "Log folder",
+            "Show thoughts",
             "Agents can start and message chats",
             "Click answers twice to send",
-            "Cross-model review",
             "Enter steers a running reply",
             "Granular chats",
             "Resume interrupted replies at launch",
@@ -85,7 +82,7 @@ const INDEX: &[(&str, &[&str])] = &[
     ),
     ("chat-background", &["Chat theme", "Generate with"]),
     ("quilts-background", &["Quilts theme"]),
-    ("interface", &["Font"]),
+    ("interface", &["Font", "Sync backgrounds", "App icon"]),
     ("shortcuts", &["Keyboard shortcuts", "Reset all"]),
     (
         "providers",
