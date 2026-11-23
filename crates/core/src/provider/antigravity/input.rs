@@ -10,9 +10,9 @@ use serde_json::{Value, json};
 use crate::chats::{AccessMode, Attachment, AttachmentKind};
 use crate::provider::{Image, Parsed, TurnSpec, prompt};
 
-use super::client::{client_info, strip_effort_suffix};
+use super::models::strip_effort_suffix;
+use super::probe::client_info;
 use super::questions;
-use super::swarm;
 
 /// Request id of `initialize`.
 pub(super) const INIT_REQUEST: u64 = 1;
@@ -81,12 +81,10 @@ pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
         "params": {
             "protocolVersion": 1,
             "clientInfo": client_info(),
-            // Keep fs/terminal false so `agy acp` uses its own workspace diff/shell tools,
-            // and negotiate native Antigravity swarm notifications (`_antigravity/swarm`).
+            // Keep fs/terminal false so `agy acp` uses its own workspace diff/shell tools.
             "clientCapabilities": {
                 "fs": {"readTextFile": false, "writeTextFile": false},
                 "terminal": false,
-                "_meta": swarm::capabilities_meta(),
             },
         },
     });

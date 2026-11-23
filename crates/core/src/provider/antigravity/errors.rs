@@ -14,7 +14,7 @@ use crate::provider::Parsed;
 use crate::system::now_ms;
 use crate::usage::UsageWindow;
 
-use super::client::home;
+use super::cli::home;
 
 /// The step type agy's session log records a failed model call as.
 const ERROR_STEP: i64 = 17;

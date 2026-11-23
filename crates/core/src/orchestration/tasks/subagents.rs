@@ -34,7 +34,8 @@ pub(in crate::orchestration) type Controls = Arc<Mutex<HashMap<String, mpsc::Sen
 /// How often an agy sub agent's transcript is read for new steps.
 const TRANSCRIPT_POLL: Duration = Duration::from_secs(1);
 
-/// An agy sub agent whose transcript grows no further for this long is taken to be done.
+/// An agy sub agent whose transcript grows no further for this long is taken to be done. A swarm
+/// worker is not: it parks between wakes for as long as the swarm runs.
 const TRANSCRIPT_IDLE: Duration = Duration::from_secs(10 * 60);
 
 /// How long a steer waits for Claude to move its foreground subagents to the background.
@@ -167,8 +168,8 @@ pub(in crate::orchestration) fn finish_child(
     );
 }
 
-/// Streams the steps of agy's sub agents into `child`'s chat from their `transcripts`, then ends
-/// it once each answered with nothing left running, the agent exited, or they went quiet.
+/// Streams the steps of agy's sub agents or a swarm worker into `child`'s chat from their
+/// `transcripts`, then ends it once each is done, the agent exited, or sub agents went quiet.
 pub(in crate::orchestration) fn follow_agy_children(
     turn: &Turn,
     mut child: SubagentChat,
@@ -200,7 +201,11 @@ pub(in crate::orchestration) fn follow_agy_children(
                 let done = transcripts
                     .iter()
                     .all(provider::antigravity::Transcript::is_done);
-                if done || stopping || last_step.elapsed() > TRANSCRIPT_IDLE {
+                let quiet = last_step.elapsed() > TRANSCRIPT_IDLE
+                    && transcripts
+                        .iter()
+                        .all(provider::antigravity::Transcript::ends_when_quiet);
+                if done || stopping || quiet {
                     break;
                 }
                 std::thread::sleep(TRANSCRIPT_POLL);
