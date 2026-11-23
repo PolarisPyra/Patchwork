@@ -17,6 +17,14 @@ pub enum Entry<'a> {
     Tool(&'a ToolCall),
 }
 
+/// Where a compaction is: running, done, or stopped before it was.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Compaction {
+    Compacting,
+    Compacted,
+    Stopped,
+}
+
 /// One line of a turn, in the order it happened.
 pub enum Step<'a> {
     Text(&'a str),
@@ -24,9 +32,8 @@ pub enum Step<'a> {
     Agents(Vec<&'a ToolCall>),
     Plan(&'a str),
     Approvals(Vec<&'a str>),
-    /// A compaction, and whether the agent is still at it: the reply streams with nothing after
-    /// it yet.
-    Compaction(bool),
+    /// A compaction, and where it stands.
+    Compaction(Compaction),
     /// A Patchwork tool a chat-app agent ran, drawn as a pill so its history reads at a glance.
     Note(&'a ToolCall),
     /// A call of the quilt tool, drawn as a card that opens what it saved.
@@ -83,10 +90,19 @@ pub fn steps_of(message: &Message, notes: bool) -> Vec<Step<'_>> {
                 continue;
             }
             Part::Compaction { done, .. } => {
-                let running = !done
-                    && index + 1 == message.parts.len()
-                    && message.status == MessageStatus::Streaming;
-                steps.push(Step::Compaction(running));
+                // The agent went on past it, so it finished even if it never said so.
+                let state = if *done || index + 1 < message.parts.len() {
+                    Compaction::Compacted
+                } else {
+                    match message.status {
+                        MessageStatus::Streaming => Compaction::Compacting,
+                        MessageStatus::Complete => Compaction::Compacted,
+                        MessageStatus::Error
+                        | MessageStatus::Cancelled
+                        | MessageStatus::Interrupted => Compaction::Stopped,
+                    }
+                };
+                steps.push(Step::Compaction(state));
                 continue;
             }
             Part::Approval { id } => {
