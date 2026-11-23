@@ -100,7 +100,7 @@ pub(super) fn load_request(spec: &TurnSpec, session_id: &str) -> Value {
     request
 }
 
-/// Builds `session/new` or `session/resume` with workspace root and optional system prompt append.
+/// Builds `session/new` or `session/resume` with the workspace root and Patchwork's tools.
 pub(super) fn session_request(spec: &TurnSpec, resume_id: Option<&str>) -> Value {
     // Patchwork's own tools run on this machine, which a remote agy cannot start.
     let servers = if spec.host.is_some() {
@@ -109,9 +109,6 @@ pub(super) fn session_request(spec: &TurnSpec, resume_id: Option<&str>) -> Value
         crate::provider::mcp::overrides::acp_servers(spec.chat_id)
     };
     let mut params = json!({"cwd": spec.root, "mcpServers": servers});
-    if let Some(text) = spec.instructions.filter(|t| !t.trim().is_empty()) {
-        params["_meta"] = json!({"antigravity": {"systemPrompt": {"append": text}}});
-    }
     match resume_id {
         Some(id) => {
             params["sessionId"] = json!(id);

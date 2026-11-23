@@ -205,7 +205,7 @@ impl Runner {
             core.told_role(&chat_id, switched);
             text
         };
-        let text = core.chat_app_voice(&chat_id, text, session_id.is_none());
+        let text = core.chat_app_voice(&chat_id, text, session_id.is_none(), agent);
         let text = core.agent_brief(&chat_id, text, session_id.is_none());
         let text = core.worktree_brief(&chat_id, text, session_id.is_none());
         let text = core.chat_app_context(&chat_id, text);
@@ -214,7 +214,7 @@ impl Runner {
             None => text,
         };
         // Codex takes its instructions as the chat's developer instructions; Claude takes them as
-        // launch arguments. OpenCode and Antigravity get only the user's system prompt.
+        // launch arguments. OpenCode gets only the user's system prompt, and Antigravity nothing.
         let instructions = match agent {
             _ if dispatcher => Some(crate::chats::tools::DISPATCHER.to_string()),
             AgentKind::Codex => Some(crate::orchestration::agent_instructions(
@@ -230,10 +230,10 @@ impl Runner {
                 Some(parts.into_iter().flatten().collect::<Vec<_>>().join("\n\n"))
                     .filter(|t| !t.is_empty())
             }
-            AgentKind::OpenCode | AgentKind::Antigravity => {
+            AgentKind::OpenCode => {
                 crate::orchestration::system_prompt(&settings, agent).map(str::to_string)
             }
-            AgentKind::Claude => None,
+            AgentKind::Claude | AgentKind::Antigravity => None,
         };
         // Codex and OpenCode load skills from a folder of their own; Claude's comes with its launch.
         let skills_dir = match agent {

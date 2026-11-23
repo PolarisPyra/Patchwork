@@ -7,12 +7,16 @@ use patchwork_core::provider::api::{ApiProvider, ProviderView};
 use patchwork_core::provider::{AgentKind, AgentStatus};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::switch;
-use patchwork_ui::theme::{fs_sm, Theme, theme};
+use patchwork_ui::theme::{fs, fs_sm, Theme, theme};
 use patchwork_ui::{BtnKind, agent_label, agent_logo, badge, btn, provider_logo, spinner};
 use super::AntigravityAuth;
 use super::catalog::{CLI_KINDS, PromptOf};
 use super::cli;
 use super::form;
+
+/// How wide each button in a provider row is at medium text: wide enough for "System Prompt",
+/// so the buttons line up from row to row.
+const ACTION_W: f32 = 128.;
 
 /// "Ready · 2.1.0", or why it is not: `describeAgent`.
 pub(super) fn describe_agent(status: Option<&Option<AgentStatus>>) -> String {
@@ -137,6 +141,7 @@ impl SettingsDialog {
                             installing,
                             &t,
                         )
+                        .min_w(px(fs(ACTION_W)))
                         .when(installing, |b| {
                             b.role(Role::Status)
                                 .child(spinner(12., t.text_muted))
@@ -166,6 +171,7 @@ impl SettingsDialog {
                             &t,
                         )
                         .tooltip(patchwork_ui::tooltip(path.clone()))
+                        .min_w(px(fs(ACTION_W)))
                         .child("Auto-detect")
                         .on_click(cx.listener(move |d, _, _, cx| d.set_agent_path(kind, None, cx))),
                     ),
@@ -177,10 +183,25 @@ impl SettingsDialog {
                             false,
                             &t,
                         )
+                        .min_w(px(fs(ACTION_W)))
                         .child("Locate…")
                         .on_click(cx.listener(move |d, _, _, cx| d.locate(kind, cx))),
                     ),
                     None => r,
+                })
+                .when(installed && cli::has_details(kind), |r| {
+                    r.child(
+                        btn(
+                            SharedString::from(format!("details-{key}")),
+                            format!("{label} details"),
+                            BtnKind::Plain,
+                            false,
+                            &t,
+                        )
+                        .min_w(px(fs(ACTION_W)))
+                        .child("Details")
+                        .on_click(cx.listener(move |d, _, _, cx| d.open_details(kind, cx))),
+                    )
                 })
                 .when(
                     kind == AgentKind::Antigravity && installed && !checking,
@@ -194,6 +215,7 @@ impl SettingsDialog {
                                     agy_auth_busy,
                                     &t,
                                 )
+                                .min_w(px(fs(ACTION_W)))
                                 .child("Sign out")
                                 .when(!agy_auth_busy, |b| {
                                     b.on_click(
@@ -210,6 +232,7 @@ impl SettingsDialog {
                                     agy_auth_busy,
                                     &t,
                                 )
+                                .min_w(px(fs(ACTION_W)))
                                 .child(if agy_auth_busy {
                                     "Signing in…"
                                 } else {
@@ -224,40 +247,31 @@ impl SettingsDialog {
                         }
                     },
                 )
-                .when(installed && cli::has_details(kind), |r| {
-                    r.child(
+                // An agent that may not be given a system prompt offers none to write.
+                .when(kind.takes_persona(), |row| {
+                    row.child(
                         btn(
-                            SharedString::from(format!("details-{key}")),
-                            format!("{label} details"),
+                            SharedString::from(format!("prompt-{key}")),
+                            format!("{label} system prompt"),
                             BtnKind::Plain,
                             false,
                             &t,
                         )
-                        .child("Details")
-                        .on_click(cx.listener(move |d, _, _, cx| d.open_details(kind, cx))),
+                        .aria_expanded(prompting)
+                        .when(prompted, |b| b.text_color(t.accent))
+                        .min_w(px(fs(ACTION_W)))
+                        .child("System Prompt")
+                        .on_click(cx.listener(move |d, _, window, cx| {
+                            let saved = d
+                                .settings
+                                .system_prompts
+                                .get(&kind)
+                                .cloned()
+                                .unwrap_or_default();
+                            d.toggle_prompt(PromptOf::Cli(kind), saved, window, cx);
+                        })),
                     )
                 })
-                .child(
-                    btn(
-                        SharedString::from(format!("prompt-{key}")),
-                        format!("{label} system prompt"),
-                        BtnKind::Plain,
-                        false,
-                        &t,
-                    )
-                    .aria_expanded(prompting)
-                    .when(prompted, |b| b.text_color(t.accent))
-                    .child("System Prompt")
-                    .on_click(cx.listener(move |d, _, window, cx| {
-                        let saved = d
-                            .settings
-                            .system_prompts
-                            .get(&kind)
-                            .cloned()
-                            .unwrap_or_default();
-                        d.toggle_prompt(PromptOf::Cli(kind), saved, window, cx);
-                    })),
-                )
                 .child(
                     switch(format!("connect-{key}"), format!("Connect {label}"), on, &t)
                         .when(locked, |s| s.opacity(0.5).cursor_default())
@@ -380,6 +394,7 @@ pub(super) fn provider_actions(
             false,
             t,
         )
+        .min_w(px(fs(ACTION_W)))
         .child("Edit")
         .on_click(cx.listener(move |d, _, window, cx| {
             d.open_form(edit.provider.clone(), edit.has_key, window, cx);
@@ -394,6 +409,7 @@ pub(super) fn provider_actions(
         )
         .aria_expanded(prompting)
         .when(!p.system_prompt.is_empty(), |b| b.text_color(t.accent))
+        .min_w(px(fs(ACTION_W)))
         .child("System Prompt")
         .on_click(cx.listener(move |d, _, window, cx| {
             d.toggle_prompt(
