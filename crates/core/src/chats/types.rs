@@ -296,15 +296,20 @@ impl Chat {
                     // A completed /compact clears the pre-compaction context. Keep the reply's
                     // context only when it reflects post-compaction usage (such as an ACP
                     // `usage_update`), not the pre-compaction input tokens read to summarize it.
+                    // Antigravity reports the size from before as `/compact` ends, and the
+                    // smaller one only on its next reply.
+                    let before = latest;
                     latest = m
                         .usage
                         .as_ref()
                         .filter(|u| u.context > 0 && (u.input == 0 || u.context < u.input))
+                        .filter(|u| before.is_none_or(|b| u.context < b))
                         .map(|u| u.context);
                     continue;
                 }
             }
-            if let Some(usage) = &m.usage {
+            // A reply that never said how full the context is leaves it as it was.
+            if let Some(usage) = m.usage.as_ref().filter(|u| u.context > 0) {
                 latest = Some(usage.context);
             }
         }

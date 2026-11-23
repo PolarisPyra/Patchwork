@@ -19,7 +19,7 @@ pub(in crate::orchestration) struct Request {
 }
 
 /// The tokens a message used, summed over its requests. Its context and speed are those of the
-/// last request the main agent made for it.
+/// last request the main agent made for it that reported them.
 pub(in crate::orchestration) fn message_usage(
     requests: &[Request],
     message_id: &str,
@@ -41,7 +41,10 @@ pub(in crate::orchestration) fn message_usage(
             }
         }
         if r.top_level {
-            total.context = r.usage.context;
+            // A request that does not say how full the context is leaves it as it was.
+            if r.usage.context > 0 {
+                total.context = r.usage.context;
+            }
             if r.usage.first_token_ms.is_some() {
                 total.first_token_ms = r.usage.first_token_ms;
             }
