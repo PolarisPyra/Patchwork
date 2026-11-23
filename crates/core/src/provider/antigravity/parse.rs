@@ -150,7 +150,7 @@ fn handle_response(
         return;
     }
 
-    if id == PROMPT_REQUEST {
+    if let Some(prompt_id) = id.as_u64().filter(|&n| n >= PROMPT_REQUEST) {
         if let Some(msg) = error_msg {
             out.extend([Parsed::Error(msg.into()), Parsed::Finished]);
             return;
@@ -166,9 +166,9 @@ fn handle_response(
             let total_tokens = count("totalTokens");
             if input_tokens > 0 || output_tokens > 0 || total_tokens > 0 {
                 out.push(Parsed::RequestUsage {
-                    request_id: format!("acp-prompt-{total_tokens}"),
+                    request_id: format!("acp-prompt-{prompt_id}"),
                     usage: TokenUsage {
-                        input: input_tokens.saturating_sub(cached_read),
+                        input: input_tokens,
                         cache_read: cached_read,
                         cache_write: cached_write,
                         output: output_tokens,

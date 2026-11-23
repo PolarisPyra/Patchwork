@@ -55,10 +55,11 @@ impl Runner {
     /// could take it now. False when no turn is running there.
     pub(crate) fn enqueue(&self, chat_id: &str, input: FollowUpInput<'_>) -> bool {
         let turns = self.turns.locked();
-        // An idle agent is not replying, so there is nothing to wait for.
+        // An idle agent is not replying, so there is nothing to wait for — unless Antigravity is
+        // still working on an unprompted reply of its own.
         let Some(turn) = turns
             .get(chat_id)
-            .filter(|t| !t.idle.load(Ordering::SeqCst))
+            .filter(|t| !t.idle.load(Ordering::SeqCst) || t.alone.load(Ordering::SeqCst))
         else {
             return false;
         };
@@ -152,10 +153,27 @@ impl Runner {
             attachments: &follow_up.attachments,
             images: &follow_up.images,
         };
-        let line = provider::steer_input(turn.agent, prompt, session_id, turn_id.as_deref());
         let mut stdin = turn.stdin.locked();
-        // As in `steer`: during Patchwork's compaction the message waits for it to end.
+        if turn.idle.load(Ordering::SeqCst) {
+            let line = provider::resume_input(turn.agent, prompt, session_id, turn_id.as_deref());
+            if !turn.stale.load(Ordering::SeqCst)
+                && line.is_some_and(|line| write_to(&mut stdin, &line))
+            {
+                turn.idle.store(false, Ordering::SeqCst);
+                turn.steers.locked().push_back(follow_up);
+                turn.wake.reply_due();
+                return true;
+            }
+            queue.insert(index, follow_up);
+            return false;
+        }
+        let line = provider::steer_input(turn.agent, prompt, session_id, turn_id.as_deref());
+        // As in `steer`: during Patchwork's compaction, or when Antigravity is already cancelling
+        // for an earlier steer, wait instead of writing another cancel.
+        let already_cancelling =
+            turn.agent == provider::AgentKind::Antigravity && !turn.steers.locked().is_empty();
         if turn.compacting.load(Ordering::SeqCst)
+            || already_cancelling
             || line
                 .as_deref()
                 .is_some_and(|line| write_to(&mut stdin, line))

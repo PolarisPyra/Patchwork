@@ -56,6 +56,17 @@ pub(in crate::orchestration) fn message_usage(
     total
 }
 
+/// Clears the recorded context size on `message_id` after compaction completes, leaving token
+/// totals intact until the next post-compaction request reports the smaller context.
+pub(in crate::orchestration) fn clear_context(requests: &mut [Request], message_id: &str) {
+    for r in requests
+        .iter_mut()
+        .filter(|r| r.message_id == message_id && r.top_level)
+    {
+        r.usage.context = 0;
+    }
+}
+
 /// Records the tokens a request used, made while `current` was the message being written, and
 /// returns the message they count toward. Claude reports a request once per content block, so a
 /// repeat updates it.

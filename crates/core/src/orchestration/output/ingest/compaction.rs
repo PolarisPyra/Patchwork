@@ -55,6 +55,11 @@ pub(super) enum After {
 }
 
 impl Compaction {
+    /// Whether Patchwork is currently stopping the reply for compaction or running `/compact`.
+    pub(super) fn is_compacting(&self) -> bool {
+        matches!(self, Self::Stopping | Self::Compacting(_))
+    }
+
     /// Notes the context `agy` reported, against the chat's compact `window` (0 when off).
     pub(super) fn usage(&mut self, context: u64, window: u64) {
         if window == 0 {

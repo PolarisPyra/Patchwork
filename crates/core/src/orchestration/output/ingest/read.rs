@@ -70,6 +70,7 @@ use crate::orchestration::tasks::subagents::open_child;
 use crate::orchestration::tasks::subagents::SubagentChat;
 use crate::orchestration::turn::end::{TurnEnd, finish};
 use crate::orchestration::turn::start::Turn;
+use crate::orchestration::output::usage::clear_context;
 use crate::orchestration::output::usage::message_usage;
 use crate::orchestration::output::usage::record_request;
 use crate::orchestration::output::usage::Request;
@@ -445,7 +446,23 @@ pub(in crate::orchestration) fn ingest(
                         compaction.stopped(&turn);
                         continue;
                     }
-                    match compaction.finished(&turn, &value, stream_error.is_some(), &mut unsaved) {
+                    let was_compacting = compaction.is_compacting();
+                    let after_compaction =
+                        compaction.finished(&turn, &value, stream_error.is_some(), &mut unsaved);
+                    if was_compacting
+                        && !compaction.is_compacting()
+                        && stream_error.is_none()
+                        && !turn.cancelled.load(Ordering::SeqCst)
+                    {
+                        // Drop the pre-compaction context size so the UI clears any over-window
+                        // warning immediately while waiting for the next post-compaction update.
+                        clear_context(&mut requests, &turn.message_id);
+                        turn.publish(AgentEvent::Usage {
+                            usage: message_usage(&requests, &turn.message_id),
+                            message_id: turn.message_id.clone(),
+                        });
+                    }
+                    match after_compaction {
                         After::Compact(line) => {
                             match &mut commands {
                                 Commands::Listed => {
@@ -475,6 +492,8 @@ pub(in crate::orchestration) fn ingest(
                             AgentKind::Codex | AgentKind::OpenCode | AgentKind::Api => false,
                         };
                     if answers_steers {
+                        // An error from the cancelled prompt does not carry over to the steer.
+                        stream_error = None;
                         close_steered_segment(&turn, &segments, &mut completed);
                         turn.next_segment(&mut unsaved);
                         segments.push(turn.message_id.clone());
@@ -601,7 +620,12 @@ pub(in crate::orchestration) fn ingest(
                     if turn.agent == AgentKind::Antigravity
                         && request_id.starts_with(provider::antigravity::CONTEXT_REQUEST)
                     {
-                        compaction.usage(usage.context, turn.compact_window);
+                        // `agy` emits the pre-compaction context size as `/compact` runs; ignore
+                        // it so the UI does not show stale over-window context after compaction.
+                        if compaction.is_compacting() {
+                            continue;
+                        }
+                        compaction.usage(usage.context, turn.compact_window.load(Ordering::SeqCst));
                     }
                     if usage.cost_micros.is_none() {
                         let model = model.or_else(|| {

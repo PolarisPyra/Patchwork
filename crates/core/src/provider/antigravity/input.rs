@@ -3,6 +3,7 @@
 // Rust guideline compliant 2026-11-22
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde_json::{Value, json};
 
@@ -27,8 +28,15 @@ pub(super) const MODEL_REQUEST: u64 = 4;
 /// Request id of `session/set_config_option` for the thinking level.
 pub(super) const EFFORT_REQUEST: u64 = 5;
 
-/// Request id of `session/prompt`.
+/// First JSON-RPC request id for `session/prompt`; each prompt increments from here.
 pub(super) const PROMPT_REQUEST: u64 = 6;
+
+/// Monotonic id generator so every `session/prompt` in a warm ACP process is distinct.
+static NEXT_PROMPT_ID: AtomicU64 = AtomicU64::new(PROMPT_REQUEST);
+
+fn next_prompt_id() -> u64 {
+    NEXT_PROMPT_ID.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Command-line arguments for an Antigravity ACP turn (`agy acp --stdio`).
 #[must_use]
@@ -146,12 +154,15 @@ pub(super) fn begin(spec: &TurnSpec, session_id: &str, session_result: &Value) -
         ));
     }
 
-    // Apply model selection if requested.
-    let model_options: Vec<&str> = session_result["configOptions"]
+    // Apply model selection only when it differs from the session's active value.
+    let config_options = session_result["configOptions"]
         .as_array()
-        .into_iter()
-        .flatten()
-        .find(|opt| opt["id"].as_str() == Some("model"))
+        .map_or(&[][..], Vec::as_slice);
+    let model_config = config_options
+        .iter()
+        .find(|opt| opt["id"].as_str() == Some("model"));
+    let current_model = model_config.and_then(|opt| opt["currentValue"].as_str());
+    let model_options: Vec<&str> = model_config
         .and_then(|opt| opt["options"].as_array())
         .into_iter()
         .flatten()
@@ -168,23 +179,31 @@ pub(super) fn begin(spec: &TurnSpec, session_id: &str, session_result: &Value) -
                 m
             }
         };
-        out.push(Parsed::Send(
-            json!({
-                "jsonrpc": "2.0",
-                "id": MODEL_REQUEST,
-                "method": "session/set_config_option",
-                "params": {
-                    "sessionId": session_id,
-                    "configId": "model",
-                    "value": resolved,
-                },
-            })
-            .to_string(),
-        ));
+        if current_model != Some(resolved) {
+            out.push(Parsed::Send(
+                json!({
+                    "jsonrpc": "2.0",
+                    "id": MODEL_REQUEST,
+                    "method": "session/set_config_option",
+                    "params": {
+                        "sessionId": session_id,
+                        "configId": "model",
+                        "value": resolved,
+                    },
+                })
+                .to_string(),
+            ));
+        }
     }
 
-    // Apply thinking effort when requested.
-    if let Some(effort) = spec.effort {
+    // Apply thinking effort only when it differs from the session's active value.
+    let current_effort = config_options
+        .iter()
+        .find(|opt| opt["id"].as_str() == Some("thought_level"))
+        .and_then(|opt| opt["currentValue"].as_str());
+    if let Some(effort) = spec.effort
+        && current_effort != Some(effort)
+    {
         out.push(Parsed::Send(
             json!({
                 "jsonrpc": "2.0",
@@ -201,7 +220,7 @@ pub(super) fn begin(spec: &TurnSpec, session_id: &str, session_result: &Value) -
     }
 
     let text = prompt(spec);
-    let line = prompt_request(PROMPT_REQUEST, session_id, &text, spec.images);
+    let line = prompt_request(next_prompt_id(), session_id, &text, spec.images);
     // `agy` runs a slash command sent before it lists its commands as plain chat, so a
     // `/compact` that starts a resumed session waits for that list.
     out.push(if text.trim_start().starts_with('/') {
@@ -228,11 +247,10 @@ fn prompt_blocks(text: &str, images: &[Image]) -> Vec<Value> {
     blocks
 }
 
-/// Sends a new prompt into an idle, already-initialized ACP session (uses `PROMPT_REQUEST` so
-/// its completion ends the turn cleanly).
+/// Sends a new prompt into an idle, already-initialized ACP session with a fresh request id.
 #[must_use]
 pub fn prompt_input(session_id: &str, text: &str, images: &[Image]) -> String {
-    prompt_request(PROMPT_REQUEST, session_id, text, images)
+    prompt_request(next_prompt_id(), session_id, text, images)
 }
 
 fn prompt_request(id: u64, session_id: &str, text: &str, images: &[Image]) -> String {

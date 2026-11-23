@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::provider::{AgentKind, ProviderSlashCommand};
 use crate::backgrounds::ChatBackground;
-use crate::chats::{Message, MessageStatus, Role};
+use crate::chats::{Message, MessageStatus, Part, Role};
 
 /// How much an agent may do without asking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -307,6 +307,20 @@ impl Chat {
                         .map(|u| u.context);
                     continue;
                 }
+            }
+            // A completed mid-turn compaction resets context until the continuation reports a
+            // post-compaction `usage_update`.
+            if m.role == Role::Assistant
+                && m.parts
+                    .iter()
+                    .any(|p| matches!(p, Part::Compaction { done: true, .. }))
+            {
+                latest = m
+                    .usage
+                    .as_ref()
+                    .filter(|u| u.context > 0)
+                    .map(|u| u.context);
+                continue;
             }
             // A reply that never said how full the context is leaves it as it was.
             if let Some(usage) = m.usage.as_ref().filter(|u| u.context > 0) {
