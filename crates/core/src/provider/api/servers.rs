@@ -8,7 +8,9 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use super::config::{self, ApiProvider};
+use super::secrets::{key, with_headers};
+use super::store::{move_to, provider};
+use super::types::ApiProvider;
 
 /// Ports well-known local servers listen on: Ollama, LM Studio, llama.cpp, vLLM, and others.
 const KNOWN_PORTS: &[u16] = &[11434, 1234, 8080, 8081, 8000, 5000];
@@ -47,7 +49,7 @@ pub(super) fn on_this_computer(base: &str) -> bool {
 /// The model ids the server at `base` serves, when it answers its model list.
 fn served(agent: &ureq::Agent, provider: &ApiProvider, base: &str) -> Option<Vec<String>> {
     let mut request = agent.get(format!("{base}/models"));
-    if let Some(key) = config::key(provider) {
+    if let Some(key) = key(provider) {
         request = request.header("Authorization", &format!("Bearer {key}"));
     }
     for h in &provider.headers {
@@ -109,8 +111,8 @@ fn listening_ports() -> Vec<u16> {
 /// Returns an error when the provider is no longer saved, its base URL is not valid, no server on
 /// that host serves its models, or saving the new address fails.
 pub fn relocate(id: &str) -> Result<String, Error> {
-    let provider = config::provider(id).ok_or("That provider is no longer saved")?;
-    let provider = config::with_headers(provider);
+    let provider = provider(id).ok_or("That provider is no longer saved")?;
+    let provider = with_headers(provider);
     let (scheme, host, port, path) =
         split(&provider.base_url).ok_or("The base URL is not valid")?;
     let mut ports: Vec<u16> = KNOWN_PORTS.to_vec();
@@ -154,7 +156,7 @@ pub fn relocate(id: &str) -> Result<String, Error> {
         )
         .into());
     };
-    config::move_to(id, &base)?;
+    move_to(id, &base)?;
     log::info!(provider:% = provider.name, base:%; "{{provider}} moved to {{base}}");
     Ok(base)
 }

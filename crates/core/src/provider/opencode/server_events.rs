@@ -2,7 +2,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use super::request::slash_commands;
+use super::requests::slash_commands;
 use serde_json::{Value, json};
 use crate::chats::{Question, QuestionOption, TokenUsage};
 use crate::permissions::Target;

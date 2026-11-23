@@ -337,7 +337,7 @@ pub fn withheld_env(agent: AgentKind, vision: Option<AgentKind>) -> Vec<String> 
         own_key_vars(agent).contains(&var)
             || vision.is_some_and(|vision| own_key_vars(vision).contains(&var))
     };
-    api::config::providers()
+    api::providers()
         .into_iter()
         .filter_map(|provider| provider.key_env)
         .map(|var| var.trim().to_string())

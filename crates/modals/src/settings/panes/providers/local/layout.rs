@@ -7,7 +7,7 @@ use super::servers::from_discovered;
 use super::servers::health_line;
 use super::servers::trim_slash;
 use gpui::{AnyElement, SharedString, Window, div, prelude::*, px};
-use patchwork_core::provider::api::config::{DiscoveredServer, ProviderView};
+use patchwork_core::provider::api::{DiscoveredServer, ProviderView};
 use crate::settings::controls::{self, tile, tile_grid};
 use crate::settings::SettingsDialog;
 use patchwork_ui::theme::theme;

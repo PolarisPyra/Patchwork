@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{Div, Focusable, Window, div, prelude::*, px};
-use patchwork_core::provider::api::config::{self, ApiProvider, KeyChange};
+use patchwork_core::provider::api::{self, ApiProvider, KeyChange};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
 use patchwork_ui::theme::theme;
@@ -129,7 +129,7 @@ impl SettingsDialog {
                     ..view.provider.clone()
                 };
                 self.run(
-                    move || config::save(provider, KeyChange::Keep),
+                    move || api::save(provider, KeyChange::Keep),
                     |d, saved, cx| match saved {
                         Ok(_) => {
                             d.providers.prompt = None;

@@ -122,7 +122,7 @@ impl Core {
                 not_copied.push(format!("database: {e}"));
             }
         }
-        crate::provider::api::config::init(&dirs.config);
+        crate::provider::api::init(&dirs.config);
         skills::init(&dirs.config);
         hooks::init(&dirs.config);
         themes::init();

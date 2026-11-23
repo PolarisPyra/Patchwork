@@ -241,16 +241,16 @@ pub fn save(name: &str, previous: Option<String>, server: McpServer) -> Result<(
             headers: take_values(&mut server.headers, &kept.headers),
         };
         if secrets.env.is_empty() && secrets.headers.is_empty() {
-            crate::provider::api::config::delete_secret(&secret_name(&name));
+            crate::provider::api::delete_secret(&secret_name(&name));
         } else {
             let text = serde_json::to_string(&secrets).map_err(|e| e.to_string())?;
-            crate::provider::api::config::store_secret(&secret_name(&name), &text)?;
+            crate::provider::api::store_secret(&secret_name(&name), &text)?;
         }
         write_server(&name, &server)?;
         if let Some(previous) = previous.filter(|p| *p != name) {
             remove_file(&previous)?;
             pool().remove(&previous);
-            crate::provider::api::config::delete_secret(&secret_name(&previous));
+            crate::provider::api::delete_secret(&secret_name(&previous));
         }
     }
     restart_changed();
@@ -293,7 +293,7 @@ pub(super) fn resolved(name: &str, server: &McpServer) -> McpServer {
         .chain(server.headers.values())
         .any(String::is_empty)
     {
-        let stored: Secrets = crate::provider::api::config::read_secret(&secret_name(name))
+        let stored: Secrets = crate::provider::api::read_secret(&secret_name(name))
             .and_then(|text| serde_json::from_str(&text).ok())
             .unwrap_or_default();
         for (values, stored) in [
@@ -321,7 +321,7 @@ pub fn remove(name: &str) -> Result<(), Error> {
     let _guard = WRITE.locked();
     remove_file(name)?;
     pool().remove(name);
-    crate::provider::api::config::delete_secret(&secret_name(name));
+    crate::provider::api::delete_secret(&secret_name(name));
     Ok(())
 }
 

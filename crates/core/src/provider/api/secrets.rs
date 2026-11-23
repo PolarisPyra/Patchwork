@@ -135,7 +135,7 @@ pub(crate) fn remove_old_copies(names: &[String]) -> Result<usize, Error> {
 }
 
 /// The provider with its header values filled in from where they are stored.
-pub(in crate::provider::api) fn with_headers(mut provider: ApiProvider) -> ApiProvider {
+pub(super) fn with_headers(mut provider: ApiProvider) -> ApiProvider {
     // A config written before header values moved out still holds them.
     if provider.headers.iter().all(|h| !h.value.is_empty()) {
         return provider;

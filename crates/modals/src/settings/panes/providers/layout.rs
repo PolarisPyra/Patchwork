@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Window, div, prelude::*};
-use patchwork_core::provider::api::config::ProviderView;
+use patchwork_core::provider::api::ProviderView;
 use patchwork_core::provider::AgentKind;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{alert, section_heading, token_row};

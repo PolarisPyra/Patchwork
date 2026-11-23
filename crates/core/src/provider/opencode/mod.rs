@@ -4,8 +4,10 @@
 // Rust guideline compliant 2026-10-09
 
 mod config;
+mod requests;
 mod run;
-mod serve;
+mod server;
+mod server_events;
 
 #[doc(inline)]
 pub use config::{
@@ -19,11 +21,9 @@ use config::major_version;
 pub use run::{turn_args, parse};
 use run::{todo_plan, tool_name};
 #[doc(inline)]
-pub use serve::{uses_serve, bridge_request, mode_asks, steer_line, interrupt_line, approval_reply};
-use serve::{action, parse_serve};
+pub use requests::{uses_serve, bridge_request, mode_asks, steer_line, interrupt_line, approval_reply};
+use requests::action;
+use server_events::parse_serve;
 
 pub mod bridge;
 pub mod cli;
-
-#[cfg(test)]
-mod tests;

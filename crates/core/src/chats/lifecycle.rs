@@ -306,7 +306,7 @@ impl Core {
             return;
         };
         if let (AgentKind::Api, Some(session)) = (chat.agent, &chat.session_id) {
-            let dir = crate::provider::api::config::sessions_dir();
+            let dir = crate::provider::api::sessions_dir();
             let _ = std::fs::remove_file(dir.join(format!("{session}.json")));
             if crate::system::files::paths::is_plain_file_name(session) {
                 let _ = std::fs::remove_dir_all(dir.join(session));

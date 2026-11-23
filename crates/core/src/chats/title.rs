@@ -51,8 +51,8 @@ pub struct Writer {
 fn runs_locally(model: Option<&str>) -> bool {
     model
         .map(String::from)
-        .or_else(crate::provider::api::config::default_model)
-        .and_then(|m| crate::provider::api::config::resolve(&m))
+        .or_else(crate::provider::api::default_model)
+        .and_then(|m| crate::provider::api::resolve(&m))
         .is_some_and(|(provider, _)| provider.local)
 }
 
@@ -136,7 +136,7 @@ pub(crate) fn ask(
 
 /// Asks the chat's OpenAI-compatible endpoint, such as DeepSeek's, with the chat's model.
 fn from_api(request: &Request, model: Option<&str>) -> Option<Value> {
-    let connection = crate::provider::api::config::connection(model).ok()?;
+    let connection = crate::provider::api::connection(model).ok()?;
     let base = connection["baseUrl"].as_str()?.trim_end_matches('/');
     let body = json!({
         "model": connection["model"],

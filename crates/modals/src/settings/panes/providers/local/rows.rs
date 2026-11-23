@@ -5,7 +5,7 @@
 use super::servers::health_line;
 use super::servers::ADDRESS_FIELD;
 use gpui::{AnyElement, Div, Focusable, SharedString, Window, div, prelude::*, px};
-use patchwork_core::provider::api::config::{self, ApiProvider, KeyChange, ProviderView};
+use patchwork_core::provider::api::{self, ApiProvider, KeyChange, ProviderView};
 use patchwork_core::provider::api::servers;
 use crate::settings::panes::providers::PromptOf;
 use crate::settings::panes::providers::rows::{provider_actions, provider_title, status_badge};
@@ -80,7 +80,7 @@ impl SettingsDialog {
                 let id = provider.id.clone();
                 d.repair(
                     id,
-                    move || config::save(provider, KeyChange::Keep).map(|_| ()),
+                    move || api::save(provider, KeyChange::Keep).map(|_| ()),
                     cx,
                 );
             };

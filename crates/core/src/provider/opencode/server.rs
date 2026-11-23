@@ -2,9 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
-use super::turn::START_TIMEOUT;
-use super::turn::log_error;
-use super::turn::Request;
+use super::bridge::START_TIMEOUT;
+use super::bridge::log_error;
+use super::bridge::Request;
 use crate::Error;
 use std::io::{BufReader, Read};
 use std::process::{Child, Stdio};

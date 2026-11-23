@@ -6,7 +6,7 @@ use std::io::Cursor;
 
 use base64::Engine;
 use gpui::{Focusable, PathPromptOptions, Window, prelude::*, px};
-use patchwork_core::provider::api::config::{
+use patchwork_core::provider::api::{
     self, ApiModel, ApiProvider, KeyChange, KeyStore, ModelsQuery, ProviderView,
 };
 
@@ -291,7 +291,7 @@ impl SettingsDialog {
         }
         let change = form.key_change();
         self.run(
-            move || config::save(provider, change),
+            move || api::save(provider, change),
             |d, saved, cx| match saved {
                 Ok(_) => d.close_form(true, cx),
                 Err(e) => {
@@ -312,7 +312,7 @@ impl SettingsDialog {
         form.busy = true;
         let id = form.draft.id.clone();
         self.run(
-            move || config::remove(&id),
+            move || api::remove(&id),
             |d, removed, cx| match removed {
                 Ok(()) => d.close_form(true, cx),
                 Err(e) => {
@@ -366,7 +366,7 @@ impl SettingsDialog {
             provider_id: (!form.draft.id.is_empty()).then(|| form.draft.id.clone()),
         };
         self.run(
-            move || config::fetch_models(query),
+            move || api::fetch_models(query),
             |d, list, _| {
                 if let Some(f) = d.form_mut() {
                     f.loading = false;
