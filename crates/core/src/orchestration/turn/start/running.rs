@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::Mutex;
 
 use serde_json::Value;
@@ -63,6 +63,8 @@ pub(in crate::orchestration) struct RunningTurn {
     /// Patchwork stopped the Antigravity reply to compact it. A steer meanwhile waits for the
     /// compaction to end instead of stopping it.
     pub(in crate::orchestration) compacting: Arc<AtomicBool>,
+    /// Live compact window (0 when off), updated when the user changes it mid-turn or while idle.
+    pub(in crate::orchestration) compact_window: Arc<AtomicU64>,
     /// Starts the reply to a message the idle agent was sent, before the agent says anything.
     pub(in crate::orchestration) wake: Wake,
     /// The chat's settings changed while the agent was replying, so it is not used again once

@@ -25,7 +25,7 @@ use crate::system::processes::running::{SIGKILL, signal_process_group};
 const ACP_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// How long `detect_agent` and `list_models` reuse one ACP session probe.
-const PROBE_CACHE_TTL: Duration = Duration::from_secs(5);
+const PROBE_CACHE_TTL: Duration = Duration::from_secs(60);
 
 /// JSON-RPC error code `agy acp` returns when the user is not signed in.
 pub(super) const AUTH_REQUIRED_CODE: i64 = -32000;

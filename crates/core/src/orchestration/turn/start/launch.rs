@@ -494,6 +494,7 @@ impl Runner {
         let idle = Arc::new(AtomicBool::new(false));
         let alone = Arc::new(AtomicBool::new(false));
         let compacting = Arc::new(AtomicBool::new(false));
+        let compact_window = Arc::new(AtomicU64::new(compact_window));
         let wake = Wake::default();
         let turn = Turn {
             core: Arc::clone(core),
@@ -525,7 +526,7 @@ impl Runner {
             sent_context: sends_context,
             mode,
             effort,
-            compact_window,
+            compact_window: Arc::clone(&compact_window),
             unlimited_steps,
             token_limit,
             attachments,
@@ -555,6 +556,7 @@ impl Runner {
                 idle,
                 alone,
                 compacting,
+                compact_window,
                 wake,
                 stale: AtomicBool::new(false),
                 root: turn.root.clone(),

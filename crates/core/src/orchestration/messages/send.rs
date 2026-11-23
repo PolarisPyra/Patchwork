@@ -462,9 +462,12 @@ impl Core {
         chat.current_context().is_some_and(|c| c >= window)
     }
 
-    /// Whether the Antigravity reply under way answers `/compact`. A steer would stop it, so
-    /// messages sent meanwhile wait for it in the queue.
+    /// Whether the Antigravity reply under way is compacting (either `/compact` or Patchwork's
+    /// mid-turn compaction). A steer would stop it, so messages sent meanwhile wait in the queue.
     pub(crate) fn compacting(&self, chat_id: &str) -> bool {
+        if self.runner.is_compacting(chat_id) {
+            return true;
+        }
         let Some(chat) = self.store.chat(chat_id) else {
             return false;
         };

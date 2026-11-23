@@ -215,16 +215,24 @@ impl Runner {
         }
     }
 
-    /// Hands a new compact window to the API turn replying in `chat_id`, which compacts by it
-    /// from its next step. Other agents read it only when they start.
+    /// Hands a new compact window to the turn in `chat_id` so it compacts by it from its next step.
     pub fn set_compact_window(&self, chat_id: &str, window: u64) {
         let turns = self.turns.locked();
-        if let Some(turn) = turns.get(chat_id)
-            && turn.agent == provider::AgentKind::Api
-            && !turn.idle.load(Ordering::SeqCst)
-        {
+        let Some(turn) = turns.get(chat_id) else {
+            return;
+        };
+        turn.compact_window.store(window, Ordering::SeqCst);
+        if turn.agent == provider::AgentKind::Api && !turn.idle.load(Ordering::SeqCst) {
             write_line(&turn.stdin, &provider::api::compact_window_line(window));
         }
+    }
+
+    /// Whether the running turn in `chat_id` is currently compacting mid-turn.
+    pub(crate) fn is_compacting(&self, chat_id: &str) -> bool {
+        let turns = self.turns.locked();
+        turns
+            .get(chat_id)
+            .is_some_and(|t| t.compacting.load(Ordering::SeqCst))
     }
 
     /// Hands a message to the turn running in `chat_id`: written to the agent when it
@@ -296,6 +304,12 @@ impl Runner {
         // Patchwork stopped the reply to compact it, and a stop now would stop the compaction:
         // the message goes once it ends, as a steer's would.
         if turn.compacting.load(Ordering::SeqCst) {
+            turn.steers.locked().push_back(follow_up);
+            return Delivery::Steered;
+        }
+        // Antigravity steers by cancelling the in-flight prompt and sending all accumulated steers
+        // once it settles; a second `session/cancel` would race with the steered prompt.
+        if turn.agent == provider::AgentKind::Antigravity && !turn.steers.locked().is_empty() {
             turn.steers.locked().push_back(follow_up);
             return Delivery::Steered;
         }

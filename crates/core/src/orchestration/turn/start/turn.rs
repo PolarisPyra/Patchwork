@@ -9,7 +9,7 @@ use crate::orchestration::output::ingest::Wake;
 use crate::orchestration::turn::end::background_id;
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::orchestration::changes::attribution::{Reach, SharedAttribution};
 use crate::provider::TurnSpec;
@@ -77,7 +77,7 @@ pub(in crate::orchestration) struct Turn {
     pub(in crate::orchestration) sent_context: bool,
     pub(in crate::orchestration) mode: AccessMode,
     pub(in crate::orchestration) effort: Option<String>,
-    pub(in crate::orchestration) compact_window: u64,
+    pub(in crate::orchestration) compact_window: Arc<AtomicU64>,
     /// What `spec` passes as `TurnSpec::unlimited_steps`.
     pub(in crate::orchestration) unlimited_steps: bool,
     /// What `spec` passes as `TurnSpec::token_limit`.
@@ -169,7 +169,7 @@ impl Turn {
             text: &self.text,
             mode: self.mode,
             effort: self.effort.as_deref(),
-            compact_window: self.compact_window,
+            compact_window: self.compact_window.load(Ordering::SeqCst),
             unlimited_steps: self.unlimited_steps,
             token_limit: self.token_limit,
             attachments: &self.attachments,
