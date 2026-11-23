@@ -28,7 +28,20 @@ const ACP_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 const PROBE_CACHE_TTL: Duration = Duration::from_secs(60);
 
 /// JSON-RPC error code `agy acp` returns when the user is not signed in.
-pub(super) const AUTH_REQUIRED_CODE: i64 = -32000;
+const AUTH_REQUIRED_CODE: i64 = -32000;
+
+/// How long the probe waits for `session/close` before it kills the process anyway.
+const PROBE_CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Whether an `agy acp` error means the user has to sign in. Besides its auth code, agy answers
+/// `-32603 No browser is available here` when its saved sign-in expired and it cannot open a
+/// browser to renew it.
+pub(super) fn auth_required(code: Option<i64>, message: &str) -> bool {
+    let lower = message.to_lowercase();
+    code == Some(AUTH_REQUIRED_CODE)
+        || lower.contains("authentication")
+        || lower.contains("no browser is available")
+}
 
 /// ACP `clientInfo` for `initialize`: always identifies honestly as Patchwork.
 pub(super) fn client_info() -> Value {
@@ -196,13 +209,24 @@ pub fn models() -> Vec<ModelOption> {
     parse_models(&listed.stdout)
 }
 
-/// Reads the cached ACP probe or runs a fresh one.
+/// Reads the cached ACP probe or runs a fresh one. Callers arriving while a probe runs wait for
+/// it and share its result instead of each starting `agy`.
 fn probe_acp_cached() -> AcpProbe {
+    static RUNNING: Mutex<()> = Mutex::new(());
     let cache = probe_cache();
-    if let Some((at, cached)) = cache.locked().as_ref()
-        && at.elapsed() < PROBE_CACHE_TTL
-    {
-        return cached.clone();
+    let cached = || {
+        cache
+            .locked()
+            .as_ref()
+            .filter(|(at, _)| at.elapsed() < PROBE_CACHE_TTL)
+            .map(|(_, probe)| probe.clone())
+    };
+    if let Some(probe) = cached() {
+        return probe;
+    }
+    let _running = RUNNING.locked();
+    if let Some(probe) = cached() {
+        return probe;
     }
     let fresh = run_acp_probe();
     *cache.locked() = Some((Instant::now(), fresh.clone()));
@@ -251,6 +275,7 @@ fn run_acp_probe() -> AcpProbe {
         "method": "session/new",
         "params": {
             "cwd": cwd.to_string_lossy(),
+            "mcpServers": [],
         },
     });
     let wrote = writeln!(stdin, "{init}")
@@ -269,13 +294,30 @@ fn run_acp_probe() -> AcpProbe {
             let Ok(v) = serde_json::from_str::<Value>(&line) else {
                 continue;
             };
-            if v["id"] == 2 {
+            if v["id"] == 2 || v["id"] == 3 {
                 let _ = tx.send(v);
-                return;
             }
         }
     });
     let response = rx.recv_timeout(ACP_PROBE_TIMEOUT).ok();
+    // Close the probe's session so agy does not keep it open as a conversation of its own.
+    if let Some(id) = response
+        .as_ref()
+        .and_then(|r| r["result"]["sessionId"].as_str())
+    {
+        let close = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "session/close",
+            "params": {"sessionId": id},
+        });
+        if writeln!(stdin, "{close}")
+            .and_then(|()| stdin.flush())
+            .is_ok()
+        {
+            let _ = rx.recv_timeout(PROBE_CLOSE_TIMEOUT);
+        }
+    }
     drop(stdin);
     signal_process_group(pid, SIGKILL);
     let _ = child.kill();
@@ -285,11 +327,10 @@ fn run_acp_probe() -> AcpProbe {
         return AcpProbe::Unavailable("Antigravity ACP server did not respond in time".into());
     };
     if let Some(error) = response.get("error") {
-        let code = error["code"].as_i64().unwrap_or_default();
         let message = error["message"]
             .as_str()
             .unwrap_or("Authentication required");
-        if code == AUTH_REQUIRED_CODE || message.to_lowercase().contains("authentication") {
+        if auth_required(error["code"].as_i64(), message) {
             return AcpProbe::AuthRequired;
         }
         return AcpProbe::Unavailable(message.into());

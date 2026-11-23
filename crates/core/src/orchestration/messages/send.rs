@@ -13,7 +13,9 @@ use crate::events::{AgentEvent, AgentEventEnvelope};
 use crate::logging::{Data, Source, CHAT_LOG};
 use crate::provider::AgentKind;
 use crate::settings::LogLevel;
-use crate::chats::{Role, MessageStatus, StepStatus, Attachment, Message, GoalStatus, BackgroundTask};
+use crate::chats::{
+    Role, MessageStatus, StepStatus, Attachment, Message, GoalStatus, BackgroundTask, Chat,
+};
 use crate::extensions::skills;
 use crate::{orchestration, provider};
 use crate::chats::title;
@@ -456,7 +458,7 @@ impl Core {
         let window = chat
             .compact_window
             .unwrap_or_else(|| self.store.settings().tokens.compact_window(chat.agent));
-        if window == 0 {
+        if window == 0 || compact_failed(&chat) {
             return false;
         }
         chat.current_context().is_some_and(|c| c >= window)
@@ -555,4 +557,23 @@ impl Core {
             },
         )
     }
+}
+
+/// Whether the chat's last `/compact` failed and no reply has reported the context since. Asking
+/// again would fail the same way before every message, so the next one goes without it.
+fn compact_failed(chat: &Chat) -> bool {
+    let Some(at) = chat
+        .messages
+        .iter()
+        .rposition(|m| m.role == Role::User && !m.queued && provider::is_compact_command(&m.text))
+    else {
+        return false;
+    };
+    let mut replies = chat.messages[at + 1..]
+        .iter()
+        .filter(|m| m.role == Role::Assistant);
+    let failed = replies
+        .next()
+        .is_some_and(|m| matches!(m.status, MessageStatus::Error | MessageStatus::Interrupted));
+    failed && !replies.any(|m| m.usage.as_ref().is_some_and(|u| u.context > 0))
 }

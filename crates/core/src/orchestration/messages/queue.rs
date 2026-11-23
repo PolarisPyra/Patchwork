@@ -11,6 +11,7 @@ use std::sync::Mutex;
 use crate::provider;
 use crate::chats::Attachment;
 use crate::orchestration::turn::process::write_to;
+use crate::orchestration::turn::runner::watch_steer;
 use crate::orchestration::Runner;
 
 /// A message sent during a turn, kept until the agent answers it or the turn ends.
@@ -155,7 +156,13 @@ impl Runner {
         };
         let mut stdin = turn.stdin.locked();
         if turn.idle.load(Ordering::SeqCst) {
-            let line = provider::resume_input(turn.agent, prompt, session_id, turn_id.as_deref());
+            let line = provider::resume_input(turn.agent, prompt, session_id, turn_id.as_deref())
+                .map(|line| {
+                    let mode = *turn.mode.locked();
+                    turn.settings
+                        .locked()
+                        .first_line(turn.agent, mode, session_id, line)
+                });
             if !turn.stale.load(Ordering::SeqCst)
                 && line.is_some_and(|line| write_to(&mut stdin, &line))
             {
@@ -170,15 +177,16 @@ impl Runner {
         let line = provider::steer_input(turn.agent, prompt, session_id, turn_id.as_deref());
         // As in `steer`: during Patchwork's compaction, or when Antigravity is already cancelling
         // for an earlier steer, wait instead of writing another cancel.
-        let already_cancelling =
-            turn.agent == provider::AgentKind::Antigravity && !turn.steers.locked().is_empty();
-        if turn.compacting.load(Ordering::SeqCst)
-            || already_cancelling
-            || line
-                .as_deref()
-                .is_some_and(|line| write_to(&mut stdin, line))
-        {
+        let already_cancelling = turn.agent == provider::AgentKind::Antigravity
+            && turn.cancelling.load(Ordering::SeqCst);
+        let waits = turn.compacting.load(Ordering::SeqCst) || already_cancelling;
+        if waits {
             turn.steers.locked().push_back(follow_up);
+            true
+        } else if let Some(line) = line.filter(|line| write_to(&mut stdin, line)) {
+            let id = follow_up.message_id.clone();
+            turn.steers.locked().push_back(follow_up);
+            watch_steer(turn, &id, line);
             true
         } else {
             queue.insert(index, follow_up);

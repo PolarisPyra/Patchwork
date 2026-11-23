@@ -227,6 +227,34 @@ impl Runner {
         }
     }
 
+    /// Hands the chat's new model and effort to its Antigravity agent, which takes them at its
+    /// next reply. False when the chat's agent needs a new process for them.
+    pub(crate) fn set_choice(
+        &self,
+        chat_id: &str,
+        agent: provider::AgentKind,
+        model: Option<&str>,
+        effort: Option<&str>,
+    ) -> bool {
+        let turns = self.turns.locked();
+        let Some(turn) = turns.get(chat_id) else {
+            return false;
+        };
+        if turn.agent != provider::AgentKind::Antigravity || agent != turn.agent {
+            return false;
+        }
+        let mut settings = turn.settings.locked();
+        // agy cannot go back to its own default, so that takes a new process.
+        if (model.is_none() && settings.model.is_some())
+            || (effort.is_none() && settings.effort.is_some())
+        {
+            return false;
+        }
+        settings.model = model.map(String::from);
+        settings.effort = effort.map(String::from);
+        true
+    }
+
     /// Whether the running turn in `chat_id` is currently compacting mid-turn.
     pub(crate) fn is_compacting(&self, chat_id: &str) -> bool {
         let turns = self.turns.locked();
@@ -286,7 +314,13 @@ impl Runner {
                 turn.queue.locked().push(follow_up);
                 return Delivery::Queued;
             }
-            let line = provider::resume_input(turn.agent, prompt, session_id, turn_id.as_deref());
+            let line = provider::resume_input(turn.agent, prompt, session_id, turn_id.as_deref())
+                .map(|line| {
+                    let mode = *turn.mode.locked();
+                    turn.settings
+                        .locked()
+                        .first_line(turn.agent, mode, session_id, line)
+                });
             // The agent's last reply is over; this message starts the next one, and if the agent
             // can no longer take it, or was started with settings changed since, a new turn
             // replaces the idle process.
@@ -308,8 +342,10 @@ impl Runner {
             return Delivery::Steered;
         }
         // Antigravity steers by cancelling the in-flight prompt and sending all accumulated steers
-        // once it settles; a second `session/cancel` would race with the steered prompt.
-        if turn.agent == provider::AgentKind::Antigravity && !turn.steers.locked().is_empty() {
+        // once it settles; a second `session/cancel` would race with the steered prompt. A
+        // message that only resumed the idle agent waits there too, but cancels nothing.
+        if turn.agent == provider::AgentKind::Antigravity && turn.cancelling.load(Ordering::SeqCst)
+        {
             turn.steers.locked().push_back(follow_up);
             return Delivery::Steered;
         }
@@ -317,7 +353,9 @@ impl Runner {
         if let Some(line) = line
             && write_to(&mut stdin, &line)
         {
+            let id = follow_up.message_id.clone();
             turn.steers.locked().push_back(follow_up);
+            watch_steer(turn, &id, line);
             return Delivery::Steered;
         }
         turn.queue.locked().push(follow_up);
@@ -426,6 +464,62 @@ impl Runner {
             .filter(|(_, exited)| !exited.load(Ordering::SeqCst))
             .for_each(|(pid, _)| running::signal_process_group(*pid, running::SIGKILL));
     }
+}
+
+/// How long Antigravity gets to stop its reply for a steer before the stop is written again:
+/// agy drops a `session/cancel` that arrives before it has taken the prompt in.
+const STEER_RETRY: Duration = Duration::from_secs(3);
+
+/// How long Antigravity gets to stop its reply for a steer before its process is stopped. The
+/// turn's end then sends the steer in a new turn, so it is never left waiting.
+const STEER_GRACE: Duration = Duration::from_secs(30);
+
+/// How often a steer's watch checks whether Antigravity answered the stop.
+const STEER_POLL: Duration = Duration::from_millis(100);
+
+/// Watches the stop `cancel` that Antigravity was sent for the steer `message_id` until the
+/// reply ends and the steer goes out, writing it again once and stopping the process past
+/// `STEER_GRACE`. Other agents take steers without stopping, so they are not watched.
+pub(in crate::orchestration) fn watch_steer(turn: &RunningTurn, message_id: &str, cancel: String) {
+    if turn.agent != provider::AgentKind::Antigravity {
+        return;
+    }
+    turn.cancelling.store(true, Ordering::SeqCst);
+    let (steers, stdin, exited) = (
+        Arc::clone(&turn.steers),
+        Arc::clone(&turn.stdin),
+        Arc::clone(&turn.exited),
+    );
+    let (pid, scope, message_id) = (turn.pid, turn.scope.clone(), message_id.to_string());
+    std::thread::spawn(move || {
+        let waiting = || {
+            !exited.load(Ordering::SeqCst)
+                && steers.locked().iter().any(|f| f.message_id == message_id)
+        };
+        let started = Instant::now();
+        let mut retried = false;
+        while waiting() {
+            let waited = started.elapsed();
+            if waited >= STEER_GRACE {
+                log::warn!("Antigravity did not stop its reply for a steer; stopping its process");
+                terminate(pid, exited);
+                if let Some(unit) = scope {
+                    scope::stop(&unit);
+                }
+                return;
+            }
+            if !retried && waited >= STEER_RETRY {
+                retried = true;
+                // Under the stdin lock, where the steer is sent once the reply ends, so the
+                // repeated stop cannot land on the steer's own prompt.
+                let mut stdin = stdin.locked();
+                if waiting() {
+                    write_to(&mut stdin, &cancel);
+                }
+            }
+            std::thread::sleep(STEER_POLL);
+        }
+    });
 }
 
 /// Marks the turn stopped. The messages waiting for it stay queued, and the turn's end takes

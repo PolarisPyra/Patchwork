@@ -317,6 +317,7 @@ fn add(a: TokenUsage, b: TokenUsage) -> TokenUsage {
         cache_write: a.cache_write.saturating_add(b.cache_write),
         output: a.output.saturating_add(b.output),
         context: a.context.max(b.context),
+        context_window: a.context_window.max(b.context_window),
         first_token_ms: None,
         output_per_second: None,
         cost_micros: sum(a.cost_micros, b.cost_micros),

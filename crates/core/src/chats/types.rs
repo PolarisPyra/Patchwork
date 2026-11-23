@@ -277,6 +277,15 @@ impl Chat {
             .filter(|m| matches!(m.status, MessageStatus::Interrupted | MessageStatus::Error))
     }
 
+    /// How large the context may grow, as the agent last reported it.
+    #[must_use]
+    pub fn context_window(&self) -> Option<u64> {
+        self.messages
+            .iter()
+            .rev()
+            .find_map(|m| m.usage.as_ref()?.context_window)
+    }
+
     /// Current context size in tokens, reset after a completed `/compact`.
     #[must_use]
     pub fn current_context(&self) -> Option<u64> {
@@ -286,7 +295,7 @@ impl Chat {
             if m.queued {
                 continue;
             }
-            if m.role == Role::User && m.text.trim() == "/compact" {
+            if m.role == Role::User && crate::provider::is_compact_command(&m.text) {
                 after_compact = true;
                 continue;
             }

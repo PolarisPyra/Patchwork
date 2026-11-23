@@ -113,6 +113,7 @@ pub(super) fn go_idle(
     // A steer that stopped Antigravity as its reply ended stopped nothing, so it goes first.
     if turn.agent == AgentKind::Antigravity {
         queued.splice(0..0, turn.steers.locked().drain(..));
+        turn.cancelling.store(false, Ordering::SeqCst);
     }
     let mut handed_over = turn.core.runner.handed_over.locked();
     for message in &queued {

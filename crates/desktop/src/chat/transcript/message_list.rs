@@ -340,7 +340,7 @@ pub fn transcript(
         .iter()
         .map(|m| {
             let was = latest;
-            if m.role == MessageRole::User && m.text.trim() == "/compact" {
+            if m.role == MessageRole::User && upkeep(&m.text) == Some(Upkeep::Compact) {
                 after_compact = true;
             } else if after_compact {
                 after_compact = false;

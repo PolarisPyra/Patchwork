@@ -92,10 +92,19 @@ pub enum Parsed {
     Error(String),
     /// The agent has no conversation under the session id the turn resumed.
     SessionLost,
+    /// The agent replays the session it loads until it answers, or has answered (`false`).
+    Replaying(bool),
     /// Write this line to the agent's stdin.
     Send(String),
     /// Write this line to the agent's stdin once it has listed its slash commands.
     SendAfterCommands(String),
+    /// Write these, each a `Send` or `SendAfterCommands`, one at a time: the first now, and
+    /// each next one on `SendNext`.
+    SendInOrder(Vec<Parsed>),
+    /// The agent answered a line sent in order, so the next one goes.
+    SendNext,
+    /// The agent's settings as it now reports them (Antigravity's `configOptions`).
+    AgentConfig(Value),
     /// The API agent calls a tool of an MCP server, which Patchwork keeps running; the result
     /// goes back to its stdin as `api::mcp_reply`.
     McpCall {

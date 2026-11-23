@@ -3,9 +3,11 @@
 // Rust guideline compliant 2026-11-22
 
 mod client;
+mod errors;
 mod input;
 mod login;
 mod parse;
+mod questions;
 mod swarm;
 
 #[doc(inline)]
@@ -15,7 +17,9 @@ pub use client::{
 };
 pub(crate) use client::tier;
 #[doc(inline)]
-pub use input::{approval_reply, interrupt, prompt_input, turn_args, turn_env, turn_input};
+pub use input::{
+    Wanted, approval_reply, configure, interrupt, prompt_input, turn_args, turn_env, turn_input,
+};
 #[doc(inline)]
 pub use login::{LoginSession, sign_out, start_login};
 #[doc(inline)]

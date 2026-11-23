@@ -4,11 +4,11 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::system::Locked;
-use super::running::{NativeTurn, Pending};
+use super::running::{NativeTurn, Pending, Settings};
 use crate::orchestration::output::ingest::Wake;
 use crate::orchestration::turn::end::background_id;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::orchestration::changes::attribution::{Reach, SharedAttribution};
@@ -61,6 +61,9 @@ pub(in crate::orchestration) struct Turn {
     /// Patchwork stopped the Antigravity reply to compact it. A steer meanwhile waits for the
     /// compaction to end instead of stopping it.
     pub(in crate::orchestration) compacting: Arc<AtomicBool>,
+    /// Antigravity was sent a cancel for a steer and has yet to take the steers. A steer
+    /// meanwhile joins them instead of sending another cancel.
+    pub(in crate::orchestration) cancelling: Arc<AtomicBool>,
     /// Starts the reply to a message the idle agent was sent, before the agent says anything.
     pub(in crate::orchestration) wake: Wake,
     /// When the agent last said anything (ms since epoch), which `watch` reads to tell the user
@@ -75,9 +78,12 @@ pub(in crate::orchestration) struct Turn {
     pub(in crate::orchestration) resumes: bool,
     /// The turn's message carried the conversation so far, for an agent with no session of it.
     pub(in crate::orchestration) sent_context: bool,
-    pub(in crate::orchestration) mode: AccessMode,
+    /// The chat's access mode, changed live when the user switches it mid-turn.
+    pub(in crate::orchestration) mode: Arc<Mutex<AccessMode>>,
     pub(in crate::orchestration) effort: Option<String>,
     pub(in crate::orchestration) compact_window: Arc<AtomicU64>,
+    /// The model and effort for the next reply, which `model` and `effort` were at launch.
+    pub(in crate::orchestration) settings: Settings,
     /// What `spec` passes as `TurnSpec::unlimited_steps`.
     pub(in crate::orchestration) unlimited_steps: bool,
     /// What `spec` passes as `TurnSpec::token_limit`.
@@ -167,7 +173,7 @@ impl Turn {
             model: self.model.as_deref(),
             vision_model: self.vision_model.as_ref(),
             text: &self.text,
-            mode: self.mode,
+            mode: *self.mode.locked(),
             effort: self.effort.as_deref(),
             compact_window: self.compact_window.load(Ordering::SeqCst),
             unlimited_steps: self.unlimited_steps,
