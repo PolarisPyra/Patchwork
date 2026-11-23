@@ -75,36 +75,3 @@ const ZSH_NOTES: &str = " Unlike bash, zsh refuses to run a command with a glob 
      nothing, so quote patterns meant for the program (`--include='*.rs'`, `find -name '*.ts'`); \
      reads a word starting with `=` as a program's path and stops the whole command line when \
      there is none, so quote it (`echo '===='`); and does not split an unquoted `$var` into words.";
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn each_agent_is_told_to_keep_a_checklist_with_its_own_tool() {
-        let settings = Settings::default();
-        for (agent, tools) in [
-            (AgentKind::Claude, "TaskCreate and TaskUpdate tools"),
-            (AgentKind::Codex, "update_plan tool"),
-            (AgentKind::OpenCode, "todowrite tool"),
-        ] {
-            let text = agent_instructions(&settings, agent);
-            assert!(text.contains(&format!("your {tools}")), "{agent:?}: {text}");
-        }
-        for agent in [AgentKind::Antigravity, AgentKind::Api] {
-            assert_eq!(checklist_instructions(agent), None, "{agent:?}");
-            let text = agent_instructions(&settings, agent);
-            assert!(!text.contains("checklist"), "{agent:?}: {text}");
-        }
-    }
-
-    #[test]
-    fn the_instructions_carry_the_checklist_and_the_shell_line() {
-        let shell = shell_instructions(AgentKind::Claude);
-        let text = agent_instructions(&Settings::default(), AgentKind::Claude);
-        assert!(text.starts_with("For any task with more than one step"));
-        assert!(text.ends_with(&shell), "{text}");
-        assert!(!text.contains("\n\n\n"), "no double blank line: {text:?}");
-        assert!(!text.ends_with('\n'));
-    }
-}

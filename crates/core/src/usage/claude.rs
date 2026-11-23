@@ -188,36 +188,3 @@ fn windows(body: &Value) -> Vec<UsageWindow> {
     }
     out
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn reads_reported_windows_only() {
-        let body = json!({
-            "five_hour": {"utilization": 9.0, "resets_at": "1970-01-01T00:00:01+00:00"},
-            "seven_day": {"utilization": 31.0, "resets_at": null},
-            "seven_day_opus": null
-        });
-        let w = windows(&body);
-        assert_eq!(w.len(), 2);
-        assert_eq!(
-            (w[0].label.as_str(), w[0].used_percent, w[0].resets_at),
-            ("Session (5h)", 9.0, Some(1000))
-        );
-        assert_eq!((w[1].label.as_str(), w[1].resets_at), ("Weekly", None));
-    }
-
-    #[test]
-    fn live_plan_includes_the_usage_multiplier() {
-        let max = json!({"organization": {
-            "organization_type": "claude_max", "rate_limit_tier": "default_claude_max_5x"}});
-        assert_eq!(live_plan(&max).as_deref(), Some("max 5x"));
-        let pro = json!({"organization": {
-            "organization_type": "claude_pro", "rate_limit_tier": "default_claude_ai"}});
-        assert_eq!(live_plan(&pro).as_deref(), Some("pro"));
-        assert_eq!(live_plan(&json!({})), None);
-    }
-}

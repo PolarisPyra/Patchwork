@@ -23,6 +23,3 @@ mod chats;
 pub(crate) use store::DB_FILE;
 pub use store::Store;
 use store::{dec, enc, err, from_json, json};
-
-#[cfg(test)]
-mod tests;

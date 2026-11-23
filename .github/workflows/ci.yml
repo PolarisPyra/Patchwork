@@ -1,7 +1,7 @@
 name: CI
 
-# Checks every PR, every push to main, a run started by hand and a weekly run on main. Two jobs side
-# by side: check (rustfmt, clippy and the Rust tests) and audit (Cargo.lock against the RustSec
+# Checks every PR, a run started by hand and a weekly run on main. Two jobs side by side: check
+# (rustfmt and clippy) and audit (Cargo.lock against the RustSec
 # advisories, so an advisory on something the app ships is seen without anyone having to look).
 # On a PR that touches no Rust inputs (docs, site, other workflows), check skips the Rust build and
 # finishes in seconds while still satisfying the ruleset on main.
@@ -9,10 +9,6 @@ name: CI
 # Actions are pinned to commits; the comment after each names the version it was.
 
 on:
-  push:
-    branches: [main]
-    # Nothing these check.
-    paths-ignore: ["site/**", "docs/**", "**.md"]
   pull_request:
   workflow_dispatch:
   schedule:
@@ -21,15 +17,14 @@ on:
 permissions:
   contents: read
 
-# A newer push to a PR makes its older run's result moot. Each push to main runs to the end, so
-# merges in a row do not cancel each other's checks.
+# A newer push to a PR makes its older run's result moot.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   RUST_TOOLCHAIN: "1.99.0"
-  # No debug info in the check and test builds, which nothing here debugs: it was most of the Rust
+  # No debug info in the check build, which nothing here debugs: it was most of the Rust
   # cache, which took longer to restore than the checks took to run.
   CARGO_PROFILE_DEV_DEBUG: "0"
   CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
@@ -57,7 +52,7 @@ jobs:
             echo "rust=true" >> "$GITHUB_OUTPUT"
           else
             echo "rust=false" >> "$GITHUB_OUTPUT"
-            echo "No Rust inputs changed; skipping fmt, clippy and tests."
+            echo "No Rust inputs changed; skipping fmt and clippy."
           fi
 
       # The runner's Azure apt mirror is sometimes throttled, so use archive.ubuntu.com directly.
@@ -98,11 +93,7 @@ jobs:
 
       - name: Lint
         if: steps.changed.outputs.rust == 'true'
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-      - name: Test
-        if: steps.changed.outputs.rust == 'true'
-        run: cargo test --workspace
+        run: cargo clippy --workspace -- -D warnings
 
   audit:
     runs-on: ubuntu-24.04

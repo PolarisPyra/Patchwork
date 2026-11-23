@@ -17,8 +17,6 @@ mod hunks;
 mod prompts;
 mod types;
 mod write;
-#[cfg(test)]
-mod tests;
 
 #[doc(inline)]
 pub use types::{

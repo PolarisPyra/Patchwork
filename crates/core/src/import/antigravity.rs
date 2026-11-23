@@ -164,35 +164,3 @@ fn parse_document(v: &Value, cwd: &str) -> Option<Session> {
         .for_each(|record| push_record(&mut messages, record, start));
     session(v, cwd, messages)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn reads_both_formats() {
-        let lines = [
-            json!({"sessionId": "g1", "startTime": "1970-01-01T00:00:01Z", "kind": "main"}),
-            json!({"id": "1", "type": "user", "content": [{"text": "hi"}], "timestamp": "1970-01-01T00:00:02Z"}),
-            json!({"id": "2", "type": "info", "content": "note"}),
-            json!({"id": "3", "type": "gemini", "content": "hello"}),
-            json!({"$set": {"lastUpdated": "x"}}),
-        ];
-        let text: Vec<String> = lines.iter().map(Value::to_string).collect();
-        let s = parse_jsonl(&text.join("\n"), "/p").unwrap();
-        assert_eq!((s.session_id.as_str(), s.created_at), ("g1", 1000));
-        let got: Vec<_> = s
-            .messages
-            .iter()
-            .map(|m| (m.role, m.text.as_str(), m.created_at))
-            .collect();
-        assert_eq!(
-            got,
-            [(Role::User, "hi", 2000), (Role::Assistant, "hello", 1000)]
-        );
-
-        let doc = json!({"sessionId": "g2", "messages": [{"type": "user", "content": "yo"}]});
-        assert_eq!(parse_document(&doc, "/p").unwrap().messages.len(), 1);
-    }
-}

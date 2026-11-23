@@ -11,9 +11,8 @@ name: Release
 # is published until every platform is built, so a release is never missing a download. A Mac
 # runner that never starts is re-run by retry.yml. docs/release.md explains it.
 #
-# Scheduled runs and manual `mode=check` runs are a "Release build check": they build all three,
-# publish nothing, and save the Rust caches the tag builds restore, since a tag's own run can't
-# save one that the next tag could read.
+# A manual `mode=check` run is a "Release build check": it builds all three and publishes nothing,
+# to catch a broken release build or refresh the Rust caches after a dependency change.
 #
 # Actions are pinned to commits; the comment after each names the version it was.
 
@@ -42,8 +41,6 @@ on:
         description: "Version override (YY.M.N). Blank picks the next version this month."
         required: false
         type: string
-  schedule:
-    - cron: "23 7 * * *"
 
 permissions:
   contents: read
@@ -316,8 +313,8 @@ jobs:
           # The helpers for Linux and Windows SSH hosts.
           targets: x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,x86_64-pc-windows-gnu
 
-      # Saved only from a run on main. A cache saved from a tag can be read by that tag alone, and
-      # each release's three filled the repository's 10 GB and pushed out the ones main had saved.
+      # Saved only by runs on main. A cache saved from a tag can be read by that tag alone, and each
+      # release's three filled the repository's 10 GB and pushed out the ones main had saved.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -356,8 +353,8 @@ jobs:
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
 
-      # Saved only from a run on main. A cache saved from a tag can be read by that tag alone, and
-      # each release's three filled the repository's 10 GB and pushed out the ones main had saved.
+      # Saved only by runs on main. A cache saved from a tag can be read by that tag alone, and each
+      # release's three filled the repository's 10 GB and pushed out the ones main had saved.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -400,8 +397,8 @@ jobs:
           # The helpers for macOS SSH hosts on both architectures.
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-      # Saved only from a run on main. A cache saved from a tag can be read by that tag alone, and
-      # each release's three filled the repository's 10 GB and pushed out the ones main had saved.
+      # Saved only by runs on main. A cache saved from a tag can be read by that tag alone, and each
+      # release's three filled the repository's 10 GB and pushed out the ones main had saved.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}

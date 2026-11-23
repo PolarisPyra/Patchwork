@@ -29,10 +29,10 @@ flowchart LR
 
 | Workflow | Starts on | Jobs |
 | --- | --- | --- |
-| CI (`ci.yml`) | Every PR, each push to `main` that changes more than `site/`, `docs/` or `*.md`, Mondays, by hand | `check`: rustfmt, clippy with `-D warnings`, `cargo test --workspace`. `audit`: `cargo audit` against the RustSec advisories |
+| CI (`ci.yml`) | Every PR, Mondays on `main`, by hand | `check`: rustfmt and clippy with `-D warnings`. `audit`: `cargo audit` against the RustSec advisories |
 | Site (`site.yml`) | A PR or a push to `main` that changes `site/`, `.github/deploy/` or the workflow | Checks the pages; on `main`, deploys `site/` to Cloudflare Pages and checks the deployed page |
 | Release (`release.yml`), run "Release YY.M.N" | `gh workflow run release.yml` on `main`, or a pushed tag `YY.M.N` | `notes`, then `linux`, `windows`, `macos` side by side, then `publish` ([Releasing](release.md)) |
-| Release (`release.yml`), run "Release build check" | Daily on `main`, or `gh workflow run release.yml -f mode=check` | The three builds alone, to save their Rust caches and catch a broken release build before a release; publishes nothing |
+| Release (`release.yml`), run "Release build check" | `gh workflow run release.yml -f mode=check` | The three builds alone, to refresh their Rust caches and catch a broken release build before a release; publishes nothing |
 | Retry (`retry.yml`) | A Release run that failed | Re-runs the run's failed jobs when none of them started, at most twice |
 
 ## A pull request
@@ -97,8 +97,8 @@ safe too, but rebuilds every app.
 - Each Release build job (`linux`, `windows`, `macos`) has its own Rust cache of 1.5 to 1.8 GB,
   also saved only by runs on `main`. A tag's run reads the newest one `main` saved. GitHub keeps
   10 GB per repository and lets a tag's run read only caches saved from `main` or from that tag.
-- The daily build check refreshes the Release caches. To refresh them sooner after a
-  dependency changes, run a build check on `main` (`gh workflow run release.yml -f mode=check`).
+- Each release started on `main` refreshes the Release caches. To refresh them before a release
+  after a dependency changes, run a build check on `main` (`gh workflow run release.yml -f mode=check`).
 
 `gh cache list` shows what is stored. A Release build that takes twice as long as usual has
 usually found no cache: look for "No cache found" in its `Swatinem/rust-cache` step, then refresh

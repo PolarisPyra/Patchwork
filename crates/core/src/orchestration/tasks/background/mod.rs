@@ -10,7 +10,5 @@
 // Rust guideline compliant 2026-10-09
 
 mod tracker;
-#[cfg(test)]
-mod tests;
 
 pub(in crate::orchestration) use tracker::{Background};

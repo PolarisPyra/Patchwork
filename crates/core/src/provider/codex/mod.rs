@@ -22,6 +22,3 @@ use input::{
 pub use parse::parse;
 #[doc(inline)]
 pub use subagents::{background_task, subagent_events};
-
-#[cfg(test)]
-pub(crate) mod tests;

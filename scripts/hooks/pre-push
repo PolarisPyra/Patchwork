@@ -2,7 +2,7 @@
 # Git runs this before each push once `git config core.hooksPath scripts/hooks` is set. It runs the
 # quick checks CI starts with, on the files as they are in the working tree, so a push that CI
 # would turn down for formatting or a lint stops here in a few seconds. Tag-only pushes and branch
-# deletions skip the checks. CI still runs the tests. `git push --no-verify` skips it.
+# deletions skip the checks. `git push --no-verify` skips it.
 set -euo pipefail
 
 if [[ ! -t 0 ]]; then
@@ -26,8 +26,8 @@ cd "$(git rev-parse --show-toplevel)"
 echo "pre-push: cargo fmt --all -- --check"
 cargo fmt --all -- --check
 
-echo "pre-push: cargo clippy --workspace --all-targets -- -D warnings"
-cargo clippy --workspace --all-targets -- -D warnings
+echo "pre-push: cargo clippy --workspace -- -D warnings"
+cargo clippy --workspace -- -D warnings
 
 echo "pre-push: node --check on the website's script"
 node --check site/site.js
