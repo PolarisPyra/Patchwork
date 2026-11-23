@@ -18,7 +18,7 @@ use crate::workspace::{Workspace, is_busy};
 
 use patchwork_ui::text::markdown::find_in;
 use super::reply::{is_open, pieces_of, reply_piece};
-use super::turn_contents::{Step, steps_of};
+use super::turn_contents::{Compaction, Step, steps_of};
 use super::{turn_rail, user_message};
 
 /// What one item of the transcript's list draws. A reply is cut into pieces, so a frame lays out
@@ -243,14 +243,6 @@ impl Workspace {
         }
         first
     }
-}
-
-/// Where a `/compact` is: running, done, or stopped before it was.
-#[derive(Clone, Copy, PartialEq)]
-enum Compaction {
-    Compacting,
-    Compacted,
-    Stopped,
 }
 
 /// The state of a `/compact`, read from the reply after it.

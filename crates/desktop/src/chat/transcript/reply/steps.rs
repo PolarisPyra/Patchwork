@@ -11,8 +11,8 @@ use crate::workspace::Workspace;
 use patchwork_ui::text::markdown::{self, FindIn, markdown, markdown_part};
 use patchwork_ui::text::selection::{Kind, selectable, text_id};
 use crate::chat::transcript::turn_contents::{
-    CommandResult, Entry, Step, action_of, command_result, details_of, entry_active, entry_label,
-    lines_of, steps_of, work_key,
+    CommandResult, Compaction, Entry, Step, action_of, command_result, details_of, entry_active,
+    entry_label, lines_of, steps_of, work_key,
 };
 use super::{approvals, subagent_cards};
 use crate::chat::above_composer::proposed_plan;
@@ -87,7 +87,7 @@ pub(super) fn reply_step(
         Step::Note(tool) => note_pill(m, i, tool, t),
         Step::Quilt(tool) => quilt_card(w, m, tool, t, cx),
         Step::Approvals(ids) => approvals::approvals(w, m, ids, t, cx),
-        Step::Compaction(running) => div().pb(px(20.)).child(
+        Step::Compaction(state) => div().pb(px(20.)).child(
             div()
                 .flex()
                 .items_center()
@@ -95,8 +95,8 @@ pub(super) fn reply_step(
                 .text_size(px(fs_xs()))
                 .text_color(t.text_subtle)
                 .child(div().h(px(1.)).flex_1().bg(t.border))
-                .child(if *running {
-                    div()
+                .child(match state {
+                    Compaction::Compacting => div()
                         .id("compacting")
                         .role(Role::Status)
                         .flex()
@@ -104,9 +104,9 @@ pub(super) fn reply_step(
                         .gap(px(6.))
                         .child(spinner(11., t.text_subtle))
                         .child("Compacting context")
-                        .into_any_element()
-                } else {
-                    div().child("Context compacted").into_any_element()
+                        .into_any_element(),
+                    Compaction::Compacted => div().child("Context compacted").into_any_element(),
+                    Compaction::Stopped => div().child("Compaction stopped").into_any_element(),
                 })
                 .child(div().h(px(1.)).flex_1().bg(t.border)),
         ),
