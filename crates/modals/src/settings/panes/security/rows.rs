@@ -1,4 +1,4 @@
-//! The Security pane's rows under the password fields: what protects the vault, when it locks,
+//! The Vault pane's rows under the password fields: what protects the vault, when it locks,
 //! its recovery key, the saved secrets, and what the chat apps had Patchwork do.
 
 // Rust guideline compliant 2026-10-09

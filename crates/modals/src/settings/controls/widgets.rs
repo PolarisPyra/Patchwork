@@ -527,17 +527,17 @@ pub fn vault_notice(id: impl Into<SharedString>, t: &Theme) -> Option<Stateful<D
         )),
         Status::Open(Method::File) => Some(alert(
             id,
-            "No system keychain: set a password in Settings, under Security, to lock saved secrets",
+            "No system keychain: set a password in Settings, under Vault, to lock saved secrets",
             t.warning,
         )),
         Status::Unset => Some(alert(
             id,
-            "No system keychain: set a password in Settings, under Security, to save secrets",
+            "No system keychain: set a password in Settings, under Vault, to save secrets",
             t.danger,
         )),
         Status::Waiting => Some(alert(
             id,
-            "Saved secrets are locked until the password is entered in Settings, under Security",
+            "Saved secrets are locked until the password is entered in Settings, under Vault",
             t.danger,
         )),
         Status::Open(Method::Keychain | Method::Password) | Status::Closed => None,

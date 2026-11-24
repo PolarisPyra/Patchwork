@@ -203,11 +203,11 @@ pub(crate) fn put(name: &str, value: &str) -> Result<(), Error> {
             return Err(format!("Patchwork cannot save secrets: {why}").into());
         }
         State::Waiting(_) => {
-            return Err("Enter the vault's password in Settings, under Security, first".into());
+            return Err("Enter the vault's password in Settings, under Vault, first".into());
         }
         State::Unset(_) => {
             return Err(
-                "Set a password in Settings, under Security, first: this system has \
+                "Set a password in Settings, under Vault, first: this system has \
                         no keychain to lock saved secrets"
                     .into(),
             );
