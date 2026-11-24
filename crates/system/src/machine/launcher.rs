@@ -27,6 +27,9 @@ mod linux {
     /// The window's app id, and the one it had before, which launcher entries made then name.
     const APP_IDS: [&str; 2] = ["dev.patchwork.ade", "patchwork"];
 
+    /// The line that marks the hidden entry [`write_window_entry`] writes as Patchwork's own.
+    const MARK: &str = "X-Patchwork-Window-Entry=true";
+
     pub(crate) fn set(svg: &[u8]) {
         let Some(data_home) = std::env::var_os("XDG_DATA_HOME")
             .map(PathBuf::from)
@@ -42,6 +45,7 @@ mod linux {
             }
         };
         let hicolor = data_home.join("icons/hicolor");
+        write_window_entry(&data_home.join("applications"));
         let mut names = Vec::new();
         let mut themed_changed = false;
         for entry in entries(&data_home.join("applications")) {
@@ -74,6 +78,35 @@ mod linux {
         }
         if themed_changed {
             refresh_theme(&hicolor);
+        }
+    }
+
+    /// Writes a hidden launcher entry named after the window's app id, for an AppImage.
+    ///
+    /// A Wayland desktop such as KDE finds a window's icon by the entry named `<app id>.desktop`,
+    /// and does not fall back to an entry's `StartupWMClass`. Tools that add an AppImage to the
+    /// menu often name its entry after the file (`patchwork.desktop`), so the title bar and
+    /// taskbar would show a generic icon. This entry is hidden from the menu and names an icon
+    /// in the theme, which [`set`] then draws.
+    fn write_window_entry(applications: &Path) {
+        let Ok(appimage) = std::env::var("APPIMAGE") else {
+            return;
+        };
+        let id = APP_IDS[0];
+        let text = format!(
+            "[Desktop Entry]\nType=Application\nName=Patchwork\nIcon={id}\nExec=\"{appimage}\"\n\
+             Terminal=false\nNoDisplay=true\nStartupWMClass={id}\n{MARK}\n"
+        );
+        let file = applications.join(format!("{id}.desktop"));
+        // An entry of that name that Patchwork did not write is the user's menu entry: kept.
+        match std::fs::read_to_string(&file) {
+            Ok(old) if old == text || !old.contains(MARK) => return,
+            _ => {}
+        }
+        let written =
+            std::fs::create_dir_all(applications).and_then(|()| std::fs::write(&file, text));
+        if let Err(e) = written {
+            log::warn!(path:% = file.display(), error:% = e; "could not write {{path}}: {{error}}");
         }
     }
 
