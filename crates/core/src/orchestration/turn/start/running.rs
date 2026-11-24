@@ -109,10 +109,11 @@ impl LiveSettings {
         session_id: Option<&str>,
         prompt: String,
     ) -> String {
-        let Some(session_id) = session_id.filter(|_| agent == AgentKind::Antigravity) else {
+        let Some(session_id) = session_id.filter(|_| agent.speaks_acp()) else {
             return prompt;
         };
         let wanted = antigravity::Wanted {
+            agent,
             model: self.model.as_deref(),
             effort: self.effort.as_deref(),
             mode,

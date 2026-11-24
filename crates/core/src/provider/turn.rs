@@ -14,6 +14,8 @@ use super::Parsed;
 /// What one turn runs with.
 #[derive(Debug)]
 pub struct TurnSpec<'a> {
+    /// The agent the turn runs.
+    pub agent: AgentKind,
     /// The project's folder, on the SSH host when [`Self::host`] is set.
     pub root: &'a str,
     /// The SSH host the project is on, for a remote project.
@@ -157,7 +159,9 @@ pub fn steer_input(
         )),
         // `agy` drops a reply it is given a prompt during and may ignore that prompt, so a
         // steer stops the reply instead, and the reader sends the steer once it has stopped.
-        AgentKind::Antigravity => Some(antigravity::interrupt(session_id?)),
+        AgentKind::Antigravity | AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => {
+            Some(antigravity::interrupt(session_id?))
+        }
         // `opencode run` reads one message per run; later ones start the next turn.
         AgentKind::OpenCode => opencode::uses_serve()
             .then(|| opencode::steer_line(&prompt_text(text, attachments), attachments)),
@@ -173,7 +177,7 @@ pub fn resume_input(
     session_id: Option<&str>,
     turn_id: Option<&str>,
 ) -> Option<String> {
-    if agent == AgentKind::Antigravity {
+    if agent.speaks_acp() {
         let Prompt {
             text,
             attachments,
@@ -181,7 +185,7 @@ pub fn resume_input(
         } = prompt;
         return Some(antigravity::prompt_input(
             session_id?,
-            &prompt_text(text, attachments),
+            &super::acp::own_command(agent, prompt_text(text, attachments)),
             attachments,
             images,
         ));
@@ -203,7 +207,9 @@ pub fn interrupt(
         AgentKind::Api => Some(api::interrupt()),
         // `opencode run` reads nothing once it starts; only the bridge to `opencode serve` can.
         AgentKind::OpenCode => opencode::uses_serve().then(opencode::interrupt_line),
-        AgentKind::Antigravity => Some(antigravity::interrupt(session_id?)),
+        AgentKind::Antigravity | AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => {
+            Some(antigravity::interrupt(session_id?))
+        }
     }
 }
 
@@ -275,7 +281,9 @@ pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
             codex::compact_args(spec),
         ]
         .concat(),
-        AgentKind::Antigravity => antigravity::turn_args(spec),
+        AgentKind::Antigravity | AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => {
+            antigravity::turn_args(spec)
+        }
         AgentKind::OpenCode => opencode::turn_args(spec),
         AgentKind::Api => api::turn_args(),
     }
@@ -307,7 +315,9 @@ pub fn turn_env(agent: AgentKind, spec: &TurnSpec) -> Vec<(&'static str, String)
                 .map(|config| ("OPENCODE_CONFIG_CONTENT", config)),
             )
             .collect(),
-        AgentKind::Antigravity => antigravity::turn_env(spec),
+        AgentKind::Antigravity | AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => {
+            antigravity::turn_env(spec)
+        }
         AgentKind::Claude | AgentKind::Codex | AgentKind::Api => Vec::new(),
     }
 }
@@ -318,7 +328,8 @@ fn own_key_vars(agent: AgentKind) -> &'static [&'static str] {
         AgentKind::Claude => &["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"],
         AgentKind::Codex => &["OPENAI_API_KEY", "CODEX_API_KEY"],
         AgentKind::Antigravity => &["GEMINI_API_KEY", "GOOGLE_API_KEY"],
-        AgentKind::OpenCode | AgentKind::Api => &[],
+        AgentKind::Qwen => &["DASHSCOPE_API_KEY", "OPENAI_API_KEY"],
+        AgentKind::OpenCode | AgentKind::Kimi | AgentKind::Auggie | AgentKind::Api => &[],
     }
 }
 
@@ -356,7 +367,9 @@ pub fn turn_input(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
         AgentKind::OpenCode if opencode::uses_serve() => vec![opencode::bridge_request(spec)],
         // Patchwork's own agent reads its turn from stdin, and answers and steers after it.
         AgentKind::Api => vec![api::bridge_request(spec)],
-        AgentKind::Antigravity => antigravity::turn_input(spec),
+        AgentKind::Antigravity | AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => {
+            antigravity::turn_input(spec)
+        }
         // `opencode run` reads the prompt from stdin, which is closed after it (see `closes_input`).
         AgentKind::OpenCode => opencode::turn_input(spec),
     }
@@ -375,7 +388,9 @@ pub fn parse_line(agent: AgentKind, v: &Value, spec: &TurnSpec, message_id: &str
     let parsed = match agent {
         AgentKind::Claude => claude::parse(v, spec.root, message_id),
         AgentKind::Codex => codex::parse(v, spec, message_id),
-        AgentKind::Antigravity => antigravity::parse(v, spec, message_id),
+        AgentKind::Antigravity | AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => {
+            antigravity::parse(v, spec, message_id)
+        }
         AgentKind::OpenCode => opencode::parse(v, spec, message_id),
         AgentKind::Api => api::parse(v, message_id),
     };
@@ -459,7 +474,9 @@ pub fn approval_reply(
             opencode::approval_reply(reply, allow, answers)
         }
         AgentKind::Api => api::approval_reply(reply, allow, answers),
-        AgentKind::Antigravity => antigravity::approval_reply(reply, allow, answers),
+        AgentKind::Antigravity | AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => {
+            antigravity::approval_reply(reply, allow, answers)
+        }
         // `opencode run` runs headless and never asks.
         AgentKind::OpenCode => String::new(),
     }

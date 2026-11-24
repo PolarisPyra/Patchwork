@@ -2,8 +2,9 @@
 //!
 //! On macOS and Linux each CLI comes from its official shell script, and on Windows from its
 //! official PowerShell script. OpenCode publishes no PowerShell script, so on Windows its release
-//! archive is downloaded and unpacked where its shell script would have put it. Each CLI lands in
-//! the folder its installer picks by default, which Patchwork already searches.
+//! archive is downloaded and unpacked where its shell script would have put it. A CLI with no
+//! script for the system (Auggie, and Kimi Code on Windows) is installed with npm. Each CLI lands
+//! in the folder its installer picks by default, which Patchwork already searches.
 
 // Rust guideline compliant 2026-10-09
 
@@ -34,6 +35,8 @@ enum Installer {
     },
     /// OpenCode's release archive, for Windows, where it has no install script.
     OpenCodeArchive,
+    /// A global npm install of this package.
+    Npm(&'static str),
 }
 
 impl Core {
@@ -63,16 +66,25 @@ impl Core {
                 run_script(&http, &self.installers_dir, kind, url, shell, name, &home)?;
             }
             Installer::OpenCodeArchive => {
-                install_opencode_archive(&http, &self.installers_dir, &bin)?;
+                let bin = bin.as_deref().ok_or("OpenCode's archive needs a folder")?;
+                install_opencode_archive(&http, &self.installers_dir, bin)?;
             }
+            Installer::Npm(package) => install_npm(package)?,
         }
-        if !bin.is_file() {
-            return Err(format!(
-                "The installer finished, but the CLI is not at {}",
-                bin.display()
-            )
-            .into());
-        }
+        // Where an installer puts a CLI it does not say is found the way a turn finds it.
+        let bin = match bin {
+            Some(bin) if bin.is_file() => bin,
+            Some(bin) => {
+                return Err(format!(
+                    "The installer finished, but the CLI is not at {}",
+                    bin.display()
+                )
+                .into());
+            }
+            None => crate::provider::agent_binary(kind).map_err(|e| {
+                format!("The installer finished, but the CLI could not be found: {e}")
+            })?,
+        };
         #[cfg(windows)]
         if let Some(folder) = bin.parent() {
             add_to_user_path(folder)?;
@@ -163,7 +175,7 @@ fn announce_environment() {
 }
 
 /// How `kind` is installed on this system, and where its CLI is once it is.
-fn plan(kind: AgentKind, home: &Path) -> Result<(Installer, PathBuf), Error> {
+fn plan(kind: AgentKind, home: &Path) -> Result<(Installer, Option<PathBuf>), Error> {
     let windows = cfg!(windows);
     let local_app_data = || {
         std::env::var_os("LOCALAPPDATA")
@@ -171,7 +183,27 @@ fn plan(kind: AgentKind, home: &Path) -> Result<(Installer, PathBuf), Error> {
             .ok_or("Could not find the local app data folder")
     };
     let script = |url, shell, name| Installer::Script { url, shell, name };
-    Ok(match kind {
+    if let Some(spec) = crate::provider::acp::spec(kind) {
+        let found = |dir: &str| home.join(dir).join(spec.binary);
+        let installer = if windows {
+            spec.install_script_windows
+                .map_or(Installer::Npm(spec.npm_package), |url| {
+                    script(url, "powershell", spec.binary)
+                })
+        } else {
+            spec.install_script
+                .map_or(Installer::Npm(spec.npm_package), |url| {
+                    script(url, "bash", spec.binary)
+                })
+        };
+        // A script's own folder, when the spec names one; otherwise wherever PATH finds it.
+        let bin = match installer {
+            Installer::Script { .. } if !windows => spec.install_dirs.first().map(|d| found(d)),
+            _ => None,
+        };
+        return Ok((installer, bin));
+    }
+    let (installer, bin) = match kind {
         AgentKind::Claude if windows => (
             script("https://claude.ai/install.ps1", "powershell", "claude"),
             home.join(r".local\bin\claude.exe"),
@@ -216,8 +248,25 @@ fn plan(kind: AgentKind, home: &Path) -> Result<(Installer, PathBuf), Error> {
             script("https://opencode.ai/install", "bash", "opencode"),
             home.join(".opencode/bin/opencode"),
         ),
-        AgentKind::Api => return Err("API providers have no CLI to install".into()),
-    })
+        AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie | AgentKind::Api => {
+            return Err("This agent has no CLI to install".into());
+        }
+    };
+    Ok((installer, Some(bin)))
+}
+
+/// Installs `package` globally with the npm on the user's PATH.
+fn install_npm(package: &str) -> Result<(), Error> {
+    let mut cmd = crate::provider::user_command("npm");
+    cmd.args(["install", "-g", package]);
+    let run = cmd
+        .output()
+        .map_err(|e| format!("Could not run npm, which installs this CLI: {e}"))?;
+    if run.status.success() {
+        return Ok(());
+    }
+    let said = String::from_utf8_lossy(&run.stderr);
+    Err(format!("npm install -g {package} failed: {}", last_lines(&said, 3)).into())
 }
 
 /// Saves the install script at `url` in `dir`, runs it with `shell`, then deletes it.
@@ -265,7 +314,12 @@ fn run_script(
         AgentKind::OpenCode => {
             cmd.arg("--no-modify-path");
         }
-        AgentKind::Claude | AgentKind::Antigravity | AgentKind::Api => {}
+        AgentKind::Claude
+        | AgentKind::Antigravity
+        | AgentKind::Qwen
+        | AgentKind::Kimi
+        | AgentKind::Auggie
+        | AgentKind::Api => {}
     }
     let run = cmd.output();
     let _ = std::fs::remove_file(&script);

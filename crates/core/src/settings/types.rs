@@ -590,6 +590,7 @@ impl TokenSettings {
             AgentKind::Antigravity => self.antigravity_compact_window,
             AgentKind::OpenCode => self.opencode_compact_window,
             AgentKind::Api => self.api_compact_window,
+            AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => 0,
         }
     }
 }

@@ -56,7 +56,11 @@ pub fn import_sources(agents: &[AgentKind]) -> Vec<ImportSource> {
             AgentKind::Claude => Some(ImportSource::Claude),
             AgentKind::Codex => Some(ImportSource::Codex),
             AgentKind::Antigravity => Some(ImportSource::Antigravity),
-            AgentKind::OpenCode | AgentKind::Api => None,
+            AgentKind::OpenCode
+            | AgentKind::Qwen
+            | AgentKind::Kimi
+            | AgentKind::Auggie
+            | AgentKind::Api => None,
         })
         .chain([ImportSource::OpenCode])
         .collect()

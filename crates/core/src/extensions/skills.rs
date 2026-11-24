@@ -164,7 +164,12 @@ pub fn invocation(agent: AgentKind, skill: &Skill, rest: &str) -> String {
         // A `$name` later in the message already mentions the skill.
         AgentKind::Codex if mentioned(rest).any(|name| name == skill.name) => rest.to_string(),
         AgentKind::Codex => format!("${} {rest}", skill.name),
-        AgentKind::OpenCode | AgentKind::Antigravity | AgentKind::Api => {
+        AgentKind::OpenCode
+        | AgentKind::Antigravity
+        | AgentKind::Qwen
+        | AgentKind::Kimi
+        | AgentKind::Auggie
+        | AgentKind::Api => {
             format!(
                 "Use the {} skill: read {} and follow it.\n\n{rest}",
                 skill.name, skill.path

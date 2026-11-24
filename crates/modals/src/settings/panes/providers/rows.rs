@@ -2,21 +2,26 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, Window, div, prelude::*, px};
+use gpui::{
+    AnyElement, ClipboardItem, Div, FontWeight, Role, SharedString, Stateful, Window, div,
+    prelude::*, px,
+};
 use patchwork_core::provider::api::{ApiProvider, ProviderView};
-use patchwork_core::provider::{AgentKind, AgentStatus};
+use patchwork_core::provider::{AgentKind, AgentStatus, UpdateMethod};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::switch;
 use patchwork_ui::theme::{fs, fs_sm, Theme, theme};
 use patchwork_ui::{BtnKind, agent_label, agent_logo, badge, btn, provider_logo, spinner};
 use super::AntigravityAuth;
-use super::catalog::{CLI_KINDS, PromptOf};
+use super::catalog::{CLI_KINDS, PromptOf, UpdateStep};
 use super::cli;
 use super::form;
 
 /// How wide each button in a provider row is at medium text: wide enough for "System Prompt",
 /// so the buttons line up from row to row.
 const ACTION_W: f32 = 128.;
+/// The narrowest a CLI's name and version may get, so "OpenCode CLI" never wraps.
+const TITLE_MIN_W: f32 = 120.;
 
 /// "Ready · 2.1.0", or why it is not: `describeAgent`.
 pub(super) fn describe_agent(status: Option<&Option<AgentStatus>>) -> String {
@@ -93,6 +98,7 @@ impl SettingsDialog {
                 .as_ref()
                 .is_some_and(|p| p.of == PromptOf::Cli(kind));
             let installing = self.providers.installing.contains(&kind);
+            let update = self.providers.updates.get(&kind).filter(|_| installed);
             // Only installed agents can be switched on; any agent can be switched off.
             let locked = !on && !installed;
             let key = format!("{kind:?}").to_lowercase();
@@ -106,28 +112,102 @@ impl SettingsDialog {
                 .child(agent_logo(kind, None, 20.))
                 .child(
                     div()
-                        .min_w_0()
+                        .min_w(px(fs(TITLE_MIN_W)))
                         .flex_1()
-                        .child(div().font_weight(FontWeight::SEMIBOLD).child(label))
                         .child(
                             div()
+                                .truncate()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(label),
+                        )
+                        .child(
+                            div()
+                                .truncate()
                                 .text_size(px(fs_sm()))
                                 .text_color(t.text_muted)
-                                .child(describe_agent(status)),
-                        ),
+                                .child(match update {
+                                    Some(u) => format!(
+                                        "{} · {} available",
+                                        describe_agent(status),
+                                        u.release.latest
+                                    ),
+                                    None => describe_agent(status),
+                                }),
+                        )
+                        .children(update.and_then(|u| {
+                            match &u.step {
+                                UpdateStep::Failed(e) => Some(
+                                    div()
+                                        .id(SharedString::from(format!("update-error-{key}")))
+                                        .role(Role::Alert)
+                                        .text_size(px(fs_sm()))
+                                        .text_color(t.danger)
+                                        .child(e.clone()),
+                                ),
+                                UpdateStep::Offered | UpdateStep::Running => None,
+                            }
+                        })),
                 )
-                .child(status_badge(
-                    if checking {
-                        "Checking…"
-                    } else if installed {
-                        "Installed"
-                    } else {
-                        "Not installed"
-                    },
-                    installed,
-                    false,
-                    &t,
-                ))
+                // The Update button says the CLI is installed, and needs the badge's room.
+                .when(update.is_none(), |r| {
+                    r.child(status_badge(
+                        if checking {
+                            "Checking…"
+                        } else if installed {
+                            "Installed"
+                        } else {
+                            "Not installed"
+                        },
+                        installed,
+                        false,
+                        &t,
+                    ))
+                })
+                .children(update.map(|u| {
+                    let release = &u.release;
+                    let running = matches!(u.step, UpdateStep::Running);
+                    let button = match &release.method {
+                        UpdateMethod::Run => btn(
+                            SharedString::from(format!("update-{key}")),
+                            format!(
+                                "Update {label} from {} to {}",
+                                release.installed, release.latest
+                            ),
+                            BtnKind::Plain,
+                            running,
+                            &t,
+                        )
+                        .when(running, |b| {
+                            b.role(Role::Status)
+                                .child(spinner(12., t.text_muted))
+                                .child("Updating…")
+                        })
+                        .when(!running, |b| {
+                            b.child("Update")
+                                .on_click(cx.listener(move |d, _, _, cx| d.update_cli(kind, cx)))
+                        }),
+                        UpdateMethod::Manual(command) => {
+                            let copied = command.clone();
+                            btn(
+                                SharedString::from(format!("update-{key}")),
+                                format!("Copy the command that updates {label}: {command}"),
+                                BtnKind::Plain,
+                                false,
+                                &t,
+                            )
+                            .tooltip(patchwork_ui::tooltip(command.clone()))
+                            .child("Copy Update")
+                            .on_click(cx.listener(
+                                move |_, _, _, cx| {
+                                    cx.write_to_clipboard(ClipboardItem::new_string(
+                                        copied.clone(),
+                                    ));
+                                },
+                            ))
+                        }
+                    };
+                    button.min_w(px(fs(ACTION_W))).into_any_element()
+                }))
                 .when(!installed && !checking && path.is_none(), |r| {
                     r.child(
                         btn(
@@ -247,8 +327,9 @@ impl SettingsDialog {
                         }
                     },
                 )
-                // An agent that may not be given a system prompt offers none to write.
-                .when(kind.takes_persona(), |row| {
+                // An agent that may not be given a system prompt offers none to write, and one not
+                // installed yet has Download and Locate in the prompt's place, so its row fits.
+                .when(kind.takes_persona() && (installed || prompting), |row| {
                     row.child(
                         btn(
                             SharedString::from(format!("prompt-{key}")),

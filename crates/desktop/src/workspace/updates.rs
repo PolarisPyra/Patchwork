@@ -1,16 +1,25 @@
-//! The update card in the window's top right, and the restart into an installed update.
+//! The update card in the window's top right, the restart into an installed update, and the
+//! desktop notice of a newer agent CLI.
 
 // Rust guideline compliant 2026-10-09
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use gpui::{App, FontWeight, PromptLevel, Role, Window, deferred, div, prelude::*, px};
 use patchwork_core::Core;
 use patchwork_core::updates::{RELEASES_URL, RestartResult, UpdateState, restart_path};
 
 use patchwork_ui::theme::{radius, radius_sm, Theme};
-use patchwork_ui::{BtnKind, btn, button, icon, popup_shadow};
+use patchwork_ui::{BtnKind, agent_label, btn, button, icon, popup_shadow};
 use super::window::Workspace;
+
+/// The tag before a CLI update notice's agent, which a click on it recognizes.
+pub(crate) const CLI_UPDATE_TAG: &str = "cli-update";
+/// How long after launch agent CLIs are first checked, so the check never slows startup.
+const CLI_FIRST_CHECK: Duration = Duration::from_secs(60);
+/// How often agent CLIs are checked for newer releases.
+const CLI_CHECK_EVERY: Duration = Duration::from_secs(60 * 60);
 
 /// Restarts into the installed update. Replies that are running resume after it; when Settings
 /// says a launch never resumes them, the user confirms the restart first.
@@ -53,6 +62,43 @@ pub(crate) fn restart(cx: &mut App) {
 }
 
 impl Workspace {
+    /// Checks the connected agent CLIs a minute after launch and then hourly, and shows a desktop
+    /// notice for each newer release not announced before. Stops with the window.
+    pub(crate) fn watch_cli_updates(&mut self, cx: &mut Context<Self>) {
+        let core = Arc::clone(&self.core);
+        cx.spawn(async move |this, cx| {
+            let mut wait = CLI_FIRST_CHECK;
+            loop {
+                cx.background_executor().timer(wait).await;
+                wait = CLI_CHECK_EVERY;
+                let checking = Arc::clone(&core);
+                let found = cx
+                    .background_executor()
+                    .spawn(async move { checking.unannounced_cli_updates() })
+                    .await;
+                let shown = this.update(cx, |_, cx| {
+                    for (kind, update) in found {
+                        let label = agent_label(kind);
+                        cx.show_system_notification(gpui::SystemNotification {
+                            tag: format!("{CLI_UPDATE_TAG}|{kind:?}").into(),
+                            title: format!("{label} {} is available", update.latest).into(),
+                            body: format!(
+                                "You have {}. Update it in Settings → Providers.",
+                                update.installed
+                            )
+                            .into(),
+                            actions: Vec::new(),
+                        });
+                    }
+                });
+                if shown.is_err() {
+                    return;
+                }
+            }
+        })
+        .detach();
+    }
+
     /// Redraws what shows where updating stands: the card here, and Settings while it is open.
     pub fn on_update_change(&mut self, cx: &mut Context<Self>) {
         if let Some(dialog) = &self.settings_dialog {

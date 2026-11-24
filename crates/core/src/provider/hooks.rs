@@ -70,7 +70,13 @@ pub fn patchwork_command(agent: AgentKind, args: &[&str]) -> Option<String> {
             format!("{} {args}", path.replace('\\', "/"))
         }
         AgentKind::Antigravity => format!("exec {}", posix()),
-        AgentKind::Claude | AgentKind::Codex | AgentKind::OpenCode | AgentKind::Api => posix(),
+        AgentKind::Claude
+        | AgentKind::Codex
+        | AgentKind::OpenCode
+        | AgentKind::Qwen
+        | AgentKind::Kimi
+        | AgentKind::Auggie
+        | AgentKind::Api => posix(),
     })
 }
 

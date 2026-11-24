@@ -177,8 +177,7 @@ impl Runner {
         let line = provider::steer_input(turn.agent, prompt, session_id, turn_id.as_deref());
         // As in `steer`: during Patchwork's compaction, or when Antigravity is already cancelling
         // for an earlier steer, wait instead of writing another cancel.
-        let already_cancelling = turn.agent == provider::AgentKind::Antigravity
-            && turn.cancelling.load(Ordering::SeqCst);
+        let already_cancelling = turn.agent.speaks_acp() && turn.cancelling.load(Ordering::SeqCst);
         let waits = turn.compacting.load(Ordering::SeqCst) || already_cancelling;
         if waits {
             turn.steers.locked().push_back(follow_up);

@@ -114,6 +114,9 @@ fn agent_file(agent: AgentKind) -> &'static str {
         AgentKind::Codex => "agent-codex.log",
         AgentKind::Antigravity => "agent-antigravity.log",
         AgentKind::OpenCode => "agent-opencode.log",
+        AgentKind::Qwen => "agent-qwen.log",
+        AgentKind::Kimi => "agent-kimi.log",
+        AgentKind::Auggie => "agent-auggie.log",
         AgentKind::Api => "agent-api.log",
     }
 }

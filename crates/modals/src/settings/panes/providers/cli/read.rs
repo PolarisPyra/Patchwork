@@ -98,7 +98,7 @@ pub(super) fn cli(kind: AgentKind) -> Option<Cli> {
             filter: None,
             empty: "Nothing matches.",
         },
-        AgentKind::Api => return None,
+        AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie | AgentKind::Api => return None,
     })
 }
 
@@ -199,6 +199,9 @@ pub(super) fn read(kind: AgentKind) -> Result<Info, patchwork_core::Error> {
             features: Vec::new(),
             models: cli_models(i.models),
         }),
+        AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => {
+            Err("Patchwork reads no details for this agent".into())
+        }
         AgentKind::Api => Err("API providers have no CLI".into()),
     }
 }
@@ -212,6 +215,9 @@ pub(super) fn run_command(
         AgentKind::Codex => codex::cli::command(command),
         AgentKind::OpenCode => opencode::cli::command(command),
         AgentKind::Antigravity => antigravity::command(command),
+        AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => {
+            Err("Patchwork runs no commands for this agent".into())
+        }
         AgentKind::Api => Err("API providers have no CLI".into()),
     }
 }

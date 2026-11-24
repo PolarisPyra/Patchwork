@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
 use crate::system::files::paths::home_dir;
-use super::{antigravity, opencode, AgentKind};
+use super::{acp, antigravity, opencode, AgentKind};
 
 /// Agent CLIs the user located by hand, mirrored from the settings.
 static AGENT_PATHS: Mutex<Vec<(AgentKind, PathBuf)>> = Mutex::new(Vec::new());
@@ -97,11 +97,10 @@ pub(super) fn find_binary(name: &str) -> Option<PathBuf> {
     })
 }
 
-/// Resolves the agent CLI (searching the PATH the user's shell sets up, then common install dirs)
-/// and returns a Command for it with the binary's directory prepended to PATH (codex needs `node`
-/// beside it).
-pub(crate) fn agent_command(kind: AgentKind) -> Result<Command, Error> {
-    let bin = match kind {
+/// Where `kind`'s CLI is: the path the user chose, else the one found on PATH or in its usual
+/// install folder.
+pub(crate) fn agent_binary(kind: AgentKind) -> Result<PathBuf, Error> {
+    Ok(match kind {
         AgentKind::Claude => {
             located_or(kind, || find_binary("claude")).ok_or("Claude Code is not installed")?
         }
@@ -112,9 +111,23 @@ pub(crate) fn agent_command(kind: AgentKind) -> Result<Command, Error> {
             antigravity::antigravity_bin().ok_or("Antigravity CLI is not installed")?
         }
         AgentKind::OpenCode => opencode::opencode_bin().ok_or("OpenCode CLI is not installed")?,
+        AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => {
+            let spec = acp::spec(kind).ok_or("Unknown agent")?;
+            acp::binary(spec).ok_or_else(|| format!("{} is not installed", spec.label))?
+        }
+        AgentKind::Api => return Err("API providers have no CLI".into()),
+    })
+}
+
+/// Resolves the agent CLI (searching the PATH the user's shell sets up, then common install dirs)
+/// and returns a Command for it with the binary's directory prepended to PATH (codex needs `node`
+/// beside it).
+pub(crate) fn agent_command(kind: AgentKind) -> Result<Command, Error> {
+    let bin = match kind {
         AgentKind::Api => {
             std::env::current_exe().map_err(|e| format!("Failed to find Patchwork: {e}"))?
         }
+        _ => agent_binary(kind)?,
     };
     let mut cmd = command_at(&bin);
     // Turns, probes and one-off calls all start here; the in-app terminal does not.
@@ -235,6 +248,9 @@ pub(crate) fn remote_turn_command(kind: AgentKind) -> Result<Command, Error> {
         AgentKind::Claude => "claude",
         AgentKind::Codex => "codex",
         AgentKind::Antigravity => "agy",
+        AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => {
+            acp::spec(kind).ok_or("Unknown agent")?.binary
+        }
         AgentKind::OpenCode if !opencode::uses_serve() => "opencode",
         AgentKind::OpenCode | AgentKind::Api => return turn_command(kind),
     };
@@ -260,6 +276,11 @@ pub fn agent_shell(agent: AgentKind) -> Option<String> {
     match agent {
         AgentKind::Claude => find_shell("bash").or_else(|| find_shell("zsh")),
         AgentKind::Codex => login_shell().filter(|shell| is_posix(shell)),
-        AgentKind::Antigravity | AgentKind::OpenCode | AgentKind::Api => command_shell(),
+        AgentKind::Antigravity
+        | AgentKind::OpenCode
+        | AgentKind::Qwen
+        | AgentKind::Kimi
+        | AgentKind::Auggie
+        | AgentKind::Api => command_shell(),
     }
 }

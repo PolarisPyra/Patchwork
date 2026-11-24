@@ -306,7 +306,11 @@ fn main() {
                 let _ = window.update(cx, |workspace, window, cx| {
                     cx.activate(true);
                     window.activate_window();
-                    workspace.open_chat(&chat_id, cx);
+                    if chat_id == workspace::CLI_UPDATE_TAG {
+                        workspace.open_settings(Some("providers"), window, cx);
+                    } else {
+                        workspace.open_chat(&chat_id, cx);
+                    }
                 });
             });
             forward(window, raised, cx, |_, (), window, cx| {

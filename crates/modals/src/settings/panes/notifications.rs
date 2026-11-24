@@ -1,5 +1,6 @@
 //! Settings → Notifications: which events notify on the desktop and on the chat apps, when the
-//! chat apps hear about them, and the chats and projects muted on the chat apps.
+//! chat apps hear about them, the chats and projects muted on the chat apps, and agent CLI
+//! updates.
 
 // Rust guideline compliant 2026-10-09
 
@@ -104,6 +105,18 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .child(header)
         .children(rows);
 
+    let cli_updates = token_row("Update available", None, &t).child(
+        switch(
+            "notify-cli-updates",
+            "Notify when an agent CLI has an update",
+            n.cli_updates,
+            &t,
+        )
+        .on_click(cx.listener(move |d, _, _, cx| {
+            d.update(|s| s.notifications.cli_updates = !n.cli_updates, cx);
+        })),
+    );
+
     let when = token_row("Send to chat apps", None, &t).child(segmented(
         "notify-when",
         "Send to chat apps",
@@ -148,6 +161,8 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .flex_col()
         .child(section_heading("Events", true, &t))
         .child(events)
+        .child(section_heading("Agent CLIs", false, &t))
+        .child(cli_updates)
         .child(section_heading("Chat apps", false, &t))
         .child(when)
         .children(away)

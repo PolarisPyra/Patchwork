@@ -214,7 +214,8 @@ impl Runner {
             None => text,
         };
         // Codex takes its instructions as the chat's developer instructions; Claude takes them as
-        // launch arguments. OpenCode gets only the user's system prompt, and Antigravity nothing.
+        // launch arguments. OpenCode and the listed ACP agents get only the user's system prompt,
+        // and Antigravity nothing.
         let instructions = match agent {
             _ if dispatcher => Some(crate::chats::tools::DISPATCHER.to_string()),
             AgentKind::Codex => Some(crate::orchestration::agent_instructions(
@@ -230,7 +231,7 @@ impl Runner {
                 Some(parts.into_iter().flatten().collect::<Vec<_>>().join("\n\n"))
                     .filter(|t| !t.is_empty())
             }
-            AgentKind::OpenCode => {
+            AgentKind::OpenCode | AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => {
                 crate::orchestration::system_prompt(&settings, agent).map(str::to_string)
             }
             AgentKind::Claude | AgentKind::Antigravity => None,
@@ -240,7 +241,12 @@ impl Runner {
             _ if dispatcher => None,
             AgentKind::Codex => crate::extensions::skills::sync(&settings, "codex"),
             AgentKind::OpenCode => crate::extensions::skills::sync(&settings, "opencode"),
-            AgentKind::Claude | AgentKind::Antigravity | AgentKind::Api => None,
+            AgentKind::Claude
+            | AgentKind::Antigravity
+            | AgentKind::Qwen
+            | AgentKind::Kimi
+            | AgentKind::Auggie
+            | AgentKind::Api => None,
         }
         .map(|cli| cli.join("skills").to_string_lossy().into_owned());
         // A dispatcher runs none of the user's hooks or custom agents, which could run commands.
@@ -258,7 +264,11 @@ impl Runner {
             AgentKind::Claude | AgentKind::Codex | AgentKind::OpenCode => {
                 core.chat_agents(&chat_id)
             }
-            AgentKind::Antigravity | AgentKind::Api => Vec::new(),
+            AgentKind::Antigravity
+            | AgentKind::Qwen
+            | AgentKind::Kimi
+            | AgentKind::Auggie
+            | AgentKind::Api => Vec::new(),
         };
         // The tools an agent blocks. Every agent but `opencode run` asks Patchwork at each call;
         // that one is told at launch, and can't be told about servers.
@@ -300,6 +310,7 @@ impl Runner {
         let unlimited_steps = settings.unlimited_steps;
         let token_limit = settings.turn_token_limit;
         let spec = TurnSpec {
+            agent,
             root: crate::system::ssh::here(&root),
             host: crate::system::ssh::split(&root).map(|at| at.host),
             chat_id: &chat_id,

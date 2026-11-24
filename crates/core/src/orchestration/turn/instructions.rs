@@ -46,7 +46,11 @@ fn checklist_instructions(agent: AgentKind) -> Option<String> {
         }
         AgentKind::Codex => "update_plan tool",
         AgentKind::OpenCode => "todowrite tool",
-        AgentKind::Antigravity | AgentKind::Api => return None,
+        AgentKind::Antigravity
+        | AgentKind::Qwen
+        | AgentKind::Kimi
+        | AgentKind::Auggie
+        | AgentKind::Api => return None,
     };
     Some(format!(
         "For any task with more than one step, keep a checklist with your {tools}: add every step \

@@ -19,6 +19,10 @@ pub fn agent_logo(kind: AgentKind, model: Option<&str>, size: f32) -> AnyElement
         AgentKind::Codex => ("openai.svg", true),
         AgentKind::Antigravity => ("gemini-color.svg", false),
         AgentKind::OpenCode => ("opencode.svg", true),
+        AgentKind::Qwen => ("qwen-color.svg", false),
+        AgentKind::Kimi => ("kimi.svg", true),
+        // Augment publishes no mark Patchwork ships.
+        AgentKind::Auggie => return icon("robot", size).into_any_element(),
         AgentKind::Api => {
             let provider = model.and_then(api_provider_of);
             return provider_logo(
@@ -161,11 +165,14 @@ pub(crate) fn preset_logo(preset: &str) -> Option<(&'static str, bool)> {
 }
 
 /// The agents in the order the pickers and the task list show them (`AGENT_KINDS`).
-pub const AGENT_KINDS: [AgentKind; 5] = [
+pub const AGENT_KINDS: [AgentKind; 8] = [
     AgentKind::Claude,
     AgentKind::Codex,
     AgentKind::Antigravity,
     AgentKind::OpenCode,
+    AgentKind::Qwen,
+    AgentKind::Kimi,
+    AgentKind::Auggie,
     AgentKind::Api,
 ];
 
@@ -177,6 +184,9 @@ pub fn agent_label(kind: AgentKind) -> &'static str {
         AgentKind::Codex => "Codex",
         AgentKind::Antigravity => "Antigravity CLI",
         AgentKind::OpenCode => "OpenCode CLI",
+        AgentKind::Qwen => "Qwen Code",
+        AgentKind::Kimi => "Kimi Code",
+        AgentKind::Auggie => "Auggie",
         AgentKind::Api => "API",
     }
 }

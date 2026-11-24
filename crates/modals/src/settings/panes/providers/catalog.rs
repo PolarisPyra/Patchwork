@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
 use gpui::{Context, PathPromptOptions};
 use patchwork_core::provider::api::{self, ApiProvider, KeyChange, ProviderView};
-use patchwork_core::provider::{AgentKind, AgentStatus, ModelOption};
+use patchwork_core::provider::{AgentKind, AgentStatus, CliUpdate, ModelOption};
 use crate::settings::SettingsDialog;
 use super::AntigravityAuth;
 use super::cli;
@@ -14,11 +14,14 @@ use super::form;
 use super::local;
 
 /// The agent CLIs, in the order the pane lists them (`CLI_KINDS`).
-pub(super) const CLI_KINDS: [AgentKind; 4] = [
+pub(super) const CLI_KINDS: [AgentKind; 7] = [
     AgentKind::Claude,
     AgentKind::Codex,
     AgentKind::Antigravity,
     AgentKind::OpenCode,
+    AgentKind::Qwen,
+    AgentKind::Kimi,
+    AgentKind::Auggie,
 ];
 
 /// Agents whose models can read a message's images for an API model.
@@ -44,6 +47,18 @@ pub(super) struct Prompt {
     pub(super) error: Option<String>,
 }
 
+/// A newer release of a CLI, and where updating it stands.
+pub(super) struct Update {
+    pub(super) release: CliUpdate,
+    pub(super) step: UpdateStep,
+}
+
+pub(super) enum UpdateStep {
+    Offered,
+    Running,
+    Failed(String),
+}
+
 #[derive(Default)]
 pub struct ProvidersState {
     /// Whether the agents were read and the providers loaded since the dialog opened.
@@ -52,6 +67,8 @@ pub struct ProvidersState {
     pub(super) status: HashMap<AgentKind, Option<AgentStatus>>,
     pub(super) installing: HashSet<AgentKind>,
     pub(super) install_errors: HashMap<AgentKind, String>,
+    /// Each installed CLI with a newer release, and where updating it stands.
+    pub(super) updates: HashMap<AgentKind, Update>,
     pub(super) providers: Vec<ProviderView>,
     /// The models of each agent the vision picker offers.
     pub(super) models: HashMap<AgentKind, Vec<ModelOption>>,
@@ -77,8 +94,79 @@ impl SettingsDialog {
     pub(super) fn detect(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
         self.run(
             move || patchwork_core::provider::detect_agent(kind),
-            move |d, status, _| {
+            move |d, status, cx| {
+                if status.installed {
+                    d.check_update(kind, cx);
+                } else {
+                    d.providers.updates.remove(&kind);
+                }
                 d.providers.status.insert(kind, Some(status));
+            },
+            cx,
+        );
+    }
+
+    /// Looks up whether `kind`'s CLI has a newer release, keeping an update that is running.
+    fn check_update(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
+        let running = move |d: &Self| {
+            d.providers
+                .updates
+                .get(&kind)
+                .is_some_and(|u| matches!(u.step, UpdateStep::Running))
+        };
+        if running(self) {
+            return;
+        }
+        self.run(
+            move || patchwork_core::provider::check_cli_update(kind),
+            move |d, found, _| {
+                if running(d) {
+                    return;
+                }
+                match found {
+                    Ok(Some(release)) => {
+                        d.providers.updates.insert(
+                            kind,
+                            Update {
+                                release,
+                                step: UpdateStep::Offered,
+                            },
+                        );
+                    }
+                    Ok(None) => {
+                        d.providers.updates.remove(&kind);
+                    }
+                    Err(e) => {
+                        log::warn!(agent:? = kind, error:% = e; "could not check {{agent}} for updates: {{error}}");
+                        d.providers.updates.remove(&kind);
+                    }
+                }
+            },
+            cx,
+        );
+    }
+
+    /// Runs `kind`'s own update command, then reads the CLI again.
+    pub(super) fn update_cli(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
+        let Some(update) = self.providers.updates.get_mut(&kind) else {
+            return;
+        };
+        if matches!(update.step, UpdateStep::Running) {
+            return;
+        }
+        update.step = UpdateStep::Running;
+        self.run(
+            move || patchwork_core::provider::update_cli(kind),
+            move |d, done, cx| match done {
+                Ok(()) => {
+                    d.providers.updates.remove(&kind);
+                    d.detect(kind, cx);
+                }
+                Err(e) => {
+                    if let Some(update) = d.providers.updates.get_mut(&kind) {
+                        update.step = UpdateStep::Failed(e.to_string());
+                    }
+                }
             },
             cx,
         );

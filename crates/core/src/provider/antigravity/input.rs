@@ -1,4 +1,5 @@
-//! What Patchwork sends `agy acp`: arguments, JSON-RPC handshake, prompts, steering, and replies.
+//! What Patchwork sends an ACP agent (`agy acp` and the listed ones): arguments, JSON-RPC
+//! handshake, prompts, steering, and replies.
 
 // Rust guideline compliant 2026-11-23
 
@@ -8,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde_json::{Value, json};
 
 use crate::chats::{AccessMode, Attachment, AttachmentKind};
-use crate::provider::{Image, Parsed, TurnSpec, prompt};
+use crate::provider::{AgentKind, Image, Parsed, TurnSpec, acp, prompt};
 
 use super::models::strip_effort_suffix;
 use super::probe::client_info;
@@ -45,9 +46,12 @@ fn next_prompt_id() -> u64 {
     NEXT_PROMPT_ID.fetch_add(1, Ordering::Relaxed)
 }
 
-/// Command-line arguments for an Antigravity ACP turn (`agy acp --stdio`).
+/// Command-line arguments for an ACP turn: `agy acp --stdio`, or the listed agent's own.
 #[must_use]
 pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
+    if let Some(acp) = acp::spec(spec.agent) {
+        return acp.args.iter().map(|a| (*a).to_string()).collect();
+    }
     // Full Access runs as agy's "auto" mode with Patchwork answering what agy still asks, so the
     // mode can change in the session without a new process.
     let mut args: Vec<String> = ["acp", "--stdio"].map(String::from).into();
@@ -58,9 +62,13 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
     args
 }
 
-/// Environment for an Antigravity ACP turn: auto-compact window override when set.
+/// Environment for an ACP turn: the listed agent's own, or agy's auto-compact window override
+/// when set.
 #[must_use]
 pub fn turn_env(spec: &TurnSpec) -> Vec<(&'static str, String)> {
+    if spec.agent.is_listed_acp() {
+        return acp::env(spec.agent);
+    }
     let mut env = Vec::new();
     if spec.compact_window > 0 {
         env.push((
@@ -71,7 +79,8 @@ pub fn turn_env(spec: &TurnSpec) -> Vec<(&'static str, String)> {
     env
 }
 
-/// Handshake and session creation/resumption sent on stdin when the ACP process starts.
+/// Handshake and session creation/resumption sent on stdin when the ACP process starts. A listed
+/// agent is sent only the handshake; its answer says whether a session can be loaded.
 #[must_use]
 pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
     let init = json!({
@@ -88,6 +97,9 @@ pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
             },
         },
     });
+    if spec.agent.is_listed_acp() {
+        return vec![init.to_string()];
+    }
     let session = session_request(spec, spec.session_id);
     vec![init.to_string(), session.to_string()]
 }
@@ -128,99 +140,136 @@ pub(super) fn session_request(spec: &TurnSpec, resume_id: Option<&str>) -> Value
     }
 }
 
-/// What the chat wants agy's session to run with.
+/// What the chat wants the agent's session to run with.
 #[derive(Debug, Clone, Copy)]
 pub struct Wanted<'a> {
+    pub agent: AgentKind,
     pub model: Option<&'a str>,
     pub effort: Option<&'a str>,
     pub mode: AccessMode,
 }
 
-/// The requests that bring agy's session from `config`, its `configOptions`, to `wanted`.
+/// The requests that bring the agent's session from `config`, its `configOptions`, to `wanted`.
 ///
-/// They are in the order to send them, each once agy answers the one before: agy answers
+/// They are in the order to send them, each once the agent answers the one before: agy answers
 /// requests sent together out of order, and a later one can undo an earlier one.
 #[must_use]
 pub fn configure(session_id: &str, wanted: Wanted<'_>, config: &Value) -> Vec<String> {
-    let option = |id: &str| {
+    let option = |category: &str| {
         config
             .as_array()
             .into_iter()
             .flatten()
-            .find(|opt| opt["id"].as_str() == Some(id))
+            .find(|opt| opt["id"] == category || opt["category"] == category)
     };
-    let current = |id: &str| option(id).and_then(|opt| opt["currentValue"].as_str());
-    let values = |id: &str| -> Vec<&str> {
-        option(id)
+    let current = |category: &str| option(category).and_then(|opt| opt["currentValue"].as_str());
+    let values = |category: &str| -> Vec<&str> {
+        option(category)
             .and_then(|opt| opt["options"].as_array())
             .into_iter()
             .flatten()
             .filter_map(|opt| opt["value"].as_str())
             .collect()
     };
-    let set = |id: u64, config_id: &str, value: &str| {
-        json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": "session/set_config_option",
-            "params": {"sessionId": session_id, "configId": config_id, "value": value},
-        })
-        .to_string()
+    let request = |id: u64, method: &str, params: Value| {
+        json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}).to_string()
     };
+    // An option from the config list is set by its own id; one made from an older `models` or
+    // `modes` list by that list's own method.
+    let set = |id: u64, category: &str, value: &str, legacy: (&str, &str)| {
+        let opt = option(category);
+        if opt.is_some_and(|o| o[acp::LEGACY] == true) {
+            let (method, key) = legacy;
+            request(id, method, json!({"sessionId": session_id, key: value}))
+        } else {
+            let config_id = opt.and_then(|o| o["id"].as_str()).unwrap_or(category);
+            request(
+                id,
+                "session/set_config_option",
+                json!({"sessionId": session_id, "configId": config_id, "value": value}),
+            )
+        }
+    };
+    let agy = wanted.agent == AgentKind::Antigravity;
     let mut out = Vec::new();
 
     if let Some(model) = wanted.model {
         let models = values("model");
         // A model named with its effort is offered without it when agy sets effort apart.
         let stripped = strip_effort_suffix(model);
-        let resolved =
-            if !models.contains(&model) && wanted.effort.is_some() && models.contains(&stripped) {
-                stripped
-            } else {
-                model
-            };
-        if current("model") != Some(resolved) {
-            out.push(set(MODEL_REQUEST, "model", resolved));
+        let resolved = if agy
+            && !models.contains(&model)
+            && wanted.effort.is_some()
+            && models.contains(&stripped)
+        {
+            stripped
+        } else {
+            model
+        };
+        // A listed agent is sent only a model its session offers.
+        if current("model") != Some(resolved) && (agy || models.contains(&resolved)) {
+            out.push(set(
+                MODEL_REQUEST,
+                "model",
+                resolved,
+                ("session/set_model", "modelId"),
+            ));
         }
     }
 
     if let Some(effort) = wanted.effort
         && current("thought_level") != Some(effort)
+        && (agy || values("thought_level").contains(&effort))
     {
-        out.push(set(EFFORT_REQUEST, "thought_level", effort));
+        out.push(set(EFFORT_REQUEST, "thought_level", effort, ("", "")));
     }
 
     let modes = values("mode");
-    let offered = |mode: &'static str| {
-        if modes.contains(&mode) {
-            mode
+    let mode = if agy {
+        let offered = |mode: &'static str| {
+            if modes.contains(&mode) {
+                mode
+            } else {
+                "default"
+            }
+        };
+        Some(match wanted.mode {
+            AccessMode::FullAccess | AccessMode::Auto => offered("auto"),
+            AccessMode::AutoAcceptEdits => offered("accept-edits"),
+            AccessMode::Supervised => "default",
+        })
+    } else {
+        acp::spec(wanted.agent)
+            .and_then(|s| acp::mode_for(s, wanted.mode))
+            .filter(|mode| modes.contains(mode))
+    };
+    if let Some(mode) = mode
+        && current("mode") != Some(mode)
+    {
+        out.push(if agy {
+            request(
+                MODE_REQUEST,
+                "session/set_mode",
+                json!({"sessionId": session_id, "modeId": mode}),
+            )
         } else {
-            "default"
-        }
-    };
-    let mode = match wanted.mode {
-        AccessMode::FullAccess | AccessMode::Auto => offered("auto"),
-        AccessMode::AutoAcceptEdits => offered("accept-edits"),
-        AccessMode::Supervised => "default",
-    };
-    if current("mode") != Some(mode) {
-        out.push(
-            json!({
-                "jsonrpc": "2.0",
-                "id": MODE_REQUEST,
-                "method": "session/set_mode",
-                "params": {"sessionId": session_id, "modeId": mode},
-            })
-            .to_string(),
-        );
+            set(MODE_REQUEST, "mode", mode, ("session/set_mode", "modeId"))
+        });
     }
     out
 }
 
 /// Sets up the new session's model, effort and mode, then sends `session/prompt`.
 pub(super) fn begin(spec: &TurnSpec, session_id: &str, session_result: &Value) -> Vec<Parsed> {
-    let config = &session_result["configOptions"];
+    let config = &if spec.agent.is_listed_acp() {
+        let config = acp::config_options(session_result);
+        acp::remember_models(spec.agent, &config);
+        config
+    } else {
+        session_result["configOptions"].clone()
+    };
     let wanted = Wanted {
+        agent: spec.agent,
         model: spec.model,
         effort: spec.effort,
         mode: spec.mode,
@@ -229,7 +278,14 @@ pub(super) fn begin(spec: &TurnSpec, session_id: &str, session_result: &Value) -
         .into_iter()
         .map(Parsed::Send)
         .collect();
-    let text = prompt(spec);
+    let mut text = acp::own_command(spec.agent, prompt(spec));
+    // A listed agent takes no system prompt at launch, so a new session's first message has it.
+    if spec.agent.is_listed_acp()
+        && spec.session_id.is_none()
+        && let Some(instructions) = spec.instructions.filter(|i| !i.trim().is_empty())
+    {
+        text = format!("{instructions}\n\n{text}");
+    }
     let line = prompt_request(
         next_prompt_id(),
         session_id,
@@ -237,11 +293,13 @@ pub(super) fn begin(spec: &TurnSpec, session_id: &str, session_result: &Value) -
     );
     // `agy` runs a slash command sent before it lists its commands as plain chat, so a
     // `/compact` that starts a resumed session waits for that list.
-    lines.push(if text.trim_start().starts_with('/') {
-        Parsed::SendAfterCommands(line)
-    } else {
-        Parsed::Send(line)
-    });
+    lines.push(
+        if spec.agent == AgentKind::Antigravity && text.trim_start().starts_with('/') {
+            Parsed::SendAfterCommands(line)
+        } else {
+            Parsed::Send(line)
+        },
+    );
     vec![
         Parsed::AgentConfig(config.clone()),
         Parsed::SendInOrder(lines),
