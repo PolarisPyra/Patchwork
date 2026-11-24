@@ -56,6 +56,19 @@ pub enum BrowserCommand {
     Theme {
         dark: bool,
     },
+    /// Outlines the element under a point, in logical pixels, while one is being picked.
+    Highlight {
+        x: f32,
+        y: f32,
+    },
+    /// Picks the element under a point, which comes back as [`BrowserEvent::Picked`], and
+    /// clears the outline.
+    Pick {
+        x: f32,
+        y: f32,
+    },
+    /// Clears the outline without picking anything.
+    Unhighlight,
     Back,
     Forward,
     Reload,
@@ -111,6 +124,12 @@ pub enum BrowserEvent {
     },
     /// The page's script threw, logged an error, or a file it loads failed.
     PageError { message: String },
+    /// The element picked: a selector that finds it, its HTML, and the styles it is drawn with.
+    Picked {
+        selector: String,
+        html: String,
+        styles: String,
+    },
 }
 
 /// A picture of the page, in device pixels, four bytes each in blue, green, red, alpha order.

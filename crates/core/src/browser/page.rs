@@ -40,7 +40,62 @@ enum Reply {
     Created,
     Attached,
     History,
+    Picked,
 }
+
+/// Outlines the element at `__X`, `__Y` with a box the pointer passes through.
+const HIGHLIGHT: &str = r"(() => {
+  let o = document.getElementById('__patchwork_pick');
+  const el = document.elementFromPoint(__X, __Y);
+  if (!el) { if (o) o.remove(); return; }
+  if (!o) {
+    o = document.createElement('div');
+    o.id = '__patchwork_pick';
+    o.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483647;' +
+      'border:2px solid #3b82f6;background:rgba(59,130,246,.12);border-radius:2px;box-sizing:border-box';
+    document.documentElement.appendChild(o);
+  }
+  const r = el.getBoundingClientRect();
+  Object.assign(o.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+})()";
+
+/// Clears the outline.
+const UNHIGHLIGHT: &str =
+    r"(() => { const o = document.getElementById('__patchwork_pick'); if (o) o.remove(); })()";
+
+/// The element at `__X`, `__Y`: a selector for it, its HTML cut short, and the styles that
+/// shape it.
+const PICK: &str = r"(() => {
+  const o = document.getElementById('__patchwork_pick'); if (o) o.remove();
+  const el = document.elementFromPoint(__X, __Y);
+  if (!el) return null;
+  const part = (e) => {
+    if (e.id) return '#' + CSS.escape(e.id);
+    let p = e.tagName.toLowerCase();
+    p += [...e.classList].slice(0, 3).map(c => '.' + CSS.escape(c)).join('');
+    const parent = e.parentElement;
+    if (parent) {
+      const same = [...parent.children].filter(c => c.tagName === e.tagName);
+      if (same.length > 1) p += ':nth-of-type(' + (same.indexOf(e) + 1) + ')';
+    }
+    return p;
+  };
+  const parts = [];
+  for (let e = el; e && e.nodeType === 1 && e !== document.documentElement && parts.length < 6; e = e.parentElement) {
+    parts.unshift(part(e));
+    if (e.id) break;
+  }
+  const cs = getComputedStyle(el);
+  const keys = ['display', 'position', 'width', 'height', 'margin', 'padding', 'color',
+    'background-color', 'font-family', 'font-size', 'font-weight', 'line-height', 'border',
+    'border-radius', 'gap', 'flex-direction', 'justify-content', 'align-items', 'opacity'];
+  const styles = keys.map(k => k + ': ' + cs.getPropertyValue(k) + ';').join('
+');
+  let html = el.outerHTML;
+  if (html.length > 4000) html = html.slice(0, 4000) + '
+<!-- cut short -->';
+  return { selector: parts.join(' > '), html, styles };
+})()";
 
 /// The page's state between protocol messages.
 #[derive(Debug)]
@@ -218,6 +273,22 @@ impl Page {
                     "value": if dark { "dark" } else { "light" },
                 }] }),
             ),
+            BrowserCommand::Highlight { x, y } => self.page_call(
+                "Runtime.evaluate",
+                json!({ "expression": at(HIGHLIGHT, x, y) }),
+            ),
+            BrowserCommand::Pick { x, y } => {
+                let session = self.session.clone();
+                self.send_call(
+                    "Runtime.evaluate",
+                    json!({ "expression": at(PICK, x, y), "returnByValue": true }),
+                    session,
+                    Some(Reply::Picked),
+                )
+            }
+            BrowserCommand::Unhighlight => {
+                self.page_call("Runtime.evaluate", json!({ "expression": UNHIGHLIGHT }))
+            }
             BrowserCommand::Back => self.go(-1),
             BrowserCommand::Forward => self.go(1),
             BrowserCommand::Reload => self.page_call("Page.reload", json!({})),
@@ -302,6 +373,18 @@ impl Page {
                     .unwrap_or_default();
                 self.history = (current, entries);
                 self.loading(false);
+                Ok(())
+            }
+            Reply::Picked => {
+                let value = &result["result"]["value"];
+                let text = |key: &str| value[key].as_str().unwrap_or_default().to_owned();
+                if value.is_object() {
+                    self.send(BrowserEvent::Picked {
+                        selector: text("selector"),
+                        html: text("html"),
+                        styles: text("styles"),
+                    });
+                }
                 Ok(())
             }
         }
@@ -458,6 +541,13 @@ impl Page {
             .send(tungstenite::Message::text(message.to_string()))
             .map_err(|e| Error::Message(format!("The browser stopped answering: {e}")))
     }
+}
+
+/// `script` with its point filled in.
+fn at(script: &str, x: f32, y: f32) -> String {
+    script
+        .replace("__X", &format!("{x:.1}"))
+        .replace("__Y", &format!("{y:.1}"))
 }
 
 /// Decodes the page's frames and sends them to the app, skipping any a newer one has already

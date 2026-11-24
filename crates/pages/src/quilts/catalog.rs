@@ -17,7 +17,7 @@ use patchwork_core::Core;
 use patchwork_core::quilts::{Quilt, QuiltKind, QuiltVersion, ChangeRow, quilt_changes};
 
 use super::thumbs::Thumbs;
-use patchwork_sidecar::browser::{BrowserView, PageErrorsChanged};
+use patchwork_sidecar::browser::{BrowserView, ElementPicked, PageErrorsChanged, PickingChanged};
 use patchwork_ui::controls::menu::Menu;
 use patchwork_ui::off_thread;
 use patchwork_ui::text::text_area::{Changed, TextArea};
@@ -29,6 +29,9 @@ pub enum QuiltsEvent {
     OpenChat(String),
     /// Send `text` to the chat `chat_id`, which made the quilt.
     AskFix { chat_id: String, text: String },
+    /// Write `text`, about an element picked on the quilt, into the chat `chat_id`'s composer,
+    /// for the person to finish and send.
+    Picked { chat_id: String, text: String },
     /// Close the panel beside the chat.
     Closed,
     /// Show version `n` of the quilt `id` on the Quilts page instead of beside the chat.
@@ -475,6 +478,12 @@ impl QuiltsPage {
                             let view = cx.new(|cx| BrowserView::new(url, title, false, cx));
                             cx.subscribe(&view, |_, _, _: &PageErrorsChanged, cx| cx.notify())
                                 .detach();
+                            cx.subscribe(&view, |_, _, _: &PickingChanged, cx| cx.notify())
+                                .detach();
+                            cx.subscribe(&view, |this, _, picked: &ElementPicked, cx| {
+                                this.picked(picked, cx);
+                            })
+                            .detach();
                             this.preview = Some(view);
                         }
                     }
@@ -540,6 +549,37 @@ impl QuiltsPage {
             quilt.title, quilt.key
         );
         cx.emit(QuiltsEvent::AskFix {
+            chat_id: quilt.chat_id.clone(),
+            text,
+        });
+    }
+
+    /// Whether the next click on the preview picks an element.
+    pub(super) fn picking(&self, cx: &App) -> bool {
+        self.preview
+            .as_ref()
+            .is_some_and(|view| self.show == Show::Preview && view.read(cx).picking())
+    }
+
+    /// Starts or stops picking an element on the preview.
+    pub(super) fn toggle_picking(&mut self, cx: &mut Context<Self>) {
+        let on = !self.picking(cx);
+        if let Some(view) = &self.preview {
+            view.update(cx, |view, cx| view.set_picking(on, cx));
+        }
+    }
+
+    /// Hands the element picked to the chat that made the quilt, to say what to change about it.
+    fn picked(&mut self, picked: &ElementPicked, cx: &mut Context<Self>) {
+        let (Some(quilt), Some(n)) = (self.current(), self.shown) else {
+            return;
+        };
+        let text = format!(
+            "In version {n} of the quilt \"{}\" (id {}), this element:\n\n\
+             Selector: `{}`\n\n```html\n{}\n```\n\nComputed styles:\n\n```css\n{}\n```\n\n",
+            quilt.title, quilt.key, picked.selector, picked.html, picked.styles
+        );
+        cx.emit(QuiltsEvent::Picked {
             chat_id: quilt.chat_id.clone(),
             text,
         });

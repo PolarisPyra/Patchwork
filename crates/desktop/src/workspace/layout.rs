@@ -523,6 +523,17 @@ impl Workspace {
                     self.send(text.clone(), Vec::new(), None, None, cx);
                 }
             }
+            patchwork_pages::quilts::QuiltsEvent::Picked { chat_id, text } => {
+                if self.page == Page::Quilts {
+                    self.open_quilt_chat(chat_id, window, cx);
+                } else {
+                    self.open_chat(chat_id, cx);
+                }
+                if self.chat.as_ref().is_some_and(|t| &t.id == chat_id) {
+                    self.composer
+                        .update(cx, |c, cx| c.fill(text, Vec::new(), window, cx));
+                }
+            }
         }
         cx.notify();
     }
