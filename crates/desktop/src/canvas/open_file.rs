@@ -276,13 +276,26 @@ impl Canvas {
                 this.conflicts = conflicts;
                 this.conflict_shown = None;
                 this.file = Some(file.map(SharedString::from));
-                this.diff_rows = diff
-                    .as_ref()
-                    .ok()
-                    .map(|text| std::rc::Rc::new(diff::parse(text)));
-                let items = this.diff_rows.as_ref().map_or(0, |p| p.rows.len() + 1);
-                this.diff_list.reset(items);
-                this.diff = Some(diff.map(SharedString::from));
+                let diff = diff.map(SharedString::from);
+                // A reload keeps the reader's place: the project's watcher reloads on every
+                // burst of changes, and starting over at the top each time fought the scroll.
+                let reloaded = matches!(&this.diff, Some(Ok(_)));
+                if this.diff.as_ref() != Some(&diff) {
+                    this.diff_rows = diff
+                        .as_ref()
+                        .ok()
+                        .map(|text| std::rc::Rc::new(diff::parse(text)));
+                    let items = this.diff_rows.as_ref().map_or(0, |p| p.rows.len() + 1);
+                    let top = this.diff_list.logical_scroll_top();
+                    this.diff_list.reset(items);
+                    if reloaded && items > 0 {
+                        this.diff_list.scroll_to(gpui::ListOffset {
+                            item_ix: top.item_ix.min(items - 1),
+                            offset_in_item: top.offset_in_item,
+                        });
+                    }
+                }
+                this.diff = Some(diff);
                 this.staged = staged;
                 this.media = media;
                 // What was read of the file's past is of the file as it was.
