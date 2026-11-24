@@ -3,6 +3,17 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.147] - 2026-11-24
+
+## What's Changed
+* fix(swarm): Antigravity swarm replies end when their workers stop by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/319
+* fix(usage): Antigravity limits group by model family and refresh on demand by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/320
+* fix(antigravity): a probe that could not run no longer reads as signed out by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/321
+* fix(canvas): the diff keeps its scroll position when the project changes by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/322
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.146...26.11.147
+
 ## [26.11.146] - 2026-11-23
 
 ## What's Changed
