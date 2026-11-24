@@ -13,6 +13,76 @@ use patchwork_ui::{BtnKind, base_name, btn, icon, spinner, tooltip};
 use super::open_file::{Canvas, CanvasTab};
 
 impl Canvas {
+    /// A PDF's pages one under another, or why they could not be drawn, with a way to open it
+    /// elsewhere.
+    fn pdf_view(&self, path: &str, t: &Theme) -> AnyElement {
+        let name = base_name(path).to_string();
+        let open = self
+            .media
+            .as_ref()
+            .map(|m| PathBuf::from(&m.absolute))
+            .map(|file| {
+                btn(
+                    "open-pdf",
+                    format!("Open {name} in the default app"),
+                    BtnKind::Plain,
+                    false,
+                    t,
+                )
+                .child("Open in default app")
+                .on_click(move |_, _, cx| cx.open_with_system(&file))
+            });
+        match &self.pdf {
+            None => centered(div())
+                .id("pdf-loading")
+                .role(Role::Status)
+                .aria_label(format!("Drawing {name}"))
+                .child(spinner(18., t.text_subtle))
+                .into_any_element(),
+            Some(Err(e)) => centered(div())
+                .flex_col()
+                .gap(px(12.))
+                .text_color(t.text_muted)
+                .child(
+                    div()
+                        .id("pdf-error")
+                        .role(Role::Alert)
+                        .max_w(px(420.))
+                        .text_center()
+                        .child(e.clone()),
+                )
+                .children(open)
+                .into_any_element(),
+            Some(Ok(pages)) => {
+                let count = pages.len();
+                div()
+                    .id("canvas-pdf")
+                    .role(Role::List)
+                    .aria_label(name.clone())
+                    .size_full()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.body)
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap(px(12.))
+                    .p(px(16.))
+                    .children(pages.iter().enumerate().map(|(i, page)| {
+                        img(page.clone())
+                            .id(("pdf-page", i))
+                            .role(Role::Image)
+                            .aria_label(format!("Page {} of {count}", i + 1))
+                            .w_full()
+                            .max_w(px(960.))
+                            .object_fit(ObjectFit::Contain)
+                            .border_1()
+                            .border_color(t.border)
+                    }))
+                    .into_any_element()
+            }
+        }
+    }
+
     pub(super) fn body(&mut self, message: Option<&Message>, cx: &mut Context<Self>) -> AnyElement {
         let t = *theme(cx);
         let active = self.active_tab();
@@ -61,6 +131,7 @@ impl Canvas {
                     )
                     .into_any_element();
             }
+            CanvasTab::Pdf => return self.pdf_view(&path, &t),
             CanvasTab::History => return self.history_view(&t, cx),
             _ => {}
         }

@@ -29,6 +29,7 @@ pub enum CanvasTab {
     History,
     Image,
     Video,
+    Pdf,
 }
 
 /// A load's result: the value, or the error it hit.
@@ -59,6 +60,8 @@ pub struct Canvas {
     /// where it left the branch it goes back into. Such a diff is read, not staged.
     pub since: Option<String>,
     pub(super) media: Option<FileMedia>,
+    /// A PDF's pages as images, once drawn.
+    pub(super) pdf: Loaded<Vec<std::path::PathBuf>>,
     /// The conflicts git left in the file, and the one last stepped to.
     pub(super) conflicts: Vec<patchwork_core::source_control::Conflict>,
     pub(super) conflict_shown: Option<usize>,
@@ -138,6 +141,7 @@ impl Canvas {
             blame: None,
             history: None,
             history_more: false,
+            pdf: None,
             revision: None,
             load_seq: 0,
             busy: false,
@@ -262,10 +266,19 @@ impl Canvas {
                     _ => i,
                 });
             let lines: Vec<SharedString> = lines.into_iter().map(SharedString::from).collect();
-            (file, diff, staged, media, lines, runs, widest, conflicts)
+            let pdf = media
+                .as_ref()
+                .filter(|m| m.kind == PreviewKind::Pdf)
+                .map(|m| {
+                    patchwork_core::projects::pdf_pages(std::path::Path::new(&m.absolute))
+                        .map_err(|e| e.to_string())
+                });
+            (
+                file, diff, staged, media, lines, runs, widest, conflicts, pdf,
+            )
         });
         cx.spawn(async move |this, cx| {
-            let (file, diff, staged, media, lines, runs, widest, conflicts) = task.await;
+            let (file, diff, staged, media, lines, runs, widest, conflicts, pdf) = task.await;
             this.update(cx, |this, cx| {
                 if this.load_seq != seq {
                     return;
@@ -298,6 +311,7 @@ impl Canvas {
                 this.diff = Some(diff);
                 this.staged = staged;
                 this.media = media;
+                this.pdf = pdf;
                 // What was read of the file's past is of the file as it was.
                 this.blame = None;
                 if this.blame_on {
@@ -323,11 +337,12 @@ impl Canvas {
         }
     }
 
-    /// The file is an image or a video, shown in place of its code and diff.
+    /// The file is an image, a video or a PDF, shown in place of its code and diff.
     pub(super) fn preview(&self) -> Option<CanvasTab> {
         match self.media.as_ref()?.kind {
             PreviewKind::Image => Some(CanvasTab::Image),
             PreviewKind::Video => Some(CanvasTab::Video),
+            PreviewKind::Pdf => Some(CanvasTab::Pdf),
             _ => None,
         }
     }

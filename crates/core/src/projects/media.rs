@@ -24,6 +24,8 @@ pub enum PreviewKind {
     Image,
     /// A video. It streams, so it has no size cap.
     Video,
+    /// A PDF, drawn a page at a time.
+    Pdf,
     /// Source or config text. The diff list keeps these, so they get no card.
     Text,
     /// A card with the file's size and type.
@@ -76,6 +78,8 @@ fn preview_kind(rel: &str, size: u64) -> PreviewKind {
         }
     } else if is_playable_video(&ext) {
         PreviewKind::Video
+    } else if ext == "pdf" {
+        PreviewKind::Pdf
     } else if SOURCE_TEXT.contains(&ext.as_str()) {
         PreviewKind::Text
     } else {

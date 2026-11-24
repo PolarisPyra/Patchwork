@@ -155,10 +155,10 @@ impl Canvas {
                 (CanvasTab::Plan, "Plan", plan),
                 (
                     preview,
-                    if preview == CanvasTab::Image {
-                        "Image"
-                    } else {
-                        "Video"
+                    match preview {
+                        CanvasTab::Image => "Image",
+                        CanvasTab::Pdf => "PDF",
+                        _ => "Video",
                     },
                     0,
                 ),
