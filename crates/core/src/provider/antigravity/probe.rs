@@ -27,6 +27,11 @@ const ACP_PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long `detect_agent` and `list_models` reuse one ACP session probe.
 const PROBE_CACHE_TTL: Duration = Duration::from_secs(60);
 
+/// How long a probe that could not run is reused. Unlike an answer about sign-in, a probe that
+/// timed out or could not start says nothing about it, so it is asked again soon: a failure at
+/// startup, while the machine is busy, would otherwise read as "not signed in" for a minute.
+const PROBE_FAILED_TTL: Duration = Duration::from_secs(5);
+
 /// JSON-RPC error code `agy acp` returns when the user is not signed in.
 const AUTH_REQUIRED_CODE: i64 = -32000;
 
@@ -147,7 +152,13 @@ pub(super) fn probe_acp_cached() -> AcpProbe {
         cache
             .locked()
             .as_ref()
-            .filter(|(at, _)| at.elapsed() < PROBE_CACHE_TTL)
+            .filter(|(at, probe)| {
+                let ttl = match probe {
+                    AcpProbe::Unavailable(_) => PROBE_FAILED_TTL,
+                    _ => PROBE_CACHE_TTL,
+                };
+                at.elapsed() < ttl
+            })
             .map(|(_, probe)| probe.clone())
     };
     if let Some(probe) = cached() {
