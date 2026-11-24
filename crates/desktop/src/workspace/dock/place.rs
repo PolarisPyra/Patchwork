@@ -90,9 +90,12 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         self.sync_panel(cx);
-        self.dock
-            .update(cx, |p, cx| p.run_named(launch, Some(name), cx));
-        self.open_panel(DockTab::Terminal, cx);
+        self.panel_open = true;
+        self.dock.update(cx, |p, cx| {
+            p.open_terminal_tab(cx);
+            p.run_named(launch, Some(name), cx);
+        });
+        cx.notify();
     }
 
     /// Types `text` into the terminal of the command [`Self::run_in_terminal`] started.
@@ -114,21 +117,15 @@ impl Workspace {
     }
 
     /// The terminal key opens the terminal, focuses it if the panel shows something else, and
-    /// closes the panel from inside it. In a task with its own worktree it opens on a shell in
-    /// that worktree, as the worktree menu's "Open terminal here" does.
+    /// closes the panel from inside it. It opens on a shell in the open task's worktree or the
+    /// open project's folder, starting one there when none exists.
     pub(crate) fn toggle_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let panel = self.dock.read(cx);
         if self.panel_open && panel.tab == DockTab::Terminal && panel.terminal_focused(window) {
             return self.close_panel(window, cx);
         }
         self.open_panel(DockTab::Terminal, cx);
-        let folder = self.local_chat_folder();
-        self.dock.update(cx, |p, cx| {
-            if let Some(folder) = folder {
-                p.switch_to_shell_in(&folder, cx);
-            }
-            p.focus_terminal(window, cx);
-        });
+        self.dock.update(cx, |p, cx| p.focus_terminal(window, cx));
     }
 
     /// The open task's worktree when it is on this computer.

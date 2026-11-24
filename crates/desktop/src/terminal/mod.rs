@@ -13,4 +13,4 @@ mod shell;
 mod active_shell;
 
 pub(crate) use select::Drag;
-pub(crate) use shell::{Metrics, Shell};
+pub(crate) use shell::{Metrics, Shell, same_folder};
