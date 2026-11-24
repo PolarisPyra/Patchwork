@@ -59,8 +59,8 @@ impl Core {
             agent: kind,
             model: settings.tokens.default_models.get(&kind).cloned(),
             effort: None,
-            // An agent runs on its own, so its edits are approved and anything else asks.
-            access_mode: AccessMode::AutoAcceptEdits,
+            // As a new task starts: an agent runs on its own, and asking at each step stalls it.
+            access_mode: AccessMode::FullAccess,
             projects: Vec::new(),
             created_at: i64::try_from(now_ms()).unwrap_or(i64::MAX),
             archived_at: None,
