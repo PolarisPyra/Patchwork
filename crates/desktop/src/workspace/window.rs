@@ -122,6 +122,8 @@ pub struct Workspace {
     pub(crate) chat_tabs: Vec<String>,
     /// The Issues view's lists.
     pub(crate) issues: crate::sidebar::issues::IssueLists,
+    /// The chats carried on in their agent's CLI in a terminal, not yet brought back.
+    pub(crate) in_cli: std::collections::HashSet<String>,
     pub view: Option<View>,
     pub page: Page,
     /// Whether the orchestrator page has the task list beside it. Its own, so opening or closing
@@ -418,6 +420,7 @@ impl Workspace {
             chat: None,
             chat_tabs: Vec::new(),
             issues: crate::sidebar::issues::IssueLists::default(),
+            in_cli: std::collections::HashSet::new(),
             view: Some(View::Tasks),
             page: Page::Orchestrator,
             orchestrator_tasks: true,

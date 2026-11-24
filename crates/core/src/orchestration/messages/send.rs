@@ -166,6 +166,7 @@ impl Core {
         queue: bool,
         from: Option<(Platform, &str)>,
     ) -> Result<Message, Error> {
+        self.back_before_sending(&chat_id);
         let msg = self.deliver(
             chat_id.clone(),
             text,

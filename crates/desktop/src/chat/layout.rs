@@ -13,6 +13,7 @@ use super::transcript::reply::background_tasks;
 use super::top_right::buttons::header;
 use super::above_composer::missing_folder;
 use super::above_composer::goal_bar;
+use super::above_composer::in_terminal;
 use super::above_composer::plan_steps;
 use super::above_composer::agent_questions;
 use super::above_composer::queued_messages;
@@ -86,6 +87,7 @@ pub fn render(
     w.load_worktree(cx);
     w.load_worktree_told(cx);
     let missing = missing_folder::missing_folder(w, &t, cx);
+    let away = in_terminal::in_terminal(w, &t, cx);
     let parent = subagent_footer(w, &t, cx);
     let header = (!is_new).then(|| header(w, &t, window, cx));
     w.reveal_find(window, cx);
@@ -115,6 +117,7 @@ pub fn render(
                     .children(plan)
                     .children(banner)
                     .children(missing)
+                    .children(away)
                     .children(prompt)
                     .children(queued)
                     .children(goal)

@@ -205,6 +205,9 @@ impl Workspace {
                     self.dismissed_choices.insert(shown);
                 }
                 self.remember_project(chat.project_id.clone());
+                if self.core.in_cli(id) {
+                    self.in_cli.insert(id.to_owned());
+                }
                 self.chat = Some(chat);
                 self.open_folds.clear();
                 self.open_steps.clear();
@@ -548,6 +551,8 @@ impl Workspace {
                 }
             },
         };
+        // Sending brings a chat carried on in its CLI back first.
+        self.in_cli.remove(&id);
         let core = Arc::clone(&self.core);
         let draft = (id.clone(), text.clone(), attachments.clone());
         let task =
