@@ -7,6 +7,8 @@
 //! button, gives a chat a tab of its own beside the open one. A tab dragged out of its strip goes
 //! to another pane, or splits one (see `panes/`). Each tab keeps one size, open or not, busy or
 //! not.
+//!
+//! An agent's chat takes no tab: it shows alone, over the pane that had the focus, with no strip.
 
 // Rust guideline compliant 2026-10-09
 
@@ -53,14 +55,25 @@ impl Workspace {
         let Some(open) = self.chat.as_ref() else {
             return;
         };
+        if open.agent_id.is_some() {
+            return;
+        }
         let (id, project) = (open.id.clone(), open.project_id.clone());
+        // Leaving an agent's chat, which had no tab, the tab it was shown over is the open one.
+        let from_agent = replace.is_some_and(|r| self.is_agent_chat(r));
+        let replace = replace.map(str::to_owned);
         let layout = self.layout_mut(project.as_deref());
         if let Some(pane) = layout.pane_of(&id).and_then(|p| layout.pane_mut(p)) {
             pane.shown = Some(id);
             return;
         }
         let pane = layout.focused_pane();
-        let slot = replace.and_then(|r| pane.tabs.iter().position(|t| t == r));
+        let replace = if from_agent {
+            pane.shown.clone()
+        } else {
+            replace
+        };
+        let slot = replace.and_then(|r| pane.tabs.iter().position(|t| *t == r));
         match slot {
             Some(at) if new => pane.tabs.insert(at + 1, id.clone()),
             Some(at) => pane.tabs[at].clone_from(&id),
@@ -149,6 +162,13 @@ impl Workspace {
             .any(|c| c.id == id && c.archived_at.is_none())
     }
 
+    /// Whether chat `id` is an agent's, which takes no tab.
+    pub(crate) fn is_agent_chat(&self, id: &str) -> bool {
+        self.chats
+            .iter()
+            .any(|c| c.id == id && c.agent_id.is_some())
+    }
+
     /// The project whose tabs show: the open chat's, or else the one picked for a new task.
     pub(crate) fn tabs_project(&self) -> Option<String> {
         match &self.chat {
@@ -162,7 +182,7 @@ impl Workspace {
         tabs.iter()
             .filter_map(|id| self.chats.iter().find(|c| c.id == *id))
             .map(AsRef::as_ref)
-            .filter(|c| c.archived_at.is_none())
+            .filter(|c| c.archived_at.is_none() && c.agent_id.is_none())
     }
 
     /// The tasks of `project` in the task list that have no tab, in its order.
@@ -173,6 +193,7 @@ impl Workspace {
             .filter(|c| {
                 c.archived_at.is_none()
                     && c.parent.is_none()
+                    && c.agent_id.is_none()
                     && c.project_id.as_deref() == project
                     && !self.has_tab(&c.id)
             })
@@ -189,6 +210,9 @@ pub(crate) fn tab_strip(
     t: &Theme,
     cx: &mut Context<Workspace>,
 ) -> Option<AnyElement> {
+    if w.chat.as_ref().is_some_and(|c| c.agent_id.is_some()) {
+        return None;
+    }
     let project = w.tabs_project();
     let layout = w.layouts.get(&project)?;
     let (focused, alone) = (layout.focused == pane, layout.panes.len() == 1);

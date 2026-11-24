@@ -35,6 +35,12 @@ pub(crate) fn panes(
         Some(alone) => Node::Pane(alone),
         None => layout.root.clone(),
     };
+    // An agent's chat takes no tab, so it shows alone over the focused pane.
+    let root = if w.chat.as_ref().is_some_and(|c| c.agent_id.is_some()) {
+        Node::Pane(focused)
+    } else {
+        root
+    };
     let t = *theme(cx);
     node(w, v, &root, &[], focused, &t, window, cx)
 }
