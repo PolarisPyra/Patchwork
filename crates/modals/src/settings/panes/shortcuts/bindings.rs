@@ -118,6 +118,12 @@ pub(super) const COMMANDS: &[Command] = &[
     ),
     cmd("chat.find", "Chat", "Find in chat", None),
     cmd(
+        "chat.closeTab",
+        "Chat",
+        "Close tab",
+        Some("Closes the open chat's tab, when it has one"),
+    ),
+    cmd(
         "chat.back",
         "Chat",
         "Go back",
@@ -163,6 +169,7 @@ pub(super) const DEFAULT_RULES: &[(&str, &str, bool)] = &[
     ("palette.toggle", "mod+k", false),
     ("chat.new", "mod+t", false),
     ("chat.find", "mod+f", false),
+    ("chat.closeTab", "mod+w", false),
     ("chat.back", "alt+left", false),
     ("chat.forward", "alt+right", false),
     ("settings.open", "mod+,", false),
@@ -412,6 +419,7 @@ fn action_for(id: &str) -> Option<Box<dyn Action>> {
         "palette.toggle" => Box::new(patchwork_ui::TogglePalette),
         "chat.new" => Box::new(patchwork_ui::NewChat),
         "chat.find" => Box::new(patchwork_ui::FindInChat),
+        "chat.closeTab" => Box::new(patchwork_ui::CloseChatTab),
         "chat.back" => Box::new(patchwork_ui::GoBack),
         "chat.forward" => Box::new(patchwork_ui::GoForward),
         "settings.open" => Box::new(patchwork_ui::OpenSettings),

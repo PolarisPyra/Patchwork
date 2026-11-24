@@ -38,6 +38,10 @@ pub struct Renaming {
 #[derive(Clone)]
 pub(super) enum Act {
     Rename,
+    /// Put the chat in a tab beside the open chat's.
+    SendToTab,
+    /// Take the chat out of the tabs.
+    CloseTab,
     Favorite(bool),
     Pin(bool),
     Background,

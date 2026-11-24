@@ -61,6 +61,11 @@ impl Workspace {
                 });
             }
             Target::Chat(id) => {
+                if self.chat_tabs.contains(id) {
+                    items.insert(0, item("Close tab", "x", Act::CloseTab));
+                } else {
+                    items.insert(0, item("Send to tab", "plus", Act::SendToTab));
+                }
                 if let Some(chat) = self.chat_by_id(id) {
                     items.push(if chat.favorite {
                         item("Remove from favorites", "star", Act::Favorite(false))
@@ -269,6 +274,8 @@ impl Workspace {
         self.close_context_menu(window, cx);
         match (&target, &act) {
             (_, Act::Rename) => return self.start_rename(target, window, cx),
+            (Target::Chat(id), Act::SendToTab) => return self.send_to_tab(id, cx),
+            (Target::Chat(id), Act::CloseTab) => return self.close_tab(id, cx),
             (Target::Chat(id), Act::Favorite(_) | Act::Pin(_) | Act::Restore) => {
                 let id = id.clone();
                 let change = move |core: &patchwork_core::Core| match act {

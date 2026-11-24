@@ -3,7 +3,8 @@
 //!
 //! `transcript/` is the message list and each reply, `top_right/` what floats over the
 //! transcript's top right, `above_composer/` the strips and cards between the transcript and the
-//! composer, and `composer/` the box a message is written in.
+//! composer, `composer/` the box a message is written in, and `tabs.rs` the strip of chats open
+//! in tabs over it all.
 
 // Rust guideline compliant 2026-10-09
 
@@ -12,6 +13,7 @@ pub mod backdrop;
 pub mod composer;
 mod layout;
 mod session;
+mod tabs;
 pub(crate) mod text_colors;
 pub mod top_right;
 pub mod transcript;
