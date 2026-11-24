@@ -287,7 +287,12 @@ impl Markdown<'_> {
                     if let Some((_, blocks)) = self.stack.pop()
                         && let Some((Frame::List { items, .. }, _)) = self.stack.last_mut()
                     {
-                        items.push(stack_blocks(blocks));
+                        // An empty item keeps one line, so its marker doesn't draw over the next.
+                        items.push(if blocks.is_empty() {
+                            div().child("\u{a0}")
+                        } else {
+                            stack_blocks(blocks)
+                        });
                     }
                 }
                 TagEnd::List(_) => {
