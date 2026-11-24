@@ -47,8 +47,8 @@ If you find a test, harness, or script that slipped in, point it out and ask bef
 
 ## Ground rules
 
-- **Leave changes uncommitted until reviewed.** No commits, branches, worktrees, or pushes unless
-  the user asks ("push", "push to git", "release").
+- **Push finished work.** Once a change is verified, run the [push flow](#push-the-pr-flow)
+  without waiting to be asked. Leave it uncommitted only when the user says to hold it.
 - **Every change reaches `main` through a squash-merged PR.** The ruleset on `main` requires a PR
   and passing CI. Only the Release workflow pushes to `main` directly.
 - **One PR per change.** CI, docs and tooling go in their own PR with a `ci`, `docs` or `chore`
@@ -97,7 +97,8 @@ Both must pass with zero warnings. The `scripts/hooks/pre-push` hook runs the sa
 
 ## "Push": the PR flow
 
-"Push" or "push to git" runs this whole flow without asking again.
+A verified change, or the user saying "push" or "push to git", runs this whole flow without asking
+again.
 
 ```mermaid
 flowchart TD
