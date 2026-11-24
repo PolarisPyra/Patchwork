@@ -281,6 +281,12 @@ impl Render for Workspace {
                 this.peeking = false;
                 cx.notify();
             }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::ShowIssues, _, cx| {
+                this.view = Some(View::Issues);
+                this.page = Page::Chats;
+                this.peeking = false;
+                cx.notify();
+            }))
             .on_action(cx.listener(|this, _: &patchwork_ui::ShowQuilts, _, cx| {
                 this.show_quilts_page(cx);
             }))
