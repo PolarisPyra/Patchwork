@@ -174,6 +174,7 @@ impl Workspace {
                     // A task's first turn makes its worktree, which Source Control then shows.
                     this.read_git(false, cx);
                 }
+                this.sync_panel(cx);
                 cx.notify();
             })
         })

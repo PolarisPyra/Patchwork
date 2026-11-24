@@ -34,6 +34,11 @@ pub struct Shell {
     pub host: Option<String>,
     /// The folder it started in.
     cwd: String,
+    /// The project or worktree folder it was opened for, when one was active.
+    workspace: Option<String>,
+    /// The app opened it for that folder rather than the user asking for a terminal, so opening
+    /// another project's folder closes it and takes its place.
+    auto: bool,
     /// Set once the shell has ended with an error, while its last output stays readable.
     pub exit_code: Option<u32>,
     /// It runs one command rather than a shell, and has yet to say how the command ended.
@@ -117,6 +122,22 @@ fn frames() -> (
     )
 }
 
+/// Whether `a` and `b` name the same local or remote folder.
+pub(crate) fn same_folder(a: &str, b: &str) -> bool {
+    if patchwork_core::system::ssh::is_remote(a) || patchwork_core::system::ssh::is_remote(b) {
+        a.trim_end_matches('/') == b.trim_end_matches('/')
+    } else {
+        std::path::Path::new(a) == std::path::Path::new(b)
+    }
+}
+
+impl Shell {
+    /// Whether this shell was opened for `folder`.
+    pub(crate) fn matches_folder(&self, folder: &str) -> bool {
+        same_folder(self.workspace.as_deref().unwrap_or(&self.cwd), folder)
+    }
+}
+
 impl Dock {
     /// Starts a shell: `chosen`, else the one last picked while it is still installed, else the
     /// user's. `asked` is a "New terminal" that comes after the one starting now.
@@ -129,13 +150,16 @@ impl Dock {
         }
         let Some((cols, rows)) = self.grid else {
             // The screen has no size yet; it starts once the panel is laid out.
-            self.pending_start = Some((asked, chosen));
+            if asked || self.pending_start.is_none() {
+                self.pending_start = Some((asked, chosen));
+            }
             return;
         };
         self.starting = true;
         self.error = None;
         let core = Arc::clone(&self.core);
         let cwd = self.cwd.clone();
+        let workspace = cwd.clone();
         let host = self.host.clone();
         let saved = self.picked.clone();
         let (sink, rx) = frames();
@@ -156,16 +180,34 @@ impl Dock {
             },
             move |this, started, cx| {
                 this.starting = false;
-                match started {
+                let ok = match started {
                     Ok(attached) => {
                         let id = attached.info.id;
-                        this.add_shell(attached, rx, cx);
-                        this.active = Some(id);
+                        let same_host = attached.info.host == this.host;
+                        let matches_current = match (&workspace, &this.cwd) {
+                            (Some(w), Some(c)) => same_folder(w, c),
+                            (None, None) => true,
+                            _ => false,
+                        };
+                        this.add_shell(attached, workspace, !asked, rx, cx);
+                        if same_host && (this.active.is_none() || matches_current) {
+                            this.active = Some(id);
+                        }
+                        true
                     }
-                    Err(e) => this.error = Some(e.to_string()),
-                }
+                    Err(e) => {
+                        this.error = Some(e.to_string());
+                        false
+                    }
+                };
                 if let Some(next) = this.start_next.take() {
                     this.start(true, next, cx);
+                } else if ok
+                    && this.visible
+                    && this.tab == crate::workspace::dock::DockTab::Terminal
+                    && let Some(folder) = this.cwd.clone()
+                {
+                    this.switch_to_shell_in(&folder, cx);
                 }
                 cx.notify();
             },
@@ -211,7 +253,7 @@ impl Dock {
                 match started {
                     Ok(attached) => {
                         let id = attached.info.id;
-                        this.add_shell(attached, rx, cx);
+                        this.add_shell(attached, None, false, rx, cx);
                         if let Some(shell) = this.shells.iter_mut().find(|s| s.id == id) {
                             shell.task = true;
                             if let Some(name) = name {
@@ -233,31 +275,51 @@ impl Dock {
     }
 
     /// Attaches to the shells the app already has, once: a shell that ended cleanly is closed
-    /// instead. Then starts one when there is none, or when one was asked for.
+    /// instead. Then switches to a shell in the active project's folder, or starts one when there
+    /// is none or one was asked for.
     pub(crate) fn restore_then_start(&mut self, asked: bool, cx: &mut Context<Self>) {
         self.restore(cx);
-        if asked || self.shown().next().is_none() {
-            self.start(asked, None, cx);
+        if asked {
+            self.start(true, None, cx);
+        } else if let Some(folder) = self.cwd.clone() {
+            self.switch_to_shell_in(&folder, cx);
+        } else if self.shown().next().is_none() {
+            self.start(false, None, cx);
         }
     }
 
-    /// Switches to a shell that started in `folder`, or starts one there when none did.
+    /// Switches to a shell that started in `folder`, starting one there when none did. A shell the
+    /// app opened for another project's folder is closed first, so moving between projects leaves
+    /// the one terminal it replaced rather than a tab per project.
     pub fn switch_to_shell_in(&mut self, folder: &str, cx: &mut Context<Self>) {
+        if self
+            .active_shell()
+            .is_some_and(|s| s.matches_folder(folder))
+        {
+            return;
+        }
         let found = self
             .shown()
-            .find(|s| !s.task && std::path::Path::new(&s.cwd).starts_with(folder))
+            .rev()
+            .find(|s| !s.task && s.matches_folder(folder))
             .map(|s| s.id);
-        match found {
-            Some(id) => {
-                self.active = Some(id);
-                cx.notify();
-            }
-            None if !self.starting => self.start(true, None, cx),
-            None => {}
+        if let Some(id) = found {
+            self.active = Some(id);
+            cx.notify();
+            return;
         }
+        let left: Vec<u32> = self
+            .shown()
+            .filter(|s| s.auto && !s.matches_folder(folder))
+            .map(|s| s.id)
+            .collect();
+        for id in left {
+            self.forget(id, cx);
+        }
+        self.start(false, None, cx);
     }
 
-    fn restore(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn restore(&mut self, cx: &mut Context<Self>) {
         if !self.restored {
             self.restored = true;
             for info in self.core.terminals.list() {
@@ -269,7 +331,7 @@ impl Dock {
                 let Ok(attached) = self.core.terminals.attach(info.id, sink) else {
                     continue;
                 };
-                self.add_shell(attached, rx, cx);
+                self.add_shell(attached, None, false, rx, cx);
             }
         }
     }
@@ -277,6 +339,8 @@ impl Dock {
     fn add_shell(
         &mut self,
         attached: AttachedTerminal,
+        workspace: Option<String>,
+        auto: bool,
         mut rx: futures::channel::mpsc::UnboundedReceiver<TerminalFrame>,
         cx: &mut Context<Self>,
     ) {
@@ -328,6 +392,8 @@ impl Dock {
             name: attached.info.name,
             host: attached.info.host,
             cwd: attached.info.cwd,
+            workspace,
+            auto,
             exit_code,
             task: false,
             parser,
@@ -378,6 +444,20 @@ impl Dock {
     /// Takes the shell's tab away now, and ends its processes behind it. The last one going
     /// closes the panel.
     pub(crate) fn kill(&mut self, id: u32, cx: &mut Context<Self>) {
+        let shown = self.forget(id, cx);
+        if shown
+            && self.shown().next().is_none()
+            && self.tab == crate::workspace::dock::DockTab::Terminal
+        {
+            cx.emit(crate::workspace::dock::DockEvent::Close);
+        }
+        cx.notify();
+    }
+
+    /// Takes the shell's tab away and ends its processes behind it, without closing the panel
+    /// when it was the last one: another shell takes its place. Says whether its tab was one of
+    /// those the terminal shows.
+    fn forget(&mut self, id: u32, cx: &mut Context<Self>) -> bool {
         // A run whose tab is closed has ended without failing.
         if let Some(shell) = self.shells.iter_mut().find(|s| s.id == id)
             && std::mem::take(&mut shell.task)
@@ -388,20 +468,14 @@ impl Dock {
             });
         }
         let Some(at) = self.shells.iter().position(|s| s.id == id) else {
-            return;
+            return false;
         };
         let shown = self.shells.remove(at).host == self.host;
         if self.active == Some(id) {
             self.active = None;
         }
         self.close_in_background(id, cx);
-        if shown
-            && self.shown().next().is_none()
-            && self.tab == crate::workspace::dock::DockTab::Terminal
-        {
-            cx.emit(crate::workspace::dock::DockEvent::Close);
-        }
-        cx.notify();
+        shown
     }
 
     fn close_in_background(&self, id: u32, cx: &mut Context<Self>) {
@@ -415,7 +489,7 @@ impl Dock {
     }
 
     /// The shells on the machine the terminal shows.
-    pub(crate) fn shown(&self) -> impl Iterator<Item = &Shell> {
+    pub(crate) fn shown(&self) -> impl DoubleEndedIterator<Item = &Shell> {
         self.shells.iter().filter(|s| s.host == self.host)
     }
 

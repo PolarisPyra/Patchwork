@@ -161,7 +161,8 @@ impl Dock {
     }
 
     /// Takes the settings, the machine and the open project's folder as they are now. A machine
-    /// picked while the terminal shows brings up its own terminals, starting one when it has none.
+    /// or folder change while the terminal shows brings up its own terminals, starting one when it
+    /// has none.
     pub fn sync(
         &mut self,
         settings: &Settings,
@@ -179,6 +180,11 @@ impl Dock {
         self.settings = settings.terminal.clone();
         self.logging = settings.logging.clone();
         self.computer_use = settings.computer_use;
+        let cwd_changed = match (self.cwd.as_deref(), cwd.as_deref()) {
+            (Some(a), Some(b)) => !crate::terminal::same_folder(a, b),
+            (None, None) => false,
+            _ => true,
+        };
         self.cwd = cwd;
         if resized {
             self.grid = None;
@@ -191,10 +197,27 @@ impl Dock {
                 self.restore_then_start(false, cx);
                 self.focus_terminal = true;
             }
+        } else if cwd_changed
+            && self.visible
+            && self.tab == DockTab::Terminal
+            && let Some(folder) = self.cwd.clone()
+        {
+            self.switch_to_shell_in(&folder, cx);
         }
         if !self.computer_use && self.tab == DockTab::Screen {
             self.tab = DockTab::Terminal;
         }
+        cx.notify();
+    }
+
+    /// Shows the terminal tab without starting a default shell, when the caller is about to start
+    /// its own shell or command.
+    pub(crate) fn open_terminal_tab(&mut self, cx: &mut Context<Self>) {
+        self.tab = DockTab::Terminal;
+        self.visible = true;
+        self.follow_output(false, cx);
+        self.find_shells(cx);
+        self.restore(cx);
         cx.notify();
     }
 
@@ -232,7 +255,7 @@ impl Dock {
 
     /// Starts another terminal, in the shell picked last.
     pub fn new_terminal(&mut self, cx: &mut Context<Self>) {
-        self.show(DockTab::Terminal, cx);
+        self.open_terminal_tab(cx);
         self.start(true, None, cx);
     }
 

@@ -228,6 +228,12 @@ impl Workspace {
                     // Another task of the project may work in a worktree of its own.
                     self.read_git(false, cx);
                 }
+                self.load_worktree(cx);
+                // A task known to have a worktree syncs the terminal once its worktree root loads,
+                // so switching to it does not open a shell in the project folder first.
+                if self.chat_folder().is_some() || !self.worktree_marks.contains_key(id) {
+                    self.sync_panel(cx);
+                }
                 true
             }
             Err(e) => {
@@ -645,6 +651,7 @@ impl Workspace {
         if self.git_root.is_some() && self.git_root != folder {
             self.read_git(false, cx);
         }
+        self.sync_panel(cx);
     }
 
     /// Starts a chat (no project) or a task in `project`, at the top of `folder` when given, shows
