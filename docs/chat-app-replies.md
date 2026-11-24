@@ -184,7 +184,7 @@ Every call goes through `registry::invoke`:
    the permission. Arguments are not logged, since they hold prompts and settings.
 7. The call is added to the last 200 kept in the app state (`gateway.activity`): when, the chat
    app, the pairings in that conversation, the capability, its permission and whether it
-   worked. Settings lists the latest under Security, as "Chat app activity".
+   worked. Settings lists the latest under Vault, as "Chat app activity".
 
 ### Who is asked, by access mode
 
