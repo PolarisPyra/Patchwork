@@ -177,6 +177,7 @@ pub(in crate::orchestration) fn follow_agy_children(
 ) {
     let core = Arc::clone(&turn.core);
     let exited = Arc::clone(&turn.exited);
+    let cancelled = Arc::clone(&turn.cancelled);
     let root = crate::system::ssh::here(&turn.root).to_string();
     let (chat_id, message_id) = (child.chat_id.clone(), child.message_id.clone());
     let spawned = std::thread::Builder::new()
@@ -210,12 +211,24 @@ pub(in crate::orchestration) fn follow_agy_children(
                 }
                 std::thread::sleep(TRANSCRIPT_POLL);
             }
+            // A worker agy stopped partway through its turn was cut off, not finished: a swarm
+            // worker parks between turns, so only a step that ends one shows its work is done.
+            let ended = transcripts
+                .iter()
+                .all(provider::antigravity::Transcript::has_ended);
+            let status = if ended {
+                MessageStatus::Complete
+            } else if cancelled.load(Ordering::SeqCst) {
+                MessageStatus::Cancelled
+            } else {
+                MessageStatus::Interrupted
+            };
             publish(
                 &core,
                 &child.chat_id,
                 AgentEvent::TurnCompleted {
                     message_id: child.message_id,
-                    status: MessageStatus::Complete,
+                    status,
                     error: None,
                 },
             );
@@ -227,8 +240,8 @@ pub(in crate::orchestration) fn follow_agy_children(
             &chat_id,
             AgentEvent::TurnCompleted {
                 message_id,
-                status: MessageStatus::Complete,
-                error: None,
+                status: MessageStatus::Error,
+                error: Some("Patchwork could not read this agent's steps.".into()),
             },
         );
     }

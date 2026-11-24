@@ -117,6 +117,15 @@ fn settle_late(core: &Core, chat_id: &str, mut event: AgentEvent) -> AgentEvent 
     let AgentEvent::ToolStarted { message_id, tool } = &mut event else {
         return event;
     };
+    // A swarm worker's call is the swarm's to show: it reads running again each time its worker
+    // goes back to work, and the swarm ends it when the agent's process does. A reply that ends
+    // while its workers are at work then still shows which of them are.
+    if tool
+        .id
+        .starts_with(crate::provider::antigravity::SWARM_TASK_PREFIX)
+    {
+        return event;
+    }
     let ended = core.store.with_chats(|chats| {
         chats
             .iter()
@@ -307,8 +316,12 @@ pub(in crate::orchestration) fn apply(chat: &mut Chat, event: &AgentEvent) {
         AgentEvent::ToolStarted { tool, .. } => {
             if let Some(shown) = msg.tools.iter_mut().find(|t| t.id == tool.id) {
                 let started_at = shown.started_at;
+                // The chat it opened is its own, whichever update says how it reads now: a
+                // swarm worker's call is shown again each time its worker goes back to work.
+                let child_chat_id = shown.child_chat_id.clone();
                 *shown = tool.clone();
                 shown.started_at = started_at.or(tool.started_at);
+                shown.child_chat_id = shown.child_chat_id.clone().or(child_chat_id);
                 return;
             }
             end_thinking(msg);
