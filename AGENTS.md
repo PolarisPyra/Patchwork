@@ -4,7 +4,7 @@ Run all Git commands from the repository root.
 
 ## Ground rules
 
-- **Push finished work.** Once a change is verified, open its PR and turn on auto-merge without waiting to be asked. Leave it uncommitted only when the user says to hold it.
+- **Leave changes uncommitted until reviewed.** No commits, branches, worktrees, or pushes unless the user explicitly asks ("push", "push to git", "release").
 - **Every change reaches `main` through a squash-merged PR.** The ruleset on `main` requires a PR and passing CI. Only the Release workflow pushes to `main` directly.
 - **One PR per change.** Keep unrelated changes separate.
 - **Branch every PR from fresh `origin/main`**, never from another PR's branch or from local `main`.
