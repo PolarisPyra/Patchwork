@@ -169,6 +169,11 @@ pub fn detect_agent(kind: AgentKind) -> AgentStatus {
         AgentKind::Codex => codex::auth(&mut status),
         AgentKind::Antigravity => antigravity::auth(&mut status),
         AgentKind::OpenCode => opencode::auth(&mut status),
+        AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => {
+            if let Some(spec) = super::acp::spec(kind) {
+                super::acp::auth(spec, &mut status);
+            }
+        }
         AgentKind::Api => {}
     }
     status
@@ -199,6 +204,7 @@ pub fn list_models(kind: AgentKind) -> Vec<ModelOption> {
         AgentKind::Codex => (codex::configured_model(), codex::models()),
         AgentKind::Antigravity => (antigravity::configured_model(), antigravity::models()),
         AgentKind::OpenCode => (None, opencode::models()),
+        AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => (None, super::acp::models(kind)),
         AgentKind::Api => (
             crate::provider::api::default_model(),
             crate::provider::api::models(),
@@ -219,7 +225,9 @@ pub fn list_models(kind: AgentKind) -> Vec<ModelOption> {
         is_legacy: false,
         efforts: None,
         context_window,
+        needs_cli: None,
     }];
     out.extend(models);
+    super::cli_update::mark_models_needing_update(kind, &mut out);
     out
 }

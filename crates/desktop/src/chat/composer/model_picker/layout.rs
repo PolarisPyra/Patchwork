@@ -57,6 +57,14 @@ impl Composer {
             let pick = Pick::Model(row.kind, row.item.id.clone());
             let key = row.key.clone();
             let label = row.item.label.clone();
+            let needs_cli = row
+                .item
+                .needs_cli
+                .as_ref()
+                .map(|min| format!("Needs {} {min}+", agent_label(row.kind)));
+            let name = needs_cli
+                .as_ref()
+                .map_or_else(|| label.clone(), |note| format!("{label}, {note}"));
             let hover = t.bg_hover;
             let shortcut = index.filter(|&i| i < 9).map(|i| {
                 div()
@@ -78,7 +86,7 @@ impl Composer {
             div()
                 .id(SharedString::from(format!("model-{}", row.key)))
                 .role(Role::ListBoxOption)
-                .aria_label(label.clone())
+                .aria_label(name)
                 .aria_selected(selected)
                 .tab_index(0)
                 .mb(px(2.))
@@ -130,7 +138,10 @@ impl Composer {
                                     row.item.id.as_deref().or(row.item.default_model.as_deref()),
                                     12.,
                                 ))
-                                .child(div().truncate().child(source_of(row.kind, &row.item))),
+                                .child(div().truncate().child(source_of(row.kind, &row.item)))
+                                .children(needs_cli.map(|note| {
+                                    div().flex_none().text_color(t.warning).child(note)
+                                })),
                         ),
                 )
                 .children(shortcut)

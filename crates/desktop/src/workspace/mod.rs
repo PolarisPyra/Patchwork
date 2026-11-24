@@ -17,7 +17,7 @@ mod updates;
 
 pub use patchwork_modals::granular::GranularScope;
 pub(crate) use window::{Place, end_thinking, message_mut};
-pub(crate) use updates::restart;
+pub(crate) use updates::{CLI_UPDATE_TAG, restart};
 pub use window::{
     Page, ReplyNotice, SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, View, Workspace, is_busy,
     is_working,

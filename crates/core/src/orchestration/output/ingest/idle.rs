@@ -28,7 +28,7 @@ pub(super) fn can_idle(turn: &Turn, goal: Option<&Goal>, stream_error: Option<&S
 /// keep their process warm between messages so the next turn skips cold startup. An active goal
 /// ends the turn instead, so the goal is settled and carried on.
 pub(super) fn stays_up(turn: &Turn, goal: Option<&Goal>) -> bool {
-    matches!(turn.agent, AgentKind::Claude | AgentKind::Antigravity)
+    (turn.agent == AgentKind::Claude || turn.agent.speaks_acp())
         && !goal.is_some_and(|g| g.status == GoalStatus::Active)
 }
 
@@ -111,7 +111,7 @@ pub(super) fn go_idle(
     let turns = turn.core.runner.turns.locked();
     let mut queued = std::mem::take(&mut *turn.queue.locked());
     // A steer that stopped Antigravity as its reply ended stopped nothing, so it goes first.
-    if turn.agent == AgentKind::Antigravity {
+    if turn.agent.speaks_acp() {
         queued.splice(0..0, turn.steers.locked().drain(..));
         turn.cancelling.store(false, Ordering::SeqCst);
     }

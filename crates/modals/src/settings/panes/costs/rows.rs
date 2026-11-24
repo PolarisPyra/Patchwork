@@ -223,6 +223,9 @@ pub(super) fn series(agent: AgentKind, t: &Theme) -> Hsla {
         AgentKind::Api => rgb(0x004c_8df6).into(),
         AgentKind::Antigravity => t.syn_string,
         AgentKind::OpenCode => t.syn_keyword,
+        AgentKind::Qwen => t.syn_function,
+        AgentKind::Kimi => t.syn_number,
+        AgentKind::Auggie => t.syn_type,
     }
 }
 

@@ -24,6 +24,8 @@ pub struct NotificationSettings {
     pub chats: BTreeMap<String, Notices>,
     /// The projects whose chats without their own choice notify nowhere.
     pub muted_projects: Vec<String>,
+    /// Whether the desktop says when a connected agent CLI has a newer release.
+    pub cli_updates: bool,
 }
 
 impl Default for NotificationSettings {
@@ -41,6 +43,7 @@ impl Default for NotificationSettings {
             away_after_secs: 300,
             chats: BTreeMap::new(),
             muted_projects: Vec::new(),
+            cli_updates: true,
         }
     }
 }

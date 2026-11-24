@@ -10,7 +10,7 @@ mod turn;
 
 #[doc(inline)]
 pub use locate::{agent_shell, set_agent_paths, user_command};
-pub(crate) use locate::{agent_command, remote_turn_command, turn_command};
+pub(crate) use locate::{agent_binary, agent_command, remote_turn_command, turn_command};
 use locate::{command_at, located, located_or, find_binary};
 #[doc(inline)]
 pub use parsed::{TaskEvent, Parsed};
@@ -30,7 +30,12 @@ pub use turn::{
 };
 pub(crate) use turn::{without_attachments};
 
+mod acp;
+pub(crate) use acp::label as acp_label;
 mod install;
+mod cli_update;
+#[doc(inline)]
+pub use cli_update::{CliUpdate, UpdateMethod, check_cli_update, update_cli};
 mod types;
 
 #[doc(inline)]

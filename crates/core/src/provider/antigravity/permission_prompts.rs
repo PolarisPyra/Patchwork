@@ -14,6 +14,18 @@ use super::questions::question;
 use super::tool_fields::{arg_str, tool_args, tool_paths, tool_summary};
 
 pub(super) fn handle_server_request(v: &Value, spec: &TurnSpec) -> Parsed {
+    // Qwen Code asks for prompts queued during its reply, which Patchwork sends as steers, and
+    // whether it may start a turn of its own.
+    let answer = match v["method"].as_str() {
+        Some("craft/drainMidTurnQueue") => Some(json!({"messages": [], "hasQueuedPrompt": false})),
+        Some("_qwencode/start_turn") => Some(json!({"accepted": true})),
+        _ => None,
+    };
+    if let Some(result) = answer {
+        return Parsed::Send(
+            json!({"jsonrpc": "2.0", "id": v["id"], "result": result}).to_string(),
+        );
+    }
     if v["method"].as_str() != Some("session/request_permission") {
         return Parsed::Send(
             json!({

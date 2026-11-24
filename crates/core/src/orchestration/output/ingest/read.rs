@@ -267,7 +267,7 @@ pub(in crate::orchestration) fn ingest(
         } else {
             Value::Null
         };
-        if turn.agent == AgentKind::Antigravity {
+        if turn.agent.speaks_acp() {
             antigravity_calls.merge(&mut value);
         }
         // A message Claude took after it had already ended its reply (while a background
@@ -281,12 +281,12 @@ pub(in crate::orchestration) fn ingest(
         let claude_resumed = turn.agent == AgentKind::Claude
             && starts_reply
             && turn.idle.swap(false, Ordering::SeqCst);
-        let warm_reply = matches!(turn.agent, AgentKind::Claude | AgentKind::Antigravity)
+        let warm_reply = (turn.agent == AgentKind::Claude || turn.agent.speaks_acp())
             && !turn.steers.locked().is_empty();
         if !tick && (ended || unprompted.is_working()) && (claude_resumed || warm_reply) {
             let mut steers = turn.steers.locked();
             // Antigravity is stopped for a steer, so only the message that resumed it is taken now.
-            if turn.agent == AgentKind::Antigravity {
+            if turn.agent.speaks_acp() {
                 steers.pop_front();
             } else {
                 steers.clear();
@@ -479,7 +479,7 @@ pub(in crate::orchestration) fn ingest(
                             // An error in the stopped reply does not carry over to the next one.
                             stream_error = None;
                             go_idle(&turn, &segments, &mut completed, &mut unsaved, true, None);
-                        } else if matches!(turn.agent, AgentKind::Codex | AgentKind::Antigravity) {
+                        } else if turn.agent == AgentKind::Codex || turn.agent.speaks_acp() {
                             turn.stdin.locked().take();
                         } else {
                             // What it left running toward a goal or in the background stops too.
@@ -523,14 +523,17 @@ pub(in crate::orchestration) fn ingest(
                     }
                     let steered = !turn.steers.locked().is_empty();
                     // Claude ends its reply to take the steering messages, then answers them.
-                    // Antigravity's reply was stopped for them, and they start its next one.
+                    // An ACP agent's reply was stopped for them, and they start its next one.
                     let answers_steers = steered
                         && match turn.agent {
                             AgentKind::Claude => {
                                 turn.steers.locked().clear();
                                 true
                             }
-                            AgentKind::Antigravity => send_steers(&turn),
+                            AgentKind::Antigravity
+                            | AgentKind::Qwen
+                            | AgentKind::Kimi
+                            | AgentKind::Auggie => send_steers(&turn),
                             AgentKind::Codex | AgentKind::OpenCode | AgentKind::Api => false,
                         };
                     if answers_steers {
@@ -777,7 +780,12 @@ pub(in crate::orchestration) fn ingest(
                         // first stay together.
                         AgentEvent::TextDelta { text, .. } => {
                             let streams = match turn.agent {
-                                AgentKind::Antigravity | AgentKind::Claude | AgentKind::Api => true,
+                                AgentKind::Antigravity
+                                | AgentKind::Qwen
+                                | AgentKind::Kimi
+                                | AgentKind::Auggie
+                                | AgentKind::Claude
+                                | AgentKind::Api => true,
                                 AgentKind::OpenCode => provider::opencode::uses_serve(),
                                 AgentKind::Codex => false,
                             };
@@ -935,12 +943,15 @@ pub(in crate::orchestration) fn ingest(
     }
     // `agy acp` exits only when its stdin closes, so an exit with a prompt still unanswered is a
     // failure even with a clean exit code. Work it started on its own may end with it.
-    if turn.agent == AgentKind::Antigravity
+    if turn.agent.speaks_acp()
         && !turn.cancelled.load(Ordering::SeqCst)
         && stream_error.is_none()
         && ((!ended && !turn.idle.load(Ordering::SeqCst)) || !turn.steers.locked().is_empty())
     {
-        stream_error = Some("Antigravity exited before it finished replying.".into());
+        stream_error = Some(format!(
+            "{} exited before it finished replying.",
+            provider::acp_label(turn.agent)
+        ));
     }
     // The agent process is gone, and the tasks it started go with it.
     for event in background.stop_all() {

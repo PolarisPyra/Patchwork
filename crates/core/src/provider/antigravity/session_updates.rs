@@ -7,8 +7,8 @@ use serde_json::Value;
 use crate::chats::{PlanStep, TokenUsage};
 use crate::events::AgentEvent;
 use crate::provider::{
-    Parsed, ProviderSlashCommand, ToolStart, TurnSpec, file_touched, relative, step_status,
-    text_delta, thinking, tool_finished, tool_started,
+    AgentKind, Parsed, ProviderSlashCommand, acp, ToolStart, TurnSpec, file_touched, relative,
+    step_status, text_delta, thinking, tool_finished, tool_started,
 };
 
 use super::edits::edit_lines;
@@ -33,7 +33,7 @@ pub(super) fn parse_session_update(
                 .flatten()
                 .filter_map(|cmd| {
                     let name = cmd["name"].as_str()?.trim();
-                    if name.is_empty() {
+                    if name.is_empty() || acp::hides_command(spec.agent, name) {
                         return None;
                     }
                     Some(ProviderSlashCommand {
@@ -54,7 +54,7 @@ pub(super) fn parse_session_update(
             if update["content"]["type"].as_str() == Some("text")
                 && let Some(text) = update["content"]["text"].as_str().filter(|t| !t.is_empty())
             {
-                match limit_notice(text) {
+                match limit_notice(text).filter(|_| spec.agent == AgentKind::Antigravity) {
                     Some(notice) => {
                         out.push(Parsed::Error(notice.into()));
                         out.extend(limit_window(notice));
@@ -99,6 +99,7 @@ pub(super) fn parse_session_update(
             };
             let name = update["name"]
                 .as_str()
+                .or_else(|| update["_meta"]["toolName"].as_str())
                 .or_else(|| update["kind"].as_str())
                 .unwrap_or("tool");
             let args = tool_args(update);

@@ -547,6 +547,7 @@ impl Workspace {
         this.load_git(cx);
         this.load_quilt_list(cx);
         this.preload_usage(cx);
+        this.watch_cli_updates(cx);
         // The composer starts focused, so typing and the app's keys work before any click.
         let composer = this.composer.read(cx).editor.focus_handle(cx);
         window.focus(&composer, cx);

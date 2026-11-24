@@ -27,15 +27,16 @@ pub struct TokensState {
     pub(in crate::settings) models: HashMap<AgentKind, Vec<ModelOption>>,
 }
 
-/// The field that holds `kind`'s compact window (`COMPACT_SETTINGS`).
-fn compact_window_mut(t: &mut TokenSettings, kind: AgentKind) -> &mut u64 {
-    match kind {
+/// The field that holds `kind`'s compact window (`COMPACT_SETTINGS`), when Patchwork compacts it.
+fn compact_window_mut(t: &mut TokenSettings, kind: AgentKind) -> Option<&mut u64> {
+    Some(match kind {
         AgentKind::Claude => &mut t.claude_compact_window,
         AgentKind::Codex => &mut t.codex_compact_window,
         AgentKind::Antigravity => &mut t.antigravity_compact_window,
         AgentKind::OpenCode => &mut t.opencode_compact_window,
         AgentKind::Api => &mut t.api_compact_window,
-    }
+        AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => return None,
+    })
 }
 
 /// A level's label, with 0 read as "When full".
@@ -224,7 +225,8 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             .into_any_element(),
         );
     }
-    for &kind in &connected {
+    // The listed ACP agents compact on their own, so they have no row.
+    for &kind in connected.iter().filter(|k| !k.is_listed_acp()) {
         let title = format!("{} compacts at", agent_label(kind));
         let value = tokens.compact_window(kind);
         // A size saved before these levels stays shown, so the row still marks it.
@@ -246,7 +248,11 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 value,
                 &levels,
                 &t,
-                move |t, level| *compact_window_mut(t, kind) = level,
+                move |t, level| {
+                    if let Some(window) = compact_window_mut(t, kind) {
+                        *window = level;
+                    }
+                },
                 cx,
             ))
             .into_any_element(),

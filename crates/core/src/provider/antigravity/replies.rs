@@ -5,12 +5,12 @@
 use serde_json::Value;
 
 use crate::chats::TokenUsage;
-use crate::provider::{Parsed, TurnSpec};
+use crate::provider::{AgentKind, Parsed, TurnSpec, acp};
 
 use super::errors::{QUOTA_MESSAGE, logged_error};
 use super::input::{
     EFFORT_REQUEST, INIT_REQUEST, LOAD_REQUEST, MODE_REQUEST, MODEL_REQUEST, PROMPT_REQUEST,
-    SESSION_REQUEST, begin, load_request,
+    SESSION_REQUEST, begin, load_request, session_request,
 };
 use super::probe::auth_required;
 
@@ -22,6 +22,8 @@ pub(super) fn handle_response(id: &Value, v: &Value, spec: &TurnSpec, out: &mut 
     if id == INIT_REQUEST {
         if let Some(msg) = error_msg {
             out.extend([Parsed::Error(msg.into()), Parsed::Finished]);
+        } else if spec.agent.is_listed_acp() {
+            out.extend(open_session(spec, &v["result"]));
         }
         return;
     }
@@ -33,13 +35,7 @@ pub(super) fn handle_response(id: &Value, v: &Value, spec: &TurnSpec, out: &mut 
         }
         if let Some(msg) = error_msg {
             if auth_required(error_code, msg) {
-                out.extend([
-                    Parsed::Error(
-                        "Antigravity authentication required. Sign in under Settings → Providers."
-                            .into(),
-                    ),
-                    Parsed::Finished,
-                ]);
+                out.extend([Parsed::Error(sign_in_message(spec.agent)), Parsed::Finished]);
             } else if let Some(session_id) = spec.session_id.filter(|_| session_missing(msg)) {
                 if loaded {
                     // A session agy can neither resume nor load is started afresh, given the
@@ -56,15 +52,22 @@ pub(super) fn handle_response(id: &Value, v: &Value, spec: &TurnSpec, out: &mut 
             }
             return;
         }
-        if let Some(session_id) = v["result"]["sessionId"]
+        // A load may answer without the id, which is the one it was asked to load.
+        let session_id = v["result"]["sessionId"]
             .as_str()
-            .filter(|id| !id.is_empty())
-        {
+            .or(spec
+                .session_id
+                .filter(|_| loaded && spec.agent.is_listed_acp()))
+            .filter(|id| !id.is_empty());
+        if let Some(session_id) = session_id {
             out.push(Parsed::SessionId(session_id.into()));
             out.extend(begin(spec, session_id, &v["result"]));
         } else {
             out.extend([
-                Parsed::Error("Antigravity ACP did not return a session id".into()),
+                Parsed::Error(format!(
+                    "{} did not return a session id",
+                    acp::label(spec.agent)
+                )),
                 Parsed::Finished,
             ]);
         }
@@ -91,11 +94,11 @@ pub(super) fn handle_response(id: &Value, v: &Value, spec: &TurnSpec, out: &mut 
     if let Some(prompt_id) = id.as_u64().filter(|&n| n >= PROMPT_REQUEST) {
         if let Some(msg) = error_msg {
             let msg = if auth_required(error_code, msg) {
-                "Antigravity authentication required. Sign in under Settings → Providers."
+                sign_in_message(spec.agent)
             } else {
-                msg
+                msg.into()
             };
-            out.extend([Parsed::Error(msg.into()), Parsed::Finished]);
+            out.extend([Parsed::Error(msg), Parsed::Finished]);
             return;
         }
         let result = &v["result"];
@@ -127,13 +130,40 @@ pub(super) fn handle_response(id: &Value, v: &Value, spec: &TurnSpec, out: &mut 
         let reason = result["stopReason"].as_str();
         // A failed model call ends the reply as `end_turn`, and a used-up quota as `refusal`;
         // only agy's log says what failed and when a limit resets, so it goes first.
-        if matches!(reason, Some("end_turn" | "refusal"))
+        if spec.agent == AgentKind::Antigravity
+            && matches!(reason, Some("end_turn" | "refusal"))
             && let Some(session_id) = spec.session_id
         {
             out.extend(logged_error(session_id));
         }
-        out.extend(stop_reason(reason));
+        out.extend(stop_reason(spec.agent, reason));
         out.push(Parsed::Finished);
+    }
+}
+
+/// What a listed agent is sent once it answers `initialize`: `session/load` for the chat's
+/// session when it can load one, else a new session. A session it cannot load is started
+/// afresh, given the conversation so far.
+fn open_session(spec: &TurnSpec, init: &Value) -> Vec<Parsed> {
+    let Some(session_id) = spec.session_id else {
+        return vec![Parsed::Send(session_request(spec, None).to_string())];
+    };
+    if init["agentCapabilities"]["loadSession"] == true {
+        let load = load_request(spec, session_id).to_string();
+        vec![Parsed::Replaying(true), Parsed::Send(load)]
+    } else {
+        vec![Parsed::SessionLost, Parsed::Finished]
+    }
+}
+
+/// What to do when the agent says it is not signed in.
+fn sign_in_message(agent: AgentKind) -> String {
+    match acp::spec(agent) {
+        Some(spec) => format!(
+            "{} is not signed in. Run `{}` in a terminal, then try again.",
+            spec.label, spec.login
+        ),
+        None => "Antigravity authentication required. Sign in under Settings → Providers.".into(),
     }
 }
 
@@ -155,15 +185,18 @@ fn session_missing(message: &str) -> bool {
 ///
 /// agy ends a reply with `refusal` only when the model's quota ran out; the quota notice it
 /// streamed before, when any, is kept over this one.
-fn stop_reason(reason: Option<&str>) -> Option<Parsed> {
+fn stop_reason(agent: AgentKind, reason: Option<&str>) -> Option<Parsed> {
+    let label = acp::label(agent);
     let error = match reason? {
-        "refusal" => QUOTA_MESSAGE,
-        "max_tokens" => "Antigravity's reply reached the model's output limit and was cut off.",
-        "max_turn_requests" => {
-            "Antigravity reached its limit of model requests for one reply. Send a message to \
-             continue."
+        "refusal" if agent == AgentKind::Antigravity => QUOTA_MESSAGE.into(),
+        "refusal" => format!("{label}'s model refused to answer."),
+        "max_tokens" => {
+            format!("{label}'s reply reached the model's output limit and was cut off.")
         }
+        "max_turn_requests" => format!(
+            "{label} reached its limit of model requests for one reply. Send a message to continue."
+        ),
         _ => return None,
     };
-    Some(Parsed::Error(error.into()))
+    Some(Parsed::Error(error))
 }

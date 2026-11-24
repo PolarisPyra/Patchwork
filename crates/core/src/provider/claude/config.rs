@@ -130,6 +130,7 @@ pub fn models() -> Vec<ModelOption> {
             is_legacy: model.legacy,
             efforts: Some(model.efforts),
             context_window: model.context_window,
+            needs_cli: None,
         })
         .collect()
 }

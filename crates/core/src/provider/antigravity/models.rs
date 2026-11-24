@@ -167,6 +167,7 @@ pub fn parse_acp_models(session_result: &Value) -> (Option<String>, Vec<ModelOpt
             is_legacy: false,
             efforts: Some(efforts),
             context_window: None,
+            needs_cli: None,
         });
     }
     if out.is_empty() {
@@ -227,6 +228,7 @@ fn group_model_pairs(pairs: &[(&str, &str)]) -> Vec<ModelOption> {
                 is_legacy: false,
                 efforts: Some(if had_effort { efforts } else { Vec::new() }),
                 context_window: None,
+                needs_cli: None,
             }
         })
         .collect()

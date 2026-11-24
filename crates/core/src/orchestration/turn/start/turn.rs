@@ -170,6 +170,7 @@ impl Turn {
 
     pub(in crate::orchestration) fn spec(&self) -> TurnSpec<'_> {
         TurnSpec {
+            agent: self.agent,
             root: crate::system::ssh::here(&self.root),
             host: crate::system::ssh::split(&self.root).map(|at| at.host),
             chat_id: &self.chat_id,

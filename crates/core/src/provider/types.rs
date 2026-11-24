@@ -15,16 +15,41 @@ pub enum AgentKind {
     OpenCode,
     /// OpenAI-compatible API providers, run by Patchwork's own agent.
     Api,
+    /// Qwen Code (`qwen --acp`).
+    Qwen,
+    /// Kimi Code (`kimi acp`).
+    Kimi,
+    /// Augment's Auggie (`auggie --acp`).
+    Auggie,
 }
 
 impl AgentKind {
-    pub const ALL: [AgentKind; 5] = [
+    pub const ALL: [AgentKind; 8] = [
         AgentKind::Claude,
         AgentKind::Codex,
         AgentKind::Antigravity,
         AgentKind::OpenCode,
         AgentKind::Api,
+        AgentKind::Qwen,
+        AgentKind::Kimi,
+        AgentKind::Auggie,
     ];
+
+    /// Whether the agent runs as an Agent Client Protocol server on stdio, as agy does.
+    #[must_use]
+    pub fn speaks_acp(self) -> bool {
+        matches!(
+            self,
+            AgentKind::Antigravity | AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie
+        )
+    }
+
+    /// Whether the agent is one of the ACP agents run from the shared spec table
+    /// (`provider::acp`), rather than one with a module of its own.
+    #[must_use]
+    pub fn is_listed_acp(self) -> bool {
+        matches!(self, AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie)
+    }
 
     /// Whether the agent may be given a system prompt or a personality. Google's terms for
     /// Antigravity do not allow changing its instructions.
@@ -43,6 +68,8 @@ impl AgentKind {
             }
             AgentKind::Codex => &["low", "medium", "high", "xhigh"],
             AgentKind::OpenCode | AgentKind::Api => &["low", "medium", "high"],
+            // They offer a thinking level only as a session option, when a model has one.
+            AgentKind::Qwen | AgentKind::Kimi | AgentKind::Auggie => &[],
         }
     }
 
@@ -89,6 +116,8 @@ pub struct ModelOption {
     /// How many tokens the model's context holds, as its CLI's catalog reports it. `None` when the
     /// catalog does not say, so the compact picker has nothing to measure "When full" against.
     pub context_window: Option<u64>,
+    /// The CLI version this model needs, when the installed CLI is older.
+    pub needs_cli: Option<String>,
 }
 
 impl ModelOption {
@@ -102,6 +131,7 @@ impl ModelOption {
             is_legacy: false,
             efforts: None,
             context_window: None,
+            needs_cli: None,
         }
     }
 }
