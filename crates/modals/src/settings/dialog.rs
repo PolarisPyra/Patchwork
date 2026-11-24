@@ -53,194 +53,234 @@ pub enum SettingsEvent {
 pub(super) struct Pane {
     pub(super) id: &'static str,
     pub(super) label: &'static str,
+    /// What the pane holds, in a line under its title.
+    pub(super) desc: &'static str,
     pub(super) icon: &'static str,
 }
 
-/// One entry of the list: its name, its icon and the panes it holds.
+/// One entry of the list: its group, its name, its icon and the panes it holds.
 pub(super) struct Entry {
+    /// The heading the entry is listed under.
+    pub(super) group: &'static str,
     pub(super) label: &'static str,
     pub(super) icon: &'static str,
     pub(super) panes: &'static [Pane],
 }
 
-/// The list. Panes on one subject share an entry, so the list stays short.
+/// The list, by group. Panes on one subject share an entry, so the list stays short.
 pub(super) const ENTRIES: &[Entry] = &[
     Entry {
+        group: "App",
         label: "General",
         icon: "gear-six",
         panes: &[
             Pane {
                 id: "chat",
                 label: "Chat",
+                desc: "How replies show, and what agents may do on their own.",
                 icon: "chat-circle",
             },
             Pane {
                 id: "logs",
                 label: "Logs",
+                desc: "Where the app writes its logs, and opening them.",
                 icon: "file-text",
             },
             Pane {
                 id: "notifications",
                 label: "Notifications",
+                desc: "What tells you when an agent needs you or is done.",
                 icon: "bell",
             },
             Pane {
                 id: "updates",
                 label: "Updates",
+                desc: "How often to look for a new version, and installing it.",
                 icon: "arrow-circle-up",
             },
         ],
     },
     Entry {
+        group: "App",
         label: "Appearance",
         icon: "palette",
         panes: &[
             Pane {
                 id: "interface",
                 label: "Interface",
+                desc: "The font, the app icon, and the backgrounds views share.",
                 icon: "desktop",
             },
             Pane {
                 id: "orchestrator-background",
                 label: "Orchestrator theme",
+                desc: "How the Orchestrator page looks.",
                 icon: "butterfly",
             },
             Pane {
                 id: "chat-background",
                 label: "Chat theme",
+                desc: "How the chat looks behind the transcript.",
                 icon: "chat-circle",
             },
             Pane {
                 id: "quilts-background",
                 label: "Quilts theme",
+                desc: "How the Quilts page looks.",
                 icon: "code-block",
             },
             Pane {
                 id: "code-theme",
                 label: "Syntax theme",
+                desc: "The colors of code in chats and files.",
                 icon: "code",
             },
             Pane {
                 id: "themes",
                 label: "Window theme",
+                desc: "The window's colors, accent, text size and motion.",
                 icon: "palette",
             },
         ],
     },
     Entry {
+        group: "App",
         label: "Shortcuts",
         icon: "keyboard",
         panes: &[Pane {
             id: "shortcuts",
             label: "Shortcuts",
+            desc: "Every command a key runs, and the keys that run it.",
             icon: "keyboard",
         }],
     },
     Entry {
+        group: "Agents",
         label: "Providers",
         icon: "sparkle",
         panes: &[
             Pane {
                 id: "providers",
                 label: "Providers",
+                desc: "The models agents run on, and the default for new tasks.",
                 icon: "sparkle",
             },
             Pane {
                 id: "tokens",
                 label: "Usage",
+                desc: "Token use, limits, and what writes chat titles.",
                 icon: "chart-bar",
             },
         ],
     },
     Entry {
+        group: "Agents",
         label: "Costs",
         icon: "gauge",
         panes: &[Pane {
             id: "costs",
             label: "Costs",
+            desc: "What agents have spent, by day, provider, model and project.",
             icon: "gauge",
         }],
     },
     Entry {
+        group: "Agents",
         label: "Extensions",
         icon: "puzzle-piece",
         panes: &[
             Pane {
                 id: "extensions",
                 label: "Extensions",
+                desc: "The agents, skills and hooks agents can use.",
                 icon: "puzzle-piece",
             },
             Pane {
                 id: "mcp",
                 label: "MCP Servers",
+                desc: "MCP servers that give agents more tools.",
                 icon: "plugs-connected",
             },
         ],
     },
     Entry {
-        label: "Gateway",
-        icon: "chats",
-        panes: &[Pane {
-            id: "gateway",
-            label: "Gateway",
-            icon: "chats",
-        }],
-    },
-    Entry {
+        group: "Agents",
         label: "Permissions",
         icon: "shield-check",
         panes: &[Pane {
             id: "permissions",
             label: "Permissions",
+            desc: "What agents may do on this machine without asking.",
             icon: "shield-check",
         }],
     },
     Entry {
+        group: "Agents",
         label: "Vault",
         icon: "fingerprint",
         panes: &[Pane {
             id: "security",
             label: "Vault",
+            desc: "The vault that keeps your secrets, and its password.",
             icon: "fingerprint",
         }],
     },
     Entry {
+        group: "Workspace",
         label: "Projects",
         icon: "folder-simple",
         panes: &[
             Pane {
                 id: "projects",
                 label: "Projects",
+                desc: "Your projects, what they import, and checks after tasks.",
                 icon: "folder-simple",
             },
             Pane {
                 id: "scheduled",
                 label: "Scheduled",
+                desc: "Tasks that run on a schedule.",
                 icon: "clock",
             },
             Pane {
                 id: "worktrees",
                 label: "Worktrees",
+                desc: "Giving tasks their own worktree, and clearing them away.",
                 icon: "folders",
             },
         ],
     },
     Entry {
+        group: "Workspace",
         label: "Terminal",
         icon: "terminal-window",
         panes: &[Pane {
             id: "terminal",
             label: "Terminal",
+            desc: "The shell, its font, cursor and scrolling.",
             icon: "terminal-window",
         }],
     },
     Entry {
+        group: "Workspace",
         label: "Devices",
         icon: "devices",
         panes: &[Pane {
             id: "ssh",
             label: "Devices",
+            desc: "Machines agents and terminals reach over SSH.",
             icon: "devices",
+        }],
+    },
+    Entry {
+        group: "Workspace",
+        label: "Gateway",
+        icon: "chats",
+        panes: &[Pane {
+            id: "gateway",
+            label: "Gateway",
+            desc: "Reaching your agents from chat apps.",
+            icon: "chats",
         }],
     },
 ];
@@ -330,7 +370,7 @@ impl SettingsDialog {
         let section = section
             .and_then(entry_of)
             .map_or("chat", |(_, _, pane)| pane.id);
-        Self {
+        let mut dialog = Self {
             settings: core.settings(),
             core,
             section,
@@ -367,7 +407,9 @@ impl SettingsDialog {
             tokens: tokens::TokensState::default(),
             costs: costs::CostsState::default(),
             updates: updates::UpdatesState::default(),
-        }
+        };
+        dialog.watch_keys(window, cx);
+        dialog
     }
 
     /// Saves the settings as `change` leaves them.
