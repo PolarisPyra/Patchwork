@@ -2,6 +2,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use std::collections::HashMap;
+
 use gpui::{
     AnyElement, App, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, div, prelude::*,
     px,
@@ -151,13 +153,17 @@ impl Dock {
     pub(crate) fn shell_tabs(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = *theme(cx);
         let active = self.active_shell().map(|s| s.id);
-        let tabs = self.shown().enumerate().map(|(i, shell)| {
+        // A name shared by several terminals is numbered from the second on: zsh, zsh 2.
+        let mut seen: HashMap<String, usize> = HashMap::new();
+        let tabs = self.shown().map(|shell| {
             let id = shell.id;
             let on = active == Some(id);
-            let label = if i == 0 {
+            let n = seen.entry(shell.name.clone()).or_default();
+            *n += 1;
+            let label = if *n == 1 {
                 shell.name.clone()
             } else {
-                format!("{} {}", shell.name, i + 1)
+                format!("{} {n}", shell.name)
             };
             let (hover, fg) = (t.bg_hover, t.text);
             let group = SharedString::from(format!("shell-tab-{id}"));

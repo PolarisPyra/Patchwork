@@ -186,6 +186,17 @@ impl Dock {
     /// stays when it fails, as a shell does, and [`crate::workspace::dock::DockEvent::RunFinished`] says
     /// how it ended.
     pub fn run(&mut self, launch: patchwork_core::terminal::Launch, cx: &mut Context<Self>) {
+        self.run_named(launch, None, cx);
+    }
+
+    /// Runs the command `launch` starts as [`Self::run`] does, its tab called `name` rather than
+    /// after the program's file.
+    pub fn run_named(
+        &mut self,
+        launch: patchwork_core::terminal::Launch,
+        name: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         self.restore(cx);
         // Before the terminal has been shown it has no size; it takes its own once it is.
         let (cols, rows) = self.grid.unwrap_or(HIDDEN_GRID);
@@ -203,6 +214,9 @@ impl Dock {
                         this.add_shell(attached, rx, cx);
                         if let Some(shell) = this.shells.iter_mut().find(|s| s.id == id) {
                             shell.task = true;
+                            if let Some(name) = name {
+                                shell.name = name;
+                            }
                         }
                         this.active = Some(id);
                     }

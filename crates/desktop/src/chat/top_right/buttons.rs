@@ -1,5 +1,5 @@
-//! What floats over the top right of a chat's transcript: search, Android devices, "Open in
-//! editor" and an agent's details, with the subagents card under them.
+//! What floats over the top right of a chat's transcript: search, Android devices, "Continue in
+//! terminal", "Open in editor" and an agent's details, with the subagents card under them.
 
 // Rust guideline compliant 2026-10-09
 
@@ -129,6 +129,23 @@ pub(in crate::chat) fn header(
             .child(icon("device-mobile", 14.))
             .on_click(cx.listener(|w, _, window, cx| w.toggle_android(window, cx)))
     });
+    let terminal = w.can_continue_in_cli().then(|| {
+        let fg = t.text;
+        button("continue-in-cli", "Continue in terminal")
+            .flex_none()
+            .size(px(28.))
+            .justify_center()
+            .rounded(px(radius()))
+            .border_1()
+            .border_color(t.border)
+            .bg(t.bg_panel)
+            .text_color(t.text_muted)
+            .shadow(shadow())
+            .hover(move |s| s.bg(hover).text_color(fg))
+            .tooltip(tooltip("Continue in terminal"))
+            .child(icon("terminal", 14.))
+            .on_click(cx.listener(|w, _, _, cx| w.continue_in_cli(cx)))
+    });
     let bar = div()
         .block_mouse_except_scroll()
         .flex()
@@ -136,6 +153,7 @@ pub(in crate::chat) fn header(
         .gap(px(8.))
         .child(find_bar::find_field(w, t, cx))
         .children(android)
+        .children(terminal)
         .children(open)
         .children(details);
     div()

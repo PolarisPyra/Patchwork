@@ -71,7 +71,7 @@ fn joined_text(content: &Value, block_type: &str) -> String {
 }
 
 /// Parses one rollout file, line by line. Subagent sessions (e.g. guardian reviews) are flagged.
-fn parse(reader: impl BufRead) -> Option<Session> {
+pub(super) fn parse(reader: impl BufRead) -> Option<Session> {
     let mut lines = reader.lines().map_while(Result::ok);
     let meta = lines
         .by_ref()

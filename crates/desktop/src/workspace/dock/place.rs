@@ -82,6 +82,19 @@ impl Workspace {
         cx.notify();
     }
 
+    /// Runs the command `launch` starts in a new terminal tab called `name`, and shows it.
+    pub(crate) fn show_in_terminal(
+        &mut self,
+        launch: patchwork_core::terminal::Launch,
+        name: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.sync_panel(cx);
+        self.dock
+            .update(cx, |p, cx| p.run_named(launch, Some(name), cx));
+        self.open_panel(DockTab::Terminal, cx);
+    }
+
     /// Types `text` into the terminal of the command [`Self::run_in_terminal`] started.
     pub fn type_in_run(&self, text: &str, cx: &App) {
         self.dock.read(cx).type_in_task(text);

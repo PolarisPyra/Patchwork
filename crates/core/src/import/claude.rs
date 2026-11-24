@@ -88,7 +88,7 @@ fn assistant_text(content: &Value) -> String {
 }
 
 /// Parses one transcript. Subagent (sidechain) and meta entries are skipped.
-fn parse(text: &str, sidechain: bool) -> Option<Session> {
+pub(super) fn parse(text: &str, sidechain: bool) -> Option<Session> {
     let (mut session_id, mut cwd, mut created_at) = (None, None, None);
     let (mut custom_title, mut ai_title) = (None, None);
     let mut messages: Vec<SessionMessage> = Vec::new();

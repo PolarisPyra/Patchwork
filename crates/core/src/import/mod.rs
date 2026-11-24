@@ -6,8 +6,12 @@
 
 // Rust guideline compliant 2026-10-09
 
+mod handoff;
 mod scan;
 mod types;
+
+#[doc(inline)]
+pub use handoff::{CliHandoff, hands_off};
 
 #[doc(inline)]
 pub use types::{ImportScan, ImportSource};
