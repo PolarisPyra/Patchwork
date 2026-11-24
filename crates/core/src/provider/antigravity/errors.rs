@@ -89,6 +89,7 @@ pub(super) fn limit_window(text: &str) -> Option<Parsed> {
         .and_then(|c| go_duration_ms(&c[1]))?;
     Some(Parsed::Usage(vec![UsageWindow {
         label: LIMIT_WINDOW.into(),
+        group: None,
         used_percent: 100.0,
         resets_at: Some(now_ms().saturating_add(delay)),
     }]))

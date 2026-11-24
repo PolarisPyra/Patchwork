@@ -10,11 +10,23 @@ use crate::provider::AgentKind;
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageWindow {
+    /// What the window itself is called, e.g. "Weekly" or "Session (5h)".
     pub label: String,
+    /// The models the window covers, for a provider that splits its limits by model family.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
     /// 0–100.
     pub used_percent: f64,
     /// Unix epoch milliseconds.
     pub resets_at: Option<u64>,
+}
+
+impl UsageWindow {
+    /// What is left of the window, 0–100, as the provider itself reports it.
+    #[must_use]
+    pub fn remaining_percent(&self) -> f64 {
+        (100.0 - self.used_percent).clamp(0.0, 100.0)
+    }
 }
 
 /// Subscription usage limits for one agent, as reported by its provider.

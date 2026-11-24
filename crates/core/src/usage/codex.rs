@@ -91,6 +91,7 @@ fn window(w: &Value, reported_at: u64) -> Option<UsageWindow> {
     let expired = resets_at.is_some_and(|r| r <= now_ms());
     Some(UsageWindow {
         label: super::window_label(minutes),
+        group: None,
         used_percent: if expired { 0.0 } else { used },
         resets_at: resets_at.filter(|_| !expired),
     })
