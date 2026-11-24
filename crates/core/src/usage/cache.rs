@@ -12,9 +12,11 @@ use crate::system::now_ms;
 
 use super::{ProviderUsage, UsageWindow, antigravity, claude, codex};
 
-/// How long fetched usage is reused before it is fetched again.
+/// How long fetched usage is reused before it is fetched again, for a read that did not ask for
+/// fresh numbers.
 const FRESH_FOR: Duration = Duration::from_secs(5 * 60);
-/// Minimum time between fetches, even for an explicit refresh.
+/// Minimum time between fetches of the limits a turn's reports leave out, which nothing asked
+/// for. An explicit refresh is not held to it: the person pressed it.
 const MIN_REFRESH: Duration = Duration::from_secs(60);
 /// Wait after a 429 that did not say how long to wait.
 pub(super) const RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(5 * 60);
@@ -130,20 +132,16 @@ impl UsageCache {
         if let Some(e) = entries.get(&kind) {
             let age = now.saturating_duration_since(e.fetched);
             let blocked = e.blocked_until.is_some_and(|until| now < until);
-            // Only an explicit refresh fetches; opening the popup shows the last numbers.
-            // Numbers the agent reported are as current as a fetch, so they are not
-            // fetched again, even on refresh, while fresh.
-            let since_asked = e.asked.map(|at| now.saturating_duration_since(at));
-            let asked_lately = |within: Duration| since_asked.is_some_and(|d| d < within);
-            // The limits a turn does not report go stale under its reports, so the reports
-            // only stand in for a fetch while the last one is recent too.
-            let fresh = age < FRESH_FOR && e.reported && asked_lately(FRESH_FOR);
+            // A refresh is the person asking for the numbers again, so it asks: only a provider
+            // that rate-limited the last check holds it back. Opening the popup does not ask
+            // while what is known is still fresh.
             let keep = if e.complete {
-                !refresh || age < MIN_REFRESH || fresh
+                !refresh && age < FRESH_FOR
             } else {
                 // Known only from a turn's reports so far: ask once, without waiting for a
                 // refresh, for the limits the reports leave out.
-                asked_lately(MIN_REFRESH)
+                e.asked
+                    .is_some_and(|at| now.saturating_duration_since(at) < MIN_REFRESH)
             };
             if blocked || keep {
                 return e.usage.clone();

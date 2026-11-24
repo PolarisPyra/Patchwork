@@ -145,6 +145,7 @@ pub fn windows_from_event(info: &Value) -> Vec<UsageWindow> {
             let w = &reported[*key];
             Some(UsageWindow {
                 label: (*label).into(),
+                group: None,
                 used_percent: w["utilization"].as_f64()? * 100.0,
                 resets_at: w["resetsAt"].as_u64().map(|s| s * 1000),
             })
@@ -159,6 +160,7 @@ fn windows(body: &Value) -> Vec<UsageWindow> {
             let w = &body[*key];
             Some(UsageWindow {
                 label: (*label).into(),
+                group: None,
                 used_percent: w["utilization"].as_f64()?,
                 resets_at: w["resets_at"].as_str().and_then(parse_rfc3339_ms),
             })
@@ -182,6 +184,7 @@ fn windows(body: &Value) -> Vec<UsageWindow> {
         }
         out.push(UsageWindow {
             label,
+            group: None,
             used_percent,
             resets_at: limit["resets_at"].as_str().and_then(parse_rfc3339_ms),
         });

@@ -19,8 +19,22 @@ pub(super) const SHOWN_AGENTS: [AgentKind; 4] = [
     AgentKind::Antigravity,
     AgentKind::OpenCode,
 ];
-/// The height of each limit's row, and of the agent tab beside it.
+/// The height of each limit's row.
 pub(super) const ROW_H: f32 = 52.;
+/// The height of the heading over a family of limits, such as "Gemini Models".
+pub(super) const GROUP_H: f32 = 24.;
+/// The limits area's least height, so switching agents never resizes the popover: room for
+/// agy's two families of two windows each, the most any agent reports, with 4px above them, 8px
+/// below and 4px between.
+pub(super) const BODY_H: f32 = 2. * GROUP_H + 4. * ROW_H + GROUP_GAP + PANEL_PAD;
+/// The height of the line saying why an agent shows no numbers; it sits where a family's heading
+/// would.
+pub(super) const NOTE_H: f32 = GROUP_H;
+/// The space between one family of limits and the next.
+pub(super) const GROUP_GAP: f32 = 4.;
+/// The limits' padding above them, and above and below together.
+pub(super) const PANEL_PAD_TOP: f32 = 4.;
+pub(super) const PANEL_PAD: f32 = 12.;
 /// How long "Up to date" stands in for the plan badge before the badge comes back.
 pub(super) const UP_TO_DATE: Duration = Duration::from_millis(1200);
 
@@ -68,10 +82,25 @@ pub(super) fn limited_until(entry: Option<&Entry>, now: u64) -> Option<u64> {
         .filter(|&at| at > now)
 }
 
-/// The highest used percentage across an agent's limits, or `None` before numbers arrive.
-pub(super) fn peak(entry: Option<&Entry>) -> Option<f64> {
+/// The most used across an agent's limits, or `None` before numbers arrive.
+pub(super) fn most_used(entry: Option<&Entry>) -> Option<f64> {
     let windows = &entry?.usage.as_ref()?.windows;
-    windows.iter().map(|w| w.used_percent).reduce(f64::max)
+    windows
+        .iter()
+        .map(|w| w.used_percent.clamp(0., 100.))
+        .reduce(f64::max)
+}
+
+/// What "Up to date" compares: each limit's name and how much of it is left, to the whole
+/// percent the rows show.
+fn numbers(usage: &ProviderUsage) -> Vec<(String, i64)> {
+    let mut numbers: Vec<(String, i64)> = usage
+        .windows
+        .iter()
+        .map(|w| (w.label.clone(), w.remaining_percent().round() as i64))
+        .collect();
+    numbers.sort();
+    numbers
 }
 
 /// "4m", "1h 5m": the wait left, rounded up so it never reads 0m.
@@ -142,6 +171,13 @@ impl Workspace {
         cx.notify();
     }
 
+    /// Reads every shown agent's usage at startup, so the popover opens on numbers already known
+    /// rather than on agy's seconds-long `/usage` probe.
+    pub(crate) fn preload_usage(&mut self, cx: &mut Context<Self>) {
+        let shown = self.shown_usage_agents();
+        self.load_usage(false, &shown, cx);
+    }
+
     /// Closes the popover without taking the keys, for when they are going somewhere else.
     pub fn dismiss_usage(&mut self, cx: &mut Context<Self>) {
         if self.usage.open {
@@ -172,6 +208,24 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         for &kind in kinds {
+            // What the core already knows shows at once, so the popover never opens empty
+            // while a probe runs: the numbers it brings back replace these.
+            if !refresh
+                && self
+                    .usage
+                    .entries
+                    .get(&kind)
+                    .is_none_or(|entry| entry.usage.is_none())
+                && let Some(known) = self.core.usage.known(kind)
+            {
+                self.usage.entries.insert(
+                    kind,
+                    Entry {
+                        status: None,
+                        usage: Some(known),
+                    },
+                );
+            }
             if !self.usage.pending.insert(kind) {
                 continue;
             }
@@ -179,6 +233,18 @@ impl Workspace {
             patchwork_ui::off_thread(
                 cx,
                 move || {
+                    // agy's `/usage` reports a missing sign-in itself, so it runs beside agy's
+                    // slow sign-in handshake rather than after it.
+                    if kind == AgentKind::Antigravity {
+                        let (status, usage) = std::thread::scope(|s| {
+                            let usage = s.spawn(|| core.usage.get(kind, refresh));
+                            (detect_agent(kind), usage.join())
+                        });
+                        return Entry {
+                            usage: usage.ok().filter(|_| status.installed && status.signed_in),
+                            status: Some(status),
+                        };
+                    }
                     let status = detect_agent(kind);
                     let usage = (status.installed && status.signed_in)
                         .then(|| core.usage.get(kind, refresh));
@@ -188,16 +254,17 @@ impl Workspace {
                     }
                 },
                 move |this, entry, cx| {
-                    // The core returns the last numbers when it skips a refresh, so the same
-                    // reading time means nothing new came back.
+                    // A refresh asks the provider again, so "Up to date" says it answered with
+                    // the same numbers rather than that nothing was asked.
                     let before = this
                         .usage
                         .entries
                         .get(&kind)
-                        .and_then(|e| e.usage.as_ref()?.updated_at);
-                    let after = entry.usage.as_ref().and_then(|u| u.updated_at);
+                        .and_then(|e| e.usage.as_ref())
+                        .map(numbers);
+                    let after = entry.usage.as_ref().map(numbers);
                     let limited = limited_until(Some(&entry), now_ms()).is_some();
-                    if refresh && !limited && before.is_some() && after == before {
+                    if refresh && !limited && before.is_some() && before == after {
                         this.usage.up_to_date = Some(kind);
                         patchwork_ui::after(cx, UP_TO_DATE, move |this, cx| {
                             if this.usage.up_to_date == Some(kind) {
