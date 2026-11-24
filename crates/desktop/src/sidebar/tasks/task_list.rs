@@ -12,6 +12,7 @@ use patchwork_core::projects::Project;
 use patchwork_core::chats::Chat;
 use patchwork_ui::theme::{fs_md, theme};
 use patchwork_ui::{button, icon, icon_button, scrollbar};
+use crate::chat::panes::TabDrag;
 use crate::workspace::Workspace;
 use super::agents_section::agents_section;
 use crate::sidebar::sections::{empty_row, section_label, twistie};
@@ -284,6 +285,8 @@ pub(crate) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                         .into_any_element()
                 });
                 let (project_id, folder_id) = (p.id.clone(), f.id.clone());
+                let (drop_project, drop_folder) = (p.id.clone(), f.id.clone());
+                let drop_bg = t.bg_hover;
                 let key = SharedString::from(key);
                 let group = SharedString::from(format!("folder-row:{}", f.id));
                 let folder = tree_row(key, f.name.clone(), 2, open, picked, &t)
@@ -320,6 +323,11 @@ pub(crate) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                         if !this.pick_row(&pick, e.modifiers(), cx) {
                             this.toggle_collapsed(&toggle_key, cx);
                         }
+                    }))
+                    // A task dropped on a folder goes last in it.
+                    .drag_over::<TabDrag>(move |s, _, _, _| s.bg(drop_bg))
+                    .on_drop(cx.listener(move |this, drag: &TabDrag, _, cx| {
+                        this.drop_task_in_folder(&drag.chat, &drop_project, &drop_folder, cx);
                     }));
                 children = children.child(folder);
                 if open {

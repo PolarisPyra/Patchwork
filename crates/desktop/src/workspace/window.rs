@@ -130,6 +130,8 @@ pub struct Workspace {
     pub(crate) spring_tab: Option<String>,
     /// The tab a dragged tab would go before if dropped now.
     pub(crate) tab_drop_before: Option<String>,
+    /// The task a task dragged in the sidebar would go before if dropped now.
+    pub(crate) task_drop_before: Option<String>,
     /// Whether each message sent also goes to the chat every other pane shows.
     pub(crate) broadcasting: bool,
     /// The layouts the user named, in the order they were saved.
@@ -438,6 +440,7 @@ impl Workspace {
             closed_tabs: Vec::new(),
             spring_tab: None,
             tab_drop_before: None,
+            task_drop_before: None,
             broadcasting: false,
             named_layouts: Vec::new(),
             line_focus: HashMap::new(),
