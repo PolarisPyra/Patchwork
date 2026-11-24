@@ -3,6 +3,18 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.151] - 2026-11-24
+
+## What's Changed
+* chore(issues): remove Linear support from the Issues sidebar by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/343
+* feat(sidebar): Ctrl+4 opens Issues, and the shortcuts above it shift up one by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/344
+* fix(chat): a single tab shows in the strip instead of only appearing with a second by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/346
+* fix(terminal): open and switch shells in the project's folder, not the last one by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/345
+* fix(sidebar): the Source Control change count no longer overlaps the Issues icon by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/347
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.150...26.11.151
+
 ## [26.11.150] - 2026-11-24
 
 ## What's Changed
