@@ -40,6 +40,19 @@ static API_ERROR: LazyLock<Regex> = LazyLock::new(|| {
         .expect("API_ERROR is a valid pattern")
 });
 
+/// Whether a piece of text reports a used-up quota, as agy's own `QUOTA_RE` reads it. It tells a
+/// quota apart from any other failure, because a quota needs a wait where an error needs a look.
+static QUOTA: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)RESOURCE_EXHAUSTED|quota|\b429\b|exhausted your capacity|rate.?limit")
+        .expect("QUOTA is a valid pattern")
+});
+
+/// Whether `text` says the agent's quota for the period is used up, as `agy` tells it apart from
+/// a failure it could retry.
+pub(super) fn is_quota(text: &str) -> bool {
+    QUOTA.is_match(text)
+}
+
 /// Google's API error as agy's session log holds it, such as `NOT_FOUND (code 404): Requested
 /// entity was not found.`: status name, HTTP status, and message up to the next field.
 static LOGGED_API_ERROR: LazyLock<Regex> = LazyLock::new(|| {
@@ -68,17 +81,7 @@ pub(super) fn limit_notice(text: &str) -> Option<&str> {
         .strip_prefix('⚠')?
         .trim_start_matches('\u{fe0f}')
         .trim();
-    let lower = notice.to_lowercase();
-    [
-        "quota",
-        "resource_exhausted",
-        "429",
-        "exhausted your capacity",
-        "rate limit",
-    ]
-    .iter()
-    .any(|term| lower.contains(term))
-    .then_some(notice)
+    is_quota(notice).then_some(notice)
 }
 
 /// A used-up usage window resetting when `text` says the limit resets, so the reply can be

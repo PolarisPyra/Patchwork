@@ -792,17 +792,28 @@ pub(in crate::orchestration) fn ingest(
                         // is shown again in place; a subagent's call keeps its chat.
                         AgentEvent::ToolStarted { tool, message_id } => {
                             repeats.started(tool);
+                            // A swarm worker's call reads finished while its worker is parked
+                            // and running again once it is woken, so every start of it is
+                            // shown, as a worker that came back to work is working again.
+                            let worker = tool
+                                .id
+                                .starts_with(provider::antigravity::SWARM_TASK_PREFIX);
                             let shown = (turn.agent == AgentKind::Antigravity
                                 && tool.subagent.is_none())
                             .then(|| (tool.name.clone(), tool.summary.clone()));
                             if let Some(owner) = tool_owner.get(&tool.id) {
-                                let Some(shown) =
-                                    shown.filter(|shown| tool_shown.get(&tool.id) != Some(shown))
-                                else {
+                                let shown =
+                                    shown.filter(|shown| tool_shown.get(&tool.id) != Some(shown));
+                                if !worker && shown.is_none() {
                                     continue;
-                                };
+                                }
                                 message_id.clone_from(owner);
-                                tool_shown.insert(tool.id.clone(), shown);
+                                if let Some(shown) = shown {
+                                    tool_shown.insert(tool.id.clone(), shown);
+                                }
+                                if worker {
+                                    open_calls.insert(tool.id.clone());
+                                }
                             } else {
                                 if let Some(shown) = shown {
                                     tool_shown.insert(tool.id.clone(), shown);
@@ -846,8 +857,11 @@ pub(in crate::orchestration) fn ingest(
                             output,
                         } => {
                             call_ended |= open_calls.remove(tool_id.as_str());
-                            if let Some(name) =
-                                repeats.finished(tool_id, *is_error, output.as_deref())
+                            // A swarm worker parks and wakes again many times, which is the
+                            // swarm working, not a call repeated without getting anywhere.
+                            if !tool_id.starts_with(provider::antigravity::SWARM_TASK_PREFIX)
+                                && let Some(name) =
+                                    repeats.finished(tool_id, *is_error, output.as_deref())
                                 && stream_error.is_none()
                             {
                                 stream_error = Some(format!(
@@ -930,6 +944,16 @@ pub(in crate::orchestration) fn ingest(
     // The agent process is gone, and the tasks it started go with it.
     for event in background.stop_all() {
         publish_event(&turn, &mut children, &mut unsaved, event);
+    }
+    // So do its swarm workers: a card still reading running stopped with it.
+    if turn.agent == AgentKind::Antigravity {
+        // A stop by the person is not a failure, so their cards end stopped rather than failed.
+        let failed = !turn.cancelled.load(Ordering::SeqCst);
+        for parsed in antigravity_swarm.finish_open(&turn.message_id, failed) {
+            if let Parsed::Event(event) = parsed {
+                publish_event(&turn, &mut children, &mut unsaved, event);
+            }
+        }
     }
     let exit = child.wait().ok();
     let status = exit.map_or_else(|| "unknown".into(), |s| s.to_string());

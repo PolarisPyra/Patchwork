@@ -3,10 +3,16 @@
 //!
 //! agy sends nothing about a swarm over ACP. Its roster is `members.json` in the coordinator's
 //! `swarm` folder, and each worker's steps are in its own conversation's transcript, so both are
-//! reread on a timer while a swarm runs. A worker's state comes from its transcript, as agy's own
-//! swarm board decides it: the roster's `wake_mode` is only a fallback.
+//! reread on a timer while a swarm runs. A worker's stand is the one agy's own board reports
+//! (`board.StateOf`): killed, or waiting when its run has stopped, else working. A worker with
+//! no transcript yet falls back to `wake_mode` the way agy does, and a post that has rung a
+//! member leaves it waiting until its run resumes, as agy has it. agy's dashboard puts a
+//! member's newest step failing, and a member working with a transcript that has not moved,
+//! beside that stand, so the same two reports are kept here: a worker on quota or an error, or
+//! one that has gone quiet, is stuck rather than working, and stops holding the swarm open. agy
+//! names a used-up quota apart from any other failure (`QUOTA_RE`), and so does this.
 
-// Rust guideline compliant 2026-11-23
+// Rust guideline compliant 2026-11-24
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -15,7 +21,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 use serde_json::Value;
 
@@ -24,6 +30,7 @@ use crate::provider::{Parsed, TaskEvent, ToolStart, one_line, tool_finished, too
 use crate::system::now_ms;
 
 use super::children::{Transcript, conversation_dir, is_conversation_id, transcript_path};
+use super::errors::is_quota;
 
 /// Prefix of the ids of the calls that stand for swarm workers (`swarm:<conversationId>`).
 pub const SWARM_TASK_PREFIX: &str = "swarm:";
@@ -33,12 +40,25 @@ pub const SWARM_POLL: Duration = Duration::from_secs(2);
 
 /// The background task listed while workers are at work. It keeps the agent's input open, so a
 /// reply that would otherwise close it does not end the swarm under them, and keeps an idle
-/// coordinator from being retired or a quiet one from being taken for stalled.
+/// coordinator from being retired or a quiet one from being taken for stalled. Its description
+/// names the workers it waits on.
 const HOLD_TASK: &str = "swarm:hold";
+
+/// What the hold is called when it names no worker.
+const HOLD_TITLE: &str = "Swarm workers";
 
 /// A working worker whose transcript has not moved for this long is stuck, as agy's board
 /// reports it, and no longer holds the swarm open.
 const STUCK: Duration = Duration::from_secs(10 * 60);
+
+/// How long a failed step must stay a transcript's newest before its worker is stuck on it. The
+/// agent normally carries on after a tool step fails, so only one it stopped on counts; a model
+/// error counts at once. This is agy's `STEP_ERROR_SETTLE_MS`.
+const ERROR_SETTLE: Duration = Duration::from_secs(60);
+
+/// How many roster reads in a row may fail to find the file while the hold is open before the
+/// swarm is taken to be over. The roster is only gone once the swarm is.
+const ROSTER_GONE_READS: u8 = 5;
 
 /// The most of a transcript's end read to decide whether its worker's turn has ended. A single
 /// step longer than this reads as mid-turn until the next step is written.
@@ -57,6 +77,10 @@ pub struct Swarm {
     running: bool,
     /// The hold task is open.
     held: bool,
+    /// What the hold is described as, as last published.
+    hold_says: String,
+    /// Roster reads in a row that found nothing while the hold was open.
+    misses: u8,
     /// Workers by conversation id.
     workers: HashMap<String, Worker>,
 }
@@ -68,12 +92,70 @@ struct Worker {
     killed: Arc<AtomicBool>,
     /// A monitor or narrator, whose periodic pulses do not hold the swarm open.
     housekeeping: bool,
-    /// When it was first seen, for a worker that never writes a transcript.
-    seen_at: Instant,
-    /// The transcript's length and change time when `ended` was last decided.
-    read: Option<(u64, SystemTime)>,
-    /// Its transcript's newest step ends a turn.
+    /// What the call standing for it reads as, and what its card says it is.
+    card: Option<Card>,
+    /// Its transcript as last read.
+    read: Option<Tail>,
+}
+
+/// The call standing for a worker on its coordinator's reply.
+#[derive(Debug)]
+struct Card {
+    /// The subagent the call shows it as, titled by its description.
+    subagent: SubAgent,
+    /// How the call reads: the stand it was last published as.
+    stand: Stand,
+}
+
+/// How a worker stands, as agy's board reports it (`board.StateOf`) with the failure and quiet
+/// reports its dashboard puts beside it. A stand is not final: a stuck worker woken by a post
+/// works again, and the reason it was stuck is part of the stand, so a different reason reads as
+/// a change.
+#[derive(Debug, Clone, PartialEq)]
+enum Stand {
+    /// Its run has not stopped.
+    Working,
+    /// Its run has stopped: it is parked until a post or the person wakes it.
+    Waiting,
+    /// Not working, and why: its newest step failed, or its transcript went quiet.
+    Stuck(String),
+    /// Stopped for good: the swarm killed it, it left the roster, or the run ended under it.
+    Killed,
+}
+
+/// A worker's transcript as last read, and what it said.
+#[derive(Debug)]
+struct Tail {
+    /// The transcript's length and change time when it was read.
+    len: u64,
+    changed: SystemTime,
+    /// Its newest step ends a turn.
     ended: bool,
+    /// Its newest step failed.
+    failed: Option<Failed>,
+}
+
+/// A failure a worker's newest step reported.
+#[derive(Debug)]
+struct Failed {
+    /// What the step said went wrong.
+    text: String,
+    /// A model error is the end of the run; a failed tool step only counts once it stays the
+    /// newest step for `ERROR_SETTLE`.
+    at_once: bool,
+    /// Its text names a used-up quota, which needs a wait rather than a look.
+    quota: bool,
+}
+
+impl Failed {
+    /// What to tell the person, naming a used-up quota apart from any other failure as agy does.
+    fn why(&self) -> String {
+        if self.quota {
+            format!("Out of quota: {}", self.text)
+        } else {
+            format!("Failed: {}", self.text)
+        }
+    }
 }
 
 impl Swarm {
@@ -105,16 +187,18 @@ impl Swarm {
     }
 
     /// Rereads coordinator `session_id`'s roster: a call under `message_id` for each worker
-    /// added, an end to the chat of each one killed, and the hold opened or closed.
+    /// added, that call shown as its worker now stands, and the hold opened, renamed or closed.
     pub fn poll(&mut self, session_id: &str, message_id: &str) -> Vec<Parsed> {
         if !self.running {
             return Vec::new();
         }
         let Some(roster) = read_roster(session_id) else {
-            return Vec::new();
+            return self.roster_gone();
         };
+        self.misses = 0;
         let mut out = Vec::new();
-        let mut working = false;
+        let mut working: Vec<&str> = Vec::new();
+        let mut named: Vec<&str> = Vec::new();
         for (name, member) in roster["members"].as_object().into_iter().flatten() {
             let Some(id) = member["conversation_id"]
                 .as_str()
@@ -126,104 +210,280 @@ impl Swarm {
             if role == "coordinator" {
                 continue;
             }
+            named.push(id);
             let killed = member["killed"].as_bool() == Some(true);
             let worker = match self.workers.entry(id.into()) {
                 Entry::Occupied(entry) => entry.into_mut(),
                 // One killed before it was seen has nothing to show.
                 Entry::Vacant(_) if killed => continue,
-                Entry::Vacant(entry) => {
-                    out.extend(added(id, name, &role, member, message_id));
-                    entry.insert(Worker {
-                        killed: Arc::new(AtomicBool::new(false)),
-                        housekeeping: matches!(role.as_str(), "monitor" | "narrator"),
-                        seen_at: Instant::now(),
-                        read: None,
-                        ended: false,
-                    })
-                }
+                Entry::Vacant(entry) => entry.insert(Worker {
+                    killed: Arc::new(AtomicBool::new(false)),
+                    housekeeping: matches!(role.as_str(), "monitor" | "narrator"),
+                    card: None,
+                    read: None,
+                }),
             };
-            if killed {
+            let stand = if killed {
                 worker.killed.store(true, Ordering::SeqCst);
-            } else if !worker.housekeeping {
-                working |= worker.holds(id, member["wake_mode"].as_str().unwrap_or_default());
+                Stand::Killed
+            } else {
+                worker.stand(id, member["wake_mode"].as_str().unwrap_or_default())
+            };
+            if stand == Stand::Working && !worker.housekeeping {
+                working.push(name);
+            }
+            out.extend(worker.show(id, name, &role, member, stand, message_id));
+        }
+        // A worker the roster no longer names has gone, and its card must not read running for
+        // good: its chat still follows the transcript it wrote.
+        for (id, worker) in &mut self.workers {
+            if !named.contains(&id.as_str()) {
+                out.extend(worker.left(id, message_id));
             }
         }
-        if working != self.held {
-            self.held = working;
-            out.push(Parsed::Task(if working {
-                hold_started()
-            } else {
-                TaskEvent::Ended {
-                    task_id: HOLD_TASK.into(),
-                    status: TaskStatus::Done,
-                    summary: None,
-                    output: None,
-                }
-            }));
-        }
+        out.extend(self.hold(&working));
         out
+    }
+
+    /// Ends every worker's call still reading running, because the agent's process is gone and no
+    /// more of their steps will arrive. `failed` when it went with them mid-turn; a stop by the
+    /// person is not a failure.
+    pub fn finish_open(&mut self, message_id: &str, failed: bool) -> Vec<Parsed> {
+        let output = if failed {
+            "Stopped with the agent that ran it"
+        } else {
+            "Stopped"
+        };
+        let mut out = Vec::new();
+        for (id, worker) in &mut self.workers {
+            let Some(card) = &mut worker.card else {
+                continue;
+            };
+            if card.stand != Stand::Working {
+                continue;
+            }
+            card.stand = Stand::Killed;
+            let tool_id = format!("{SWARM_TASK_PREFIX}{id}");
+            out.push(tool_finished(message_id, &tool_id, failed, output));
+        }
+        self.held = false;
+        out
+    }
+
+    /// Opens, renames or closes the hold, so it stays open exactly while workers are at work.
+    fn hold(&mut self, working: &[&str]) -> Vec<Parsed> {
+        if working.is_empty() {
+            if !self.held {
+                return Vec::new();
+            }
+            self.held = false;
+            self.hold_says.clear();
+            return vec![Parsed::Task(TaskEvent::Ended {
+                task_id: HOLD_TASK.into(),
+                status: TaskStatus::Done,
+                summary: None,
+                output: None,
+            })];
+        }
+        let says = waits_on(working);
+        if !self.held {
+            self.held = true;
+            self.hold_says.clone_from(&says);
+            return vec![Parsed::Task(hold_started(&says))];
+        }
+        if says == self.hold_says {
+            return Vec::new();
+        }
+        self.hold_says.clone_from(&says);
+        vec![Parsed::Task(TaskEvent::Updated {
+            task_id: HOLD_TASK.into(),
+            status: None,
+            description: Some(says),
+            backgrounded: false,
+        })]
+    }
+
+    /// What to do when a running swarm's roster cannot be read: a read that caught agy writing
+    /// it is worth another poll, but a roster that stays gone is a swarm that is over, so the
+    /// hold must not outlive it.
+    fn roster_gone(&mut self) -> Vec<Parsed> {
+        if !self.held {
+            return Vec::new();
+        }
+        self.misses += 1;
+        if self.misses < ROSTER_GONE_READS {
+            return Vec::new();
+        }
+        log::warn!(
+            missing = self.misses;
+            "a swarm's roster went away while its workers held the reply open: {{missing}} reads in a row"
+        );
+        self.running = false;
+        self.hold(&[])
     }
 }
 
 impl Worker {
-    /// Whether it is at work: mid-turn by its transcript and not stuck. One a board post has
-    /// rung (`wake_mode` `working`) is waiting until its run resumes, which it is about to.
-    fn holds(&mut self, id: &str, wake_mode: &str) -> bool {
-        let rung = wake_mode == "working";
-        let meta =
-            transcript_path(id).and_then(|path| Some((std::fs::metadata(&path).ok()?, path)));
-        let Some((meta, path)) = meta else {
-            // No transcript yet: the roster says, as agy falls back to it.
-            return rung && self.seen_at.elapsed() < STUCK;
+    /// Ends its card because the swarm's roster no longer names it, and returns nothing more.
+    fn left(&mut self, id: &str, message_id: &str) -> Vec<Parsed> {
+        let Some(card) = &mut self.card else {
+            return Vec::new();
         };
-        let changed = meta.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-        let read = (meta.len(), changed);
-        if self.read != Some(read) {
-            self.read = Some(read);
-            self.ended = tail(&path).is_some_and(|tail| turn_ended(&tail));
+        if card.stand == Stand::Killed {
+            return Vec::new();
         }
-        let stuck = changed.elapsed().is_ok_and(|quiet| quiet > STUCK);
-        (!self.ended || rung) && !stuck
+        card.stand = Stand::Killed;
+        let tool_id = format!("{SWARM_TASK_PREFIX}{id}");
+        vec![tool_finished(message_id, &tool_id, false, "Left the swarm")]
+    }
+
+    /// How it stands now, read from its transcript as agy's board reads it.
+    fn stand(&mut self, id: &str, wake_mode: &str) -> Stand {
+        let Some((len, changed, path)) = transcript_path(id).and_then(|path| {
+            let meta = std::fs::metadata(&path).ok()?;
+            Some((
+                meta.len(),
+                meta.modified().unwrap_or(SystemTime::UNIX_EPOCH),
+                path,
+            ))
+        }) else {
+            // No transcript yet: the roster alone says, exactly as agy's `statusOf` falls back to
+            // it. A member parked on its board reads "mentions" or "anything"; one being started
+            // reads anything else, and is working until it writes its first step.
+            return if matches!(wake_mode, "mentions" | "anything") {
+                Stand::Waiting
+            } else {
+                Stand::Working
+            };
+        };
+        if self
+            .read
+            .as_ref()
+            .is_none_or(|read| read.len != len || read.changed != changed)
+        {
+            self.read = Some(Tail::of(&path, len, changed));
+        }
+        let Some(read) = self.read.as_ref() else {
+            return Stand::Waiting;
+        };
+        // A post that rings a member leaves it waiting until its run resumes, which is when its
+        // transcript moves on: `wake_mode` says a post arrived, never that the member got to work.
+        let working = !read.ended;
+        if let Some(failed) = &read.failed
+            && (failed.at_once || changed.elapsed().is_ok_and(|newest| newest >= ERROR_SETTLE))
+        {
+            return Stand::Stuck(failed.why());
+        }
+        if working && changed.elapsed().is_ok_and(|quiet| quiet > STUCK) {
+            return Stand::Stuck("No steps for 10 minutes".into());
+        }
+        if working {
+            Stand::Working
+        } else {
+            Stand::Waiting
+        }
+    }
+
+    /// What to publish so the call standing for `name` reads as `stand`, if it reads otherwise.
+    fn show(
+        &mut self,
+        id: &str,
+        name: &str,
+        role: &str,
+        member: &Value,
+        stand: Stand,
+        message_id: &str,
+    ) -> Vec<Parsed> {
+        // agy re-derives a member's issue on every snapshot, so a worker failing a second way
+        // reads differently: the stand carries the reason, and so the reason is part of the test.
+        if self.card.as_ref().is_some_and(|card| card.stand == stand) {
+            return Vec::new();
+        }
+        // Built from the roster each time the card changes: a worker is added once and then only
+        // parks and wakes, but one renamed or re-modelled while it waits reads right too.
+        let subagent = SubAgent {
+            kind: if role.is_empty() { "worker" } else { role }.into(),
+            description: member_title(name, role),
+            model: member["model"]
+                .as_str()
+                .filter(|m| !m.is_empty())
+                .map(String::from),
+            prompt: None,
+        };
+        let says = subagent.description.clone();
+        self.card = Some(Card {
+            subagent,
+            stand: stand.clone(),
+        });
+        let tool_id = format!("{SWARM_TASK_PREFIX}{id}");
+        match stand {
+            // A worker that was woken got back to work: its call reads running again, keeping
+            // the started time the reply already shows for it.
+            Stand::Working => vec![tool_started(
+                message_id,
+                ToolStart {
+                    id: &tool_id,
+                    name: "Agent",
+                    summary: says,
+                    subagent: self.card.as_ref().map(|card| card.subagent.clone()),
+                    parent: None,
+                },
+            )],
+            Stand::Waiting => vec![tool_finished(
+                message_id,
+                &tool_id,
+                false,
+                "Waiting for a post or the person",
+            )],
+            Stand::Stuck(why) => vec![tool_finished(message_id, &tool_id, true, &why)],
+            Stand::Killed => vec![tool_finished(
+                message_id,
+                &tool_id,
+                false,
+                "Stopped by the swarm",
+            )],
+        }
     }
 }
 
-/// The call that stands for worker `name` (conversation `id`), finished at once as agy's call
-/// that added it was; its chat then follows the worker's transcript.
-fn added(id: &str, name: &str, role: &str, member: &Value, message_id: &str) -> [Parsed; 2] {
-    let tool_id = format!("{SWARM_TASK_PREFIX}{id}");
-    let title = member_title(name, role);
-    let subagent = SubAgent {
-        kind: if role.is_empty() { "worker" } else { role }.into(),
-        description: title.clone(),
-        model: member["model"]
-            .as_str()
-            .filter(|m| !m.is_empty())
-            .map(String::from),
-        prompt: None,
-    };
-    [
-        tool_started(
-            message_id,
-            ToolStart {
-                id: &tool_id,
-                name: "Agent",
-                summary: title,
-                subagent: Some(subagent),
-                parent: None,
-            },
-        ),
-        tool_finished(message_id, &tool_id, false, ""),
-    ]
+impl Tail {
+    /// Reads the end of a transcript for what its newest step says about its worker.
+    fn of(path: &Path, len: u64, changed: SystemTime) -> Self {
+        let tail = tail(path).unwrap_or_default();
+        Self {
+            len,
+            changed,
+            ended: turn_ended(&tail),
+            failed: newest_failure(&tail),
+        }
+    }
 }
 
-fn hold_started() -> TaskEvent {
+/// What the hold is described as while `working` workers are at work, as agy's board says which
+/// member it waits on.
+fn waits_on(working: &[&str]) -> String {
+    const NAMED: usize = 3;
+    let handles: Vec<String> = working
+        .iter()
+        .take(NAMED)
+        .map(|name| format!("@{}", one_line(name.trim_start_matches('@'))))
+        .collect();
+    match working.len() {
+        0 => HOLD_TITLE.into(),
+        1 => format!("Waiting on {}", handles[0]),
+        n if n <= NAMED => format!("Waiting on {}", handles.join(", ")),
+        n => format!("Waiting on {}, and {} more", handles.join(", "), n - NAMED),
+    }
+}
+
+fn hold_started(description: &str) -> TaskEvent {
     TaskEvent::Started {
         task: BackgroundTask {
             tool_id: HOLD_TASK.into(),
             task_id: Some(HOLD_TASK.into()),
             run_id: None,
             kind: "agent".into(),
-            description: "Swarm workers".into(),
+            description: description.into(),
             status: TaskStatus::Running,
             started_at: now_ms(),
             summary: None,
@@ -320,6 +580,34 @@ fn turn_ended(tail: &str) -> bool {
         return wait.is_some_and(|wait| results.len() >= calls.len() && results[wait]);
     }
     false
+}
+
+/// The newest step of a transcript that failed, and what to say about it, as agy's `stepFailure`
+/// reads it: a model error ended the worker's run where it stands, and a failed tool step only
+/// counts as such once it has stayed the newest step for `ERROR_SETTLE`, since the agent normally
+/// carries on after one.
+/// The failure a transcript's newest step reports, if its newest step failed.
+fn newest_failure(tail: &str) -> Option<Failed> {
+    let step = tail
+        .lines()
+        .rev()
+        .filter(|line| !line.trim().is_empty())
+        .find_map(|line| serde_json::from_str::<Value>(line).ok())?;
+    let (fallback, at_once) = match step["type"].as_str() {
+        Some("ERROR_MESSAGE") => ("Model error", true),
+        Some("GENERIC") if step["status"] == "ERROR" => ("Step failed", false),
+        _ => return None,
+    };
+    let raw = step["error"]
+        .as_str()
+        .filter(|error| !error.trim().is_empty());
+    Some(Failed {
+        // The whole error is read for the quota test, which agy runs on it before any shortening:
+        // a message that names the quota late is still a quota.
+        quota: is_quota(raw.unwrap_or(fallback)),
+        text: raw.map_or_else(|| fallback.into(), one_line),
+        at_once,
+    })
 }
 
 /// Formats `swarm`, `post_message`, `read_board`, and `swarm_wait` tool calls cleanly.

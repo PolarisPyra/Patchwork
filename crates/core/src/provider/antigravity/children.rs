@@ -97,6 +97,12 @@ pub struct Transcript {
     open: VecDeque<String>,
     /// Its last step was an answer that called nothing, so it has stopped.
     answered: bool,
+    /// Its newest step ends a turn: an answer, or the `swarm_wait` of a batch whose own result
+    /// is `DONE`. agy's board reads the same, so this is its `turnEnded`.
+    ended: bool,
+    /// The `swarm_wait` among the calls of the reply in flight (its index), and the results of
+    /// that batch read so far.
+    waiting: Option<(usize, usize)>,
 }
 
 impl Transcript {
@@ -109,6 +115,8 @@ impl Transcript {
             partial: Vec::new(),
             open: VecDeque::new(),
             answered: false,
+            ended: false,
+            waiting: None,
         }
     }
 
@@ -130,6 +138,13 @@ impl Transcript {
     #[must_use]
     pub fn ends_when_quiet(&self) -> bool {
         matches!(self.ends, Ends::Answered)
+    }
+
+    /// Whether its newest step ends a turn, so it stopped by itself rather than being cut off
+    /// partway through one.
+    #[must_use]
+    pub fn has_ended(&self) -> bool {
+        self.ended
     }
 
     /// The events for the steps written since the last read, under `message_id`.
@@ -177,6 +192,13 @@ impl Transcript {
                     self.open.push_back(id);
                 }
                 self.answered = calls.is_empty();
+                self.ended = self.answered;
+                // A batch's results follow in call order, so the wait's own result is the one at
+                // its index; the turn ends only once that one is DONE.
+                self.waiting = calls
+                    .iter()
+                    .position(|call| call["name"] == "swarm_wait")
+                    .map(|at| (at, 0));
             }
             Some("GENERIC") => {
                 if let Some(id) = self.open.pop_front() {
@@ -186,6 +208,12 @@ impl Transcript {
                         .or_else(|| step["content"].as_str())
                         .unwrap_or_default();
                     parsed.push(tool_finished(message_id, &id, failed, output));
+                    if let Some((wait, results)) = &mut self.waiting {
+                        if *results == *wait && step["status"] == "DONE" {
+                            self.ended = true;
+                        }
+                        *results += 1;
+                    }
                 }
             }
             // Its instructions, which its chat opens with, and messages sent to it.
