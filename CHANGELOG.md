@@ -3,6 +3,17 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.154] - 2026-11-24
+
+## What's Changed
+* fix(linux): agents started from the AppImage keep working after it is moved or updated by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/354
+* fix(agents): new agents run with full access like tasks, instead of asking at every tool by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/355
+* fix(chat): an agent's chat shows alone, without a tab by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/356
+* fix(sidebar): working tasks show their time instead of a spinner by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/357
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.153...26.11.154
+
 ## [26.11.153] - 2026-11-24
 
 ## What's Changed
