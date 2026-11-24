@@ -2,15 +2,16 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{ClickEvent, Div, SharedString, Window, div, prelude::*, px};
-use patchwork_core::scheduled::{Schedule, Weekday};
+use gpui::{ClickEvent, ClipboardItem, Div, Role, SharedString, Window, div, prelude::*, px};
+use patchwork_core::scheduled::{Schedule, Trigger, Weekday};
 
 use crate::settings::controls::{FieldKind, chip, form_footer, select_box, switch};
 use crate::settings::SettingsDialog;
 use patchwork_ui::theme::{fs_sm, fs_xs, theme};
-use patchwork_ui::{AGENT_KINDS, BtnKind, agent_label, btn, icon, tooltip};
+use patchwork_ui::{AGENT_KINDS, BtnKind, agent_label, btn, icon, icon_button, tooltip};
+use patchwork_ui::theme::font_mono;
 use crate::settings::controls::ACCESS_MODES as MODES;
-use super::tasks::{DAYS, Pick, REPEATS, Repeats, labelled, repeats, time_of};
+use super::tasks::{DAYS, Pick, REPEATS, Repeats, STARTS, Starts, labelled, repeats, starts, time_of};
 
 /// The form for one task (`TaskEditor`).
 pub(super) fn editor(
@@ -66,6 +67,124 @@ pub(super) fn editor(
         window,
         cx,
     );
+
+    let start = starts(&draft.trigger);
+    let starts_select = select_box(
+        "sched-starts",
+        "Starts",
+        STARTS
+            .iter()
+            .find(|(s, _)| *s == start)
+            .map_or("", |(_, l)| l),
+        d.menu_open("sched-starts"),
+        &t,
+    )
+    .on_click(cx.listener(move |d, e: &ClickEvent, window, cx| {
+        let items = STARTS
+            .iter()
+            .map(|&(s, label)| {
+                let pick: Pick = Box::new(move |task| {
+                    // A webhook keeps its address while it stays a webhook.
+                    if starts(&task.trigger) == s {
+                        return;
+                    }
+                    task.trigger = match s {
+                        Starts::Schedule => Trigger::Schedule,
+                        Starts::PullRequest => Trigger::PullRequestOpened,
+                        Starts::CheckFailed => Trigger::CheckFailed,
+                        Starts::Webhook => Trigger::Webhook {
+                            token: String::new(),
+                        },
+                    };
+                });
+                (label.to_string(), s == start, pick)
+            })
+            .collect();
+        d.task_menu("sched-starts", "Starts", items, e, window, cx);
+    }));
+    let event_note = match &draft.trigger {
+        Trigger::Schedule => None,
+        Trigger::PullRequestOpened | Trigger::CheckFailed => Some(
+            div()
+                .text_size(px(fs_xs()))
+                .text_color(t.text_subtle)
+                .child(
+                    "Patchwork asks the project's GitHub repository through gh once a minute while \
+                     it is open. What is already there when the task is saved does not start it.",
+                )
+                .into_any_element(),
+        ),
+        Trigger::Webhook { token } => {
+            let url = d
+                .scheduled
+                .webhook_base
+                .as_ref()
+                .filter(|_| !token.is_empty())
+                .map(|base| format!("{base}{token}"));
+            Some(match url {
+                Some(url) => {
+                    let copied = url.clone();
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .child(
+                                    div()
+                                        .id("sched-webhook-url")
+                                        .role(Role::Label)
+                                        .aria_label("Webhook address")
+                                        .min_w_0()
+                                        .truncate()
+                                        .px(px(8.))
+                                        .py(px(4.))
+                                        .bg(t.bg_editor)
+                                        .font_family(font_mono())
+                                        .text_size(px(fs_sm()))
+                                        .child(url),
+                                )
+                                .child(
+                                    icon_button(
+                                        "sched-webhook-copy",
+                                        "Copy webhook address",
+                                        "copy",
+                                        14.,
+                                        cx,
+                                    )
+                                    .tooltip(tooltip("Copy address"))
+                                    .on_click(
+                                        move |_: &ClickEvent, _: &mut Window, cx| {
+                                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                                copied.clone(),
+                                            ));
+                                        },
+                                    ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(fs_xs()))
+                                .text_color(t.text_subtle)
+                                .child(
+                                    "A POST to this address starts the task, with the request's \
+                                     body after the prompt. It only answers on this computer.",
+                                ),
+                        )
+                        .into_any_element()
+                }
+                None => div()
+                    .text_size(px(fs_xs()))
+                    .text_color(t.text_subtle)
+                    .child("The webhook's address shows here once the task is saved.")
+                    .into_any_element(),
+            })
+        }
+    };
+    let on_schedule = draft.trigger.is_schedule();
 
     let kind = repeats(&draft.schedule);
     let at = time_of(&draft.schedule).to_string();
@@ -336,16 +455,20 @@ pub(super) fn editor(
             .p(px(14.))
             .child(labelled("Name", name, &t))
             .child(labelled("Prompt", prompt, &t))
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_end()
-                    .gap(px(12.))
-                    .child(labelled("Repeats", repeats_select, &t))
-                    .child(when)
-                    .children(days),
-            )
+            .child(labelled("Starts", starts_select, &t))
+            .children(event_note)
+            .when(on_schedule, |form| {
+                form.child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .items_end()
+                        .gap(px(12.))
+                        .child(labelled("Repeats", repeats_select, &t))
+                        .child(when)
+                        .children(days),
+                )
+            })
             .child(
                 div()
                     .flex()

@@ -106,7 +106,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                         .text_color(t.text_muted)
                         .child(meta(
                             "calendar-blank",
-                            patchwork_core::scheduled::describe(&task.schedule),
+                            patchwork_core::scheduled::describe_task(task),
                         ))
                         .child(meta(
                             if task.project_id.is_some() {
@@ -138,7 +138,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                         .text_size(px(fs_xs()))
                         .text_color(t.text_subtle)
                         .child(run_history(task, &t))
-                        .when(enabled, |row| {
+                        .when(enabled && task.trigger.is_schedule(), |row| {
                             row.child(
                                 div()
                                     .flex_none()

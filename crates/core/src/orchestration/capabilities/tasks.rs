@@ -283,7 +283,7 @@ fn scheduled_entry(task: &Task, projects: &[Project]) -> Entry {
         "agent": task.agent,
         "model": task.model,
         "state": state,
-        "schedule": crate::scheduled::describe(&task.schedule),
+        "schedule": crate::scheduled::describe_task(task),
         "last_run_at_epoch_ms": task.last_run_at,
         "next_run_at_epoch_ms": task.next_run_at.filter(|_| task.enabled),
         "last_run": task.recent_runs.first().map(|run| json!({
