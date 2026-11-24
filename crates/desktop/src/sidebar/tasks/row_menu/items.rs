@@ -80,22 +80,8 @@ impl Workspace {
                         });
                     }
                 }
-                items.push(item("Background…", "image", Act::Background));
                 if self.settings.granular_chats {
                     items.push(item("Granular settings…", "gauge", Act::Granular));
-                }
-                // Where the task works: its worktree, or its project's folder.
-                let local = self
-                    .chat_by_id(id)
-                    .and_then(|t| t.project_id.as_ref())
-                    .is_some_and(|p| {
-                        self.settings.projects.iter().any(|project| {
-                            &project.id == p
-                                && !patchwork_core::system::ssh::is_remote(&project.path)
-                        })
-                    });
-                if local {
-                    items.push(item("Open folder", "folder-open", Act::OpenFolder));
                 }
                 items.extend(self.chat_app_items(id));
                 items.push(item("Export to…", "export", Act::Export));
@@ -294,9 +280,6 @@ impl Workspace {
                 return self.confirm_delete(ids.clone(), window, cx);
             }
             (Target::Chat(id), Act::Remove) => return self.archive(id, cx),
-            (Target::Chat(id), Act::Background) => {
-                return self.open_background_dialog(id, window, cx);
-            }
             (Target::Agent(id), Act::Details) => return self.open_agent_details(id, cx),
             (Target::Agent(id), Act::Restore) => return self.set_agent_archived(id, false, cx),
             (Target::Agent(id), Act::Background) => {
@@ -341,18 +324,6 @@ impl Workspace {
             }
             (Target::Project(id), Act::ChangeFolder) => {
                 return self.change_project_folder(id.clone(), cx);
-            }
-            (Target::Chat(id), Act::OpenFolder) => {
-                let (core, id) = (Arc::clone(&self.core), id.clone());
-                let root = cx.background_spawn(async move { core.chat_root(&id) });
-                cx.spawn(async move |_, cx| match root.await {
-                    Ok(root) => cx.update(|cx| cx.open_with_system(std::path::Path::new(&root))),
-                    Err(e) => {
-                        log::warn!(error:% = e; "could not open the task's folder: {{error}}");
-                    }
-                })
-                .detach();
-                return;
             }
             (Target::Project(id), Act::OpenFolder) => {
                 let Some(project) = self.settings.projects.iter().find(|p| &p.id == id) else {
