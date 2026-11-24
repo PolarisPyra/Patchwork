@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use super::row_menu::Target;
 use gpui::{
-    AnyElement, ClickEvent, Div, Hsla, MouseButton, MouseDownEvent, Role, SharedString, Stateful,
-    div, prelude::*, px,
+    AnyElement, ClickEvent, DragMoveEvent, Div, Hsla, MouseButton, MouseDownEvent, Role,
+    SharedString, Stateful, div, prelude::*, px,
 };
 use patchwork_core::gateway::{ChatApps, Platform, Presence};
 use patchwork_core::chats::{ApprovalStatus, MessageStatus, Chat};
@@ -246,6 +246,8 @@ pub(super) fn chat_row(
             .into_any_element()
     });
     let (btn_hover, fg) = (t.border_strong, t.text);
+    let drop_here = cx.has_active_drag() && w.task_drop_before.as_deref() == Some(th.id.as_str());
+    let (drop_onto, line_id) = (th.id.clone(), th.id.clone());
     let worktree = w
         .worktree_marks
         .get(&th.id)
@@ -277,6 +279,38 @@ pub(super) fn chat_row(
         .text_color(t.text)
         .bg(fill)
         .hover(move |s| s.bg(hover))
+        .relative()
+        // Where a task dragged in the tree lands: a straight line in the gap above this row.
+        .when(drop_here, |row| {
+            row.child(
+                div()
+                    .absolute()
+                    .top(px(-2.))
+                    .left_0()
+                    .right_0()
+                    .h(px(2.))
+                    .bg(t.accent),
+            )
+        })
+        .on_drop(cx.listener(move |w, drag: &TabDrag, _, cx| {
+            w.drop_task_before(&drag.chat, &drop_onto, cx);
+        }))
+        .on_drag_move::<TabDrag>(cx.listener(move |w, e: &DragMoveEvent<TabDrag>, _, cx| {
+            let over = e.bounds.contains(&e.event.position);
+            let fits = over
+                && w.chats
+                    .iter()
+                    .find(|c| c.id == line_id)
+                    .is_some_and(|c| w.can_drop_task(&e.drag(cx).chat, c));
+            let here = w.task_drop_before.as_deref() == Some(line_id.as_str());
+            if fits && !here {
+                w.task_drop_before = Some(line_id.clone());
+                cx.notify();
+            } else if !fits && here {
+                w.task_drop_before = None;
+                cx.notify();
+            }
+        }))
         .children(mark)
         .child(name)
         .child(
