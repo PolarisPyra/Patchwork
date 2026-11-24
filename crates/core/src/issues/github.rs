@@ -4,7 +4,7 @@
 
 use serde::Deserialize;
 
-use super::{Issue, IssueSource};
+use super::Issue;
 use crate::{Core, Error};
 
 /// How many issues are listed, newest first.
@@ -55,7 +55,6 @@ impl Core {
         Ok(issues
             .into_iter()
             .map(|i| Issue {
-                source: IssueSource::GitHub,
                 key: format!("#{}", i.number),
                 title: i.title,
                 url: i.url,
