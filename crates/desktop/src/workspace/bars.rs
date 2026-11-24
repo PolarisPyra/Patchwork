@@ -298,6 +298,7 @@ impl Workspace {
             )
             .child(entry(View::Tasks, "Tasks", "chats", cx))
             .child(entry(View::Changes, "Source Control", "git-diff", cx))
+            .child(entry(View::Issues, "Issues", "list-checks", cx))
             .child(
                 activity_button("Quilts", "Quilts".into(), &t, on_quilts)
                     .aria_toggled(on_quilts.into())

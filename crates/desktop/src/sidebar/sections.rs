@@ -24,6 +24,7 @@ pub fn render(
     let body = match view {
         View::Tasks => tasks_view(w, cx).into_any_element(),
         View::Archived => archived_view(w, cx).into_any_element(),
+        View::Issues => super::issues::issues_view(w, cx).into_any_element(),
         View::Changes => div()
             .flex_1()
             .min_h_0()
