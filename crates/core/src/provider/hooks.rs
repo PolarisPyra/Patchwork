@@ -45,6 +45,18 @@ pub fn opencode_call(kind: PermissionKind, resource: &str) -> Option<(String, Va
     }
 }
 
+/// The program file of this running Patchwork, which the hooks and servers it hands an agent run.
+///
+/// For an AppImage this is the binary inside its mount rather than the `APPIMAGE` file. The mount
+/// holds the image open for as long as this Patchwork runs, so the path keeps working when the
+/// user moves, renames, or updates the AppImage meanwhile; an `APPIMAGE` path would then name
+/// nothing, or a different version. An agent runs only while the Patchwork that started it does,
+/// and its hooks ask that Patchwork's relay, so it never needs the program once that one quits.
+#[must_use]
+pub fn own_program() -> Option<std::path::PathBuf> {
+    std::env::current_exe().ok()
+}
+
 /// The shell command that runs Patchwork's own binary with `args`.
 ///
 /// The command that starts Patchwork's own binary with `args`, quoted for the shell `agent` runs
@@ -54,13 +66,7 @@ pub fn opencode_call(kind: PermissionKind, resource: &str) -> Option<(String, Va
 /// Antigravity's `exec` is for a POSIX shell.
 #[must_use]
 pub fn patchwork_command(agent: AgentKind, args: &[&str]) -> Option<String> {
-    // On Linux, an AppImage's `current_exe()` points inside an ephemeral `/tmp/.mount_*` FUSE
-    // mount that disappears on restart; prefer the persistent `APPIMAGE` path when available.
-    let exe = std::env::var_os("APPIMAGE")
-        .filter(|v| !v.is_empty())
-        .map(std::path::PathBuf::from)
-        .filter(|p| p.is_file())
-        .or_else(|| std::env::current_exe().ok())?;
+    let exe = own_program()?;
     let path = exe.to_string_lossy();
     let args = args.join(" ");
     let posix = || format!("'{}' {args}", path.replace('\'', r"'\''"));

@@ -15,11 +15,7 @@ const OWN_TIMEOUT_SECS: u64 = 65 * 60;
 /// The command and arguments that reach Patchwork's own server for the agent of `chat_id`.
 pub fn own_server(chat_id: &str) -> Option<(String, Vec<String>)> {
     let relay = mcp::own_relay_file()?;
-    let exe = std::env::var_os("APPIMAGE")
-        .filter(|v| !v.is_empty())
-        .map(std::path::PathBuf::from)
-        .filter(|p| p.is_file())
-        .or_else(|| std::env::current_exe().ok())?;
+    let exe = crate::provider::hooks::own_program()?;
     let args = [
         mcp::PROXY_ARG,
         &relay.display().to_string(),
