@@ -2,9 +2,9 @@
 //! switch between without the task list.
 //!
 //! A chat goes into a tab with "Send to tab" in its menu, from the task list or from another
-//! tab; the chat open then gets a tab too. The strip shows while the open chat's project has two
-//! or more tabs, whichever of its chats is open, so it does not come and go while moving between
-//! them. Each tab keeps one size, open or not, busy or not.
+//! tab; the chat open then gets a tab too. The strip shows while the open chat's project has any
+//! tabs, whichever of its chats is open, so it does not come and go while moving between them,
+//! and the tab just sent to shows at once. Each tab keeps one size, open or not, busy or not.
 
 // Rust guideline compliant 2026-10-09
 
@@ -82,7 +82,7 @@ impl Workspace {
             .any(|c| c.id == id && c.archived_at.is_none() && c.project_id.as_deref() == project)
     }
 
-    /// The tabs of the open chat's project, in order, when there are two or more.
+    /// The tabs of the open chat's project, in order, when there are any.
     fn shown_tabs(&self) -> Option<Vec<&Chat>> {
         let open = self.chat.as_ref()?;
         let tabs: Vec<&Chat> = self
@@ -92,11 +92,11 @@ impl Workspace {
             .map(AsRef::as_ref)
             .filter(|c| c.archived_at.is_none() && c.project_id == open.project_id)
             .collect();
-        (tabs.len() > 1).then_some(tabs)
+        (!tabs.is_empty()).then_some(tabs)
     }
 }
 
-/// The strip of the open chat's project's tabs, when it has two or more.
+/// The strip of the open chat's project's tabs, when it has any.
 pub(super) fn tab_strip(
     w: &Workspace,
     t: &Theme,
