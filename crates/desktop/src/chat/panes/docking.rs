@@ -75,8 +75,9 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let project = self.project_of(id);
-        // A task of another project, dragged from the sidebar, opens among its own panes.
-        if self.tabs_project() != project {
+        // A task of another project, dragged from the sidebar, opens among its own panes, and an
+        // agent's chat, which takes no tab, opens alone.
+        if self.tabs_project() != project || self.is_agent_chat(id) {
             self.open_chat(id, cx);
             return;
         }
