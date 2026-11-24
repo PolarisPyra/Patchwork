@@ -220,6 +220,7 @@ pub(crate) fn tab_strip(
         .overflow_x_scroll()
         .drag_over::<TabDrag>(move |s, _, _, _| s.bg(drop_bg))
         .on_drop(cx.listener(move |w, drag: &TabDrag, _, cx| {
+            w.tab_drop_before = None;
             w.dock_tab(&drag.chat, pane, Zone::Middle, cx);
         }))
         .on_mouse_down(
@@ -248,7 +249,9 @@ pub(crate) fn tab_strip(
         )
         .children(tabs.into_iter().enumerate().map(|(i, chat)| {
             let on = open.as_deref() == Some(chat.id.as_str());
-            tab(chat, on, focused, i, count, t, cx)
+            let drop_here =
+                cx.has_active_drag() && w.tab_drop_before.as_deref() == Some(chat.id.as_str());
+            tab(chat, (on, focused, drop_here), (i, count), t, cx)
         }))
         .when(focused && w.broadcasting && !alone, |s| {
             s.child(div().flex_1()).child(broadcast_pill(t, cx))
@@ -313,12 +316,13 @@ fn restore_button(cx: &mut Context<Workspace>) -> impl IntoElement + use<> {
 /// answer, the title, and its close button.
 /// Right-click opens the chat's menu, as on its row in the task list, and a double-click shows
 /// its pane alone. A tab dropped on it goes before it; one held over it a moment shows it.
+///
+/// `on` is whether it is its pane's shown tab, `focused` whether that pane has the focus, and
+/// `drop_here` whether a dragged tab would land before it; `i` of `count` is its place.
 fn tab(
     chat: &Chat,
-    on: bool,
-    focused: bool,
-    i: usize,
-    count: usize,
+    (on, focused, drop_here): (bool, bool, bool),
+    (i, count): (usize, usize),
     t: &Theme,
     cx: &mut Context<Workspace>,
 ) -> impl IntoElement + use<> {
@@ -366,6 +370,7 @@ fn tab(
     .role(Role::Tab)
     .aria_selected(on)
     .group("chat-tab")
+    .relative()
     .flex_none()
     .w(px(TAB_WIDTH))
     .h(px(28.))
@@ -390,6 +395,16 @@ fn tab(
             .items_center()
             .justify_center()
             .child(mark),
+    )
+    // Where a dragged tab lands: a straight line in the gap before this tab.
+    .child(
+        div()
+            .absolute()
+            .left(px(-3.))
+            .top_0()
+            .bottom_0()
+            .w(px(2.))
+            .when(drop_here, |l| l.bg(accent)),
     )
     .child(div().flex_1().min_w_0().truncate().child(title.clone()))
     .child(
@@ -421,14 +436,24 @@ fn tab(
             w.open_context_menu(Target::Chat(menu_id.clone()), e, window, cx);
         }),
     )
-    .drag_over::<TabDrag>(move |s, _, _, _| s.border_l_2().border_color(accent))
     .on_drop(cx.listener(move |w, drag: &TabDrag, _, cx| {
+        w.tab_drop_before = None;
         w.drop_tab_before(&drag.chat, &onto, cx);
     }))
     .on_drag_move::<TabDrag>(
         cx.listener(move |w, e: &DragMoveEvent<TabDrag>, window, cx| {
-            if e.bounds.contains(&e.event.position) && e.drag(cx).chat != hover_id {
+            let over = e.bounds.contains(&e.event.position);
+            let own = e.drag(cx).chat == hover_id;
+            let here = w.tab_drop_before.as_deref() == Some(hover_id.as_str());
+            if over && !own {
+                if !here {
+                    w.tab_drop_before = Some(hover_id.clone());
+                    cx.notify();
+                }
                 w.hold_tab_over(&hover_id, e.bounds, window, cx);
+            } else if here {
+                w.tab_drop_before = None;
+                cx.notify();
             }
         }),
     )
