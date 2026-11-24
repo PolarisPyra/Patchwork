@@ -6,6 +6,11 @@ use serde::Serialize;
 
 use crate::provider::AgentKind;
 
+/// What Claude and Codex call their 5-hour window.
+pub(super) const SESSION_LABEL: &str = "Session (5h)";
+/// What agy calls its 5-hour window.
+pub(super) const FIVE_HOUR_LABEL: &str = "5-hour";
+
 /// One rate-limit window, e.g. the 5-hour session limit.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +31,12 @@ impl UsageWindow {
     #[must_use]
     pub fn remaining_percent(&self) -> f64 {
         (100.0 - self.used_percent).clamp(0.0, 100.0)
+    }
+
+    /// Whether this is a provider's 5-hour window.
+    #[must_use]
+    pub fn is_five_hour(&self) -> bool {
+        self.label == SESSION_LABEL || self.label == FIVE_HOUR_LABEL
     }
 }
 

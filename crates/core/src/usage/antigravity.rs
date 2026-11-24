@@ -14,6 +14,7 @@ use crate::system::time::parse_rfc3339_ms;
 use crate::system::now_ms;
 use crate::provider::AgentKind;
 use crate::usage::{ProviderUsage, UsageWindow};
+use super::types::FIVE_HOUR_LABEL;
 
 pub fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, Error> {
     // The CLI prints one JSON object and then keeps running, so stop once that object is complete.
@@ -74,7 +75,7 @@ pub fn usage(mut out: ProviderUsage) -> Result<ProviderUsage, Error> {
 fn window_label(window: &str) -> String {
     match window.trim() {
         "weekly" => "Weekly".into(),
-        "5h" => "5-hour".into(),
+        "5h" => FIVE_HOUR_LABEL.into(),
         "" => "Limit".into(),
         other => other.into(),
     }

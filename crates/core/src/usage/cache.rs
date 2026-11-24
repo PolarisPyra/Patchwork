@@ -11,6 +11,7 @@ use crate::provider::AgentKind;
 use crate::system::now_ms;
 
 use super::{ProviderUsage, UsageWindow, antigravity, claude, codex};
+use super::types::SESSION_LABEL;
 
 /// How long fetched usage is reused before it is fetched again, for a read that did not ask for
 /// fresh numbers.
@@ -247,7 +248,7 @@ impl UsageCache {
 /// "Session (5h)" for a 300-minute window, "Weekly" for 10080, and so on.
 pub(super) fn window_label(minutes: u64) -> String {
     match minutes {
-        300 => "Session (5h)".into(),
+        300 => SESSION_LABEL.into(),
         10_080 => "Weekly".into(),
         m if m % 1440 == 0 => format!("{}-day", m / 1440),
         m => format!("{}h", (m as f64 / 60.0).round()),

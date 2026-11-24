@@ -14,6 +14,7 @@ use crate::system::time::parse_rfc3339_ms;
 use crate::system::now_ms;
 use crate::usage::{UsageWindow, ProviderUsage};
 use super::{Failure, RATE_LIMIT_BACKOFF};
+use super::types::SESSION_LABEL;
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const PROFILE_URL: &str = "https://api.anthropic.com/api/oauth/profile";
@@ -25,7 +26,7 @@ static LIVE_PLAN: Mutex<Option<(Instant, Option<String>)>> = Mutex::new(None);
 
 /// Windows the endpoint reports, in display order.
 const WINDOWS: [(&str, &str); 4] = [
-    ("five_hour", "Session (5h)"),
+    ("five_hour", SESSION_LABEL),
     ("seven_day", "Weekly"),
     ("seven_day_opus", "Weekly · Opus"),
     ("seven_day_sonnet", "Weekly · Sonnet"),

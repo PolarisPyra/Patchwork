@@ -7,7 +7,7 @@ use super::limits::describe_agent;
 use super::limits::wait_left;
 use super::limits::Entry;
 use super::ring::ring;
-use super::limits::most_used;
+use super::limits::ring_limit;
 use super::limits::limited_until;
 use gpui::{AnyElement, FontWeight, Role, SharedString, deferred, div, prelude::*, px, relative};
 use patchwork_core::provider::AgentKind;
@@ -127,11 +127,11 @@ pub(super) fn popover(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>)
         };
         let tabs = agents.iter().map(|&kind| {
             let entry = w.usage.entries.get(&kind);
-            let used = most_used(entry);
+            let limit = ring_limit(entry);
             let active = Some(kind) == current;
             let title = [
                 Some(agent_label(kind).to_string()),
-                used.map(|used| format!("{}% used", used.round())),
+                limit.map(|(label, used)| format!("{label}: {}% used", used.round())),
                 limited_until(entry, now).map(|_| "Rate limited".to_string()),
             ]
             .into_iter()
@@ -166,7 +166,13 @@ pub(super) fn popover(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>)
                     w.usage.selected = Some(kind);
                     cx.notify();
                 }))
-                .child(ring(used, 34., 3., t, agent_logo(kind, None, 18.)))
+                .child(ring(
+                    limit.map(|(_, used)| used),
+                    34.,
+                    3.,
+                    t,
+                    agent_logo(kind, None, 18.),
+                ))
         });
         let refresh = button("usage-refresh", refresh_label)
             .size(px(28.))
