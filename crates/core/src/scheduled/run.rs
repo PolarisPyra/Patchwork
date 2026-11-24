@@ -127,7 +127,7 @@ impl Core {
             .ok_or("The scheduled task no longer exists")?;
         let chat = self.start_scheduled_task(&task)?;
         let now = now_ms() as i64;
-        let next = scheduled::next_run_at(&task.schedule, chrono::Local::now());
+        let next = scheduled::next_for(&task, chrono::Local::now());
         self.store
             .scheduled_task_ran(&task.id, now, next, Ok(chat.id.as_str()))?;
         Ok(chat)
@@ -153,9 +153,9 @@ impl Core {
     pub fn run_due_scheduled_tasks(self: &Arc<Self>) -> Vec<String> {
         let now = now_ms() as i64;
         let tasks = self.store.scheduled_tasks();
-        let mut started = Vec::new();
+        let mut started = self.run_event_tasks(&tasks);
         for task in &tasks {
-            let next = || scheduled::next_run_at(&task.schedule, chrono::Local::now());
+            let next = || scheduled::next_for(task, chrono::Local::now());
             match scheduled::action(task, now) {
                 scheduled::Action::Wait => {}
                 scheduled::Action::Skip => {

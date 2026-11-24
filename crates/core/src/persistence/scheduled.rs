@@ -32,6 +32,7 @@ struct Row {
     next_run_at: Option<i64>,
     created_at: i64,
     agent_id: Option<String>,
+    run_on: Option<String>,
 }
 
 pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
@@ -39,7 +40,7 @@ pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
         .conn
         .prepare(
             "SELECT id, name, prompt, schedule, project_id, agent, model, access_mode, enabled,
-                    last_run_at, next_run_at, created_at, agent_id
+                    last_run_at, next_run_at, created_at, agent_id, run_on
              FROM scheduled_tasks ORDER BY created_at",
         )
         .map_err(err)?;
@@ -59,6 +60,7 @@ pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
                 next_run_at: row.get(10)?,
                 created_at: row.get(11)?,
                 agent_id: row.get(12)?,
+                run_on: row.get(13)?,
             })
         })
         .map_err(err)?;
@@ -68,6 +70,12 @@ pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
         .map(|row| {
             let schedule: Schedule = serde_json::from_str(&row.schedule)
                 .map_err(|e| format!("Database error: scheduled task {}: {e}", row.id))?;
+            // A trigger that cannot be read leaves the task on its schedule.
+            let trigger = row
+                .run_on
+                .as_deref()
+                .and_then(|t| serde_json::from_str(t).ok())
+                .unwrap_or_default();
             let recent_runs = runs.remove(&row.id).unwrap_or_default();
             Ok(Task {
                 id: row.id,
@@ -84,6 +92,7 @@ pub(super) fn load(inner: &Inner) -> Result<Vec<Task>, Error> {
                 created_at: row.created_at,
                 recent_runs,
                 agent_id: row.agent_id,
+                trigger,
             })
         })
         .collect()
@@ -154,14 +163,14 @@ fn save(inner: &Inner, task: &Task) -> Result<(), Error> {
         .execute(
             "INSERT INTO scheduled_tasks
                  (id, name, prompt, schedule, project_id, agent, model, access_mode, enabled,
-                  last_run_at, next_run_at, created_at, agent_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                  last_run_at, next_run_at, created_at, agent_id, run_on)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
              ON CONFLICT (id) DO UPDATE SET name = excluded.name, prompt = excluded.prompt,
                  schedule = excluded.schedule, project_id = excluded.project_id,
                  agent = excluded.agent, model = excluded.model,
                  access_mode = excluded.access_mode, enabled = excluded.enabled,
                  last_run_at = excluded.last_run_at, next_run_at = excluded.next_run_at,
-                 agent_id = excluded.agent_id",
+                 agent_id = excluded.agent_id, run_on = excluded.run_on",
             params![
                 task.id,
                 task.name,
@@ -176,6 +185,7 @@ fn save(inner: &Inner, task: &Task) -> Result<(), Error> {
                 task.next_run_at,
                 task.created_at,
                 task.agent_id,
+                json(&task.trigger),
             ],
         )
         .map_err(err)?;

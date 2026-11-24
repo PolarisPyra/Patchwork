@@ -8,7 +8,7 @@ use chrono::{Local, TimeZone};
 use gpui::{AnyElement, ClickEvent, Div, FontWeight, SharedString, Window, div, prelude::*, px};
 use patchwork_core::agents::Agent;
 use patchwork_core::provider::AgentKind;
-use patchwork_core::scheduled::{RunOutcome, Schedule, Run, Task, Weekday};
+use patchwork_core::scheduled::{RunOutcome, Schedule, Run, Task, Trigger, Weekday};
 use patchwork_core::system::now_ms;
 use patchwork_core::chats::AccessMode;
 
@@ -43,6 +43,31 @@ pub(super) const REPEATS: [(Repeats, &str); 4] = [
     (Repeats::Weekly, "Days of the week"),
 ];
 
+/// What the Starts menu offers.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum Starts {
+    Schedule,
+    PullRequest,
+    CheckFailed,
+    Webhook,
+}
+
+pub(super) const STARTS: [(Starts, &str); 4] = [
+    (Starts::Schedule, "On a schedule"),
+    (Starts::PullRequest, "When a pull request opens"),
+    (Starts::CheckFailed, "When a check fails"),
+    (Starts::Webhook, "When a webhook is called"),
+];
+
+pub(super) fn starts(trigger: &Trigger) -> Starts {
+    match trigger {
+        Trigger::Schedule => Starts::Schedule,
+        Trigger::PullRequestOpened => Starts::PullRequest,
+        Trigger::CheckFailed => Starts::CheckFailed,
+        Trigger::Webhook { .. } => Starts::Webhook,
+    }
+}
+
 /// The names of the editor's fields start with this.
 const PREFIX: &str = "sched-";
 
@@ -61,6 +86,9 @@ pub struct ScheduledState {
     pub(super) error: Option<String>,
     /// A save is on its way, so a second press of Save does not make the task twice.
     pub(super) saving: bool,
+    /// Where webhook addresses start, `http://127.0.0.1:<port>/hooks/`, once the listener has
+    /// a port.
+    pub(super) webhook_base: Option<String>,
 }
 
 pub(super) fn repeats(schedule: &Schedule) -> Repeats {
@@ -172,6 +200,7 @@ pub(super) fn blank(agent: AgentKind) -> Task {
         created_at: now_ms() as i64,
         recent_runs: Vec::new(),
         agent_id: None,
+        trigger: Trigger::Schedule,
     }
 }
 
@@ -196,10 +225,11 @@ impl SettingsDialog {
     pub(super) fn list_scheduled(&mut self, cx: &mut Context<Self>) {
         let core = Arc::clone(&self.core);
         self.run(
-            move || (core.scheduled_tasks(), core.agents()),
-            |d, (tasks, agents), _| {
+            move || (core.scheduled_tasks(), core.agents(), core.webhook_url("")),
+            |d, (tasks, agents, base), _| {
                 d.scheduled.tasks = Some(tasks);
                 d.scheduled.agents = agents;
+                d.scheduled.webhook_base = base;
             },
             cx,
         );

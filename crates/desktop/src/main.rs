@@ -69,8 +69,10 @@ fn run_helper() -> Option<i32> {
     Some(run())
 }
 
-/// Starts the tasks whose time has come, on a timer of its own, for the life of the app.
+/// Starts the tasks whose time or event has come, on a timer of its own, for the life of the
+/// app, and listens for the webhooks that start tasks.
 fn start_scheduled_tasks(core: Arc<Core>) {
+    core.listen_for_webhooks();
     std::thread::Builder::new()
         .name("scheduled-tasks".into())
         .spawn(move || {

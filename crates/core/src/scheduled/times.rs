@@ -5,6 +5,7 @@
 use super::types::Task;
 use super::types::Weekday;
 use super::types::Schedule;
+use super::types::Trigger;
 use crate::Error;
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone};
 use crate::system::new_id;
@@ -124,8 +125,46 @@ pub(crate) fn prepare(mut task: Task) -> Result<Task, Error> {
     if next.is_none() {
         return Err("The schedule needs a time of day, as HH:MM".into());
     }
-    task.next_run_at = if task.enabled { next } else { None };
+    match &mut task.trigger {
+        Trigger::PullRequestOpened | Trigger::CheckFailed if task.project_id.is_none() => {
+            return Err("Pick a project: the task watches its GitHub repository".into());
+        }
+        Trigger::Schedule | Trigger::PullRequestOpened | Trigger::CheckFailed => {}
+        Trigger::Webhook { token } => {
+            if token.trim().is_empty() {
+                *token = new_id().replace('-', "");
+            }
+        }
+    }
+    task.next_run_at = if task.enabled {
+        next_for(&task, Local::now())
+    } else {
+        None
+    };
     Ok(task)
+}
+
+/// When `task` next runs after `now`: its schedule's next slot, or None for a task an event
+/// starts.
+#[must_use]
+pub fn next_for(task: &Task, now: DateTime<Local>) -> Option<i64> {
+    if task.trigger.is_schedule() {
+        next_run_at(&task.schedule, now)
+    } else {
+        None
+    }
+}
+
+/// A one-line description of what starts `task`, e.g. `Weekdays at 09:00` or
+/// `When a pull request opens`.
+#[must_use]
+pub fn describe_task(task: &Task) -> String {
+    match task.trigger {
+        Trigger::Schedule => describe(&task.schedule),
+        Trigger::PullRequestOpened => "When a pull request opens".into(),
+        Trigger::CheckFailed => "When a check fails".into(),
+        Trigger::Webhook { .. } => "When its webhook is called".into(),
+    }
 }
 
 /// A one-line description of the schedule for a list row, e.g. `Weekdays at 09:00`.

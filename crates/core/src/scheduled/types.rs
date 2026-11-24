@@ -32,6 +32,40 @@ pub struct Task {
     /// agent.
     #[serde(default)]
     pub agent_id: Option<String>,
+    /// What starts the task: its schedule, or an event in its project's repository or a webhook.
+    #[serde(default)]
+    pub trigger: Trigger,
+}
+
+/// What starts a scheduled task.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum Trigger {
+    /// The task's schedule.
+    #[default]
+    Schedule,
+    /// A pull request opening in the project's GitHub repository.
+    PullRequestOpened,
+    /// A GitHub Actions run failing in the project's repository.
+    CheckFailed,
+    /// A `POST` to the task's own address on this computer.
+    Webhook {
+        /// The secret part of the address, made when the task is saved.
+        #[serde(default)]
+        token: String,
+    },
+}
+
+impl Trigger {
+    /// Whether the task runs on its schedule, rather than on an event.
+    #[must_use]
+    pub fn is_schedule(&self) -> bool {
+        matches!(self, Self::Schedule)
+    }
 }
 
 /// One time a scheduled task's slot came round.
