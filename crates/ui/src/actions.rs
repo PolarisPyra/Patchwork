@@ -19,6 +19,7 @@ actions!(
         ShowOrchestrator,
         ShowTasks,
         ShowChanges,
+        ShowIssues,
         ShowQuilts,
         ShowArchived,
         ToggleTerminal,
