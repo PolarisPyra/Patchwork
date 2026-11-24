@@ -405,22 +405,86 @@ pub fn run_prompt_hook() -> i32 {
 /// The folder Antigravity is given with `--add-dir`, or None when there is nothing to put in it:
 /// the hooks file it loads from there (the system prompt at session start, Patchwork's permission
 /// hook before each tool call, and the user's hooks). Rules such as a `GEMINI.md` in that folder
-/// are not read, so the prompt goes through a hook. Each hooks file has a folder of its own, named
-/// by its hash, so turns that differ do not share a file.
+/// are not read, so the prompt goes through a hook.
+///
+/// Antigravity saves the folders a session started with and loads their hooks again whenever the
+/// session resumes, even when a later run passes a different folder. So each chat keeps a single
+/// folder named after the chat, and every turn rewrites the file in it. That way a resumed session
+/// runs the hooks of the Patchwork running now, not the program path from an earlier run.
 #[must_use]
 pub fn antigravity_dir(spec: &TurnSpec) -> Option<std::path::PathBuf> {
-    let hooks = antigravity_hooks(spec)?;
-    // FNV-1a, 64-bit, so the folder's name stays the same across builds.
-    let hash = hooks.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
-        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
-    });
-    let dir = crate::extensions::skills::cli_dir("antigravity").join(format!("{hash:016x}"));
+    let root = crate::extensions::skills::cli_dir("antigravity");
+    let name: String = spec
+        .chat_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-')
+        .collect();
+    let dir = root.join(format!("chat-{name}"));
     let file = dir.join(".agents").join("hooks.json");
+    let Some(hooks) = antigravity_hooks(spec) else {
+        // Hooks this chat no longer has must not run when its session resumes.
+        let _ = std::fs::remove_file(&file);
+        return None;
+    };
+    repair_stale_antigravity_dirs(&root, &hooks);
     if std::fs::read_to_string(&file).ok().as_deref() != Some(hooks.as_str()) {
         std::fs::create_dir_all(file.parent()?).ok()?;
-        std::fs::write(&file, hooks).ok()?;
+        std::fs::write(&file, &hooks).ok()?;
     }
     Some(dir)
+}
+
+/// Rewrites, once per run, any hooks file under `root` whose permission hook calls a Patchwork
+/// program that no longer exists, such as an AppImage that was renamed or the mount of a Patchwork
+/// that has quit. Sessions that began with one of those folders load its hooks again when they
+/// resume, so each of their tool calls would otherwise fail.
+fn repair_stale_antigravity_dirs(root: &std::path::Path, hooks: &str) {
+    static DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if DONE.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let file = entry.path().join(".agents").join("hooks.json");
+        let Ok(text) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        let stale = serde_json::from_str::<Value>(&text).is_ok_and(|v| {
+            hook_commands(&v)
+                .filter(|c| c.contains(HOOK_ARG))
+                .filter_map(hook_program)
+                .any(|p| !std::path::Path::new(p).exists())
+        });
+        if stale {
+            let _ = std::fs::write(&file, hooks);
+        }
+    }
+}
+
+/// Every `command` string in a hooks file, at any depth.
+fn hook_commands(value: &Value) -> Box<dyn Iterator<Item = &str> + '_> {
+    match value {
+        Value::Object(map) => Box::new(map.iter().flat_map(|(key, v)| {
+            let own = (key == "command").then(|| v.as_str()).flatten();
+            own.into_iter().chain(hook_commands(v))
+        })),
+        Value::Array(items) => Box::new(items.iter().flat_map(hook_commands)),
+        _ => Box::new(std::iter::empty()),
+    }
+}
+
+/// The program a command from [`patchwork_command`] runs: its first word, quoted or not.
+fn hook_program(command: &str) -> Option<&str> {
+    let rest = command
+        .trim_start()
+        .trim_start_matches("exec ")
+        .trim_start_matches("& ");
+    match rest.strip_prefix('\'') {
+        Some(quoted) => quoted.split('\'').next(),
+        None => rest.split_whitespace().next(),
+    }
 }
 
 /// The hooks file Antigravity runs, or None when there are no hooks to run.
