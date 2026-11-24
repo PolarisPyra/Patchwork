@@ -3,6 +3,14 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.148] - 2026-11-24
+
+## What's Changed
+* fix(opencode): long chats no longer fail to start on OpenCode 1 with "filename or extension is too long" by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/323
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.147...26.11.148
+
 ## [26.11.147] - 2026-11-24
 
 ## What's Changed
