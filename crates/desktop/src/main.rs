@@ -245,7 +245,8 @@ fn main() {
                         title: Some(APP_TITLE.into()),
                         ..Default::default()
                     }),
-                    app_id: Some("patchwork".into()),
+                    // The launcher entry's name, which a Wayland desktop finds the window's icon by.
+                    app_id: Some("dev.patchwork.ade".into()),
                     ..Default::default()
                 },
                 |window, cx| {

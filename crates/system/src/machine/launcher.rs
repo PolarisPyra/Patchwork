@@ -24,8 +24,8 @@ pub fn set_launcher_icon(svg: &[u8]) {
 mod linux {
     use std::path::{Path, PathBuf};
 
-    /// The window's app id.
-    const APP_ID: &str = "patchwork";
+    /// The window's app id, and the one it had before, which launcher entries made then name.
+    const APP_IDS: [&str; 2] = ["dev.patchwork.ade", "patchwork"];
 
     pub(crate) fn set(svg: &[u8]) {
         let Some(data_home) = std::env::var_os("XDG_DATA_HOME")
@@ -107,7 +107,8 @@ mod linux {
                     });
                     program.is_some() && program == appimage
                 });
-                let owns_windows = value("StartupWMClass").as_deref() == Some(APP_ID);
+                let owns_windows =
+                    value("StartupWMClass").is_some_and(|c| APP_IDS.contains(&c.as_str()));
                 (starts_us || owns_windows).then(|| Entry {
                     path,
                     icon: value("Icon"),

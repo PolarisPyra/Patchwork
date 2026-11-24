@@ -6,4 +6,4 @@ Exec=@EXEC@
 Icon=dev.patchwork.ade
 Terminal=false
 Categories=Development;
-StartupWMClass=patchwork
+StartupWMClass=dev.patchwork.ade
