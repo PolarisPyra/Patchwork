@@ -471,9 +471,10 @@ pub(in crate::orchestration) fn ingest(
                     unprompted.set(Unprompted::No, &turn.alone);
                     // Stop interrupted the agent and it ended its reply. Claude stays up for the
                     // next message, as after any reply; Codex exits once its stdin closes. Until
-                    // the agent is idle or has exited, Stop still sends SIGTERM if it hangs.
+                    // the agent is idle or has exited, Stop still sends SIGTERM if it hangs. A swarm
+                    // whose workers are still at work stops with its agent, so one Stop ends both.
                     if turn.cancelled.load(Ordering::SeqCst) && turn.interrupts.waiting() {
-                        if stays_up(&turn, goal.as_ref()) {
+                        if stays_up(&turn, goal.as_ref()) && !antigravity_swarm.is_holding() {
                             turn.interrupts.answer();
                             // An error in the stopped reply does not carry over to the next one.
                             stream_error = None;
