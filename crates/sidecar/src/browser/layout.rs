@@ -196,10 +196,16 @@ impl BrowserView {
                 }
                 None => page.bg(t.bg_editor).child(self.waiting(t)),
             })
+            .when(self.picking, gpui::Styled::cursor_crosshair)
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, e: &MouseDownEvent, window, cx| {
                     window.focus(&this.focus, cx);
+                    if this.picking {
+                        cx.stop_propagation();
+                        this.pick(e.position, cx);
+                        return;
+                    }
                     this.mouse(
                         e.position,
                         MouseAction::Down,
@@ -223,6 +229,10 @@ impl BrowserView {
                 }),
             )
             .on_mouse_move(cx.listener(|this, e: &MouseMoveEvent, _, _| {
+                if this.picking {
+                    this.highlight(e.position);
+                    return;
+                }
                 this.mouse(
                     e.position,
                     MouseAction::Move,
@@ -273,6 +283,11 @@ impl BrowserView {
             }))
             // Escape goes to the page and also leaves it, so the keys are never trapped.
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                if this.picking && e.keystroke.key == "escape" {
+                    this.set_picking(false, cx);
+                    cx.stop_propagation();
+                    return;
+                }
                 if this.key(e, cx) && e.keystroke.key != "escape" {
                     cx.stop_propagation();
                 }

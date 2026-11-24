@@ -291,6 +291,20 @@ impl QuiltsPage {
                         .on_click(cx.listener(|this, _, _, cx| this.open_outside(cx))),
                 )
             })
+            .when(quilt.kind.drawn() && self.show == Show::Preview, |d| {
+                let picking = self.picking(cx);
+                d.child(
+                    icon_button("quilt-pick", "Pick an element", "target", 16., cx)
+                        .tooltip(tooltip(if picking {
+                            "Stop picking (Esc)"
+                        } else {
+                            "Pick an element to ask about"
+                        }))
+                        .aria_toggled(picking.into())
+                        .when(picking, |b| b.bg(t.bg_selected_muted))
+                        .on_click(cx.listener(|this, _, _, cx| this.toggle_picking(cx))),
+                )
+            })
             .when(quilt.kind.drawn(), |d| {
                 d.child(
                     icon_button("quilt-open", "Open in browser", "arrow-square-out", 16., cx)

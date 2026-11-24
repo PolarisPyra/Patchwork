@@ -26,6 +26,23 @@ const MOST_ERRORS: usize = 20;
 #[derive(Debug)]
 pub struct PageErrorsChanged;
 
+/// The person picked an element on the page.
+#[derive(Debug, Clone)]
+pub struct ElementPicked {
+    /// The page's address when it was picked.
+    pub url: String,
+    /// A selector that finds it.
+    pub selector: String,
+    /// Its HTML, cut short when long.
+    pub html: String,
+    /// The styles it is drawn with.
+    pub styles: String,
+}
+
+/// Whether the person is picking an element changed.
+#[derive(Debug)]
+pub struct PickingChanged;
+
 #[expect(
     clippy::struct_excessive_bools,
     reason = "independent flags the page reports, not a state machine"
@@ -62,6 +79,8 @@ pub struct BrowserView {
     errors: Vec<String>,
     /// Whether the page was last told the app's theme is dark.
     dark: Option<bool>,
+    /// The next click picks the element under it instead of reaching the page.
+    pub(super) picking: bool,
 }
 
 impl std::fmt::Debug for BrowserView {
@@ -73,6 +92,8 @@ impl std::fmt::Debug for BrowserView {
 }
 
 impl gpui::EventEmitter<PageErrorsChanged> for BrowserView {}
+impl gpui::EventEmitter<ElementPicked> for BrowserView {}
+impl gpui::EventEmitter<PickingChanged> for BrowserView {}
 
 impl BrowserView {
     /// A view that starts the browser on `url`. `toolbar` gives it an address bar.
@@ -112,6 +133,7 @@ impl BrowserView {
             session: None,
             errors: Vec::new(),
             dark: None,
+            picking: false,
         };
         view.missing = find_browser().is_none();
         if view.missing {
@@ -195,6 +217,43 @@ impl BrowserView {
         self.label = label;
     }
 
+    /// Whether the next click on the page picks an element.
+    #[must_use]
+    pub fn picking(&self) -> bool {
+        self.picking
+    }
+
+    /// Starts or stops picking an element: while on, the pointer outlines the element under it
+    /// and a click picks it rather than reaching the page. Escape stops it.
+    pub fn set_picking(&mut self, on: bool, cx: &mut Context<Self>) {
+        if self.picking == on {
+            return;
+        }
+        self.picking = on;
+        if !on {
+            self.send(BrowserCommand::Unhighlight);
+        }
+        cx.emit(PickingChanged);
+        cx.notify();
+    }
+
+    /// Outlines the element under the pointer, while picking.
+    pub(super) fn highlight(&self, position: Point<Pixels>) {
+        if let Some((x, y)) = self.place(position) {
+            self.send(BrowserCommand::Highlight { x, y });
+        }
+    }
+
+    /// Picks the element under the pointer and stops picking.
+    pub(super) fn pick(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        if let Some((x, y)) = self.place(position) {
+            self.send(BrowserCommand::Pick { x, y });
+        }
+        self.picking = false;
+        cx.emit(PickingChanged);
+        cx.notify();
+    }
+
     /// The errors the shown page met, the first first.
     #[must_use]
     pub fn errors(&self) -> &[String] {
@@ -235,6 +294,11 @@ impl BrowserView {
                     cx.emit(PageErrorsChanged);
                 }
                 self.loading = loading;
+                // A new page has no outline to keep.
+                if loading && self.picking {
+                    self.picking = false;
+                    cx.emit(PickingChanged);
+                }
                 self.back = back;
                 self.forward = forward;
             }
@@ -243,6 +307,19 @@ impl BrowserView {
                     self.errors.push(message);
                     cx.emit(PageErrorsChanged);
                 }
+                return;
+            }
+            BrowserMessage::Event(BrowserEvent::Picked {
+                selector,
+                html,
+                styles,
+            }) => {
+                cx.emit(ElementPicked {
+                    url: self.url.clone(),
+                    selector,
+                    html,
+                    styles,
+                });
                 return;
             }
         }

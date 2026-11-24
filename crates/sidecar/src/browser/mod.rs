@@ -14,4 +14,4 @@
 mod layout;
 mod headless_page;
 
-pub use headless_page::{BrowserView, PageErrorsChanged};
+pub use headless_page::{BrowserView, ElementPicked, PageErrorsChanged, PickingChanged};
