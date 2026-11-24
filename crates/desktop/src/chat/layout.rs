@@ -17,6 +17,7 @@ use super::above_composer::plan_steps;
 use super::above_composer::agent_questions;
 use super::above_composer::queued_messages;
 use super::text_colors::in_scheme;
+use super::tabs;
 
 /// How long a chat just chosen waits for the files under its last replies before it shows anyway.
 pub const OPEN_HOLD: std::time::Duration = std::time::Duration::from_millis(250);
@@ -120,6 +121,18 @@ pub fn render(
                     .child(w.composer.clone()),
             )
         });
+    let chat = match tabs::tab_strip(w, &t, cx) {
+        Some(strip) => div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .child(strip)
+            .child(chat)
+            .into_any_element(),
+        None => chat.into_any_element(),
+    };
     match scheme {
         Some(scheme) => in_scheme(scheme, chat).into_any_element(),
         None => chat.into_any_element(),

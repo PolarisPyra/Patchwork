@@ -14,6 +14,7 @@ actions!(
         TogglePalette,
         NewChat,
         FindInChat,
+        CloseChatTab,
         OpenSettings,
         ShowOrchestrator,
         ShowTasks,

@@ -19,9 +19,9 @@ pub mod text;
 pub mod theme;
 
 pub use actions::{
-    APP_TITLE, DeleteChat, FindInChat, FocusNext, FocusPrev, GoBack, GoForward, NewChat,
-    NewTerminal, OpenSettings, Quit, ShowArchived, ShowChanges, ShowOrchestrator, ShowQuilts,
-    ShowTasks, ToggleOutput, TogglePalette, TogglePanel, ToggleTerminal,
+    APP_TITLE, CloseChatTab, DeleteChat, FindInChat, FocusNext, FocusPrev, GoBack, GoForward,
+    NewChat, NewTerminal, OpenSettings, Quit, ShowArchived, ShowChanges, ShowOrchestrator,
+    ShowQuilts, ShowTasks, ToggleOutput, TogglePalette, TogglePanel, ToggleTerminal,
 };
 pub use controls::icons::{icon, kind_icon};
 pub use controls::inputs::{

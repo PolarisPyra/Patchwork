@@ -250,6 +250,11 @@ impl Render for Workspace {
                     }
                 }),
             )
+            .on_action(cx.listener(|this, _: &patchwork_ui::CloseChatTab, _, cx| {
+                if let Some(id) = this.chat.as_ref().map(|c| c.id.clone()) {
+                    this.close_tab(&id, cx);
+                }
+            }))
             .on_action(
                 cx.listener(|this, _: &patchwork_ui::OpenSettings, window, cx| {
                     if this.settings_dialog.is_none() {
