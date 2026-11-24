@@ -44,6 +44,7 @@ use crate::workspace::dock::place;
 pub enum View {
     Tasks,
     Changes,
+    Issues,
     Archived,
 }
 
@@ -119,6 +120,8 @@ pub struct Workspace {
     pub chat: Option<Chat>,
     /// The chats open in tabs, by id, in the order they show.
     pub(crate) chat_tabs: Vec<String>,
+    /// The Issues view's lists.
+    pub(crate) issues: crate::sidebar::issues::IssueLists,
     pub view: Option<View>,
     pub page: Page,
     /// Whether the orchestrator page has the task list beside it. Its own, so opening or closing
@@ -414,6 +417,7 @@ impl Workspace {
             archived_collapsed: HashSet::new(),
             chat: None,
             chat_tabs: Vec::new(),
+            issues: crate::sidebar::issues::IssueLists::default(),
             view: Some(View::Tasks),
             page: Page::Orchestrator,
             orchestrator_tasks: true,

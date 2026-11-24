@@ -19,6 +19,7 @@ pub mod extensions;
 pub mod gateway;
 pub mod harness;
 pub mod import;
+pub mod issues;
 pub mod logging;
 pub mod notifications;
 pub mod orchestration;
