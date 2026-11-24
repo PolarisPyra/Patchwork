@@ -71,6 +71,12 @@ struct Release {
     notes: ReleaseNotes,
 }
 
+/// Release notes as markdown, without the top margin a leading heading keeps: the row above
+/// already spaces them.
+fn notes_markdown(text: &str, key: impl Into<SharedString>, cx: &App) -> Div {
+    markdown(text, key, cx).when(text.starts_with('#'), |d| d.mt(px(-12.)))
+}
+
 /// The link under notes that leave changes out, to the release's page.
 fn read_more(id: impl Into<ElementId>, url: &str, cx: &App) -> Stateful<Div> {
     let url = url.to_string();
@@ -160,7 +166,11 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                         .flex()
                         .flex_col()
                         .items_start()
-                        .child(markdown(&r.notes.text, format!("release-notes-{i}"), cx))
+                        .child(notes_markdown(
+                            &r.notes.text,
+                            format!("release-notes-{i}"),
+                            cx,
+                        ))
                         .children(
                             r.notes
                                 .more
@@ -263,7 +273,11 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 .flex()
                 .flex_col()
                 .items_start()
-                .child(markdown(&release_notes(&notes.text), "update-notes", cx))
+                .child(notes_markdown(
+                    &release_notes(&notes.text),
+                    "update-notes",
+                    cx,
+                ))
                 .children(
                     notes
                         .more
