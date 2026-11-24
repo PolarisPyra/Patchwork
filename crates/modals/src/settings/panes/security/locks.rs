@@ -1,4 +1,4 @@
-//! The Security pane's password fields and rows, by whether the vault is open, waiting for its
+//! The Vault pane's password fields and rows, by whether the vault is open, waiting for its
 //! password, or has none, and the pane drawn from them.
 
 // Rust guideline compliant 2026-10-09
@@ -307,7 +307,7 @@ fn open_rows(
     rows
 }
 
-/// The Security pane: the fields the vault's state asks for, and the buttons under them.
+/// The Vault pane: the fields the vault's state asks for, and the buttons under them.
 pub fn render(
     d: &mut SettingsDialog,
     window: &mut Window,

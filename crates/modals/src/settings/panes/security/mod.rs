@@ -1,4 +1,4 @@
-//! The Security pane: what protects the saved secrets, the vault's password (set, changed,
+//! The Vault pane: what protects the saved secrets, the vault's password (set, changed,
 //! removed and entered here) and its recovery key, the secrets that are saved, the copies
 //! earlier versions left, and what the chat apps had Patchwork do.
 

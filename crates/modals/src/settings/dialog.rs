@@ -196,11 +196,11 @@ pub(super) const ENTRIES: &[Entry] = &[
         }],
     },
     Entry {
-        label: "Security",
+        label: "Vault",
         icon: "fingerprint",
         panes: &[Pane {
             id: "security",
-            label: "Security",
+            label: "Vault",
             icon: "fingerprint",
         }],
     },

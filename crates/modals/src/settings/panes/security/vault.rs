@@ -1,4 +1,4 @@
-//! The Security pane's state, and what it does with the vault: reading and showing secrets,
+//! The Vault pane's state, and what it does with the vault: reading and showing secrets,
 //! downloading the recovery key, and setting, changing or removing the password.
 
 // Rust guideline compliant 2026-10-09
