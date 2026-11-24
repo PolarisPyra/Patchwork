@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.149] - 2026-11-24
+
+## What's Changed
+* fix(chat): empty numbered list items no longer draw their numbers on top of each other by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/324
+* fix(sidebar): only folders can be dropped on the project list by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/325
+* fix(antigravity): one Stop ends a swarm whose workers are still running by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/326
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.148...26.11.149
+
 ## [26.11.148] - 2026-11-24
 
 ## What's Changed
