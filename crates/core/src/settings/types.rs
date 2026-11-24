@@ -169,6 +169,9 @@ pub struct Settings {
     pub turn_token_limit: u64,
     /// What a launch does with the replies the last session's closing cut off.
     pub resume_at_launch: ResumeAtLaunch,
+    /// Opening a task, or starting one, gives it a tab of its own beside the open task's,
+    /// instead of showing it in the open task's tab.
+    pub tasks_in_new_tab: bool,
     /// Folder of hook bundles. None uses `hooks` in the config folder.
     #[serde(alias = "pluginsDir")]
     pub hooks_dir: Option<String>,

@@ -37,6 +37,7 @@ const INDEX: &[(&str, &[&str])] = &[
             "Click answers twice to send",
             "Enter steers a running reply",
             "Granular chats",
+            "Open tasks in",
             "Resume interrupted replies at launch",
             "Stop agent after 200 tool steps",
             "Token limit per turn",

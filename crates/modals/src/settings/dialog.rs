@@ -77,7 +77,7 @@ pub(super) const ENTRIES: &[Entry] = &[
             Pane {
                 id: "chat",
                 label: "Chat",
-                desc: "How replies show, and what agents may do on their own.",
+                desc: "How replies show, where tasks open, and what agents may do on their own.",
                 icon: "chat-circle",
             },
             Pane {
