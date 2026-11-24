@@ -3,6 +3,17 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.152] - 2026-11-24
+
+## What's Changed
+* feat(chat): the open task always has a tab, each project keeps its own, and + adds one by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/348
+* fix(linux): the window shows Patchwork's icon in the title bar and dock on Wayland by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/349
+* feat(chat): split the chat into panes, each with its own tabs, and arrange them with shortcuts, presets and saved layouts by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/350
+* feat(settings): grouped settings with a header for each page, and a Shortcuts page to search, inspect and give commands more than one key by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/351
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.151...26.11.152
+
 ## [26.11.151] - 2026-11-24
 
 ## What's Changed
