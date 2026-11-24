@@ -17,6 +17,8 @@ use patchwork_ui::{format_tokens, list_scrollbar, spinner};
 use crate::workspace::{Workspace, is_busy};
 
 use patchwork_ui::text::markdown::find_in;
+use crate::chat::panes::PaneId;
+use crate::chat::top_right::find_bar::Marks;
 use super::reply::{is_open, pieces_of, reply_piece};
 use super::turn_contents::{Compaction, Step, steps_of};
 use super::{turn_rail, user_message};
@@ -316,8 +318,13 @@ fn compacted_divider(
         )
 }
 
+/// Chat `chat`'s transcript, with `marks` on what the find field matches. Drawn for `pane` out
+/// of focus, its rows are drawn with that pane's chat standing in for the open one, and it has no
+/// turn rail.
 pub fn transcript(
     w: &Workspace,
+    marks: Option<Marks>,
+    pane: Option<PaneId>,
     chat: &Chat,
     t: &Theme,
     window: &Window,
@@ -330,8 +337,10 @@ pub fn transcript(
         .map(Arc::as_ref)
         .filter(|m| !m.queued)
         .collect();
-    let rail = turn_rail::turn_rail(w, &shown, t, window, cx);
-    let marks = w.find_marks(cx);
+    let rail = pane
+        .is_none()
+        .then(|| turn_rail::turn_rail(w, &shown, t, window, cx))
+        .flatten();
     let busy = is_busy(chat);
     // The context size in force just before each row, for a compacted divider to compare against.
     let mut latest = None;
@@ -362,8 +371,13 @@ pub fn transcript(
     let theme = *t;
     let rows = list(
         w.transcript_list.clone(),
-        cx.processor(move |w, i: usize, _, cx| {
-            transcript_row(w, i, &before, marks.as_ref(), busy, &theme, cx)
+        cx.processor(move |w, i: usize, _, cx| match pane {
+            None => transcript_row(w, i, &before, marks.as_ref(), busy, &theme, cx),
+            Some(pane) => w
+                .in_pane(pane, |w| {
+                    transcript_row(w, i, &before, None, busy, &theme, cx)
+                })
+                .unwrap_or_else(|| gpui::Empty.into_any_element()),
         }),
     )
     .flex_1()
@@ -385,7 +399,9 @@ pub fn transcript(
                 .flex()
                 .flex_col()
                 // The rail's strips reach 44px in from the edge when they widen.
-                .when(turn_rail::has_rail(w, &shown), |d| d.pr(px(28.)))
+                .when(pane.is_none() && turn_rail::has_rail(w, &shown), |d| {
+                    d.pr(px(28.))
+                })
                 .text_size(px(patchwork_ui::theme::fs_md()))
                 .child(rows),
         )
@@ -405,7 +421,7 @@ fn transcript_row(
     w: &Workspace,
     i: usize,
     before: &[Option<u64>],
-    marks: Option<&(String, Option<(String, usize)>)>,
+    marks: Option<&Marks>,
     busy: bool,
     t: &Theme,
     cx: &mut Context<Workspace>,
@@ -469,7 +485,7 @@ fn transcript_row(
     {
         return div().id(row).into_any_element();
     }
-    let find = w.find_in_row(marks, &m.id);
+    let find = marks.map(|marks| marks.row(&m.id));
     let body = if m.role == MessageRole::User {
         user_message::user_message(w, m, find.as_ref(), t, cx).into_any_element()
     } else {

@@ -27,6 +27,16 @@ pub enum Action {
     OpenFolder,
     OpenChat(String),
     OpenProject(String),
+    /// Runs a command that has a key, by its id.
+    Command(&'static str),
+    /// Lays the panes out as a ready-made layout, by its place in the list.
+    Preset(usize),
+    /// Lays the panes out as a layout the user named, by its name.
+    Layout(String),
+    /// Keeps the panes' layout under a name: what is typed in the search field.
+    SaveLayout(String),
+    /// Forgets a named layout.
+    RemoveLayout(String),
 }
 
 /// A row: what it is called, the group it is listed under, a hint at its right, such as its
@@ -91,10 +101,7 @@ impl Palette {
         })
         .detach();
         cx.subscribe(&search, |this, _, _: &Submitted, cx| {
-            let picked = this
-                .rows(cx)
-                .get(this.active)
-                .map(|&i| this.items[i].action.clone());
+            let picked = this.rows(cx).get(this.active).map(|&i| this.picked(i, cx));
             if picked.is_some() {
                 cx.emit(Closed(picked));
             }
@@ -110,12 +117,39 @@ impl Palette {
         }
     }
 
+    /// What picking item `i` does; saving a layout takes the name typed.
+    fn picked(&self, i: usize, cx: &gpui::App) -> Action {
+        match &self.items[i].action {
+            Action::SaveLayout(_) => Action::SaveLayout(self.typed(cx)),
+            action => action.clone(),
+        }
+    }
+
+    /// What is typed in the search field, trimmed.
+    fn typed(&self, cx: &gpui::App) -> String {
+        self.search.read(cx).content.trim().to_owned()
+    }
+
+    /// Item `i`'s label; saving a layout names what is typed.
+    fn label(&self, i: usize, cx: &gpui::App) -> String {
+        let item = &self.items[i];
+        match item.action {
+            Action::SaveLayout(_) => format!("Save layout as \u{201c}{}\u{201d}", self.typed(cx)),
+            _ => item.label.clone(),
+        }
+    }
+
     /// The matching items, as indexes, in the order they show: grouped in first-seen order.
+    /// Saving a layout shows for anything typed, named by it.
     fn rows(&self, cx: &gpui::App) -> Vec<usize> {
         let needle = self.search.read(cx).content.trim().to_lowercase();
         let mut groups: Vec<(&str, Vec<usize>)> = Vec::new();
         for (i, item) in self.items.iter().enumerate() {
-            if !item.label.to_lowercase().contains(&needle) {
+            let shown = match item.action {
+                Action::SaveLayout(_) => !needle.is_empty(),
+                _ => item.label.to_lowercase().contains(&needle),
+            };
+            if !shown {
                 continue;
             }
             match groups.iter_mut().find(|(name, _)| *name == item.group) {
@@ -173,12 +207,12 @@ impl Render for Palette {
                 active_child = children.len();
             }
             let is_active = n == active;
-            let action = item.action.clone();
+            let label = self.label(i, cx);
             children.push(
                 div()
                     .id(SharedString::from(format!("palette-{i}")))
                     .role(Role::ListBoxOption)
-                    .aria_label(SharedString::from(item.label.clone()))
+                    .aria_label(SharedString::from(label.clone()))
                     .aria_selected(is_active)
                     .flex()
                     .flex_none()
@@ -199,14 +233,11 @@ impl Render for Palette {
                             cx.notify();
                         }
                     }))
-                    .on_click(cx.listener(move |_, _, _, cx| cx.emit(Closed(Some(action.clone())))))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .child(item.label.clone()),
-                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let action = this.picked(i, cx);
+                        cx.emit(Closed(Some(action)));
+                    }))
+                    .child(div().flex_1().min_w_0().truncate().child(label))
                     .children(item.hint.clone().map(|hint| {
                         div()
                             .flex_none()

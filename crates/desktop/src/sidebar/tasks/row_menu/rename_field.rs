@@ -30,7 +30,11 @@ impl Workspace {
                 .iter()
                 .find(|b| &b.id == id)
                 .map(|b| b.name.clone()),
-            Target::Archived(_) | Target::Many(_) | Target::Tabs(_) => None,
+            Target::Archived(_)
+            | Target::Many(_)
+            | Target::Tabs(_)
+            | Target::Layouts
+            | Target::Pane(_) => None,
         };
         let Some(current) = current else {
             return;
@@ -77,9 +81,12 @@ impl Workspace {
                 Target::Chat(id) => core.rename_chat(id, &name),
                 Target::Project(id) => core.rename_project(id, &name),
                 Target::Folder(id) => core.rename_folder(id, &name),
-                Target::Archived(_) | Target::Many(_) | Target::Agent(_) | Target::Tabs(_) => {
-                    Ok(())
-                }
+                Target::Archived(_)
+                | Target::Many(_)
+                | Target::Agent(_)
+                | Target::Tabs(_)
+                | Target::Layouts
+                | Target::Pane(_) => Ok(()),
             };
             self.change("rename it", rename, cx);
         }

@@ -12,7 +12,9 @@ use patchwork_core::Core;
 pub(super) const STATE_KEY: &str = "keybindings";
 
 /// The pages of the pane, in order.
-pub(super) const PAGES: [&str; 6] = ["Main", "Panel", "Chat", "Sidebar", "Archive", "Composer"];
+pub(super) const PAGES: [&str; 7] = [
+    "Main", "Panes", "Panel", "Chat", "Sidebar", "Archive", "Composer",
+];
 
 /// A command: its id, page, title and what it does, and whether its key is fixed.
 pub(super) struct Command {
@@ -107,6 +109,103 @@ pub(super) const COMMANDS: &[Command] = &[
     cmd("terminal.new", "Panel", "New terminal", None),
     cmd("panel.toggle", "Panel", "Toggle panel", None),
     cmd("output.toggle", "Panel", "Toggle output", None),
+    cmd(
+        "pane.splitRight",
+        "Panes",
+        "Split right",
+        Some("Moves the open chat to a new pane on the right, or adds an empty one"),
+    ),
+    cmd(
+        "pane.splitDown",
+        "Panes",
+        "Split down",
+        Some("Moves the open chat to a new pane below, or adds an empty one"),
+    ),
+    cmd("pane.focusLeft", "Panes", "Focus pane to the left", None),
+    cmd("pane.focusRight", "Panes", "Focus pane to the right", None),
+    cmd("pane.focusUp", "Panes", "Focus pane above", None),
+    cmd("pane.focusDown", "Panes", "Focus pane below", None),
+    cmd(
+        "pane.focus1",
+        "Panes",
+        "Focus first pane",
+        Some("Panes count in reading order, left to right and top to bottom"),
+    ),
+    cmd("pane.focus2", "Panes", "Focus second pane", None),
+    cmd("pane.focus3", "Panes", "Focus third pane", None),
+    cmd("pane.focus4", "Panes", "Focus fourth pane", None),
+    cmd(
+        "pane.nextTab",
+        "Panes",
+        "Next tab",
+        Some("The next tab in the focused pane"),
+    ),
+    cmd(
+        "pane.prevTab",
+        "Panes",
+        "Previous tab",
+        Some("The previous tab in the focused pane"),
+    ),
+    cmd(
+        "pane.reopenTab",
+        "Panes",
+        "Reopen closed tab",
+        Some("The tab closed last, if its chat is still listed"),
+    ),
+    cmd(
+        "pane.moveTabLeft",
+        "Panes",
+        "Move tab left",
+        Some("To the pane on the left, splitting when there is none"),
+    ),
+    cmd(
+        "pane.moveTabRight",
+        "Panes",
+        "Move tab right",
+        Some("To the pane on the right, splitting when there is none"),
+    ),
+    cmd(
+        "pane.moveTabUp",
+        "Panes",
+        "Move tab up",
+        Some("To the pane above, splitting when there is none"),
+    ),
+    cmd(
+        "pane.moveTabDown",
+        "Panes",
+        "Move tab down",
+        Some("To the pane below, splitting when there is none"),
+    ),
+    cmd(
+        "pane.swapLeft",
+        "Panes",
+        "Swap with pane left",
+        Some("Trades places with the pane on the left, keeping each place's size"),
+    ),
+    cmd(
+        "pane.swapRight",
+        "Panes",
+        "Swap with pane right",
+        Some("Trades places with the pane on the right, keeping each place's size"),
+    ),
+    cmd(
+        "pane.swapUp",
+        "Panes",
+        "Swap with pane above",
+        Some("Trades places with the pane above, keeping each place's size"),
+    ),
+    cmd(
+        "pane.swapDown",
+        "Panes",
+        "Swap with pane below",
+        Some("Trades places with the pane below, keeping each place's size"),
+    ),
+    cmd(
+        "pane.maximize",
+        "Panes",
+        "Maximize pane",
+        Some("Shows only the focused pane, or every pane again"),
+    ),
     fixed("palette.close", "Main", "Close search", None),
     fixed("settings.close", "Main", "Close settings", None),
     fixed("canvas.close", "Main", "Close the file panel", None),
@@ -179,6 +278,23 @@ pub(super) const DEFAULT_RULES: &[(&str, &str, bool)] = &[
     ("chat.back", "alt+left", false),
     ("chat.forward", "alt+right", false),
     ("settings.open", "mod+,", false),
+    ("pane.splitRight", "mod+\\", false),
+    ("pane.focusLeft", "mod+alt+left", false),
+    ("pane.focusRight", "mod+alt+right", false),
+    ("pane.focusUp", "mod+alt+up", false),
+    ("pane.focusDown", "mod+alt+down", false),
+    ("pane.focus1", "alt+1", false),
+    ("pane.focus2", "alt+2", false),
+    ("pane.focus3", "alt+3", false),
+    ("pane.focus4", "alt+4", false),
+    ("pane.nextTab", "mod+tab", false),
+    ("pane.prevTab", "mod+shift+tab", false),
+    ("pane.reopenTab", "mod+shift+t", false),
+    ("pane.moveTabLeft", "mod+alt+shift+left", false),
+    ("pane.moveTabRight", "mod+alt+shift+right", false),
+    ("pane.moveTabUp", "mod+alt+shift+up", false),
+    ("pane.moveTabDown", "mod+alt+shift+down", false),
+    ("pane.maximize", "mod+shift+enter", false),
     ("terminal.toggle", "mod+`", false),
     ("terminal.new", "mod+shift+~", false),
     ("panel.toggle", "mod+j", false),
@@ -420,6 +536,22 @@ fn gpui_key(key: &str) -> String {
         .join("-")
 }
 
+/// The commands of page `page` that run an action, as their ids and titles, for search to list.
+#[must_use]
+pub fn page_commands(page: &str) -> Vec<(&'static str, &'static str)> {
+    COMMANDS
+        .iter()
+        .filter(|c| c.page == page && action_for(c.id).is_some())
+        .map(|c| (c.id, c.title))
+        .collect()
+}
+
+/// The action command `id` runs, for search to send.
+#[must_use]
+pub fn command_action(id: &str) -> Option<Box<dyn Action>> {
+    action_for(id)
+}
+
 /// The action a command runs in this window, for the commands it has.
 fn action_for(id: &str) -> Option<Box<dyn Action>> {
     Some(match id {
@@ -441,6 +573,28 @@ fn action_for(id: &str) -> Option<Box<dyn Action>> {
         "panel.toggle" => Box::new(patchwork_ui::TogglePanel),
         "output.toggle" => Box::new(patchwork_ui::ToggleOutput),
         "workspace.deleteChat" => Box::new(patchwork_ui::DeleteChat),
+        "pane.splitRight" => Box::new(patchwork_ui::SplitPaneRight),
+        "pane.splitDown" => Box::new(patchwork_ui::SplitPaneDown),
+        "pane.focusLeft" => Box::new(patchwork_ui::FocusPaneLeft),
+        "pane.focusRight" => Box::new(patchwork_ui::FocusPaneRight),
+        "pane.focusUp" => Box::new(patchwork_ui::FocusPaneUp),
+        "pane.focusDown" => Box::new(patchwork_ui::FocusPaneDown),
+        "pane.focus1" => Box::new(patchwork_ui::FocusPane1),
+        "pane.focus2" => Box::new(patchwork_ui::FocusPane2),
+        "pane.focus3" => Box::new(patchwork_ui::FocusPane3),
+        "pane.focus4" => Box::new(patchwork_ui::FocusPane4),
+        "pane.nextTab" => Box::new(patchwork_ui::NextTab),
+        "pane.prevTab" => Box::new(patchwork_ui::PrevTab),
+        "pane.reopenTab" => Box::new(patchwork_ui::ReopenTab),
+        "pane.moveTabLeft" => Box::new(patchwork_ui::MoveTabLeft),
+        "pane.moveTabRight" => Box::new(patchwork_ui::MoveTabRight),
+        "pane.moveTabUp" => Box::new(patchwork_ui::MoveTabUp),
+        "pane.moveTabDown" => Box::new(patchwork_ui::MoveTabDown),
+        "pane.swapLeft" => Box::new(patchwork_ui::SwapPaneLeft),
+        "pane.swapRight" => Box::new(patchwork_ui::SwapPaneRight),
+        "pane.swapUp" => Box::new(patchwork_ui::SwapPaneUp),
+        "pane.swapDown" => Box::new(patchwork_ui::SwapPaneDown),
+        "pane.maximize" => Box::new(patchwork_ui::MaximizePane),
         _ => return None,
     })
 }

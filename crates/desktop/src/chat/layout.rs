@@ -2,10 +2,12 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{Div, FontWeight, Role, SharedString, Window, div, prelude::*, px};
+use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_core::chats::{MessageStatus, Chat};
 use patchwork_ui::theme::{InScheme, Theme, fs_sm, fs_xl, fs_xs, radius_sm, theme};
 use patchwork_ui::{agent_logo, button, display_title, format_tokens, icon, icon_button, tooltip};
+use crate::chat::ChatView;
+use crate::chat::panes::PaneId;
 use crate::workspace::Workspace;
 use super::transcript::message_list::{follow_width, sync_transcript, transcript};
 use super::backdrop;
@@ -26,11 +28,14 @@ pub const OPEN_HOLD: std::time::Duration = std::time::Duration::from_millis(250)
 /// The last messages whose files a chat just chosen waits for: about a screenful.
 pub(super) const HELD_MESSAGES: usize = 10;
 
-pub fn render(
+/// The focused pane `pane`: the open chat whole, with its tabs over it.
+pub(crate) fn focused_chat(
     w: &mut Workspace,
+    v: &mut ChatView,
+    pane: PaneId,
     window: &mut Window,
     cx: &mut Context<Workspace>,
-) -> impl IntoElement + use<> {
+) -> AnyElement {
     patchwork_ui::text::selection::begin_frame(cx);
     w.load_reply_files(cx);
     w.sync_secret_fields(cx);
@@ -68,7 +73,8 @@ pub fn render(
     let body = match &w.chat {
         Some(chat) if held && !chat.messages.is_empty() => div().flex_1().into_any_element(),
         Some(chat) if !chat.messages.is_empty() => {
-            transcript(w, chat, &t, window, cx).into_any_element()
+            let marks = v.find_marks(chat, cx);
+            transcript(w, marks, None, chat, &t, window, cx).into_any_element()
         }
         _ => empty_chat(w, &t).into_any_element(),
     };
@@ -89,8 +95,8 @@ pub fn render(
     let missing = missing_folder::missing_folder(w, &t, cx);
     let away = in_terminal::in_terminal(w, &t, cx);
     let parent = subagent_footer(w, &t, cx);
-    let header = (!is_new).then(|| header(w, &t, window, cx));
-    w.reveal_find(window, cx);
+    let header = (!is_new).then(|| header(w, v, &t, window, cx));
+    w.reveal_find(v, window, cx);
     let chat = div()
         .id("chat")
         .role(Role::Main)
@@ -124,7 +130,7 @@ pub fn render(
                     .child(w.composer.clone()),
             )
         });
-    let chat = match tabs::tab_strip(w, &t, cx) {
+    let chat = match tabs::tab_strip(w, pane, &t, cx) {
         Some(strip) => div()
             .flex()
             .flex_col()

@@ -19,10 +19,13 @@ pub mod text;
 pub mod theme;
 
 pub use actions::{
-    APP_TITLE, CloseChatTab, DeleteChat, FindInChat, FocusNext, FocusPrev, GoBack, GoForward,
-    NewChat, NewTerminal, OpenSettings, Quit, ShowArchived, ShowChanges, ShowIssues,
-    ShowOrchestrator, ShowQuilts, ShowTasks, ToggleOutput, TogglePalette, TogglePanel,
-    ToggleTerminal,
+    APP_TITLE, CloseChatTab, DeleteChat, FindInChat, FocusNext, FocusPane1, FocusPane2, FocusPane3,
+    FocusPane4, FocusPaneDown, FocusPaneLeft, FocusPaneRight, FocusPaneUp, FocusPrev, GoBack,
+    GoForward, MaximizePane, MoveTabDown, MoveTabLeft, MoveTabRight, MoveTabUp, NewChat,
+    NewTerminal, NextTab, OpenSettings, PrevTab, Quit, ReopenTab, ShowArchived, ShowChanges,
+    ShowIssues, ShowOrchestrator, ShowQuilts, ShowTasks, SplitPaneDown, SplitPaneRight,
+    SwapPaneDown, SwapPaneLeft, SwapPaneRight, SwapPaneUp, ToggleOutput, TogglePalette,
+    TogglePanel, ToggleTerminal,
 };
 pub use controls::icons::{icon, kind_icon};
 pub use controls::inputs::{

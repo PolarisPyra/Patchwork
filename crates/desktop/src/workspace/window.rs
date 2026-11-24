@@ -118,8 +118,22 @@ pub struct Workspace {
     pub archived_collapsed: HashSet<String>,
     /// The open chat, in full.
     pub chat: Option<Chat>,
-    /// The chats open in tabs, by id, in the order they show.
-    pub(crate) chat_tabs: Vec<String>,
+    /// Each project's panes and their tabs, by project; `None` for chats without one.
+    pub(crate) layouts: HashMap<Option<String>, crate::chat::panes::Layout>,
+    /// The last pane number given out.
+    pub(crate) pane_seq: crate::chat::panes::PaneId,
+    /// The layouts as last kept in the app state.
+    pub(crate) saved_layouts: String,
+    /// The chats whose tabs were closed, the latest last, for reopening.
+    pub(crate) closed_tabs: Vec<String>,
+    /// The tab a dragged tab is held over, waiting to show.
+    pub(crate) spring_tab: Option<String>,
+    /// Whether each message sent also goes to the chat every other pane shows.
+    pub(crate) broadcasting: bool,
+    /// The layouts the user named, in the order they were saved.
+    pub(crate) named_layouts: Vec<(String, crate::chat::panes::Node)>,
+    /// The keyboard handles of the lines between panes, by split path and part.
+    pub(crate) line_focus: HashMap<(Vec<usize>, usize), gpui::FocusHandle>,
     /// The chat closed to start a new one, whose tab the new chat takes.
     pub(crate) left_tab: Option<String>,
     /// The next chat opened gets a new tab rather than the open one's.
@@ -241,7 +255,7 @@ pub struct Workspace {
     pub composer: Entity<Composer>,
     /// The sidebar and the chat, each drawn as its own view so a scroll in one leaves the other's frame.
     pub(crate) sidebar_region: Entity<Region>,
-    pub(crate) chat_region: Entity<Region>,
+    pub(crate) chat_view: Entity<crate::chat::ChatView>,
     /// The chat's background, under the chat region, so a moving backdrop leaves the chat's frame.
     pub(crate) backdrop_region: Entity<Region>,
     /// The Quilts page's background, under the page, as `backdrop_region` is under the chat.
@@ -262,7 +276,6 @@ pub struct Workspace {
     pub open_agents: HashSet<String>,
     /// Review cards turned from how they first show, by reply.
     pub open_reviews: HashSet<String>,
-    pub find: crate::chat::top_right::find_bar::FindState,
     pub rail: crate::chat::transcript::turn_rail::RailState,
     pub proposed: crate::chat::above_composer::proposed_plan::ProposedPlans,
     pub user: crate::chat::transcript::user_message::UserState,
@@ -354,13 +367,8 @@ impl Workspace {
                 cx,
             )
         });
-        let chat_region = cx.new(|cx| {
-            Region::new(
-                &entity,
-                |w, window, cx| crate::chat::render(w, window, cx).into_any_element(),
-                cx,
-            )
-        });
+        let home_focus = cx.focus_handle();
+        let chat_view = cx.new(|cx| crate::chat::ChatView::new(&entity, home_focus.clone(), cx));
         let backdrop_region = cx.new(|cx| {
             Region::new(
                 &entity,
@@ -422,7 +430,14 @@ impl Workspace {
             chat_app_status,
             archived_collapsed: HashSet::new(),
             chat: None,
-            chat_tabs: Vec::new(),
+            layouts: HashMap::new(),
+            pane_seq: 0,
+            saved_layouts: String::new(),
+            closed_tabs: Vec::new(),
+            spring_tab: None,
+            broadcasting: false,
+            named_layouts: Vec::new(),
+            line_focus: HashMap::new(),
             left_tab: None,
             new_tab: false,
             issues: crate::sidebar::issues::IssueLists::default(),
@@ -495,7 +510,7 @@ impl Workspace {
             panel_resizing: None,
             composer,
             sidebar_region,
-            chat_region,
+            chat_view,
             backdrop_region,
             quilts_backdrop_region,
             status_region,
@@ -510,7 +525,6 @@ impl Workspace {
             checks: crate::chat::transcript::reply::checks::ChecksState::default(),
             secrets: crate::chat::above_composer::secret_request::SecretState::default(),
             folder_check: None,
-            find: crate::chat::top_right::find_bar::FindState::default(),
             rail: crate::chat::transcript::turn_rail::RailState::new(cx),
             proposed: crate::chat::above_composer::proposed_plan::ProposedPlans::default(),
             user: crate::chat::transcript::user_message::UserState::default(),
@@ -526,7 +540,7 @@ impl Workspace {
             transcript_pieces: Vec::new(),
             opened_at: std::time::Instant::now(),
             tree_scroll: ScrollHandle::new(),
-            focus: cx.focus_handle(),
+            focus: home_focus,
             usage: crate::sidebar::usage::UsageState::new(cx),
             reload_queued: false,
             palette: None,
@@ -546,6 +560,7 @@ impl Workspace {
             renaming: None,
             sort_undo: HashMap::new(),
         };
+        this.restore_layouts();
         let last = this
             .core
             .last_chat_id()

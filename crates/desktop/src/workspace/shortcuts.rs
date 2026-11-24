@@ -122,6 +122,19 @@ impl Workspace {
             Some(Action::OpenFolder) => self.open_folder(window, cx),
             Some(Action::OpenChat(id)) => self.reveal_chat(&id, cx),
             Some(Action::OpenProject(id)) => self.select_project(&id, cx),
+            Some(Action::Command(id)) => {
+                if let Some(action) = patchwork_modals::settings::command_action(id) {
+                    window.dispatch_action(action, cx);
+                }
+            }
+            Some(Action::Preset(at)) => {
+                if let Some(preset) = crate::chat::panes::Preset::ALL.get(at) {
+                    self.apply_preset(*preset, cx);
+                }
+            }
+            Some(Action::Layout(name)) => self.apply_named_layout(&name, cx),
+            Some(Action::SaveLayout(name)) => self.save_named_layout(&name, cx),
+            Some(Action::RemoveLayout(name)) => self.remove_named_layout(&name, cx),
             None => {}
         }
         cx.notify();

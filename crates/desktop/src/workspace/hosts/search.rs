@@ -5,9 +5,10 @@
 
 use patchwork_core::chats::{MessageStatus, Role as MessageRole};
 use patchwork_modals::search::{Action, Item};
-use patchwork_modals::settings::key_label;
+use patchwork_modals::settings::{key_label, page_commands};
 use patchwork_ui::display_title;
 
+use crate::chat::panes::Preset;
 use crate::workspace::Workspace;
 
 /// What search lists: actions, then every chat and task by project, then the projects.
@@ -82,6 +83,7 @@ pub(crate) fn items(w: &Workspace) -> Vec<Item> {
         None,
         Action::OpenFolder,
     ));
+    pane_items(w, &mut items);
     let projects = &w.settings.projects;
     items.extend(
         w.chats
@@ -119,4 +121,44 @@ pub(crate) fn items(w: &Workspace) -> Vec<Item> {
         )
     }));
     items
+}
+
+/// The pane commands with their keys, the layouts to lay the panes out as, and saving the
+/// layout under the name typed.
+fn pane_items(w: &Workspace, items: &mut Vec<Item>) {
+    let item = |label: String, hint: Option<String>, action| Item {
+        group: "Panes".into(),
+        label,
+        hint,
+        action,
+    };
+    for (id, title) in page_commands("Panes") {
+        items.push(item(
+            title.into(),
+            key_label(&w.core, id),
+            Action::Command(id),
+        ));
+    }
+    for (at, preset) in Preset::ALL.iter().enumerate() {
+        items.push(item(
+            format!("Layout: {}", preset.label()),
+            None,
+            Action::Preset(at),
+        ));
+    }
+    for (name, _) in &w.named_layouts {
+        items.push(item(
+            format!("Layout: {name}"),
+            None,
+            Action::Layout(name.clone()),
+        ));
+    }
+    for (name, _) in &w.named_layouts {
+        items.push(item(
+            format!("Remove layout \u{201c}{name}\u{201d}"),
+            None,
+            Action::RemoveLayout(name.clone()),
+        ));
+    }
+    items.push(item(String::new(), None, Action::SaveLayout(String::new())));
 }

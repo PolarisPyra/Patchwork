@@ -179,12 +179,17 @@ impl Workspace {
             }
             Place::Chat(id) => {
                 // The open chat's tab, or else the one left to start a new chat, shows it.
+                // A chat with a tab in another pane shows there, as that pane left it.
+                let kept = self.enter_pane_of(id, cx);
                 let left = self.left_tab.take();
                 let beside = self.chat.as_ref().map(|c| c.id.clone()).or(left);
                 let new = std::mem::take(&mut self.new_tab);
                 let shown = self.show_chat(id, cx);
                 if shown {
                     self.keep_tab(beside.as_deref(), new);
+                    if let Some(kept) = kept {
+                        self.restore_view(kept);
+                    }
                 }
                 shown
             }
@@ -425,7 +430,12 @@ impl Workspace {
             self.notices
                 .retain(|_, (chat_id, _)| *chat_id != envelope.chat_id);
         }
-        let open = self.chat.as_mut().filter(|t| t.id == envelope.chat_id);
+        // The open chat, or one shown in a pane out of focus.
+        let open = if self.chat.as_ref().is_some_and(|t| t.id == envelope.chat_id) {
+            self.chat.as_mut()
+        } else {
+            self.pane_chat_mut(&envelope.chat_id)
+        };
         match envelope.event {
             AgentEvent::TextDelta { message_id, text } => {
                 if let Some(message) = open.and_then(|t| message_mut(t, &message_id)) {
@@ -506,6 +516,7 @@ impl Workspace {
                 Err(_) => self.close_chat(cx),
             }
         }
+        self.reload_pane_chats();
         self.load_worktree_marks(cx);
         cx.notify();
     }
@@ -571,6 +582,9 @@ impl Workspace {
         };
         // Sending brings a chat carried on in its CLI back first.
         self.in_cli.remove(&id);
+        if attachments.is_empty() {
+            self.broadcast(&id, &text, queue, cx);
+        }
         let core = Arc::clone(&self.core);
         let draft = (id.clone(), text.clone(), attachments.clone());
         let task =

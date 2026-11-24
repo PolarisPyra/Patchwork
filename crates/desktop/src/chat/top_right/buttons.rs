@@ -26,6 +26,7 @@ fn shadow() -> Vec<gpui::BoxShadow> {
 /// clicks; the gaps between them pass through to the transcript.
 pub(in crate::chat) fn header(
     w: &mut Workspace,
+    v: &crate::chat::ChatView,
     t: &Theme,
     window: &Window,
     cx: &mut Context<Workspace>,
@@ -151,7 +152,7 @@ pub(in crate::chat) fn header(
         .flex()
         .items_center()
         .gap(px(8.))
-        .child(find_bar::find_field(w, t, cx))
+        .child(find_bar::find_field(w, v, t, cx))
         .children(android)
         .children(terminal)
         .children(open)
