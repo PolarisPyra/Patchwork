@@ -329,12 +329,7 @@ impl Workspace {
         });
         let agent = chat.map_or_else(|| self.settings.default_agent(), |t| t.agent);
         let state = if working {
-            div()
-                .flex()
-                .items_center()
-                .gap(px(4.))
-                .child(spinner(12., t.text_muted))
-                .child(format!("{} working…", agent_label(agent)))
+            div().child(format!("{} working…", agent_label(agent)))
         } else if done {
             div()
                 .flex()
