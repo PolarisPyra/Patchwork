@@ -82,13 +82,18 @@ pub(super) fn limited_until(entry: Option<&Entry>, now: u64) -> Option<u64> {
         .filter(|&at| at > now)
 }
 
-/// The most used across an agent's limits, or `None` before numbers arrive.
-pub(super) fn most_used(entry: Option<&Entry>) -> Option<f64> {
+/// The limit an agent's tab ring shows, and how much of it is used: its most used 5-hour window,
+/// else its most used window. `None` before numbers arrive.
+pub(super) fn ring_limit(entry: Option<&Entry>) -> Option<(&str, f64)> {
     let windows = &entry?.usage.as_ref()?.windows;
-    windows
-        .iter()
-        .map(|w| w.used_percent.clamp(0., 100.))
-        .reduce(f64::max)
+    let most_used = |five_hour_only: bool| {
+        windows
+            .iter()
+            .filter(|w| !five_hour_only || w.is_five_hour())
+            .map(|w| (w.label.as_str(), w.used_percent.clamp(0., 100.)))
+            .reduce(|a, b| if b.1 > a.1 { b } else { a })
+    };
+    most_used(true).or_else(|| most_used(false))
 }
 
 /// What "Up to date" compares: each limit's name and how much of it is left, to the whole
