@@ -167,7 +167,8 @@ impl Render for SettingsDialog {
                                     .justify_between()
                                     .gap(px(16.))
                                     .pt(px(12.))
-                                    .pb(px(10.))
+                                    // A pane's first row brings its own 10px above it.
+                                    .pb(px(2.))
                                     .pr(px(16.))
                                     .pl(px(20.))
                                     .child(
