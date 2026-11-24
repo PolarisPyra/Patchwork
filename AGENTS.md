@@ -1,91 +1,182 @@
-# Patchwork
+# Patchwork: agent rules
 
-Native desktop app in Rust: the UI is drawn with GPUI over its core in `crates/core`. Run all commands from the repo root.
+What never gets written, and how changes get from the working tree to `main` and into a release.
+Run all commands from the repo root.
 
-Root `Cargo.toml` lints already enforce `unwrap()`, `println!`, undocumented `unsafe`, `missing_debug_implementations`, and style. This file covers what lints cannot see.
+## No tests, harnesses, or scripts
 
-## Workspace layout
+The repo has no tests and takes none. This holds even when a task, a skill, a guideline, a review
+comment, or a user request for a "fix" seems to call for one. Only an explicit request from the
+user that names tests overrides it, and then only for that request.
 
-| Crate | Package | Owns |
-|---|---|---|
-| `crates/desktop` | `patchwork` | Window, workspace layout/dock/hosts, and in-window UI features. Calls `Core` directly. |
-| `crates/ui` | `patchwork-ui` | Shared controls, theme, embedded assets (`assets/`), text/Markdown tools, actions, and hand-off helpers. Knows no feature; reads only `patchwork-core`. |
-| `crates/sidecar` | `patchwork-sidecar` | Browser view drawing web pages and quilts. |
-| `crates/pages` | `patchwork-pages` | Entity pages (Quilts, Android, onboarding) emitting events to `crates/desktop/src/workspace/hosts/`. |
-| `crates/modals` | `patchwork-modals` | Entity dialogs and cards (Settings, granular, search, Add project, background, credential, interrupted). |
-| `crates/core` | `patchwork-core` | Domains (providers, chats, projects, source control, settings, permissions, extensions, scheduled, orchestration, persistence). |
-| `crates/android` | `patchwork-android` | Android SDK, emulators, devices, running apps via `Host` implemented on `Core`. |
-| `crates/system` | `patchwork-system` | Machine helpers (`processes/`, `files/`, `machine/`), keychain, SSH client, and `Error`. Re-exported as `patchwork_core::system`. |
-| `crates/remote` | `patchwork-remote` | Helper binary run on SSH hosts. |
+### Never write
 
-The app's version is `[workspace.package] version` in the root `Cargo.toml`.
+- **Rust tests of any kind:** `#[test]`, `#[tokio::test]`, `#[gpui::test]` or any other test
+  attribute; `#[cfg(test)]` modules or items; `mod tests;` declarations; `tests/` integration
+  folders; `benches/` and `#[bench]`; doctests written to be run as checks (a short usage example in
+  a `///` comment is fine, but don't add doc examples to get coverage).
+- **Test support code:** fixtures, mocks, fakes, stubs, sample data files, snapshot files
+  (`insta`, `.snap`), golden files, test helpers, or `pub(crate)` hooks added only so a test can
+  reach something.
+- **Test dependencies:** `[dev-dependencies]` for testing (`proptest`, `quickcheck`, `insta`,
+  `mockall`, `rstest`, `criterion`, `pretty_assertions`, and the like).
+- **Harnesses and scripts:** QA harnesses, repro programs, example binaries (`examples/`), shell,
+  Python or Node scripts, Makefile/justfile targets, or anything else checked in to drive or check
+  the app. The only scripts are `scripts/build.sh` and `scripts/hooks/`; add nothing beside them.
+- **CI test steps:** no `cargo test`, `cargo nextest`, coverage, or benchmark jobs in
+  `.github/workflows/`.
+- **Commits typed `test`:** with no tests, there is nothing for a `test(...)` commit to change.
 
-## Where code goes
+### Verify instead
 
-- **Logic lives in `crates/core`.** UI crates draw state and call `Core` operations; if `Core` can decide it, the UI does not.
-- **Core folders are domains, not layers.** `crates/core/src/lib.rs` holds only the module list, `Core`, and `Core::open`. Every other module is one domain holding its types, `impl Core` operations, and logic. Domains may reach down to `crate::system`, `logging/`, and other domains' types, never up into `orchestration/` or `Core` operations; `persistence/` stores what it is given and decides nothing.
-- **Desktop and UI placement.** `crates/desktop/src` holds `main.rs` and feature folders, never loose files. `workspace/` is only the window shell, `hosts/`, and `dock/`; feature methods on `Workspace` stay in that feature's folder. Move UI code into `crates/ui` only once a second feature needs it, and keep an item `pub(crate)` unless another crate uses it.
-- **File sizing and naming.** Keep a module as one file until it passes ~600 lines or two clear concerns, then split into `name/mod.rs` plus one file per concern. Don't create files under ~40 lines. Name files for what they hold (`commit_box.rs`, `lifecycle.rs`), never catch-alls (`ops.rs`, `utils.rs`, `helpers.rs`) or layer names (`render.rs`, `view.rs`). Don't repeat the folder name in the file name.
-- **`mod.rs` is an index only.** Only `//!` docs, `mod` declarations (`#[cfg(test)] mod tests;`), and `use`/`pub use` re-exports. No functions, types, consts, statics, macros, `impl`s, or inline `mod x { … }`. Sub-folders get their own `mod.rs`. Sibling files import by path (`use super::run::git;`), never `use super::*` outside tests. Narrow visibility (`pub(super)`, `pub(in crate::parent)`).
+Every change still gets checked; the check is just not saved.
 
-## Commands & verification
+1. **Compile and lint:** `cargo fmt --all` and `cargo clippy --workspace -- -D warnings`, both with
+   zero warnings.
+2. **One-off commands run inline:** `cargo run -p patchwork`, `cargo check -p <crate>`, a `gh`,
+   `jq`, `git` or `uvx` command typed into the shell. If a command needs a scratch file, put it in
+   gitignored `research/<job>/` (never `/tmp`) and delete it when done.
+3. **The real app:** for behavior, run your own debug build (`cargo run -p patchwork`, in the
+   background, stopped by PID when done; never stop an instance you did not start) and reproduce
+   the bug or exercise the feature.
+4. **UI changes:** say exactly what the user should check in the app: where to click, what to type,
+   and what they should see.
+5. **Report what was verified** and what was not, with the failing output when something fails.
 
-| Task | Command |
+If you find a test, harness, or script that slipped in, point it out and ask before deleting it.
+
+## Ground rules
+
+- **Leave changes uncommitted until reviewed.** No commits, branches, worktrees, or pushes unless
+  the user asks ("push", "push to git", "release").
+- **Every change reaches `main` through a squash-merged PR.** The ruleset on `main` requires a PR
+  and passing CI. Only the Release workflow pushes to `main` directly.
+- **One PR per change.** CI, docs and tooling go in their own PR with a `ci`, `docs` or `chore`
+  commit, never mixed into a feature or fix.
+- **Branch every PR from fresh `origin/main`**, never from another PR's branch or from local `main`.
+- **No destructive git** without explicit confirmation: `reset --hard`, `checkout -- <file>`,
+  `restore`, `stash`, `clean -f`, force-push, moving or deleting pushed tags, rewriting pushed
+  history. A hook in `.claude/settings.json` blocks most of these.
+- **Ask before deleting, moving, or renaming files.**
+- **No AI attribution.** No `Co-Authored-By: Claude` or "Generated with" lines in commits or PRs.
+- **Don't watch GitHub Actions runs** unless asked.
+
+## Commit subjects and PR titles
+
+Plain-language conventional commits, written as what users see now:
+
+```
+type(scope): what users see now
+```
+
+| Type | For |
 |---|---|
-| Run the app | `cargo run -p patchwork` |
-| Format | `cargo fmt --all` / `cargo fmt --all -- --check` |
-| Lint | `cargo clippy --workspace -- -D warnings` |
-| Build AppImage | `scripts/build.sh` |
+| `feat` | Something users can do that they could not before |
+| `fix` | Something that was broken now works |
+| `perf` | Something is faster or lighter |
+| `refactor` | Code moved or reshaped, no change users see |
+| `docs` | Documentation only |
+| `ci` | Workflows and CI |
+| `chore` | Tooling, dependencies, housekeeping |
 
-Before saying a task is done, run `cargo fmt --all` and `cargo clippy --workspace -- -D warnings`. Both must pass with zero warnings; report failing output. Never silence a lint—fix the code or use `#[expect(…, reason = "…")]` when the lint is wrong for that line.
+Examples: `fix(chat): new threads no longer spike CPU`,
+`feat(settings): synced backgrounds, Chat and Logs panes`. The PR title is the commit subject, and
+the squash merge appends ` (#N)`. GitHub's generated release notes list these titles, so they are
+the changelog: write them for users.
 
-## Never add
+## Before any commit
 
-- **Tests, scripts, or harnesses.** No tests (no test files, `#[test]`, or `#[cfg(test)]` modules), shell/Python scripts, or QA harnesses anywhere (only `scripts/build.sh` and `scripts/hooks/` exist). Run one-off commands inline. For UI changes, say what to check in the app.
-- **Anything in `/tmp` or `$TMPDIR`.** Scratch work goes in gitignored `research/<job>/` at the repo root and is deleted when done. Pass tools an explicit path under `research/` when their default is `/tmp`.
-- **Unrequested git actions.** No commits, branches, worktrees, or pushes unless asked. No destructive git commands (`reset --hard`, `checkout -- <file>`, `stash`, `clean`). Ask before deleting, moving, or renaming files.
+```sh
+cargo fmt --all
+cargo clippy --workspace -- -D warnings
+```
 
-## Rust guidelines
+Both must pass with zero warnings. The `scripts/hooks/pre-push` hook runs the same checks (plus
+`node --check site/site.js`) when `git config core.hooksPath scripts/hooks` is set. Never use
+`--no-verify` to get past a failure; fix the code.
 
-- **Errors.** Return `Result<T, Error>` (`patchwork_system::Error` / `patchwork_core::Error`); add a variant only when callers distinguish it. Write messages for a person (what failed and how to fix it). Propagate with `?`; never swallow errors (if truly harmless, log why with `log::warn!`). Use `unwrap_or_else(PoisonError::into_inner)` for locks. Log with `log` structured fields (`log::warn!(error:% = e; "Could not save: {{error}}")`), never logging keys, tokens, or header values.
-- **State machines.** Name states with one enum carrying each state's data instead of loosely coupled booleans/options/maps. Transition in one lock or UI update (check-and-act together). Derive instead of duplicating state; key per-item state by item; give every waiting state a failure/timeout/stop exit.
-- **Types & functions.** Make invalid calls unrepresentable (enums over bool pairs, newtypes over bare IDs, `Option` over sentinels). Keep fields private, max ~5 params (otherwise pass a struct), borrow unless retaining ownership, clone visibly, match exhaustively, name magic numbers as `const` with why, and keep `// Rust guideline compliant <date>` under `//!` docs in every `.rs` file. Public items get a `///` summary under 15 words and `# Errors` when returning `Result`.
-- **Performance.** Never block the UI thread: run disk, process, and network work on background tasks and apply results on the UI thread. Check concurrency, pass count, allocations, streaming, timeouts, early exits, and I/O batching on hot paths.
+## "Push": the PR flow
 
-## Running the app & performance checks
+"Push" or "push to git" runs this whole flow without asking again.
 
-- The owner usually has Patchwork open; never stop or restart an instance you did not start.
-- A debug build runs as "Patchwork (dev)" with separate `patchwork-dev` folders (scheduled tasks off). Start your own with `cargo run -p patchwork` in the background, say so, and stop it by PID when done. If a dev build is already open, isolate yours by setting `XDG_{CONFIG,DATA,CACHE,STATE}_HOME` under `target/own-xdg`. There is no hot reload.
-- To debug lag: add temporary `log::warn!` timing around the suspect in your own debug build, reproduce, isolate causes by disabling one suspect at a time, fix, re-measure, remove timing, and stop your instance by PID.
+```mermaid
+flowchart TD
+    A[User says push] --> B{In a Patchwork task worktree?<br/>branch patchwork/…}
+    B -- No --> C[git fetch origin main]
+    B -- Yes --> W1[Commit on the task branch<br/>never switch, rebase or pull it]
+    C --> D[Split uncommitted edits into changes<br/>one per PR; ci/docs/chore apart]
+    D --> E[For each change:<br/>git switch -c name origin/main<br/>carrying only its edits]
+    E --> F[Commit with type scope: subject]
+    F --> G[git push -u origin name<br/>pre-push runs fmt + clippy]
+    G -- hook fails --> F2[Fix the code, amend, push again] --> G
+    G -- ok --> H[gh pr create<br/>title = subject, body = template]
+    H --> I[gh pr merge --squash --auto --delete-branch]
+    I --> J{More changes?}
+    J -- Yes --> E
+    J -- No --> K[git switch main<br/>git pull --rebase origin main]
+    K --> L[Report PR links; end the turn]
 
-## Design & accessibility
+    W1 --> W2[git fetch origin main]
+    W2 --> W3[git worktree add -b name dir origin/main]
+    W3 --> W4[cherry-pick the change's commits there]
+    W4 --> W5[push, gh pr create, gh pr merge --squash --auto --delete-branch]
+    W5 --> W6[git worktree remove dir]
+    W6 --> W7{More changes?}
+    W7 -- Yes --> W3
+    W7 -- No --> L
+```
 
-- Cut taglines, helper text, and secondary labels; fix the layout instead.
-- Every spinner turns in step: use `ui::spinner`, never a rotating icon or custom spinner animation.
-- Ship full accessibility on every new UI feature:
-  - Name every control (`.aria_label(…)` on icon buttons and inputs), regions, and lists.
-  - Interactive controls get `.role(…)`, `.tab_index(0)`, and Enter/Space handling.
-  - Everything mouse-driven works by keyboard (menus, tabs, drag handles, resize separators with arrow keys and `.aria_numeric_value(…)` min/max).
-  - Expose state via `.aria_expanded`, `.aria_selected`, `.aria_toggled`.
-  - Dialogs use `Role::Dialog`, a name, and close on Escape. Errors use `Role::Alert`; live status/progress uses `Role::Status`.
-  - Hover-only controls stay in the accessibility tree and appear on focus.
+### Step by step (on `main`)
 
-## Git & releases
+1. `git fetch origin main`.
+2. Sort the uncommitted edits into changes. Each change becomes one branch and one PR. Keep `ci`,
+   `docs` and `chore` edits apart from code changes.
+3. For each change, create its branch from `origin/main`, carrying only that change's edits.
+   Don't touch local `main`, and don't use `stash`; to carry edits across a switch, commit them on
+   the new branch directly (`git switch -c <name> origin/main` keeps uncommitted edits that don't
+   conflict), and leave the other changes' edits uncommitted for their own branches.
+4. Commit with the subject from [Commit subjects and PR titles](#commit-subjects-and-pr-titles) and
+   push with `git push -u origin <name>`.
+5. Open the PR with `gh pr create`. The title is the commit subject. The body fills in
+   `.github/pull_request_template.md` (Problem, Change, Scope, Verification) in plain prose, no AI
+   fluff.
+6. Turn on auto-merge: `gh pr merge --squash --auto --delete-branch`.
+7. After the last PR, `git switch main` and `git pull --rebase origin main`. Don't cherry-pick
+   unmerged PRs onto local `main`; they arrive with the pull once merged.
 
-- Leave changes uncommitted until reviewed. Every change lands on `main` via a squash-merged PR (ruleset requires PR + CI; only the Release workflow pushes to `main` directly). One PR per change; keep CI/docs/tooling in their own `ci`, `docs`, or `chore` commits.
-- **"Push" / "push to git"** runs the whole PR flow without asking again:
-  1. `git fetch origin main`, then create a branch per change from `origin/main` (carrying uncommitted edits cleanly, without touching local `main`).
-  2. Commit each change on its branch and push.
-  3. Open the PR with `gh pr create`: title is the commit subject, body fills in `.github/pull_request_template.md` (lead with what users see in the first 300 chars for release highlights; plain prose, no AI fluff).
-  4. Enable auto-merge: `gh pr merge --squash --auto --delete-branch`.
-  5. Switch back to `main` and `git pull --rebase origin main` (do not cherry-pick unmerged PRs onto local `main`).
-  - In a Patchwork task worktree (`patchwork/…`), never switch, rebase, or pull that branch: commit on it, create each PR branch in a temporary worktree from `origin/main` (`git worktree add -b <name> <dir> origin/main`), cherry-pick there, push, open PR with `--auto`, and remove the temporary worktree.
-- **"Release"** cuts a release from `origin/main` (see [docs/release.md](docs/release.md)):
-  - Run `gh workflow run release.yml` (the workflow picks the next `YY.M.N` tag, writes notes, builds all three platforms, signs and publishes, tags `main`, and commits `Release YY.M.N`). Never bump versions or write `CHANGELOG.md` entries by hand.
-  - Manual tagging (`git fetch origin --tags && git tag <YY.M.N> origin/main && git push origin <YY.M.N>`) also works.
-- Commit subjects and PR titles use plain-language conventional commits: `type(scope): what users see now` (`feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `ci`, `chore`).
-- Force-pushing, moving/deleting pushed tags, and rewriting pushed history require explicit confirmation. Never watch GitHub Actions runs unless asked.
+### In a Patchwork task worktree (`patchwork/…` branch)
 
-## Finishing
+Never switch, rebase, or pull the task branch.
 
-When only the user's steps remain (trying the change, reviewing, confirming), report what was done and what wasn't, then end the turn. The same applies to `/goal`.
+1. Commit the work on the task branch.
+2. `git fetch origin main`.
+3. For each change: `git worktree add -b <name> research/pr-<name> origin/main`, cherry-pick its
+   commits there, push, `gh pr create`, `gh pr merge --squash --auto --delete-branch`.
+4. Remove the temporary worktree with `git worktree remove research/pr-<name>`.
+
+### When a PR's CI fails
+
+Fix it on the same branch, commit, and push again; auto-merge picks up the new run. Don't
+force-push a branch that is under review without asking.
+
+## "Release"
+
+Releases are cut from `origin/main` by the Release workflow. Never bump versions or write
+`CHANGELOG.md` entries by hand. Details are in [docs/release.md](docs/release.md).
+
+```mermaid
+flowchart TD
+    A[User says release] --> B[Merged PRs on origin/main?<br/>PRs still waiting on CI are not in it]
+    B --> C[gh workflow run release.yml<br/>or -f version=YY.M.N]
+    C --> D[notes: picks next YY.M.N,<br/>GitHub's generated notes,<br/>sets version + CHANGELOG for the builds]
+    D --> E[linux, windows, macos build side by side]
+    E --> F[publish: signs, publishes release,<br/>tags main, posts to Discord,<br/>commits Release YY.M.N to main]
+    F --> G[git pull --rebase origin main<br/>before the next push]
+```
+
+- Start it with `gh workflow run release.yml`. Manual tagging also works:
+  `git fetch origin --tags && git tag <YY.M.N> origin/main && git push origin <YY.M.N>`.
+- Tags are `YY.M.N` with no `v`.
+- After it finishes, `main` has a `Release YY.M.N` commit; pull it before the next push.
+- To reword published notes, edit the GitHub release and its `CHANGELOG.md` section in a `docs`
+  PR.
