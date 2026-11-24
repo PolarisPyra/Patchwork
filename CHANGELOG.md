@@ -3,6 +3,29 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.150] - 2026-11-24
+
+## What's Changed
+* ci(release): release notes are GitHub's generated notes, without AI highlights by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/327
+* docs(agents): agent rules cover only git and the no-tests rule by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/328
+* feat(site): Discord link in the navigation and footer by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/329
+* feat(import): Antigravity import now includes conversations started in agy by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/330
+* feat(diff): click diff lines to leave comments and send them to chat by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/332
+* feat(files): open PDF files as scrolling pages in the workspace by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/333
+* docs(vault): update Security settings references to Vault by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/337
+* fix(usage): sidebar preview rings show the 5-hour limit instead of the fullest window by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/331
+* feat(quilts): pick elements in the preview to send their selector, HTML, and styles to chat by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/334
+* feat(scheduled): trigger tasks on GitHub pull requests, failed checks, or local webhooks by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/335
+* feat(settings): rename Security settings to Vault by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/336
+* feat(providers): CLI update checks and notifications, model version warnings, and Qwen, Kimi, and Auggie agents by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/338
+* feat(chat): open multiple chats in tabs via the right-click menu and close with Ctrl+W by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/339
+* feat(issues): browse GitHub and Linear issues in the sidebar and start tasks from them by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/340
+* fix(sidebar): remove Background and Open folder from the chat right-click menu by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/341
+* feat(chat): continue Claude Code and Codex chats in a terminal and bring them back by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/342
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.149...26.11.150
+
 ## [26.11.149] - 2026-11-24
 
 ## What's Changed
