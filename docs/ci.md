@@ -84,8 +84,6 @@ no published release has a higher version.
   announced again, and the release commit is skipped when `main` already has the release's
   changelog section.
 - **The Discord post failed.** It does not fail the release. Post it by hand.
-- **The highlights failed.** The notes are GitHub's generated notes alone, and the run shows a
-  warning.
 
 Re-running a release's failed jobs from the Actions page is always safe. Re-running all its jobs is
 safe too, but rebuilds every app.
@@ -111,7 +109,6 @@ as above.
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | Site | Deploying to the `patchwork-site` Pages project. Without the token the workflow fails. |
 | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Release (`publish`) | Signing the release's files |
 | `RELEASE_DEPLOY_KEY` | Release | Pushing the release commit to `main` without a PR |
-| `ANTHROPIC_API_KEY` | Release | The highlights in the notes; without it the notes are the full list |
 | `DISCORD_RELEASE_WEBHOOK_URL` | Release | Announcing the release; without it nothing is posted |
 
 ## Timings

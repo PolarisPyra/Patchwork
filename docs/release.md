@@ -16,23 +16,10 @@ A GitHub release tagged `YY.M.N` (CalVer: the next N this month, or 0 in a new m
 | `patchwork-remote-*` (five) | The helpers the app copies to SSH hosts: Linux and macOS on x86_64 and aarch64, and Windows on x86_64 |
 | `patchwork-remote-*.minisig` | The release key's signature over each helper, which the app checks before copying it |
 
-Its notes are written when it is published, from the commits since the previous tag. Each change
-is a squash-merged PR, one commit whose subject ends in "(#N)", or a commit pushed straight to
-`main`. The notes have:
-
-- A line with the version and how many commits and contributors it has. Contributors are the PR
-  authors, without bots, plus the authors of direct pushes who have no PR in the range.
-- Up to seven highlights, each a bold name and one sentence. Claude Haiku 5.5 (`claude-haiku-5-5`
-  at low effort, through the `ANTHROPIC_API_KEY` repository secret) picks them from the commit
-  subjects, each with its PR's size and the first 300 characters of its description, and may pick
-  none when no change qualifies. A line after them counts the `fix` and `perf` commits they leave
-  out, by the type at the start of the subject.
-- GitHub's generated notes for the range, folded under "Full changelog".
-
-The app's update notes and Settings → Updates show what comes before the fold, with a "Read more"
-link to the release's page. Without the secret, or when the request fails, the notes are GitHub's
-generated notes alone, the app shows their first ten entries, and the run shows a warning. The
-prompt and its rules are in the workflow's "Write the highlights" step.
+Its notes are GitHub's generated notes for the commits since the previous tag. Each change is a
+squash-merged PR, one commit whose subject ends in "(#N)", or a commit pushed straight to `main`.
+The app's update notes and Settings → Updates show their first ten entries, with a "Read more"
+link to the release's page.
 
 ## Cutting one
 
@@ -109,8 +96,8 @@ gh workflow run release.yml -f mode=check --ref main
 
 Pushes to `main` do not start the Release workflow.
 
-The highlights use only the commit subjects and PR descriptions, so they are right when the PR is
-written. To reword the notes after publishing, edit the release on GitHub and its section in `CHANGELOG.md`;
+The notes use only the PR titles, so they are right when the PR is merged. To reword the notes
+after publishing, edit the release on GitHub and its section in `CHANGELOG.md`;
 the update notes in `latest.json` are signed, so they keep the published words.
 
 ## Signing
