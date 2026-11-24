@@ -78,7 +78,7 @@ impl Workspace {
         }
         self.chat = Some(chat);
         let left = self.left_tab.take();
-        self.keep_tab(left.as_deref(), false);
+        self.keep_tab(left.as_deref(), self.settings.tasks_in_new_tab);
         self.reload(cx);
         self.open_granular_dialog(GranularScope::Chat(id), Some(first), window, cx);
     }

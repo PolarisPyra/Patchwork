@@ -183,7 +183,7 @@ impl Workspace {
                 let kept = self.enter_pane_of(id, cx);
                 let left = self.left_tab.take();
                 let beside = self.chat.as_ref().map(|c| c.id.clone()).or(left);
-                let new = std::mem::take(&mut self.new_tab);
+                let new = std::mem::take(&mut self.new_tab) || self.settings.tasks_in_new_tab;
                 let shown = self.show_chat(id, cx);
                 if shown {
                     self.keep_tab(beside.as_deref(), new);
@@ -571,7 +571,7 @@ impl Workspace {
                     }
                     self.chat = Some(chat);
                     let left = self.left_tab.take();
-                    self.keep_tab(left.as_deref(), false);
+                    self.keep_tab(left.as_deref(), self.settings.tasks_in_new_tab);
                     id
                 }
                 Err(e) => {

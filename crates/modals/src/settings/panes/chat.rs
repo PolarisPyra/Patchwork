@@ -1,5 +1,6 @@
 //! Settings → Chat: how a chat is answered and steered, how many steps and tokens a turn of
-//! Patchwork's own agent may take, and what a launch does with replies the last session cut off.
+//! Patchwork's own agent may take, what a launch does with replies the last session cut off, and
+//! whether a task opens in the open tab or a new one.
 
 // Rust guideline compliant 2026-11-23
 
@@ -15,6 +16,9 @@ const RESUMES: [(ResumeAtLaunch, &str); 3] = [
     (ResumeAtLaunch::Ask, "Ask"),
     (ResumeAtLaunch::Never, "Never"),
 ];
+
+/// Where an opened task shows: in the open task's tab, or in a tab of its own.
+const TAB_CHOICES: [(bool, &str); 2] = [(false, "Current tab"), (true, "New tab")];
 
 /// The token limits a turn of Patchwork's own agent can have, with 0 for none.
 const TOKEN_LIMITS: [(u64, &str); 5] = [
@@ -89,6 +93,15 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .flex()
         .flex_col()
         .children(flags)
+        .child(token_row("Open tasks in", None, &t).child(segmented(
+            "tasks-in-new-tab",
+            "Open tasks in",
+            s.tasks_in_new_tab,
+            &TAB_CHOICES,
+            &t,
+            |d, new_tab, cx| d.update(|s| s.tasks_in_new_tab = new_tab, cx),
+            cx,
+        )))
         .child(token_row("Token limit per turn", None, &t).child(segmented(
             "token-limit",
             "Token limit per turn",
