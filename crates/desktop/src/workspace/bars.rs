@@ -5,14 +5,13 @@
 
 use gpui::{App, ClickEvent, FontWeight, Pixels, Point, Role, Window, div, point, prelude::*, px};
 use patchwork_core::system::machine::device::Kind;
-use patchwork_core::chats::{MessageStatus, Role as MessageRole};
 
-use crate::workspace::{Page, View, Workspace, is_busy};
+use crate::workspace::{Page, View, Workspace};
 use patchwork_ui::controls::menu::{Dismissed, Menu, MenuItem};
 use patchwork_ui::theme::{
     ACTIVITY_BAR_W, fs_xs, radius, radius_sm, STATUSBAR_H, TOOLBAR_H, Theme, theme,
 };
-use patchwork_ui::{agent_label, button, icon, kind_icon, spinner};
+use patchwork_ui::{button, icon, kind_icon, spinner};
 
 /// The machine button's size, the same as the activity bar's buttons.
 const MACHINE_BUTTON: f32 = 28.;
@@ -321,25 +320,6 @@ impl Workspace {
         let project = self
             .project()
             .map_or_else(|| "No project".into(), |p| p.name.clone());
-        let chat = self.chat.as_ref();
-        let last = chat.and_then(|t| t.messages.last());
-        let working = chat.is_some_and(is_busy);
-        let done = last.is_some_and(|m| {
-            m.status == MessageStatus::Complete && m.role == MessageRole::Assistant
-        });
-        let agent = chat.map_or_else(|| self.settings.default_agent(), |t| t.agent);
-        let state = if working {
-            div().child(format!("{} working…", agent_label(agent)))
-        } else if done {
-            div()
-                .flex()
-                .items_center()
-                .gap(px(4.))
-                .child("Done")
-                .child(icon("check-bold", 12.).text_color(t.success))
-        } else {
-            div().child("Idle")
-        };
         div()
             .id("status-bar")
             .role(Role::ContentInfo)
@@ -371,15 +351,6 @@ impl Workspace {
                             .child(icon("git-branch", 12.))
                             .child(branch)
                     }),
-            )
-            .child(div().flex_1())
-            .child(
-                div()
-                    .h(px(20.))
-                    .flex()
-                    .items_center()
-                    .px(px(6.))
-                    .child(state),
             )
     }
 }
