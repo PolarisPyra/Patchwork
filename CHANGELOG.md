@@ -3,6 +3,15 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.153] - 2026-11-24
+
+## What's Changed
+* feat(settings): choose whether tasks open in the current tab or a new one by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/352
+* fix(chat): dragging a tab shows a straight line where it will land by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/353
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.152...26.11.153
+
 ## [26.11.152] - 2026-11-24
 
 ## What's Changed
