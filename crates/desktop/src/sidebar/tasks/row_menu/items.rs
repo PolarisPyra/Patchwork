@@ -9,6 +9,7 @@ use super::target::Target;
 use std::sync::Arc;
 use gpui::{MouseDownEvent, SharedString, Window, prelude::*};
 use patchwork_core::chats::Chat;
+use crate::chat::panes::{Dir, PaneId, Preset, Zone};
 use crate::workspace::{GranularScope, Workspace};
 
 impl Workspace {
@@ -31,6 +32,18 @@ impl Workspace {
             Target::Archived(_) => return vec![delete],
             Target::Many(targets) => return self.many_items(targets),
             Target::Tabs(project) => return self.tab_items(project.as_deref()),
+            Target::Layouts => {
+                let named = self.named_layouts.iter().map(|(name, _)| Item {
+                    label: name.clone().into(),
+                    ..item("", "star", Act::Layout(name.clone()))
+                });
+                return Preset::ALL
+                    .into_iter()
+                    .map(|p| item(p.label(), p.icon(), Act::Preset(p)))
+                    .chain(named)
+                    .collect();
+            }
+            Target::Pane(pane) => return self.pane_items(*pane),
             Target::Chat(id) if self.chat_by_id(id).is_some_and(|t| t.archived_at.is_some()) => {
                 return vec![
                     item("Restore", "arrow-counter-clockwise", Act::Restore),
@@ -52,7 +65,11 @@ impl Workspace {
         }
         let mut items = vec![item("Rename", "pencil-simple", Act::Rename)];
         match target {
-            Target::Archived(_) | Target::Many(_) | Target::Tabs(_) => {}
+            Target::Archived(_)
+            | Target::Many(_)
+            | Target::Tabs(_)
+            | Target::Layouts
+            | Target::Pane(_) => {}
             Target::Agent(_) => {
                 items.push(item("Details", "robot", Act::Details));
                 items.push(item("Background…", "image", Act::Background));
@@ -62,10 +79,40 @@ impl Workspace {
                 });
             }
             Target::Chat(id) => {
-                if self.chat_tabs.contains(id) {
+                if self.has_tab(id) {
                     items.insert(0, item("Close tab", "x", Act::CloseTab));
+                    let (others, right) = self.tabs_beside(id);
+                    let mut at = 1;
+                    if others {
+                        items.insert(at, item("Close other tabs", "x-circle", Act::CloseOthers));
+                        at += 1;
+                    }
+                    if right {
+                        items.insert(
+                            at,
+                            item("Close tabs to the right", "x-circle", Act::CloseRight),
+                        );
+                    }
                 } else {
                     items.insert(0, item("Open in new tab", "plus", Act::OpenInNewTab));
+                }
+                if self.can_split(id) {
+                    items.insert(
+                        1,
+                        item(
+                            "Split right",
+                            "square-split-horizontal",
+                            Act::Split(Zone::Right),
+                        ),
+                    );
+                    items.insert(
+                        2,
+                        item(
+                            "Split down",
+                            "square-split-vertical",
+                            Act::Split(Zone::Bottom),
+                        ),
+                    );
                 }
                 if let Some(chat) = self.chat_by_id(id) {
                     items.push(if chat.favorite {
@@ -172,6 +219,17 @@ impl Workspace {
             act,
         };
         let mut items = Vec::new();
+        let project = self.tabs_project();
+        if archiving
+            && (2..=4).contains(&chats.len())
+            && chats.iter().all(|c| c.project_id == project)
+        {
+            items.push(item(
+                "Open side by side",
+                "square-split-horizontal",
+                Act::SideBySide,
+            ));
+        }
         if archiving {
             // Some not yet a favorite, or not yet pinned: the item adds them all; otherwise it
             // takes them all off.
@@ -198,6 +256,65 @@ impl Workspace {
                 ..item(&format!("Remove {n} items"), "trash", Act::Remove)
             }
         });
+        items
+    }
+
+    /// A tab strip's menu: split the pane, show it alone, close it.
+    fn pane_items(&self, pane: PaneId) -> Vec<Item> {
+        let item = |label: &'static str, icon, act| Item {
+            label: label.into(),
+            icon,
+            danger: false,
+            act,
+        };
+        let layout = self.layouts.get(&self.tabs_project());
+        let several = layout.is_some_and(|l| l.panes.len() > 1);
+        let maximized = layout.is_some_and(|l| l.maximized.is_some());
+        let mut items = vec![
+            item(
+                "Split right",
+                "square-split-horizontal",
+                Act::SplitPane(Zone::Right),
+            ),
+            item(
+                "Split down",
+                "square-split-vertical",
+                Act::SplitPane(Zone::Bottom),
+            ),
+        ];
+        if maximized {
+            items.push(item("Show all panes", "arrows-in-simple", Act::Maximize));
+        } else if several && layout.is_some_and(|l| l.focused == pane) {
+            items.push(item("Maximize pane", "arrows-out-simple", Act::Maximize));
+        }
+        if several {
+            items.push(if self.broadcasting {
+                item(
+                    "Stop sending to every pane",
+                    "paper-plane-right",
+                    Act::Broadcast,
+                )
+            } else {
+                item(
+                    "Send messages to every pane",
+                    "paper-plane-right",
+                    Act::Broadcast,
+                )
+            });
+            if let Some(layout) = layout {
+                for (label, dir) in [
+                    ("Swap with pane left", Dir::Left),
+                    ("Swap with pane right", Dir::Right),
+                    ("Swap with pane above", Dir::Up),
+                    ("Swap with pane below", Dir::Down),
+                ] {
+                    if let Some(other) = layout.neighbour(pane, dir) {
+                        items.push(item(label, "arrows-left-right", Act::SwapPane(other)));
+                    }
+                }
+            }
+            items.push(item("Close pane", "x", Act::ClosePane));
+        }
         items
     }
 
@@ -291,9 +408,33 @@ impl Workspace {
         match (&target, &act) {
             (_, Act::Rename) => return self.start_rename(target, window, cx),
             (Target::Chat(id), Act::CloseTab) => return self.close_tab(id, cx),
+            (Target::Chat(id), Act::CloseOthers) => return self.close_tabs_beside(id, false, cx),
+            (Target::Chat(id), Act::CloseRight) => return self.close_tabs_beside(id, true, cx),
+            (Target::Pane(pane), Act::SplitPane(zone)) => {
+                return self.split_pane_at(*pane, *zone, cx);
+            }
+            (Target::Pane(_), Act::Maximize) => return self.toggle_maximized(cx),
+            (Target::Pane(pane), Act::ClosePane) => return self.close_pane(*pane, cx),
+            (Target::Pane(pane), Act::SwapPane(other)) => {
+                return self.swap_panes(*pane, *other, cx);
+            }
+            (Target::Pane(_), Act::Broadcast) => return self.toggle_broadcast(cx),
+            (Target::Many(targets), Act::SideBySide) => {
+                let ids: Vec<String> = targets
+                    .iter()
+                    .filter_map(|t| match t {
+                        Target::Chat(id) => Some(id.clone()),
+                        _ => None,
+                    })
+                    .collect();
+                return self.open_side_by_side(&ids, cx);
+            }
             (Target::Tabs(project), Act::NewTaskTab) => {
                 return self.new_task_tab(project.clone(), window, cx);
             }
+            (Target::Layouts, Act::Preset(preset)) => return self.apply_preset(*preset, cx),
+            (Target::Layouts, Act::Layout(name)) => return self.apply_named_layout(name, cx),
+            (Target::Chat(id), Act::Split(zone)) => return self.open_in_split(id, *zone, cx),
             (Target::Chat(id), Act::OpenInNewTab) | (_, Act::OpenTab(id)) => {
                 return self.open_in_new_tab(id, cx);
             }

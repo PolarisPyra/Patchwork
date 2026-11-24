@@ -46,10 +46,17 @@ pub struct ReplyFiles {
 impl Workspace {
     /// Loads the files of every reply in the open chat whose state is missing or out of date.
     pub fn load_reply_files(&mut self, cx: &mut Context<Self>) {
+        let folder = self.chat_folder();
+        self.load_reply_files_in(folder, cx);
+    }
+
+    /// Loads the reply files as [`Self::load_reply_files`] does, read in `folder`, the open
+    /// chat's worktree, or in its project's folder when it has none.
+    pub(crate) fn load_reply_files_in(&mut self, folder: Option<String>, cx: &mut Context<Self>) {
         let (Some(chat), Some(project)) = (&self.chat, self.project()) else {
             return;
         };
-        let root = self.chat_folder().unwrap_or_else(|| project.path.clone());
+        let root = folder.unwrap_or_else(|| project.path.clone());
         let generation = self.changes_generation;
         let chat_id = chat.id.clone();
         let stale: Vec<_> = chat

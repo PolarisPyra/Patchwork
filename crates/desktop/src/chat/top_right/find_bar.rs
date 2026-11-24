@@ -19,6 +19,7 @@ use patchwork_ui::text::text_area::{Changed, Submitted, SubmittedBack, TextArea}
 use crate::chat::transcript::turn_contents::{Step, steps_of};
 use patchwork_ui::theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
 use patchwork_ui::{button, icon};
+use crate::chat::ChatView;
 use crate::workspace::Workspace;
 
 /// Room kept above a revealed match, for the controls floating over the transcript's top.
@@ -75,7 +76,31 @@ fn matches(chat: &Chat, needle: &str) -> Vec<Match> {
     found
 }
 
-impl Workspace {
+/// What the transcript marks while the field is open: the query, the current match, by message
+/// id and which of its matches, and where that match is drawn.
+pub struct Marks {
+    needle: String,
+    current: Option<(String, usize)>,
+    target: Rc<RefCell<Option<(TextLayout, usize)>>>,
+}
+
+impl Marks {
+    /// What to mark in message `id`, and where its current match is drawn.
+    pub fn row(&self, id: &str) -> FindIn {
+        FindIn {
+            needle: self.needle.clone(),
+            current: self
+                .current
+                .as_ref()
+                .filter(|(m, _)| m == id)
+                .map(|(_, nth)| *nth),
+            seen: Cell::new(0),
+            target: Rc::clone(&self.target),
+        }
+    }
+}
+
+impl ChatView {
     fn find_query(&self, cx: &gpui::App) -> String {
         self.find
             .field
@@ -84,11 +109,18 @@ impl Workspace {
             .unwrap_or_default()
     }
 
-    fn find_matches(&self, cx: &gpui::App) -> Vec<Match> {
-        match &self.chat {
+    fn find_matches(&self, chat: Option<&Chat>, cx: &gpui::App) -> Vec<Match> {
+        match chat {
             Some(chat) if self.find.open => matches(chat, &self.find_query(cx)),
             _ => Vec::new(),
         }
+    }
+
+    /// How many matches the workspace's open chat has.
+    fn match_count(&self, cx: &gpui::App) -> usize {
+        self.workspace
+            .upgrade()
+            .map_or(0, |w| self.find_matches(w.read(cx).chat.as_ref(), cx).len())
     }
 
     /// Opens the field, or focuses it when open, with its text selected so typing replaces the
@@ -105,15 +137,19 @@ impl Workspace {
             });
             // The newest match first, since a chat is read from its end.
             cx.subscribe(&field, |this, _, _: &Changed, cx| {
-                this.find.current = this.find_matches(cx).len().saturating_sub(1);
+                this.find.current = this.match_count(cx).saturating_sub(1);
                 this.find.reveal = true;
                 cx.notify();
             })
             .detach();
-            cx.subscribe(&field, |this, _, _: &Submitted, cx| this.step_find(1, cx))
-                .detach();
+            cx.subscribe(&field, |this, _, _: &Submitted, cx| {
+                let count = this.match_count(cx);
+                this.step_find(1, count, cx);
+            })
+            .detach();
             cx.subscribe(&field, |this, _, _: &SubmittedBack, cx| {
-                this.step_find(-1, cx);
+                let count = this.match_count(cx);
+                this.step_find(-1, count, cx);
             })
             .detach();
             self.find.field = Some(field.clone());
@@ -137,13 +173,13 @@ impl Workspace {
             .find
             .came_from
             .take()
-            .unwrap_or_else(|| self.focus.clone());
+            .unwrap_or_else(|| self.home_focus.clone());
         window.focus(&back, cx);
         cx.notify();
     }
 
-    fn step_find(&mut self, delta: isize, cx: &mut Context<Self>) {
-        let count = self.find_matches(cx).len();
+    /// Moves `delta` matches on, of `count`, wrapping around.
+    fn step_find(&mut self, delta: isize, count: usize, cx: &mut Context<Self>) {
         if count == 0 {
             return;
         }
@@ -153,57 +189,52 @@ impl Workspace {
         cx.notify();
     }
 
-    /// What each row marks: the query, and the current match when it is in that row. None while
-    /// the field is closed or empty.
-    pub fn find_marks(&self, cx: &gpui::App) -> Option<(String, Option<(String, usize)>)> {
+    /// What the rows of `chat` mark. None while the field is closed or empty.
+    pub fn find_marks(&self, chat: &Chat, cx: &gpui::App) -> Option<Marks> {
         // Drawn again below; a match not drawn this time leaves none.
         self.find.target.borrow_mut().take();
         let needle = self.find_query(cx);
         if !self.find.open || needle.trim().is_empty() {
             return None;
         }
-        let found = self.find_matches(cx);
+        let found = self.find_matches(Some(chat), cx);
         let current = found
             .get(self.find.current.min(found.len().saturating_sub(1)))
             .map(|m| (m.id.clone(), m.nth));
-        Some((needle, current))
-    }
-
-    /// A row's marks: what to mark in message `id`, and where its current match was drawn.
-    pub fn find_in_row(
-        &self,
-        marks: Option<&(String, Option<(String, usize)>)>,
-        id: &str,
-    ) -> Option<FindIn> {
-        let (needle, current) = marks?;
-        Some(FindIn {
-            needle: needle.clone(),
-            current: current
-                .as_ref()
-                .filter(|(m, _)| m == id)
-                .map(|(_, nth)| *nth),
-            seen: Cell::new(0),
+        Some(Marks {
+            needle,
+            current,
             target: Rc::clone(&self.find.target),
         })
+    }
+}
+
+impl Workspace {
+    /// Opens the find field over the open chat, or focuses it when open.
+    pub fn open_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.chat_view.update(cx, |v, cx| v.open_find(window, cx));
     }
 
     /// Once the transcript has drawn a new current match, scrolls it to the middle of the view if
     /// it is out of sight. A match the text did not draw, as in a code block, brings its row in.
-    pub fn reveal_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.find.reveal || !self.find.open {
+    pub fn reveal_find(&mut self, v: &mut ChatView, window: &mut Window, cx: &mut Context<Self>) {
+        if !v.find.reveal || !v.find.open {
             return;
         }
-        self.find.reveal = false;
+        v.find.reveal = false;
         let row = {
-            let needle = self.find_query(cx);
-            self.find_matches(cx)
-                .get(self.find.current)
+            let needle = v.find_query(cx);
+            v.find_matches(self.chat.as_ref(), cx)
+                .get(v.find.current)
                 .map(|m| self.item_of_match(m.row, m.nth, &needle))
         };
+        let target = Rc::clone(&v.find.target);
         cx.on_next_frame(window, move |this, _, cx| {
             let list = &this.transcript_list;
-            let target = this.find.target.borrow().clone();
-            let at = target.and_then(|(layout, i)| layout.position_for_index(i));
+            let at = target
+                .borrow()
+                .clone()
+                .and_then(|(layout, i)| layout.position_for_index(i));
             match at {
                 Some(at) => {
                     let view = list.viewport_bounds();
@@ -221,12 +252,25 @@ impl Workspace {
                             item_ix: row,
                             offset_in_item: px(0.),
                         });
-                        this.find.reveal = true;
+                        this.chat_view.update(cx, |v, _| v.find.reveal = true);
                     }
                 }
             }
             cx.notify();
         });
+    }
+
+    /// Moves `delta` matches on in the open chat.
+    fn step_find(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let chat = self.chat.as_ref();
+        self.chat_view.update(cx, |v, cx| {
+            let count = v.find_matches(chat, cx).len();
+            v.step_find(delta, count, cx);
+        });
+    }
+
+    fn close_find(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.chat_view.update(cx, |v, cx| v.close_find(window, cx));
     }
 }
 
@@ -253,8 +297,13 @@ fn small_button(
 }
 
 /// The search button over the chat, widened into the field while open.
-pub fn find_field(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> Stateful<Div> {
-    let open = w.find.open;
+pub fn find_field(
+    w: &mut Workspace,
+    v: &ChatView,
+    t: &Theme,
+    cx: &mut Context<Workspace>,
+) -> Stateful<Div> {
+    let open = v.find.open;
     let fg = t.text;
     let toggle = button(
         "find-toggle",
@@ -294,12 +343,12 @@ pub fn find_field(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> 
             inset: false,
         }])
         .child(toggle);
-    let Some(field) = w.find.field.clone().filter(|_| open) else {
+    let Some(field) = v.find.field.clone().filter(|_| open) else {
         return frame;
     };
-    let query = w.find_query(cx);
-    let count = w.find_matches(cx).len();
-    let at = w.find.current.min(count.saturating_sub(1));
+    let query = v.find_query(cx);
+    let count = v.find_matches(w.chat.as_ref(), cx).len();
+    let at = v.find.current.min(count.saturating_sub(1));
     let status = if query.is_empty() {
         String::new()
     } else if count == 0 {

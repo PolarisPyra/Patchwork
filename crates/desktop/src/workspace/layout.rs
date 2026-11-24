@@ -10,6 +10,7 @@ use gpui::{
 };
 use crate::chat::backdrop::quilts_scheme;
 use crate::chat::text_colors::in_scheme;
+use crate::chat::panes::{Dir, Zone};
 use patchwork_ui::controls::menu::Menu;
 use patchwork_ui::theme::{font_ui, fs_md, radius, radius_sm, STATUSBAR_H, Theme, theme};
 use patchwork_ui::{button, display_title, icon};
@@ -256,6 +257,76 @@ impl Render for Workspace {
                 }
             }))
             .on_action(
+                cx.listener(|this, _: &patchwork_ui::SplitPaneRight, _, cx| {
+                    this.split_pane(Zone::Right, cx);
+                }),
+            )
+            .on_action(cx.listener(|this, _: &patchwork_ui::SplitPaneDown, _, cx| {
+                this.split_pane(Zone::Bottom, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::FocusPaneLeft, _, cx| {
+                this.focus_pane_toward(Dir::Left, cx);
+            }))
+            .on_action(
+                cx.listener(|this, _: &patchwork_ui::FocusPaneRight, _, cx| {
+                    this.focus_pane_toward(Dir::Right, cx);
+                }),
+            )
+            .on_action(cx.listener(|this, _: &patchwork_ui::FocusPaneUp, _, cx| {
+                this.focus_pane_toward(Dir::Up, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::FocusPaneDown, _, cx| {
+                this.focus_pane_toward(Dir::Down, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::FocusPane1, _, cx| {
+                this.focus_pane_number(1, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::FocusPane2, _, cx| {
+                this.focus_pane_number(2, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::FocusPane3, _, cx| {
+                this.focus_pane_number(3, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::FocusPane4, _, cx| {
+                this.focus_pane_number(4, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::NextTab, _, cx| {
+                this.step_tab(false, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::PrevTab, _, cx| {
+                this.step_tab(true, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::ReopenTab, _, cx| {
+                this.reopen_tab(cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::MoveTabLeft, _, cx| {
+                this.move_tab_toward(Dir::Left, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::MoveTabRight, _, cx| {
+                this.move_tab_toward(Dir::Right, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::MoveTabUp, _, cx| {
+                this.move_tab_toward(Dir::Up, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::MoveTabDown, _, cx| {
+                this.move_tab_toward(Dir::Down, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::SwapPaneLeft, _, cx| {
+                this.swap_pane_toward(Dir::Left, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::SwapPaneRight, _, cx| {
+                this.swap_pane_toward(Dir::Right, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::SwapPaneUp, _, cx| {
+                this.swap_pane_toward(Dir::Up, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::SwapPaneDown, _, cx| {
+                this.swap_pane_toward(Dir::Down, cx);
+            }))
+            .on_action(cx.listener(|this, _: &patchwork_ui::MaximizePane, _, cx| {
+                this.toggle_maximized(cx);
+            }))
+            .on_action(
                 cx.listener(|this, _: &patchwork_ui::OpenSettings, window, cx| {
                     if this.settings_dialog.is_none() {
                         this.open_settings(None, window, cx);
@@ -483,7 +554,7 @@ impl Workspace {
                     .cached(StyleRefinement::default().absolute().inset_0()),
             )
             .child(
-                self.chat_region
+                self.chat_view
                     .clone()
                     .cached(StyleRefinement::default().flex_1().min_w_0().min_h_0()),
             )

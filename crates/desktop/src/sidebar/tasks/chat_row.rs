@@ -18,6 +18,8 @@ use patchwork_ui::theme::{fs_sm, radius_sm, Theme, theme};
 use patchwork_ui::{
     agent_label, agent_logo, button, display_title, format_relative, icon, now_ms, spinner,
 };
+use crate::chat::panes::TabDrag;
+use crate::chat::TabGhost;
 use crate::workspace::{Workspace, is_busy};
 
 /// The scrollbar's gutter at the tree's right edge, which its thumb sits in.
@@ -239,7 +241,12 @@ pub(super) fn chat_row(
             .into_any_element()
     };
     let pick = target.clone();
-    let name = w.rename_field(&target, cx).unwrap_or_else(|| {
+    let renaming = w.rename_field(&target, cx);
+    let drag = renaming.is_none().then(|| TabDrag {
+        chat: th.id.clone(),
+        title: title.clone().into(),
+    });
+    let name = renaming.unwrap_or_else(|| {
         div()
             .flex_1()
             .min_w_0()
@@ -313,6 +320,13 @@ pub(super) fn chat_row(
                 ),
         )
         .children(worktree.map(|(mark, _)| div().w(px(13.)).flex_none().child(mark)))
+        // Dragged onto a pane, the task opens there as a tab, or in a new pane at its edge.
+        .when_some(drag, |row, drag| {
+            row.on_drag(drag, |drag, _, _, cx| {
+                let title = drag.title.clone();
+                cx.new(|_| TabGhost(title))
+            })
+        })
         .children(chat_app_mark(w, w.chat_apps.get(&th.id), &t))
         .child(
             div()

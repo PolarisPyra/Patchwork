@@ -28,7 +28,29 @@ actions!(
         ToggleOutput,
         DeleteChat,
         GoBack,
-        GoForward
+        GoForward,
+        SplitPaneRight,
+        SplitPaneDown,
+        FocusPaneLeft,
+        FocusPaneRight,
+        FocusPaneUp,
+        FocusPaneDown,
+        FocusPane1,
+        FocusPane2,
+        FocusPane3,
+        FocusPane4,
+        NextTab,
+        PrevTab,
+        ReopenTab,
+        MoveTabLeft,
+        MoveTabRight,
+        MoveTabUp,
+        MoveTabDown,
+        SwapPaneLeft,
+        SwapPaneRight,
+        SwapPaneUp,
+        SwapPaneDown,
+        MaximizePane
     ]
 );
 

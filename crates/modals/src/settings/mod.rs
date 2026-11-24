@@ -17,4 +17,4 @@ pub use dialog::{SettingsDialog, SettingsEvent};
 pub use panes::general::show_app_icon;
 pub use panes::permissions::{kind_label, scope_name};
 pub use panes::projects::{import_sources, source_agent, source_label};
-pub use panes::shortcuts::{bind_keys, key_label};
+pub use panes::shortcuts::{bind_keys, command_action, key_label, page_commands};

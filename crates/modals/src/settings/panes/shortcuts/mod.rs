@@ -7,5 +7,5 @@
 mod bindings;
 mod list;
 
-pub use bindings::{bind_keys, key_label};
+pub use bindings::{bind_keys, command_action, key_label, page_commands};
 pub use list::{ShortcutsState, kbd, render};
