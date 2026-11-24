@@ -1,6 +1,7 @@
 //! Gemini CLI chats: `~/.gemini/tmp/<project>/chats/session-*.jsonl` (older
 //! versions wrote one `.json` document). `~/.gemini/projects.json` maps each
-//! project directory to its folder name under `tmp/`.
+//! project directory to its folder name under `tmp/`. agy's own conversations
+//! are read by `agy` and imported along with these.
 
 // Rust guideline compliant 2026-10-09
 
@@ -9,13 +10,20 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::{Session, SessionMessage, ilog, push_merged};
+use super::{Session, SessionMessage, agy, ilog, push_merged};
 use crate::provider;
 use crate::system::time::parse_rfc3339_ms;
 use crate::provider::AgentKind;
 use crate::chats::Role;
 
+/// agy's own conversations, then the chats the Gemini CLI saved before it.
 pub fn sessions() -> Vec<Session> {
+    let mut out = agy::sessions();
+    out.extend(gemini_cli_sessions());
+    out
+}
+
+fn gemini_cli_sessions() -> Vec<Session> {
     let Some(home) = provider::antigravity::home() else {
         ilog!("Antigravity: no home folder");
         return vec![];

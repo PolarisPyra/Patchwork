@@ -12,6 +12,7 @@ mod types;
 #[doc(inline)]
 pub use types::{ImportScan, ImportSource};
 
+mod agy;
 mod antigravity;
 mod claude;
 mod codex;
