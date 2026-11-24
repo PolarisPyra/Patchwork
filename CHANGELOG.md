@@ -3,6 +3,15 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.146] - 2026-11-23
+
+## What's Changed
+* feat(settings): synced backgrounds, Chat and Logs panes, and shown thoughts by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/318
+* fix(antigravity): Gemini no longer gets a system prompt or chat personality by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/317
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.145...26.11.146
+
 ## [26.11.145] - 2026-11-23
 
 ## What's Changed
