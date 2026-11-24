@@ -47,9 +47,15 @@ pub fn turn_args(spec: &TurnSpec) -> Vec<String> {
     {
         args.extend(["--file".into(), image.path.clone()]);
     }
-    // After `--`, a prompt that starts with "-" is not read as a flag.
-    args.extend(["--".into(), prompt(spec)]);
+    // The prompt goes on stdin (see `turn_input`): a chat handed to OpenCode carries its whole
+    // transcript, which outgrows the command line Windows allows (32,767 characters).
     args
+}
+
+/// The prompt, which `opencode run` reads from its stdin once that is closed.
+#[must_use]
+pub fn turn_input(spec: &TurnSpec) -> Vec<String> {
+    vec![prompt(spec)]
 }
 
 /// Maps one line of `opencode run --format json`: a `step_start`, then the step's `reasoning`,
