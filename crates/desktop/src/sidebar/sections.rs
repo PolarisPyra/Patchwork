@@ -46,13 +46,19 @@ pub fn render(
         .border_color(t.border)
         .bg(t.bg_panel)
         .text_size(px(patchwork_ui::theme::fs(13.)))
-        // Folders held over the project list light it up; dropped, each becomes a project.
+        // Folders held over the project list light it up; dropped, each becomes a project. A
+        // drag holding any file is turned away.
         .when(view == View::Tasks, |s| {
-            s.drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(t.bg_hover))
-                .on_drop(cx.listener(|this, files: &ExternalPaths, _, cx| {
-                    this.add_dropped_folders(files.paths(), cx);
-                    cx.stop_propagation();
-                }))
+            s.can_drop(|value, _, _| {
+                value
+                    .downcast_ref::<ExternalPaths>()
+                    .is_some_and(|files| files.paths().iter().all(|p| p.is_dir()))
+            })
+            .drag_over::<ExternalPaths>(move |style, _, _, _| style.bg(t.bg_hover))
+            .on_drop(cx.listener(|this, files: &ExternalPaths, _, cx| {
+                this.add_dropped_folders(files.paths(), cx);
+                cx.stop_propagation();
+            }))
         })
         .child(
             div()
