@@ -5,8 +5,7 @@ as "fix(chat): new threads no longer spike CPU".
 
 ## Problem
 
-<!-- The problem in a sentence or two, with the expected behavior. The release notes read the
-start of this section, so lead with what users see. -->
+<!-- The problem in a sentence or two, with the expected behavior. -->
 
 ## Change
 

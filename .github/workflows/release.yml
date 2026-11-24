@@ -77,13 +77,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Each commit since the previous tag: its subject and git author, and for a squash-merged PR
-      # (a subject ending in "(#N)") the PR's author, size and the prose of its body, up to 300
-      # characters: no images, tables, headings, HTML, or verification sections.
+      # The version and the previous tag, and a check that the range has changes to release.
       - name: Collect the changes
         id: changes
         env:
-          GH_TOKEN: ${{ github.token }}
           INPUT_VERSION: ${{ inputs.version }}
         run: |
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
@@ -118,138 +115,19 @@ jobs:
             echo "::error::No unreleased changes since ${previous:-the start of history}"
             exit 1
           fi
-          : > "$RUNNER_TEMP/commits"
-          for commit in $(git rev-list --reverse "$range"); do
-            subject=$(git show -s --format=%s "$commit")
-            login="" bot=false name="" size="" body=""
-            if [[ "$subject" =~ \(#([0-9]+)\)$ ]]; then
-              view=$(gh pr view "${BASH_REMATCH[1]}" --json body,author,additions,deletions,changedFiles) || view={}
-              login=$(jq -r '.author.login // empty' <<< "$view")
-              bot=$(jq -r '.author.is_bot // false' <<< "$view")
-              name=$(jq -r '.author.name // empty' <<< "$view")
-              size=$(jq -r 'if .additions then "+\(.additions) -\(.deletions), \(.changedFiles) files" else "" end' <<< "$view")
-              body=$(jq -r '.body // "" | [splits("\n#+\\s*(?:Verification|Council|Test|Testing|Screenshots)\\b"; "i")][0]
-                | split("\n") | map(select(test("\\S") and (test("^\\s*[!|#<]") | not)))
-                | join(" ") | gsub("\\s+"; " ") | ltrimstr(" ") | rtrimstr(" ")
-                | if length > 300 then .[:300] + "..." else . end' <<< "$view")
-            fi
-            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$subject" "$(git show -s --format=%an "$commit")" \
-              "$login" "$bot" "$name" "$size" "$body" >> "$RUNNER_TEMP/commits"
-          done
-          jq -R -s 'split("\n") | map(select(. != "") | split("\t")
-            | {subject: .[0], authorName: .[1], login: .[2], bot: (.[3] == "true"), name: .[4],
-              size: .[5], body: .[6]})' \
-            "$RUNNER_TEMP/commits" > "$RUNNER_TEMP/commits.json"
-          jq -e 'length > 0' "$RUNNER_TEMP/commits.json" > /dev/null \
+          [ -n "$(git rev-list "$range")" ] \
             || { echo "::error::No commits in ${previous:+$previous..}$GITHUB_REF_NAME"; exit 1; }
 
-      # Claude Haiku 5.5, at low effort, picks up to seven commits worth leading with and writes
-      # each as a short name and one sentence. When this step fails, or the ANTHROPIC_API_KEY
-      # secret is not set, the notes are GitHub's generated notes alone.
-      - name: Write the highlights
-        continue-on-error: true
-        timeout-minutes: 5
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          [ -n "$ANTHROPIC_API_KEY" ] \
-            || { echo "::warning::ANTHROPIC_API_KEY is not set, so the notes have no highlights"; exit 1; }
-          cat > "$RUNNER_TEMP/prompt" <<'EOF'
-          Write up to 7 bullet points for the Patchwork update popover.
-
-          Give a feature a bullet only when it lets users do something they could not do before, removes a real limitation they hit in normal use, or cuts meaningful steps or wait time from a common task. Judge the outcome, regardless of the commit prefix. A new setting, a large diff, or support for one more edge case is not enough.
-
-          Lead with new capabilities. Give a bug fix its own bullet only when the source shows lost work or a core workflow that users could not complete in normal use. Leave isolated failures, cosmetic polish, and routine fixes in the count. Skip internal work, docs, tests, and dependency bumps. Group commits only when they deliver the same user outcome. Seven is a ceiling. Stop when the qualifying changes run out, even if that leaves zero bullets.
-
-          Each bullet has a short feature name and one sentence of at most 20 words. Say what the user can do or what now works. Use product names people see in the app and leave out protocol or implementation details. Describe the shipped behavior at the end of the range. Mark user-accessible Labs or beta features "(beta)". Skip dev-only features. No title, headings, introduction, example prompts, hype, PR numbers, or em dashes.
-
-          Return JSON with a "highlights" array. For each highlight, give "label" (plain text, no final period), "detail" (one sentence), and "commits" (the bracketed input numbers of all commits it covers). Use the subjects and PR descriptions as source material. The release script adds the formatting, count of remaining fixes and performance improvements, and contributor credit.
-          EOF
-          request=$(jq -n --rawfile prompt "$RUNNER_TEMP/prompt" \
-            --slurpfile commits "$RUNNER_TEMP/commits.json" '{
-              model: "claude-haiku-5-5",
-              max_tokens: 16000,
-              output_config: {effort: "low", format: {type: "json_schema", schema: {
-                type: "object", additionalProperties: false, required: ["highlights"],
-                properties: {highlights: {type: "array", items: {
-                  type: "object", additionalProperties: false, required: ["label", "detail", "commits"],
-                  properties: {label: {type: "string"}, detail: {type: "string"},
-                    commits: {type: "array", items: {type: "integer"}}}}}}}}},
-              system: $prompt,
-              messages: [{role: "user", content: ("Choose highlights as JSON from these commits:\n"
-                + ($commits[0] | to_entries
-                  | map("[\(.key + 1)] \(.value.subject)"
-                    + (if .value.size != "" then " [\(.value.size)]" else "" end)
-                    + (if .value.body != "" then "\n  > \(.value.body)" else "" end))
-                  | join("\n")))}]}')
-          response=$(curl -sS --fail-with-body --max-time 180 https://api.anthropic.com/v1/messages \
-            -H "content-type: application/json" \
-            -H "x-api-key: $ANTHROPIC_API_KEY" \
-            -H "anthropic-version: 2026-10-21" \
-            -d "$request") \
-            || { echo "::warning::The highlights request failed: $response"; exit 1; }
-          jq -e '.stop_reason == "end_turn"' <<< "$response" > /dev/null \
-            || { echo "::warning::The highlights stopped early: $response"; exit 1; }
-          jq -r '[.content[] | select(.type == "text") | .text] | join("")' <<< "$response" \
-            > "$RUNNER_TEMP/highlights.json"
-          jq -e '.highlights | type == "array"' "$RUNNER_TEMP/highlights.json" > /dev/null \
-            || { echo "::warning::The highlights are not in the expected form: $response"; exit 1; }
-
-      # The notes: the count of commits and contributors, the highlights and the count of fixes
-      # they leave out, and GitHub's generated notes folded under "Full changelog". The app's
-      # update notes end at the fold. Without highlights, GitHub's notes alone.
+      # The notes are GitHub's generated notes for the range.
       - name: Write the release notes
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.changes.outputs.version }}
           PREVIOUS: ${{ steps.changes.outputs.previous }}
         run: |
-          commits=$RUNNER_TEMP/commits.json
           args=(-f "tag_name=$VERSION" -f "target_commitish=$GITHUB_SHA")
           [ -z "$PREVIOUS" ] || args+=(-f "previous_tag_name=$PREVIOUS")
-          full=$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" "${args[@]}" --jq .body)
-          if [ -s "$RUNNER_TEMP/highlights.json" ] \
-            && summary=$(jq -r --slurpfile commits "$commits" '
-              $commits[0] as $all
-              | .highlights[:7] as $picked
-              | if any($picked[].commits[]; . < 1 or . > ($all | length)) then error("a commit number is out of range") else . end
-              | [$picked[].commits[]] as $covered
-              | ($picked | map("- **\(.label | sub("\\.$"; "")).** \(.detail)") | join("\n")) as $bullets
-              # The fixes and performance improvements no highlight covers, by the type their subject starts with.
-              | [$all | to_entries[] | select((.key + 1) | IN($covered[]) | not)
-                  | .value.subject | capture("^(?<type>fix|perf)(\\([^)]*\\))?!?:"; "i") | .type | ascii_downcase]
-                as $remaining
-              | ($remaining | length) as $count
-              | (if ($remaining | index("fix")) == null then
-                  (if $count == 1 then "performance improvement" else "performance improvements" end)
-                elif ($remaining | index("perf")) == null then
-                  (if $count == 1 then "bug fix" else "bug fixes" end)
-                else "bug fixes and performance improvements" end) as $kind
-              | if $count == 0 then $bullets
-                elif $bullets == "" then "**\($count) \($kind).**"
-                else "\($bullets)\n\n### Plus \($count) more \($kind)." end
-            ' "$RUNNER_TEMP/highlights.json"); then
-            # PR authors without bots, plus authors of direct pushes who have no PR in the range.
-            # A PR's squash commit carries its author's git name, which may differ from the login.
-            header=$(jq -r --arg version "$VERSION" '
-              def count($n; $word): "\($n) \($word)\(if $n == 1 then "" else "s" end)";
-              . as $all
-              | map(select(.login != "" and (.bot | not) and (.login | endswith("[bot]") | not))) as $people
-              | [$people[] | .authorName, .name | select(. != "")] as $names
-              | [$all[] | select(.login == "") | .authorName
-                  | select((endswith("[bot]") | not) and (IN($names[]) | not))] as $direct
-              | "**v\($version)** · \(count($all | length; "change")) from \(count(($people | map(.login)) + $direct | unique | length; "contributor"))"
-            ' "$commits")
-            {
-              echo "$header"
-              if [ -n "$summary" ]; then printf '\n%s\n' "$summary"; fi
-              printf '\n<details>\n<summary>Full changelog</summary>\n\n%s\n\n</details>\n' "$full"
-            } > notes.md
-          else
-            [ ! -s "$RUNNER_TEMP/highlights.json" ] \
-              || echo "::warning::The highlights could not be read, so the notes are GitHub's alone"
-            printf '%s\n' "$full" > notes.md
-          fi
+          gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" "${args[@]}" --jq .body > notes.md
           { echo "## [$VERSION] - $(date -u +%F)"; echo; cat notes.md; echo; } > section.md
           awk 'FNR == NR { section = section $0 "\n"; next }
             !done && /^## \[/ { printf "%s", section; done = 1 } { print }' \
