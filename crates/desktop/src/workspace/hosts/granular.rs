@@ -77,6 +77,8 @@ impl Workspace {
             log::warn!(error:% = e; "could not set the chat's agent: {{error}}");
         }
         self.chat = Some(chat);
+        let left = self.left_tab.take();
+        self.keep_tab(left.as_deref(), false);
         self.reload(cx);
         self.open_granular_dialog(GranularScope::Chat(id), Some(first), window, cx);
     }

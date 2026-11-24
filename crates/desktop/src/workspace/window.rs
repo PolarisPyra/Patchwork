@@ -120,6 +120,10 @@ pub struct Workspace {
     pub chat: Option<Chat>,
     /// The chats open in tabs, by id, in the order they show.
     pub(crate) chat_tabs: Vec<String>,
+    /// The chat closed to start a new one, whose tab the new chat takes.
+    pub(crate) left_tab: Option<String>,
+    /// The next chat opened gets a new tab rather than the open one's.
+    pub(crate) new_tab: bool,
     /// The Issues view's lists.
     pub(crate) issues: crate::sidebar::issues::IssueLists,
     /// The chats carried on in their agent's CLI in a terminal, not yet brought back.
@@ -419,6 +423,8 @@ impl Workspace {
             archived_collapsed: HashSet::new(),
             chat: None,
             chat_tabs: Vec::new(),
+            left_tab: None,
+            new_tab: false,
             issues: crate::sidebar::issues::IssueLists::default(),
             in_cli: std::collections::HashSet::new(),
             view: Some(View::Tasks),

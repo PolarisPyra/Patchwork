@@ -30,6 +30,7 @@ impl Workspace {
         match target {
             Target::Archived(_) => return vec![delete],
             Target::Many(targets) => return self.many_items(targets),
+            Target::Tabs(project) => return self.tab_items(project.as_deref()),
             Target::Chat(id) if self.chat_by_id(id).is_some_and(|t| t.archived_at.is_some()) => {
                 return vec![
                     item("Restore", "arrow-counter-clockwise", Act::Restore),
@@ -51,7 +52,7 @@ impl Workspace {
         }
         let mut items = vec![item("Rename", "pencil-simple", Act::Rename)];
         match target {
-            Target::Archived(_) | Target::Many(_) => {}
+            Target::Archived(_) | Target::Many(_) | Target::Tabs(_) => {}
             Target::Agent(_) => {
                 items.push(item("Details", "robot", Act::Details));
                 items.push(item("Background…", "image", Act::Background));
@@ -64,7 +65,7 @@ impl Workspace {
                 if self.chat_tabs.contains(id) {
                     items.insert(0, item("Close tab", "x", Act::CloseTab));
                 } else {
-                    items.insert(0, item("Send to tab", "plus", Act::SendToTab));
+                    items.insert(0, item("Open in new tab", "plus", Act::OpenInNewTab));
                 }
                 if let Some(chat) = self.chat_by_id(id) {
                     items.push(if chat.favorite {
@@ -200,6 +201,35 @@ impl Workspace {
         items
     }
 
+    /// The tab add button's menu: a new task, then each of the project's tasks with no tab.
+    fn tab_items(&self, project: Option<&str>) -> Vec<Item> {
+        let new = Item {
+            label: if project.is_some() {
+                "New task"
+            } else {
+                "New chat"
+            }
+            .into(),
+            icon: "plus",
+            danger: false,
+            act: Act::NewTaskTab,
+        };
+        let tasks = self.untabbed_tasks(project).into_iter().map(|c| {
+            let title = patchwork_ui::display_title(&c.title);
+            Item {
+                label: if title.trim().is_empty() {
+                    "New chat".into()
+                } else {
+                    title.into()
+                },
+                icon: "chat-circle",
+                danger: false,
+                act: Act::OpenTab(c.id.clone()),
+            }
+        });
+        std::iter::once(new).chain(tasks).collect()
+    }
+
     /// Opens the menu for `target` where the pointer pressed.
     pub fn open_context_menu(
         &mut self,
@@ -260,8 +290,13 @@ impl Workspace {
         self.close_context_menu(window, cx);
         match (&target, &act) {
             (_, Act::Rename) => return self.start_rename(target, window, cx),
-            (Target::Chat(id), Act::SendToTab) => return self.send_to_tab(id, cx),
             (Target::Chat(id), Act::CloseTab) => return self.close_tab(id, cx),
+            (Target::Tabs(project), Act::NewTaskTab) => {
+                return self.new_task_tab(project.clone(), window, cx);
+            }
+            (Target::Chat(id), Act::OpenInNewTab) | (_, Act::OpenTab(id)) => {
+                return self.open_in_new_tab(id, cx);
+            }
             (Target::Chat(id), Act::Favorite(_) | Act::Pin(_) | Act::Restore) => {
                 let id = id.clone();
                 let change = move |core: &patchwork_core::Core| match act {

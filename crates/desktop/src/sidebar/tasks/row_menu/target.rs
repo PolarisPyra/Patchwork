@@ -17,6 +17,8 @@ pub enum Target {
     Archived(Vec<String>),
     /// Rows picked together with Ctrl or Shift.
     Many(Vec<Target>),
+    /// The chat tabs' add button, for the project (or none) whose tabs show.
+    Tabs(Option<String>),
 }
 
 /// The open menu: where it was opened, for which row, and the row the keyboard is on.
@@ -39,9 +41,13 @@ pub struct Renaming {
 pub(super) enum Act {
     Rename,
     /// Put the chat in a tab beside the open chat's.
-    SendToTab,
+    OpenInNewTab,
     /// Take the chat out of the tabs.
     CloseTab,
+    /// Start a task in a new tab.
+    NewTaskTab,
+    /// Open this task in a new tab.
+    OpenTab(String),
     Favorite(bool),
     Pin(bool),
     Background,

@@ -1,14 +1,14 @@
 //! Chat tabs: several chats of one project kept open side by side over the transcript, to
 //! switch between without the task list.
 //!
-//! A chat goes into a tab with "Send to tab" in its menu, from the task list or from another
-//! tab; the chat open then gets a tab too. The strip shows while the open chat's project has any
-//! tabs, whichever of its chats is open, so it does not come and go while moving between them,
-//! and the tab just sent to shows at once. Each tab keeps one size, open or not, busy or not.
+//! Each project keeps its own tabs, and the strip shows the open chat's project's. The open chat
+//! always has a tab. Opening or starting a chat shows it in the tab that was open, as a browser
+//! does, and "Open in new tab" in a chat's menu, or the strip's add button, gives a chat a tab of
+//! its own beside the open one. Closing the open chat's last tab closes the chat. Each tab keeps one size, open or not, busy or not.
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{AnyElement, MouseButton, MouseDownEvent, Role, SharedString, div, prelude::*, px};
+use gpui::{AnyElement, MouseButton, MouseDownEvent, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_core::chats::Chat;
 use patchwork_ui::theme::{Theme, fs_sm, radius};
 use patchwork_ui::{agent_logo, button, display_title, icon_button, spinner, tooltip};
@@ -23,33 +23,48 @@ const TAB_WIDTH: f32 = 180.;
 const STRIP_HEIGHT: f32 = 40.;
 
 impl Workspace {
-    /// Puts chat `id` in a tab beside the open chat's, giving the open chat a tab too, and
-    /// opens it.
-    pub(crate) fn send_to_tab(&mut self, id: &str, cx: &mut Context<Self>) {
-        if !self.chat_tabs.iter().any(|t| t == id) {
-            let open = self
-                .chat
-                .as_ref()
-                .map(|c| (c.id.clone(), c.project_id.clone()));
-            let project = self
-                .chats
-                .iter()
-                .find(|c| c.id == id)
-                .map(|c| &c.project_id);
-            let at = match open {
-                // Beside the open chat, when it is of the same project.
-                Some((open, of)) if Some(&of) == project && open != id => {
-                    let at = self.chat_tabs.iter().position(|t| *t == open);
-                    at.unwrap_or_else(|| {
-                        self.chat_tabs.push(open);
-                        self.chat_tabs.len() - 1
-                    }) + 1
-                }
-                _ => self.chat_tabs.len(),
-            };
-            self.chat_tabs.insert(at, id.to_owned());
-        }
+    /// Opens chat `id` in a new tab beside the open chat's.
+    pub(crate) fn open_in_new_tab(&mut self, id: &str, cx: &mut Context<Self>) {
+        self.new_tab = true;
         self.open_chat(id, cx);
+    }
+
+    /// Starts a task in `project` in a new tab beside the open chat's.
+    pub(crate) fn new_task_tab(
+        &mut self,
+        project: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.new_tab = true;
+        self.new_chat_in(project, None, window, cx);
+        self.new_tab = false;
+    }
+
+    /// Gives the open chat a tab when it has none. It takes over `replace`'s tab when that is of
+    /// the same project, or goes right after it when `new`, and else goes last.
+    pub(crate) fn keep_tab(&mut self, replace: Option<&str>, new: bool) {
+        let Some(open) = self.chat.as_ref() else {
+            return;
+        };
+        if self.chat_tabs.contains(&open.id) {
+            return;
+        }
+        let (id, project) = (open.id.clone(), open.project_id.clone());
+        // A chat deleted since has no project to differ in, and its tab is free to take.
+        let slot = replace
+            .filter(|r| {
+                self.chats
+                    .iter()
+                    .find(|c| c.id == *r)
+                    .is_none_or(|c| c.project_id == project)
+            })
+            .and_then(|r| self.chat_tabs.iter().position(|t| t == r));
+        match slot {
+            Some(at) if new => self.chat_tabs.insert(at + 1, id),
+            Some(at) => self.chat_tabs[at] = id,
+            None => self.chat_tabs.push(id),
+        }
     }
 
     /// Takes chat `id` out of the tabs, showing its neighbour when it was the one open.
@@ -68,8 +83,10 @@ impl Workspace {
                 .chain(before.iter().rev())
                 .find(|t| self.listed_in(t, project.as_deref()))
                 .cloned();
-            if let Some(next) = next {
-                self.open_chat(&next, cx);
+            // The open chat always has a tab, so closing the last one closes the chat.
+            match next {
+                Some(next) => self.open_chat(&next, cx),
+                None => self.close_chat(cx),
             }
         }
         cx.notify();
@@ -82,27 +99,51 @@ impl Workspace {
             .any(|c| c.id == id && c.archived_at.is_none() && c.project_id.as_deref() == project)
     }
 
-    /// The tabs of the open chat's project, in order, when there are any.
-    fn shown_tabs(&self) -> Option<Vec<&Chat>> {
-        let open = self.chat.as_ref()?;
-        let tabs: Vec<&Chat> = self
-            .chat_tabs
+    /// The project whose tabs show: the open chat's, or else the one picked for a new task.
+    fn tabs_project(&self) -> Option<String> {
+        match &self.chat {
+            Some(chat) => chat.project_id.clone(),
+            None => self.settings.active_project_id.clone(),
+        }
+    }
+
+    /// The tabs of `project`, in order.
+    fn project_tabs(&self, project: Option<&str>) -> Vec<&Chat> {
+        self.chat_tabs
             .iter()
             .filter_map(|id| self.chats.iter().find(|c| c.id == *id))
             .map(AsRef::as_ref)
-            .filter(|c| c.archived_at.is_none() && c.project_id == open.project_id)
-            .collect();
-        (!tabs.is_empty()).then_some(tabs)
+            .filter(|c| c.archived_at.is_none() && c.project_id.as_deref() == project)
+            .collect()
+    }
+
+    /// The tasks of `project` in the task list that have no tab, in its order.
+    pub(crate) fn untabbed_tasks(&self, project: Option<&str>) -> Vec<&Chat> {
+        self.chats
+            .iter()
+            .map(AsRef::as_ref)
+            .filter(|c| {
+                c.archived_at.is_none()
+                    && c.parent.is_none()
+                    && c.project_id.as_deref() == project
+                    && !self.chat_tabs.contains(&c.id)
+            })
+            .collect()
     }
 }
 
-/// The strip of the open chat's project's tabs, when it has any.
+/// The strip of a project's tabs, led by the button that adds one. It shows while a chat is open,
+/// or while the project picked for a new task has tabs.
 pub(super) fn tab_strip(
     w: &Workspace,
     t: &Theme,
     cx: &mut Context<Workspace>,
 ) -> Option<AnyElement> {
-    let tabs = w.shown_tabs()?;
+    let project = w.tabs_project();
+    let tabs = w.project_tabs(project.as_deref());
+    if w.chat.is_none() && tabs.is_empty() {
+        return None;
+    }
     let open = w.chat.as_ref().map(|c| c.id.clone());
     let count = tabs.len();
     let strip = div()
@@ -118,6 +159,18 @@ pub(super) fn tab_strip(
         .border_b_1()
         .border_color(t.border)
         .overflow_x_scroll()
+        .child(
+            icon_button("chat-tab-add", "Add a tab", "plus", 14., cx)
+                .flex_none()
+                .tooltip(tooltip("Add a tab"))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |w, e: &MouseDownEvent, window, cx| {
+                        let target = Target::Tabs(project.clone());
+                        w.open_context_menu(target, e, window, cx);
+                    }),
+                ),
+        )
         .children(tabs.into_iter().enumerate().map(|(i, chat)| {
             let on = open.as_deref() == Some(chat.id.as_str());
             tab(chat, on, i, count, t, cx)
