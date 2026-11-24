@@ -4,13 +4,14 @@
 
 use std::time::Duration;
 use gpui::{
-    Animation, AnimationExt, ease_out_quint, AnyElement, Entity, Focusable, Role, ScrollAnchor,
-    SharedString, Window, div, prelude::*, px,
+    Animation, AnimationExt, AnyElement, Entity, Focusable, FontWeight, Role, ScrollAnchor,
+    SharedString, Window, div, ease_out_quint, prelude::*, px,
 };
 use patchwork_ui::text::text_area::{Arrow, Changed, Submitted, TextArea};
-use patchwork_ui::theme::{Theme, fs_md, fs_sm, input_placeholder, radius_sm, theme};
+use patchwork_ui::theme::{Theme, fs_md, fs_sm, fs_xs, input_placeholder, radius_sm, theme};
 use patchwork_ui::{button, icon, mix};
 use super::controls::seek;
+use super::panes::shortcuts;
 use super::dialog::{ENTRIES, SettingsDialog, entry_of};
 
 /// How tall a pane's row under its entry is.
@@ -211,6 +212,8 @@ pub(super) struct Hit {
     name: &'static str,
     /// The pane's name, shown under a setting's; empty when the result is the pane itself.
     place: &'static str,
+    /// The shortcut command the result is, opened picked in the Shortcuts pane.
+    command: Option<&'static str>,
 }
 
 /// What `query`, in lower case, finds: the panes whose name has it, then the settings.
@@ -224,6 +227,7 @@ pub(super) fn hits(query: &str) -> Vec<Hit> {
                 pane: p.id,
                 name: p.label,
                 place: "",
+                command: None,
             })
     });
     let settings = INDEX.iter().flat_map(|(pane, names)| {
@@ -231,9 +235,27 @@ pub(super) fn hits(query: &str) -> Vec<Hit> {
         names
             .iter()
             .filter(move |name| has(name))
-            .map(move |name| Hit { pane, name, place })
+            .map(move |name| Hit {
+                pane,
+                name,
+                place,
+                command: None,
+            })
     });
-    panes.chain(settings).take(MAX_HITS).collect()
+    // Commands come last: a setting named the same is more likely what is looked for.
+    let commands = shortcuts::searchable()
+        .filter(move |(_, title)| has(title))
+        .map(|(id, name)| Hit {
+            pane: "shortcuts",
+            name,
+            place: "Shortcuts",
+            command: Some(id),
+        });
+    panes
+        .chain(settings)
+        .chain(commands)
+        .take(MAX_HITS)
+        .collect()
 }
 
 /// Every pane's id, in the order the list shows them.
@@ -267,6 +289,10 @@ impl SettingsDialog {
         self.clear_search(cx);
         self.open_section(hit.pane, cx);
         self.focus_row(hit.pane, window, cx);
+        if let Some(id) = hit.command {
+            self.show_command(id, cx);
+            return;
+        }
         if hit.place.is_empty() {
             return;
         }
@@ -458,6 +484,23 @@ impl SettingsDialog {
         let (hover, selected, muted) = (t.bg_hover, t.bg_selected, t.text_muted);
         let selected_hover = mix(t.bg_selected, t.text, 92.);
         for (at, e) in ENTRIES.iter().enumerate() {
+            if at == 0 || ENTRIES[at - 1].group != e.group {
+                rows.push(
+                    div()
+                        .flex_none()
+                        .h(px(24.))
+                        .when(at > 0, |d| d.mt(px(10.)))
+                        .flex()
+                        .items_end()
+                        .pb(px(4.))
+                        .px(px(8.))
+                        .text_size(px(fs_xs()))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(muted)
+                        .child(e.group)
+                        .into_any_element(),
+                );
+            }
             let open = e.panes.iter().any(|p| p.id == section);
             let group = e.panes.len() > 1;
             let row = button(SharedString::from(format!("section-{at}")), e.label)

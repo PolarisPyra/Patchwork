@@ -5,24 +5,38 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use gpui::{Action, App, KeyBinding, KeyBindingContextPredicate, KeyDownEvent, NoAction};
+use gpui::{Action, App, KeyBinding, KeyBindingContextPredicate, Keystroke, NoAction};
 use patchwork_core::Core;
 
-/// Where the user's keys are kept: a command's key, or null for one they unbound.
+/// Where the user's keys are kept: a command's keys, apart by spaces, or null for one they
+/// unbound.
 pub(super) const STATE_KEY: &str = "keybindings";
 
 /// The pages of the pane, in order.
-pub(super) const PAGES: [&str; 7] = [
-    "Main", "Panes", "Panel", "Chat", "Sidebar", "Archive", "Composer",
+pub(super) const PAGES: [&str; 8] = [
+    "Main", "Editing", "Panes", "Panel", "Chat", "Sidebar", "Archive", "Composer",
 ];
 
+/// The editing keys every text field and selection in the app answers to, as stored keys. No
+/// command may take them, so copy and paste work the same everywhere.
+const EDITING_KEYS: &[&str] = &["mod+c", "mod+x", "mod+v", "mod+z", "mod+y"];
+
 /// A command: its id, page, title and what it does, and whether its key is fixed.
+#[derive(Debug)]
 pub(super) struct Command {
     pub(super) id: &'static str,
     pub(super) page: &'static str,
     pub(super) title: &'static str,
     pub(super) desc: Option<&'static str>,
     pub(super) fixed: bool,
+}
+
+/// Every command in the shortcuts list, as its id and title, for settings search.
+pub fn searchable() -> impl Iterator<Item = (&'static str, &'static str)> {
+    COMMANDS
+        .iter()
+        .filter(|c| !c.fixed)
+        .map(|c| (c.id, c.title))
 }
 
 const fn cmd(
@@ -318,6 +332,12 @@ pub(super) const DEFAULT_RULES: &[(&str, &str, bool)] = &[
 
 /// Keys the editor and the mouse own, listed on the page they belong to.
 pub(super) const FIXED_KEYS: &[(&str, &[&str], &str)] = &[
+    ("Editing", &["Ctrl", "C"], "Copy"),
+    ("Editing", &["Ctrl", "X"], "Cut"),
+    ("Editing", &["Ctrl", "V"], "Paste"),
+    ("Editing", &["Ctrl", "Z"], "Undo"),
+    ("Editing", &["Ctrl", "Y"], "Redo"),
+    ("Editing", &["Ctrl", "A"], "Select all"),
     ("Chat", &["Mouse back"], "Go back"),
     ("Chat", &["Mouse forward"], "Go forward"),
     ("Panel", &["Ctrl", "Shift", "C"], "Copy in the terminal"),
@@ -391,8 +411,6 @@ pub(super) const FIXED_KEYS: &[(&str, &[&str], &str)] = &[
     ),
     ("Composer", &["Enter"], "Send the message"),
     ("Composer", &["Shift", "Enter"], "New line"),
-    ("Composer", &["Ctrl", "Z"], "Undo"),
-    ("Composer", &["Ctrl", "Shift", "Z"], "Redo"),
     (
         "Composer",
         &["Up", "Down"],
@@ -410,6 +428,8 @@ pub(super) const FIXED_KEYS: &[(&str, &[&str], &str)] = &[
     ),
 ];
 
+/// The user's keys by command: its keys apart by spaces, or None when they took them all off.
+/// Commands left out keep their built-in keys.
 pub(super) type Overrides = HashMap<String, Option<String>>;
 
 pub(super) fn load(core: &Core) -> Overrides {
@@ -424,16 +444,42 @@ pub(super) fn load(core: &Core) -> Overrides {
     overrides
 }
 
-/// A command's key: the user's, or the built-in one.
-pub(super) fn key_for(overrides: &Overrides, id: &str) -> Option<String> {
+/// A command's built-in keys.
+pub(super) fn default_keys(id: &str) -> Vec<String> {
+    DEFAULT_RULES
+        .iter()
+        .filter(|(c, _, _)| *c == id)
+        .map(|(_, k, _)| (*k).to_owned())
+        .collect()
+}
+
+/// A command's keys: the user's, or the built-in ones.
+pub(super) fn keys_for(overrides: &Overrides, id: &str) -> Vec<String> {
     match overrides.get(id) {
-        Some(key) => key.clone(),
-        None => DEFAULT_RULES
-            .iter()
-            .rev()
-            .find(|(c, _, _)| *c == id)
-            .map(|(_, k, _)| k.to_string()),
+        Some(Some(keys)) => keys.split_whitespace().map(str::to_owned).collect(),
+        Some(None) => Vec::new(),
+        None => default_keys(id),
     }
+}
+
+/// A command's first key, the one menus and search show.
+pub(super) fn key_for(overrides: &Overrides, id: &str) -> Option<String> {
+    keys_for(overrides, id).into_iter().next()
+}
+
+/// Gives command `id` the keys `keys`, leaving it out when they are its built-in ones.
+pub(super) fn store_keys(overrides: &mut Overrides, id: &str, keys: &[String]) {
+    if keys == default_keys(id).as_slice() {
+        overrides.remove(id);
+    } else {
+        let kept = (!keys.is_empty()).then(|| keys.join(" "));
+        overrides.insert(id.to_owned(), kept);
+    }
+}
+
+/// The command with id `id`.
+pub(super) fn command(id: &str) -> Option<&'static Command> {
+    COMMANDS.iter().find(|c| c.id == id)
 }
 
 /// A command's key as the palette shows it, "Ctrl T", or None when it has none.
@@ -441,7 +487,7 @@ pub fn key_label(core: &Core, id: &str) -> Option<String> {
     key_for(&load(core), id).map(|key| format_key(&key).join(" "))
 }
 
-fn is_fixed(id: &str) -> bool {
+pub(super) fn is_fixed(id: &str) -> bool {
     COMMANDS.iter().any(|c| c.id == id && c.fixed)
 }
 
@@ -463,8 +509,7 @@ pub(super) fn format_key(key: &str) -> Vec<String> {
 }
 
 /// The key pressed, in the stored shape: "mod+shift+k". None for a bare modifier.
-pub(super) fn key_from_event(e: &KeyDownEvent) -> Option<String> {
-    let k = &e.keystroke;
+pub(super) fn key_from_keystroke(k: &Keystroke) -> Option<String> {
     let name = k.key.as_str();
     if matches!(
         name,
@@ -488,6 +533,12 @@ pub(super) fn key_from_event(e: &KeyDownEvent) -> Option<String> {
 
 /// Why `key` cannot run `command`, if it cannot.
 pub(super) fn key_problem(command: &str, key: &str) -> Option<String> {
+    if EDITING_KEYS.contains(&key) {
+        return Some(format!(
+            "{} copies, pastes or undoes everywhere and cannot be reassigned",
+            format_key(key).join("+")
+        ));
+    }
     if DEFAULT_RULES
         .iter()
         .any(|(c, k, _)| *k == key && is_fixed(c))
@@ -511,17 +562,14 @@ pub(super) fn key_problem(command: &str, key: &str) -> Option<String> {
         .then(|| "This shortcut works while typing, so it needs Ctrl, Cmd or Alt".to_string())
 }
 
-/// The other commands on the same key.
-pub(super) fn conflicts(overrides: &Overrides, id: &str) -> Vec<&'static Command> {
-    let Some(mine) = key_for(overrides, id) else {
-        return Vec::new();
-    };
+/// Whether command `other`, also on `key`, clashes with command `id`. Fixed commands on one key
+/// work in different places, so they never clash with each other, and neither do the Select all
+/// keys that each wait for their own list.
+pub(super) fn clashes(id: &str, other: &Command, key: &str) -> bool {
     let outside = |c: &str| DEFAULT_RULES.iter().any(|(r, _, o)| *r == c && *o);
-    COMMANDS
-        .iter()
-        .filter(|c| c.id != id && key_for(overrides, c.id).as_deref() == Some(mine.as_str()))
-        .filter(|c| !(outside(c.id) && outside(id)) || mine != "mod+a")
-        .collect()
+    let both_fixed = other.fixed && is_fixed(id);
+    let own_lists = outside(other.id) && outside(id) && key == "mod+a";
+    other.id != id && !both_fixed && !own_lists
 }
 
 /// A stored key as GPUI writes it: "mod+shift+k" is "ctrl-shift-k".
@@ -630,32 +678,46 @@ pub fn bind_keys(core: &Core, cx: &mut App) {
         .map(Rc::new);
     let mut bindings = Vec::new();
     for c in COMMANDS {
-        let (Some(key), Some(action)) = (key_for(&overrides, c.id), action_for(c.id)) else {
-            continue;
-        };
-        match KeyBinding::load(&gpui_key(&key), action, None, false, None, cx) {
-            Ok(binding) => bindings.push(binding),
-            Err(e) => {
-                log::warn!(
-                    key:%, command:% = c.id, error:% = e;
-                    "could not bind {{key}} to {{command}}: {{error}}"
-                );
-            }
-        }
-        if !SKIP_SHELL.contains(&c.id)
-            && let Ok(binding) = KeyBinding::load(
-                &gpui_key(&key),
-                Box::new(NoAction),
-                terminal.clone(),
-                false,
-                None,
-                cx,
-            )
-        {
-            bindings.push(binding);
+        for key in keys_for(&overrides, c.id) {
+            bind_one(c, &key, terminal.as_ref(), &mut bindings, cx);
         }
     }
     cx.bind_keys(bindings);
     cx.bind_keys(patchwork_ui::text::text_area::bindings());
     cx.bind_keys(patchwork_ui::text::selection::bindings());
+}
+
+/// Binds `key` to command `c`'s action, and in a terminal leaves it to the shell unless the
+/// command is one the terminal lets through.
+fn bind_one(
+    c: &Command,
+    key: &str,
+    terminal: Option<&Rc<KeyBindingContextPredicate>>,
+    bindings: &mut Vec<KeyBinding>,
+    cx: &App,
+) {
+    let Some(action) = action_for(c.id) else {
+        return;
+    };
+    match KeyBinding::load(&gpui_key(key), action, None, false, None, cx) {
+        Ok(binding) => bindings.push(binding),
+        Err(e) => {
+            log::warn!(
+                key:%, command:% = c.id, error:% = e;
+                "could not bind {{key}} to {{command}}: {{error}}"
+            );
+        }
+    }
+    if !SKIP_SHELL.contains(&c.id)
+        && let Ok(binding) = KeyBinding::load(
+            &gpui_key(key),
+            Box::new(NoAction),
+            terminal.cloned(),
+            false,
+            None,
+            cx,
+        )
+    {
+        bindings.push(binding);
+    }
 }

@@ -8,7 +8,7 @@ use super::nav::pane_order;
 
 impl SettingsDialog {
     pub(super) fn on_key(&mut self, e: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if self.record_key(e, cx) || self.record_sigil(e, cx) {
+        if self.record_sigil(e, cx) {
             return cx.stop_propagation();
         }
         let step = match e.keystroke.key.as_str() {

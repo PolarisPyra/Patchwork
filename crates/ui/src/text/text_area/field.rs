@@ -84,7 +84,6 @@ pub fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new("ctrl-enter", CtrlSubmit, context),
         KeyBinding::new("tab", Tab, context),
         KeyBinding::new("ctrl-z", Undo, context),
-        KeyBinding::new("ctrl-shift-z", Redo, context),
         KeyBinding::new("ctrl-y", Redo, context),
         KeyBinding::new("ctrl-left", WordLeft, context),
         KeyBinding::new("ctrl-right", WordRight, context),
