@@ -357,9 +357,16 @@ pub fn turn_input(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
         // Patchwork's own agent reads its turn from stdin, and answers and steers after it.
         AgentKind::Api => vec![api::bridge_request(spec)],
         AgentKind::Antigravity => antigravity::turn_input(spec),
-        // `opencode run` reads the prompt from its arguments, and stdin is closed so it does not wait on it.
-        AgentKind::OpenCode => vec![],
+        // `opencode run` reads the prompt from stdin, which is closed after it (see `closes_input`).
+        AgentKind::OpenCode => opencode::turn_input(spec),
     }
+}
+
+/// Whether the agent's stdin is closed once `turn_input` is written: `opencode run` reads it to
+/// its end before it starts.
+#[must_use]
+pub fn closes_input(agent: AgentKind) -> bool {
+    agent == AgentKind::OpenCode && !opencode::uses_serve()
 }
 
 /// Maps one line of the agent's JSONL output.

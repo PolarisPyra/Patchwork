@@ -18,7 +18,7 @@ pub(super) use config::needs_own_database;
 pub(crate) use config::{SHARED_DATABASE, V1_DATABASE, data_dir};
 use config::major_version;
 #[doc(inline)]
-pub use run::{turn_args, parse};
+pub use run::{turn_args, turn_input, parse};
 use run::{todo_plan, tool_name};
 #[doc(inline)]
 pub use requests::{uses_serve, bridge_request, mode_asks, steer_line, interrupt_line, approval_reply};

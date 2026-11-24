@@ -481,6 +481,9 @@ impl Runner {
         for line in &input {
             write_line(&stdin, line);
         }
+        if provider::closes_input(agent) {
+            stdin.locked().take();
+        }
 
         let message = assistant_message();
         let cancelled = Arc::new(AtomicBool::new(false));
