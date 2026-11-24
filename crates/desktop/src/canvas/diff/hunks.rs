@@ -153,29 +153,45 @@ impl Canvas {
                     .text_color(t.text_subtle)
                     .child(n.map(|n| n.to_string()).unwrap_or_default())
             };
+            let line = row.new_no.or(row.old_no).unwrap_or(0);
+            // A change can be noted line by line; shift extends the note being written to here.
+            let notable = self.revision.is_none() && self.since.is_none();
+            let hover = t.bg_hover;
             children.push(
-                div()
-                    .flex()
-                    .w_full()
-                    .when_some(bg, gpui::Styled::bg)
-                    .child(number(row.old_no))
-                    .child(number(row.new_no))
-                    .child(
-                        div()
-                            .flex_none()
-                            .w(px(20.))
-                            .flex()
-                            .justify_center()
-                            .text_color(t.text_subtle)
-                            .child(mark),
-                    )
-                    .child(
-                        div()
-                            .flex_none()
-                            .whitespace_nowrap()
-                            .child(row.text.clone()),
-                    )
-                    .into_any_element(),
+                button(
+                    SharedString::from(format!("diff-line-{index}")),
+                    format!("Add a note on line {line}"),
+                )
+                .w_full()
+                .items_start()
+                .cursor_text()
+                .when_some(bg, gpui::Styled::bg)
+                .when(notable, |d| {
+                    d.cursor_pointer()
+                        .hover(move |s| s.bg(hover))
+                        .on_click(cx.listener(move |this, e: &gpui::ClickEvent, window, cx| {
+                            this.note_line(index, e.modifiers().shift, window, cx);
+                        }))
+                })
+                .when(!notable, |d| d.tab_index(-1))
+                .child(number(row.old_no))
+                .child(number(row.new_no))
+                .child(
+                    div()
+                        .flex_none()
+                        .w(px(20.))
+                        .flex()
+                        .justify_center()
+                        .text_color(t.text_subtle)
+                        .child(mark),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .whitespace_nowrap()
+                        .child(row.text.clone()),
+                )
+                .into_any_element(),
             );
         }
         for note in notes.iter().filter(|n| anchored_at(n, row)) {
@@ -300,6 +316,26 @@ impl Canvas {
                         ),
                 )
             })
+    }
+
+    /// Opens a note on diff row `index`, or with `extend`, on the rows from the open note's to it.
+    fn note_line(
+        &mut self,
+        index: usize,
+        extend: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(parsed) = self.diff_rows.clone() else {
+            return;
+        };
+        let (from, to) = match self.draft.as_ref().filter(|_| extend) {
+            Some(open) => (open.row.min(index), open.row.max(index)),
+            None => (index, index),
+        };
+        if let Some(draft) = note_for(&parsed.rows, from, to) {
+            self.start_draft(draft, window, cx);
+        }
     }
 
     fn start_draft(&mut self, draft: Draft, window: &mut Window, cx: &mut Context<Self>) {
