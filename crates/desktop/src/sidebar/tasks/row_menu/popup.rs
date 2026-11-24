@@ -36,8 +36,8 @@ impl Workspace {
                 .text_color(if item.danger { t.danger } else { t.text })
                 .when(highlighted, |row| row.bg(t.bg_hover))
                 .hover(|s| s.bg(t.bg_hover))
-                .child(icon(item.icon, 14.))
-                .child(item.label)
+                .child(div().flex_none().child(icon(item.icon, 14.)))
+                .child(div().min_w_0().truncate().child(item.label))
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.act(target.clone(), act.clone(), window, cx);
                 }))
@@ -51,6 +51,9 @@ impl Workspace {
             .flex()
             .flex_col()
             .min_w(px(160.))
+            .max_w(px(360.))
+            .max_h(px(420.))
+            .overflow_y_scroll()
             .p(px(4.))
             .rounded(px(radius()))
             .border_1()

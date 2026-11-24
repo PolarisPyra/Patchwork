@@ -177,7 +177,17 @@ impl Workspace {
                 cx.notify();
                 true
             }
-            Place::Chat(id) => self.show_chat(id, cx),
+            Place::Chat(id) => {
+                // The open chat's tab, or else the one left to start a new chat, shows it.
+                let left = self.left_tab.take();
+                let beside = self.chat.as_ref().map(|c| c.id.clone()).or(left);
+                let new = std::mem::take(&mut self.new_tab);
+                let shown = self.show_chat(id, cx);
+                if shown {
+                    self.keep_tab(beside.as_deref(), new);
+                }
+                shown
+            }
             Place::Agent(id) => self.show_agent(id, cx),
             Place::Quilts(open) => self.show_quilts(open.as_ref(), cx),
             Place::Peek(id) => {
@@ -549,6 +559,8 @@ impl Workspace {
                         log::warn!(error:% = e; "could not set the chat's agent: {{error}}");
                     }
                     self.chat = Some(chat);
+                    let left = self.left_tab.take();
+                    self.keep_tab(left.as_deref(), false);
                     id
                 }
                 Err(e) => {
@@ -646,7 +658,7 @@ impl Workspace {
     /// Closes the open chat, and points Source Control back at the project's folder when it
     /// showed the chat's worktree.
     pub(crate) fn close_chat(&mut self, cx: &mut Context<Self>) {
-        self.chat = None;
+        self.left_tab = self.chat.take().map(|c| c.id);
         let folder = self.project().map(|p| p.path.clone());
         if self.git_root.is_some() && self.git_root != folder {
             self.read_git(false, cx);
