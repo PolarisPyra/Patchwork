@@ -9,6 +9,7 @@
 mod files;
 mod manage;
 mod media;
+mod pdf;
 mod types;
 pub mod watch;
 
@@ -19,6 +20,7 @@ pub(crate) use files::make_project;
 pub use manage::folder_found;
 #[doc(inline)]
 pub use media::{FileMedia, PreviewKind, file_media};
+pub use pdf::pdf_pages;
 pub(crate) use types::ProjectWatch;
 #[doc(inline)]
 pub use types::{Folder, Project, ProjectChanged};
