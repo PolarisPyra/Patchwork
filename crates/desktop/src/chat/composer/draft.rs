@@ -147,16 +147,7 @@ impl Composer {
         cx.observe(&editor, |_, _, cx| cx.notify()).detach();
         // Each agent's list arrives on its own, so a slow CLI holds up only its own label.
         for kind in patchwork_ui::AGENT_KINDS {
-            let task =
-                cx.background_spawn(async move { patchwork_core::provider::list_models(kind) });
-            cx.spawn(async move |this, cx| {
-                let models = task.await;
-                this.update(cx, |this, cx| {
-                    this.models.insert(kind, models);
-                    cx.notify();
-                })
-            })
-            .detach();
+            load_models(kind, cx);
         }
         Self {
             workspace,
@@ -195,6 +186,18 @@ impl Composer {
 
     pub fn models_of(&self, kind: AgentKind) -> Option<&[ModelOption]> {
         self.models.get(&kind).map(Vec::as_slice)
+    }
+
+    /// Asks again for the models of each of `agents` that offered only its CLI default.
+    ///
+    /// A CLI installed after the composer was made, as during onboarding, listed nothing but
+    /// "Default" when the composer first asked.
+    pub(super) fn reload_bare_models(&self, agents: &[AgentKind], cx: &mut Context<Self>) {
+        for &kind in agents {
+            if self.models_of(kind).is_none_or(|models| models.len() <= 1) {
+                load_models(kind, cx);
+            }
+        }
     }
 
     pub(super) fn picks(&self, w: &Workspace) -> Picks {
@@ -298,4 +301,17 @@ pub(super) fn offered(w: &Workspace, agent: AgentKind) -> Vec<AgentKind> {
         agents.push(agent);
     }
     ordered(&agents)
+}
+
+/// Lists `kind`'s models off the UI thread and keeps them when they arrive.
+fn load_models(kind: AgentKind, cx: &mut Context<Composer>) {
+    let task = cx.background_spawn(async move { patchwork_core::provider::list_models(kind) });
+    cx.spawn(async move |this, cx| {
+        let models = task.await;
+        this.update(cx, |this, cx| {
+            this.models.insert(kind, models);
+            cx.notify();
+        })
+    })
+    .detach();
 }

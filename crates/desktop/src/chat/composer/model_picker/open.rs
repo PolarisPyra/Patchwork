@@ -71,6 +71,7 @@ impl Composer {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.reload_bare_models(agents, cx);
         let favorites = self.favorites.clone();
         let has_favorite = agents.iter().any(|&kind| {
             self.models_of(kind)
