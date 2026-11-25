@@ -325,7 +325,7 @@ pub fn section(
         return div()
             .id("graph-error")
             .role(Role::Alert)
-            .px(px(12.))
+            .px(px(8.))
             .text_size(px(fs_md()))
             .text_color(t.danger)
             .child(e.clone())
@@ -334,7 +334,7 @@ pub fn section(
     let rows = layout(&view.commits, t);
     if rows.is_empty() {
         return div()
-            .px(px(12.))
+            .px(px(8.))
             .text_size(px(fs_md()))
             .text_color(t.text_muted)
             .child("No commits")
@@ -566,7 +566,7 @@ pub fn section(
     }
     if view.more {
         list = list.child(
-            div().h(px(ROW)).flex().items_center().px(px(12.)).child(
+            div().h(px(ROW)).flex().items_center().px(px(8.)).child(
                 button("load-more", "Load more")
                     .text_size(px(fs_md()))
                     .text_color(t.accent_text)
@@ -578,7 +578,7 @@ pub fn section(
     }
     let error: Option<Div> = view.undo_error.clone().map(|e| {
         div()
-            .px(px(12.))
+            .px(px(8.))
             .pb(px(4.))
             .text_size(px(fs_sm()))
             .text_color(t.danger)

@@ -144,7 +144,7 @@ fn env_editor(
     div()
         .border_b_1()
         .border_color(t.border)
-        .py(px(10.))
+        .py(px(patchwork_ui::theme::roomy(10.)))
         .child(
             div()
                 .flex()
@@ -424,7 +424,6 @@ pub fn render(
     div()
         .flex()
         .flex_col()
-        .child(section_heading("Shell", true, &t))
         .child(cwd)
         .child(term_switch(
             "Inherit environment",

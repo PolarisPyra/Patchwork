@@ -262,7 +262,7 @@ pub fn render(
             .gap(px(12.))
             .border_b_1()
             .border_color(t.border)
-            .py(px(10.))
+            .py(px(patchwork_ui::theme::roomy(10.)))
             .child(
                 div()
                     .flex_none()

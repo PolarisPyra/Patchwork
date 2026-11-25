@@ -20,7 +20,7 @@ use super::look::{accent_row, schedule_rows};
 use super::reading::code_theme_cards;
 use crate::settings::{SettingsDialog, SettingsEvent};
 use patchwork_ui::backdrop::PreviewFlight;
-use crate::settings::controls::{FieldKind, alert, section_heading, switch, token_row};
+use crate::settings::controls::{FieldKind, alert, switch, token_row};
 use patchwork_ui::background_picker::BackgroundPicker;
 use patchwork_ui::theme::{fs_sm, theme};
 use patchwork_ui::{BtnKind, btn, icon_button, spinner};
@@ -417,7 +417,6 @@ pub fn render(
     );
     let generate_with = generator_row(d, &t, cx);
     pane(d, cx)
-        .child(section_heading("Color scheme", true, &t))
         .child(follow)
         .children(schedule)
         .children(schemes)

@@ -73,7 +73,7 @@ pub fn menu_item(
         .min_w(px(160.))
         .rounded(px(radius_sm()))
         .px(px(8.))
-        .py(px(5.))
+        .h(px(crate::theme::roomy(26.)))
         .whitespace_nowrap()
         .text_color(t.text)
         .when(checked, |row| row.bg(t.bg_selected_muted))

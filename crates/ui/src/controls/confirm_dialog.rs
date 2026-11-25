@@ -79,7 +79,7 @@ impl Render for Confirm {
             .gap(px(8.))
             .border_t_1()
             .border_color(t.border)
-            .px(px(16.))
+            .px(px(20.))
             .py(px(8.));
         for &ix in &self.order {
             let action = &self.actions[ix];
@@ -175,8 +175,7 @@ impl Render for Confirm {
                             .flex()
                             .flex_col()
                             .px(px(20.))
-                            .pt(px(12.))
-                            .pb(px(10.))
+                            .py(px(16.))
                             .line_height(gpui::relative(1.25))
                             .child(
                                 div()

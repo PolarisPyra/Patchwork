@@ -277,7 +277,7 @@ pub(crate) fn orchestrator_background_pane(
     let slot = d.backdrop_slot(cx);
     let windows = slot.map(|scheme| {
         div()
-            .pb(px(8.))
+            .pt(px(12.))
             .text_size(px(fs_sm()))
             .text_color(t.text_muted)
             .child(match scheme {

@@ -256,6 +256,7 @@ pub fn render(
         .flex()
         .items_center()
         .gap(px(12.))
+        .pt(px(12.))
         .child(
             icon_button("mcp-back", "Back", "caret-left", 16., cx)
                 .tooltip(patchwork_ui::tooltip("Back"))

@@ -15,7 +15,7 @@ use patchwork_ui::theme::{fs_md, fs_sm, radius, Theme, theme};
 use patchwork_ui::{BtnKind, agent_label, agent_logo, btn, button, icon, icon_button};
 
 /// The height of every select on the card.
-const SELECT_HEIGHT: f32 = 32.;
+const SELECT_HEIGHT: f32 = 28.;
 
 /// What a select shows.
 struct Field {
@@ -50,7 +50,7 @@ fn select(
         .w_full()
         .h(px(SELECT_HEIGHT))
         .gap(px(8.))
-        .px(px(10.))
+        .px(px(8.))
         .rounded(px(radius()))
         .border_1()
         .border_color(if open { t.accent } else { t.border_strong })
@@ -138,7 +138,7 @@ impl GranularDialog {
                 .items_center()
                 .h(px(SELECT_HEIGHT))
                 .gap(px(8.))
-                .px(px(10.))
+                .px(px(8.))
                 .rounded(px(radius()))
                 .bg(t.bg_hover)
                 .text_size(px(fs_md()))
@@ -283,7 +283,7 @@ impl Render for GranularDialog {
             }))
             .flex()
             .flex_col()
-            .gap(px(14.))
+            .gap(px(12.))
             .w(px(640.))
             .max_w(viewport.width - px(48.))
             .p(px(16.))

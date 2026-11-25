@@ -162,7 +162,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 d.child(
                     div()
                         .pb(px(12.))
-                        .pl(px(18.))
+                        .pl(px(24.))
                         .flex()
                         .flex_col()
                         .items_start()
@@ -234,7 +234,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 .gap(px(12.))
                 .border_b_1()
                 .border_color(t.border)
-                .py(px(10.))
+                .py(px(patchwork_ui::theme::roomy(10.)))
                 .child(
                     div()
                         .min_w_0()

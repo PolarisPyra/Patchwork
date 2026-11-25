@@ -388,7 +388,7 @@ impl Composer {
                             .child(
                                 div()
                                     .mx(px(12.))
-                                    .mt(px(9.))
+                                    .mt(px(8.))
                                     .h(px(34.))
                                     .flex_none()
                                     .flex()
@@ -413,7 +413,8 @@ impl Composer {
                             .child(
                                 div()
                                     .px(px(12.))
-                                    .pt(px(8.))
+                                    .pt(px(12.))
+                                    .pb(px(6.))
                                     .text_size(px(fs_sm()))
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(t.text_subtle)

@@ -41,7 +41,7 @@ pub(super) fn hero(report: &CostReport, by_cost: bool, t: &Theme) -> Div {
             )))
             .flex()
             .flex_col()
-            .gap(px(5.))
+            .gap(px(4.))
             .child(
                 div()
                     .flex()
@@ -82,7 +82,7 @@ pub(super) fn hero(report: &CostReport, by_cost: bool, t: &Theme) -> Div {
     div()
         .flex()
         .flex_col()
-        .gap(px(14.))
+        .gap(px(12.))
         .w(px(220.))
         .flex_none()
         .child(

@@ -472,7 +472,7 @@ impl Markdown<'_> {
                     .border_color(t.border)
                     .py(px(2.))
                     .pr(px(4.))
-                    .pl(px(10.))
+                    .pl(px(12.))
                     .text_size(px(fs_xs()))
                     .text_color(t.text_subtle)
                     .child(div().min_w_0().truncate().child(if lang.is_empty() {

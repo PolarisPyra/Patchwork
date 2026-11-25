@@ -460,7 +460,6 @@ pub fn queued_strip(
             .id("queued")
             .role(Role::Region)
             .aria_label("Queued messages")
-            .mx(px(8.))
             .mb(px(6.))
             .overflow_hidden()
             .rounded(px(radius_sm()))

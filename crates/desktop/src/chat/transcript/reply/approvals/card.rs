@@ -55,7 +55,7 @@ pub fn approvals(
     div()
         .flex()
         .flex_col()
-        .gap(px(6.))
+        .gap(px(10.))
         .pb(px(8.))
         .children(groups.into_iter().map(|(a, count)| {
             if a.secret.is_some() {
@@ -98,7 +98,7 @@ pub(in crate::chat) fn approval(
             .border_color(t.border_strong)
             .bg(t.bg_panel)
             .px(px(12.))
-            .py(px(10.))
+            .py(px(8.))
             .text_size(px(fs_sm()))
     };
     if !a.questions.is_empty() {

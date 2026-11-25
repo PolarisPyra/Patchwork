@@ -232,9 +232,9 @@ impl ChangesView {
             .h(px(22.))
             .flex()
             .items_center()
-            .gap(px(4.))
+            .gap(px(6.))
             .rounded(px(radius_sm()))
-            .pr(px(4.))
+            .pr(px(6.))
             .pl(px(20.))
             .hover(move |s| s.bg(hover))
             .child(

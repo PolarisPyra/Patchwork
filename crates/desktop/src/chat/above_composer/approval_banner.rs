@@ -238,7 +238,7 @@ impl Workspace {
                     div()
                         .flex()
                         .justify_end()
-                        .gap(px(6.))
+                        .gap(px(8.))
                         .child(deny)
                         .child(div().flex().child(allow).children(more)),
                 ),

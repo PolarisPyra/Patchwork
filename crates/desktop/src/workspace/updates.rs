@@ -150,7 +150,9 @@ impl Workspace {
                     .border_1()
                     .border_color(t.border_strong)
                     .bg(t.bg_elevated)
-                    .p(px(10.))
+                    .pl(px(12.))
+                    .pr(px(8.))
+                    .py(px(8.))
                     .shadow(popup_shadow(t))
                     .child(
                         div()

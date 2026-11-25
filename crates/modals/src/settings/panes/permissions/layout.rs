@@ -79,7 +79,7 @@ pub fn render(
         .gap(px(8.))
         .border_b_1()
         .border_color(t.border)
-        .mt(px(8.))
+        .pt(px(12.))
         .pb(px(10.))
         // The chip's own padding is pulled out past the edge, so its text lines up with the
         // separator and the rows below.

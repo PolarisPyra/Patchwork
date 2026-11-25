@@ -161,7 +161,7 @@ pub fn render(
                 .mb(px(12.))
                 .border_b_1()
                 .border_color(t.border)
-                .pt(px(4.))
+                .pt(px(12.))
                 .pb(px(12.))
                 .child(segmented(
                     "extensions-tab",

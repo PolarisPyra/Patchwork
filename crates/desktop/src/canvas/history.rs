@@ -194,7 +194,7 @@ impl Canvas {
                 .items_center()
                 .gap(px(8.))
                 .py(px(6.))
-                .px(px(16.))
+                .px(px(20.))
                 .border_b_1()
                 .border_color(t.border)
                 .bg(t.bg_panel)

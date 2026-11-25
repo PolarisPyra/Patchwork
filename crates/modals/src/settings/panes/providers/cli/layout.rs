@@ -66,7 +66,9 @@ pub fn render(
     let busy = details.busy;
     let back = |d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>| d.close_details(cx);
     let logo = agent_logo(kind, None, 24.);
-    let header = detail_header("details", logo, agent_label(kind), back, cx).pb(px(16.));
+    let header = detail_header("details", logo, agent_label(kind), back, cx)
+        .pt(px(12.))
+        .pb(px(16.));
     let read_again = |id: &'static str| {
         btn(id, "Read again", BtnKind::Plain, busy, &t)
             .child("Read again")
@@ -166,7 +168,7 @@ pub fn render(
         .flex_wrap()
         .items_center()
         .gap(px(6.))
-        .pb(px(8.))
+        .pb(px(12.))
         .children(spec.filter.map(|label| {
             patchwork_ui::button("details-filter", label)
                 .aria_toggled(filtered.into())

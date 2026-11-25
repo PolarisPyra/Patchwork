@@ -92,7 +92,6 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     div()
         .flex()
         .flex_col()
-        .child(section_heading("Tasks", true, &t))
         .child(use_row)
         .child(projects)
         .child(section_heading("Forks", false, &t))

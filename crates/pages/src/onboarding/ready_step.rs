@@ -184,7 +184,7 @@ fn runs_on(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) -> impl I
         .mt(px(8.))
         .flex()
         .flex_col()
-        .gap(px(8.))
+        .gap(px(16.))
         .child(heading("Where tasks run"))
         .child(
             div()

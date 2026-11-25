@@ -443,6 +443,8 @@ pub fn render(
         .flex_1()
         .min_h_0()
         .gap(px(10.))
+        // Other panes start with a row that brings its own space above it; the search does not.
+        .pt(px(12.))
         .child(
             div()
                 .flex()
@@ -598,11 +600,11 @@ fn chips(
             .cursor_pointer()
             .flex()
             .flex_none()
-            .h(px(24.))
+            .h(px(28.))
             .items_center()
-            .gap(px(5.))
+            .gap(px(6.))
             .rounded_full()
-            .px(px(9.))
+            .px(px(10.))
             .text_size(px(fs_sm()))
             .border_1()
             .map(|d| {
@@ -648,7 +650,7 @@ fn chips(
         .flex()
         .flex_none()
         .items_center()
-        .gap(px(4.))
+        .gap(px(6.))
         .overflow_x_scroll()
         .pb(px(2.))
         .children(pages)
@@ -692,13 +694,7 @@ fn directory(
         _ => "No shortcuts match.",
     };
     if empty {
-        out.push(
-            div()
-                .py(px(16.))
-                .text_color(t.text_muted)
-                .child(message)
-                .into_any_element(),
-        );
+        out.push(crate::settings::controls::empty(message, t).into_any_element());
     }
     out
 }

@@ -55,6 +55,8 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .justify_end()
         // The rows' gap between their switches, so each label sits over its column.
         .gap(px(12.))
+        // The pane starts here, without a row's own space above it.
+        .pt(px(12.))
         .pb(px(4.))
         .border_b_1()
         .border_color(t.border)
@@ -159,7 +161,6 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     div()
         .flex()
         .flex_col()
-        .child(section_heading("Events", true, &t))
         .child(events)
         .child(section_heading("Agent CLIs", false, &t))
         .child(cli_updates)

@@ -435,7 +435,7 @@ impl Render for Palette {
                             .h(px(36.))
                             .items_center()
                             .gap(px(16.))
-                            .px(px(16.))
+                            .px(px(20.))
                             .border_t_1()
                             .border_color(t.border)
                             .text_size(px(fs_xs()))

@@ -189,7 +189,7 @@ impl Workspace {
                     .flex_none()
                     .items_center()
                     .gap(px(8.))
-                    .pl(px(14.))
+                    .pl(px(12.))
                     .pr(px(8.))
                     .py(px(6.))
                     .border_b_1()
