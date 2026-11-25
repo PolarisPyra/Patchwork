@@ -115,7 +115,9 @@ pub enum Parsed {
         tool: String,
         arguments: Value,
     },
-    /// The agent waits for the user; `reply` is what `approval_reply` needs to answer it.
+    /// The agent waits for the user; `reply` is what `approval_reply` needs to answer it. A
+    /// `reply` holding [`antigravity::BY_MESSAGE`](super::antigravity::BY_MESSAGE) is a question
+    /// the agent ended its reply on, answered by the user's next message instead.
     Approval {
         title: String,
         detail: String,

@@ -19,7 +19,7 @@ use crate::orchestration::turn::process::write_line;
 use crate::orchestration::turn::start::{PendingApproval, Turn};
 use crate::orchestration::unasked;
 use crate::permissions;
-use crate::provider::{self, AgentKind, Parsed};
+use crate::provider::{self, AgentKind, Parsed, antigravity};
 use crate::chats::{Approval, ApprovalStatus, Question};
 
 /// A call the access mode runs without asking runs unless a rule refuses it or asks. Returns the
@@ -140,6 +140,23 @@ pub(super) fn request_approval(
     questions: Vec<Question>,
     target: Option<permissions::Target>,
 ) {
+    // A question the agent ended its reply on outlives the reply: no turn holds it, so answering
+    // it sends the answer as the next message (see `answer_in_new_turn`). There is nothing to
+    // write back to the agent, so a Stop leaves it unasked.
+    if reply.get(antigravity::BY_MESSAGE).is_some() {
+        if !turn.cancelled.load(Ordering::SeqCst) {
+            turn.save_text(unsaved);
+            turn.publish(AgentEvent::ApprovalRequested {
+                message_id: turn.message_id.clone(),
+                approval: Approval {
+                    questions,
+                    by_message: true,
+                    ..Approval::pending(title, detail)
+                },
+            });
+        }
+        return;
+    }
     if turn.cancelled.load(Ordering::SeqCst) {
         let mut cancel_reply = reply;
         cancel_reply["cancel"] = Value::Bool(true);

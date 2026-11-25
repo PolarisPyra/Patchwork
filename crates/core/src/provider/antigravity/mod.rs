@@ -39,6 +39,8 @@ pub use login::{LoginSession, sign_out, start_login};
 #[doc(inline)]
 pub use dispatch::{background_task, is_work, parse};
 #[doc(inline)]
+pub use questions::BY_MESSAGE;
+#[doc(inline)]
 pub use session_updates::CONTEXT_REQUEST;
 #[doc(inline)]
 pub use swarm::{SWARM_POLL, SWARM_TASK_PREFIX, Swarm};
