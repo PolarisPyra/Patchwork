@@ -249,7 +249,9 @@ impl Render for Onboarding {
             );
 
         let step = self.step;
-        let continue_label = if is_last {
+        let continue_label = if is_last && self.restarts() {
+            "Restart and start a task"
+        } else if is_last {
             "Start your first task"
         } else {
             "Continue"
