@@ -97,7 +97,7 @@ impl Orchestrator {
             .mt(px(6.))
             .px(px(12.))
             .flex()
-            .gap(px(2.))
+            .gap(px(6.))
             .child(
                 div()
                     .relative()

@@ -110,10 +110,10 @@ impl SettingsDialog {
         div()
             .flex()
             .flex_col()
-            .gap(px(6.))
+            .gap(px(8.))
             .border_b_1()
             .border_color(t.border)
-            .py(px(8.))
+            .py(px(10.))
             .child(body)
             .children(error.map(|e| alert("repair-error", e, t.danger).pt(px(0.))))
     }
@@ -177,7 +177,7 @@ impl SettingsDialog {
             .gap(px(12.))
             .border_b_1()
             .border_color(t.border)
-            .py(px(10.))
+            .py(px(patchwork_ui::theme::roomy(10.)))
             .child(provider_logo(&p.preset, p.logo.as_deref(), 20.))
             .child(provider_title(view, "local-", line, &t, cx))
             .child(status_badge(

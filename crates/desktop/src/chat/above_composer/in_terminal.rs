@@ -88,7 +88,6 @@ pub fn in_terminal(w: &Workspace, t: &Theme, cx: &mut Context<Workspace>) -> Opt
     };
     Some(
         div()
-            .mx(px(8.))
             .mb(px(6.))
             .overflow_hidden()
             .rounded(px(radius_sm()))

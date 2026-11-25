@@ -153,7 +153,7 @@ impl Render for CredentialDialog {
             .flex_col()
             .gap(px(12.))
             .w(px(WIDTH))
-            .p(px(14.))
+            .p(px(16.))
             .text_size(px(fs_md()))
             .child(dialog::title_row(
                 title,
@@ -185,7 +185,7 @@ impl Render for CredentialDialog {
                 div()
                     .flex()
                     .justify_end()
-                    .gap(px(6.))
+                    .gap(px(8.))
                     .child(decline)
                     .child(accept),
             );

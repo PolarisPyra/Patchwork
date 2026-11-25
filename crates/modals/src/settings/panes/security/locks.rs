@@ -160,7 +160,7 @@ fn actions(
         .items_center()
         .justify_end()
         .gap(px(8.))
-        .pt(px(10.))
+        .pt(px(12.))
         .children(working)
         .children(done)
         .children(others)

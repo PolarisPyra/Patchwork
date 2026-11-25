@@ -333,7 +333,7 @@ impl Workspace {
             .border_t_1()
             .border_color(t.border)
             .bg(t.bg_app)
-            .px(px(10.))
+            .px(px(8.))
             .text_size(px(fs_xs()))
             .line_height(px(16.))
             .text_color(t.text_muted)

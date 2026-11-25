@@ -108,7 +108,7 @@ impl SettingsDialog {
                 .gap(px(12.))
                 .border_b_1()
                 .border_color(t.border)
-                .py(px(10.))
+                .py(px(patchwork_ui::theme::roomy(10.)))
                 .child(agent_logo(kind, None, 20.))
                 .child(
                     div()
@@ -406,7 +406,7 @@ impl SettingsDialog {
             .gap(px(12.))
             .border_b_1()
             .border_color(t.border)
-            .py(px(10.))
+            .py(px(patchwork_ui::theme::roomy(10.)))
             .child(provider_logo(&p.preset, p.logo.as_deref(), 20.))
             .child(provider_title(view, "", form::describe(view), &t, cx))
             .children(provider_actions(view, "", prompting, &t, cx));

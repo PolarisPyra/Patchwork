@@ -13,7 +13,7 @@ use patchwork_core::chats::Chat;
 
 use super::tasks::row_menu::Target;
 use super::{empty_row, twistie};
-use super::tasks::chat_row::{indent_guide, tree_row};
+use super::tasks::chat_row::{TREE_GUTTER, indent_guide, tree_row};
 use patchwork_ui::controls::avatar::{Mood, avatar};
 use patchwork_ui::theme::{fs_md, fs_sm, radius_sm, theme};
 use patchwork_ui::{agent_label, agent_logo, button, display_title, icon, scrollbar};
@@ -203,6 +203,8 @@ pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl Int
         .gap(px(1.))
         .size_full()
         .p(px(8.))
+        // Rows end where the Tasks tree's do.
+        .pr(px(8. + TREE_GUTTER))
         .when(empty, |s| {
             s.child(empty_row("Nothing archived", &t).mt(px(-10.)).px(px(4.)))
         })
@@ -332,6 +334,7 @@ fn agents_group(w: &Workspace, agents: &[&Agent], cx: &mut Context<Workspace>) -
             .mr(px(4.))
             .pl(px(8.))
             .pr(px(8.))
+            .mb(px(2.))
             .rounded(px(radius_sm()))
             .text_color(t.text)
             .hover(move |s| s.bg(row_hover))
@@ -416,6 +419,7 @@ fn archived_row(
         .mr(px(4.))
         .pl(px(8.))
         .pr(px(8.))
+        .mb(px(2.))
         .rounded(px(radius_sm()))
         .cursor_pointer()
         .text_color(t.text)

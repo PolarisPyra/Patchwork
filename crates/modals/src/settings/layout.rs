@@ -8,7 +8,7 @@ use gpui::{
     div, prelude::*, px,
 };
 use patchwork_ui::controls::menu::Menu;
-use patchwork_ui::theme::{fs_lg, fs_sm, fs_xs, theme};
+use patchwork_ui::theme::{fs_lg, fs_xs, theme};
 use patchwork_ui::{icon_button, overflows, scrollbar};
 use super::dialog::{SettingsDialog, SettingsEvent, entry_of};
 use super::panes::chat;
@@ -84,15 +84,15 @@ impl Render for SettingsDialog {
             .nav_focus
             .get_or_insert_with(|| cx.focus_handle())
             .clone();
-        let (trail, open, about) =
-            entry_of(self.section).map_or((String::new(), "General", ""), |(_, entry, pane)| {
+        let (trail, open) =
+            entry_of(self.section).map_or((String::new(), "General"), |(_, entry, pane)| {
                 // A pane of its own entry is named once; one of several is named under its entry.
                 let trail = if entry.panes.len() > 1 {
                     format!("{} › {}", entry.group, entry.label)
                 } else {
                     entry.group.to_owned()
                 };
-                (trail, pane.label, pane.desc)
+                (trail, pane.label)
             });
         let overflows = overflows(&self.scroll, window, cx);
         let nav = self.nav(window, cx);
@@ -166,8 +166,10 @@ impl Render for SettingsDialog {
                                     .items_start()
                                     .justify_between()
                                     .gap(px(16.))
-                                    .pt(px(12.))
-                                    // A pane's first row brings its own 10px above it.
+                                    // 20px above, as at the sides. A pane's first row brings
+                                    // its own 10px above it, so the title sits midway between
+                                    // the breadcrumb and that row.
+                                    .pt(px(20.))
                                     .pb(px(2.))
                                     .pr(px(16.))
                                     .pl(px(20.))
@@ -177,7 +179,7 @@ impl Render for SettingsDialog {
                                             .flex_col()
                                             .flex_1()
                                             .min_w_0()
-                                            .gap(px(2.))
+                                            .gap(px(12.))
                                             .child(
                                                 div()
                                                     .text_size(px(fs_xs()))
@@ -191,15 +193,7 @@ impl Render for SettingsDialog {
                                                     .text_size(px(fs_lg()))
                                                     .font_weight(FontWeight::SEMIBOLD)
                                                     .child(open),
-                                            )
-                                            .when(!about.is_empty(), |d| {
-                                                d.child(
-                                                    div()
-                                                        .text_size(px(fs_sm()))
-                                                        .text_color(t.text_muted)
-                                                        .child(about),
-                                                )
-                                            }),
+                                            ),
                                     )
                                     .child(
                                         icon_button("settings-close", "Close", "x", 16., cx)

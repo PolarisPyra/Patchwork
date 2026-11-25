@@ -53,8 +53,6 @@ pub enum SettingsEvent {
 pub(super) struct Pane {
     pub(super) id: &'static str,
     pub(super) label: &'static str,
-    /// What the pane holds, in a line under its title.
-    pub(super) desc: &'static str,
     pub(super) icon: &'static str,
 }
 
@@ -77,25 +75,21 @@ pub(super) const ENTRIES: &[Entry] = &[
             Pane {
                 id: "chat",
                 label: "Chat",
-                desc: "How replies show, where tasks open, and what agents may do on their own.",
                 icon: "chat-circle",
             },
             Pane {
                 id: "logs",
                 label: "Logs",
-                desc: "Where the app writes its logs, and opening them.",
                 icon: "file-text",
             },
             Pane {
                 id: "notifications",
                 label: "Notifications",
-                desc: "What tells you when an agent needs you or is done.",
                 icon: "bell",
             },
             Pane {
                 id: "updates",
                 label: "Updates",
-                desc: "How often to look for a new version, and installing it.",
                 icon: "arrow-circle-up",
             },
         ],
@@ -108,37 +102,31 @@ pub(super) const ENTRIES: &[Entry] = &[
             Pane {
                 id: "interface",
                 label: "Interface",
-                desc: "The font, the app icon, and the backgrounds views share.",
                 icon: "desktop",
             },
             Pane {
                 id: "orchestrator-background",
                 label: "Orchestrator theme",
-                desc: "How the Orchestrator page looks.",
                 icon: "butterfly",
             },
             Pane {
                 id: "chat-background",
                 label: "Chat theme",
-                desc: "How the chat looks behind the transcript.",
                 icon: "chat-circle",
             },
             Pane {
                 id: "quilts-background",
                 label: "Quilts theme",
-                desc: "How the Quilts page looks.",
                 icon: "code-block",
             },
             Pane {
                 id: "code-theme",
                 label: "Syntax theme",
-                desc: "The colors of code in chats and files.",
                 icon: "code",
             },
             Pane {
                 id: "themes",
                 label: "Window theme",
-                desc: "The window's colors, accent, text size and motion.",
                 icon: "palette",
             },
         ],
@@ -150,7 +138,6 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[Pane {
             id: "shortcuts",
             label: "Shortcuts",
-            desc: "Every command a key runs, and the keys that run it.",
             icon: "keyboard",
         }],
     },
@@ -162,13 +149,11 @@ pub(super) const ENTRIES: &[Entry] = &[
             Pane {
                 id: "providers",
                 label: "Providers",
-                desc: "The models agents run on, and the default for new tasks.",
                 icon: "sparkle",
             },
             Pane {
                 id: "tokens",
                 label: "Usage",
-                desc: "Token use, limits, and what writes chat titles.",
                 icon: "chart-bar",
             },
         ],
@@ -180,7 +165,6 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[Pane {
             id: "costs",
             label: "Costs",
-            desc: "What agents have spent, by day, provider, model and project.",
             icon: "gauge",
         }],
     },
@@ -192,13 +176,11 @@ pub(super) const ENTRIES: &[Entry] = &[
             Pane {
                 id: "extensions",
                 label: "Extensions",
-                desc: "The agents, skills and hooks agents can use.",
                 icon: "puzzle-piece",
             },
             Pane {
                 id: "mcp",
                 label: "MCP Servers",
-                desc: "MCP servers that give agents more tools.",
                 icon: "plugs-connected",
             },
         ],
@@ -210,7 +192,6 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[Pane {
             id: "permissions",
             label: "Permissions",
-            desc: "What agents may do on this machine without asking.",
             icon: "shield-check",
         }],
     },
@@ -221,7 +202,6 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[Pane {
             id: "security",
             label: "Vault",
-            desc: "The vault that keeps your secrets, and its password.",
             icon: "fingerprint",
         }],
     },
@@ -233,19 +213,16 @@ pub(super) const ENTRIES: &[Entry] = &[
             Pane {
                 id: "projects",
                 label: "Projects",
-                desc: "Your projects, what they import, and checks after tasks.",
                 icon: "folder-simple",
             },
             Pane {
                 id: "scheduled",
                 label: "Scheduled",
-                desc: "Tasks that run on a schedule.",
                 icon: "clock",
             },
             Pane {
                 id: "worktrees",
                 label: "Worktrees",
-                desc: "Giving tasks their own worktree, and clearing them away.",
                 icon: "folders",
             },
         ],
@@ -257,7 +234,6 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[Pane {
             id: "terminal",
             label: "Terminal",
-            desc: "The shell, its font, cursor and scrolling.",
             icon: "terminal-window",
         }],
     },
@@ -268,7 +244,6 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[Pane {
             id: "ssh",
             label: "Devices",
-            desc: "Machines agents and terminals reach over SSH.",
             icon: "devices",
         }],
     },
@@ -279,7 +254,6 @@ pub(super) const ENTRIES: &[Entry] = &[
         panes: &[Pane {
             id: "gateway",
             label: "Gateway",
-            desc: "Reaching your agents from chat apps.",
             icon: "chats",
         }],
     },

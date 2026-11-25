@@ -180,7 +180,7 @@ fn credential_actions(
         .items_center()
         .justify_end()
         .gap(px(8.))
-        .pt(px(6.))
+        .pt(px(12.))
         .children(done)
         .child(
             btn(
@@ -227,7 +227,10 @@ pub(super) fn page(
     let back = |d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>| {
         d.close_gateway(cx);
     };
-    let header = detail_header("gw", platform_logo(each, 24.), label, back, cx).pb(px(8.));
+    let header = detail_header("gw", platform_logo(each, 24.), label, back, cx)
+        .pt(px(12.))
+        // 16 above the first step, with the 12 the steps bring of their own.
+        .pb(px(4.));
     let steps = setup(each, cx);
     let rows = platform(d, each, window, cx);
     let pairing = pairing_row(d, each, cx);

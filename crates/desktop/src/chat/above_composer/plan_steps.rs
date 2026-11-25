@@ -156,7 +156,7 @@ pub fn plan_panel(
                 .aria_expanded(open)
                 .w_full()
                 .min_w_0()
-                .gap(px(6.))
+                .gap(px(8.))
                 .px(px(10.))
                 .py(px(6.))
                 .text_color(t.text_muted)

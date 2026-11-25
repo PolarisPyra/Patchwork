@@ -90,11 +90,7 @@ pub(super) fn pairing_row(
 pub(super) fn paired(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
     let t = *theme(cx);
     if d.gateway.pairings.is_empty() {
-        return div()
-            .py(px(10.))
-            .text_color(t.text_muted)
-            .child("No pairings")
-            .into_any_element();
+        return crate::settings::controls::empty("No pairings", &t).into_any_element();
     }
     let rows = d
         .gateway

@@ -142,7 +142,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     .child(
         switch("checks-default", "Run checks after every task", after_every_task, &t)
             // In line with each project's switch, which has its remove button after it.
-            .when(!d.settings.projects.is_empty(), |s| s.mr(px(36.)))
+            .when(!d.settings.projects.is_empty(), |s| s.mr(px(40.)))
             .on_click(cx.listener(
             move |d, _, _, cx| d.update(|s| s.checks.after_every_task = !after_every_task, cx),
         )),
@@ -169,10 +169,10 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             .aria_label(SharedString::from(p.name.clone()))
             .flex()
             .items_center()
-            .gap(px(8.))
+            .gap(px(12.))
             .border_b_1()
             .border_color(t.border)
-            .py(px(8.))
+            .py(px(patchwork_ui::theme::roomy(10.)))
             .child(
                 div()
                     .min_w_0()
@@ -274,7 +274,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 .gap(px(12.))
                 .border_b_1()
                 .border_color(t.border)
-                .py(px(10.))
+                .py(px(patchwork_ui::theme::roomy(10.)))
                 .child(agent_logo(agent, None, 20.))
                 .child(
                     div()
@@ -328,7 +328,6 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .when(no_projects, |col| {
             col.child(
                 div()
-                    .px(px(12.))
                     .py(px(8.))
                     .text_size(px(fs_sm()))
                     .text_color(t.text_subtle)

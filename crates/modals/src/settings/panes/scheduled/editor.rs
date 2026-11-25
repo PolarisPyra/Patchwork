@@ -452,7 +452,7 @@ pub(super) fn editor(
             .border_1()
             .border_color(t.border_strong)
             .bg(t.bg_panel)
-            .p(px(14.))
+            .p(px(16.))
             .child(labelled("Name", name, &t))
             .child(labelled("Prompt", prompt, &t))
             .child(labelled("Starts", starts_select, &t))

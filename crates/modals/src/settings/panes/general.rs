@@ -139,7 +139,7 @@ pub(in crate::settings) fn app_icon_row(
     anchored(div().id("row-app-icon"), "App icon")
         .border_b_1()
         .border_color(t.border)
-        .py(px(10.))
+        .py(px(patchwork_ui::theme::roomy(10.)))
         .child(div().font_weight(FontWeight::SEMIBOLD).child("App icon"))
         .child(icons)
         .into_any_element()

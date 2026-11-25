@@ -146,7 +146,7 @@ impl Composer {
             body: div()
                 .flex()
                 .items_center()
-                .gap(px(8.))
+                .gap(px(6.))
                 .child(icon(name, 14.))
                 .child(label)
                 .into_any_element(),

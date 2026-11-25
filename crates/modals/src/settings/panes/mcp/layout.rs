@@ -104,24 +104,30 @@ pub fn render(
         window,
         cx,
     );
-    let mut tools = div().flex().items_center().gap(px(6.)).pb(px(12.)).child(
-        chip(
-            "mcp-all",
-            format!("All {}", cards.len()),
-            filter.is_none(),
-            &t,
-        )
-        .child("All")
+    let mut tools = div()
+        .flex()
+        .items_center()
+        .gap(px(6.))
+        .pt(px(12.))
+        .pb(px(12.))
         .child(
-            div()
-                .text_color(t.text_muted)
-                .child(cards.len().to_string()),
-        )
-        .on_click(cx.listener(|d, _, _, cx| {
-            d.mcp.filter = None;
-            cx.notify();
-        })),
-    );
+            chip(
+                "mcp-all",
+                format!("All {}", cards.len()),
+                filter.is_none(),
+                &t,
+            )
+            .child("All")
+            .child(
+                div()
+                    .text_color(t.text_muted)
+                    .child(cards.len().to_string()),
+            )
+            .on_click(cx.listener(|d, _, _, cx| {
+                d.mcp.filter = None;
+                cx.notify();
+            })),
+        );
     for client in CLIENTS {
         let count = cards
             .iter()

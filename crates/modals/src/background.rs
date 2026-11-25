@@ -83,7 +83,7 @@ impl Render for BackgroundDialog {
                 .w(px(482.))
                 .max_w(viewport.width - px(48.))
                 .px(px(10.))
-                .pt(px(14.))
+                .pt(px(16.))
                 .pb(px(10.))
                 .child(
                     dialog::title_row(

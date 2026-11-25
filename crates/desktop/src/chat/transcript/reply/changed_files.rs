@@ -455,7 +455,7 @@ fn change_summary(
                 .flex()
                 .flex_wrap()
                 .items_center()
-                .gap(px(12.))
+                .gap(px(8.))
                 .child(icon("git-diff", 14.).flex_none().text_color(t.text_muted))
                 .child(div().whitespace_nowrap().child(format!(
                     "{} {} changed",

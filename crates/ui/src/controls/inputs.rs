@@ -188,7 +188,7 @@ pub fn dropdown_chip(
         .aria_expanded(open)
         .flex_none()
         .h(px(28.))
-        .gap(px(4.))
+        .gap(px(6.))
         .rounded(px(radius_sm()))
         .px(px(6.))
         .text_size(px(fs_md()))

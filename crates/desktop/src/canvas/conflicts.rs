@@ -74,7 +74,7 @@ impl Canvas {
                 .flex_none()
                 .items_center()
                 .gap(px(4.))
-                .pr(px(16.))
+                .pr(px(12.))
                 .font_family(font_ui())
                 .text_size(px(fs_xs()))
                 .children(
@@ -88,7 +88,7 @@ impl Canvas {
                             )
                             .rounded(px(radius_sm()))
                             .px(px(6.))
-                            .py(px(1.))
+                            .py(px(2.))
                             .text_color(t.text_muted)
                             .tooltip(tooltip(about))
                             .when(busy, |b| b.opacity(0.5).cursor_default())

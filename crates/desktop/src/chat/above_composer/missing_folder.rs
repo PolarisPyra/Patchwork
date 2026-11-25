@@ -112,7 +112,6 @@ pub fn missing_folder(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>)
     let path = w.project()?.path.clone();
     Some(
         div()
-            .mx(px(8.))
             .mb(px(6.))
             .overflow_hidden()
             .rounded(px(radius_sm()))

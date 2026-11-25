@@ -184,7 +184,8 @@ pub fn secret_card(
         .border_1()
         .border_color(t.warning)
         .bg(t.bg_panel)
-        .p(px(10.))
+        .px(px(12.))
+        .py(px(8.))
         .text_size(px(fs_sm()))
         .child(
             div()

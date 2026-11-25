@@ -38,7 +38,7 @@ impl Canvas {
             .items_center()
             .gap(px(12.))
             .flex_none()
-            .py(px(14.))
+            .py(px(12.))
             .px(px(20.))
             .border_b_1()
             .border_color(t.border)

@@ -173,7 +173,7 @@ impl Orchestrator {
             .left_0()
             .bottom(relative(1.))
             .max_w_full()
-            .mb(px(8.))
+            .mb(px(6.))
             .p(px(6.))
             .flex()
             .flex_wrap()

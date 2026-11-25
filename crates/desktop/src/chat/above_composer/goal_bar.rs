@@ -214,7 +214,6 @@ pub fn goal_banner(
             .id("goal")
             .role(Role::Region)
             .aria_label("Goal")
-            .mx(px(8.))
             .mb(px(6.))
             .overflow_hidden()
             .rounded(px(radius_sm()))

@@ -11,7 +11,7 @@ use super::lines::lines;
 use super::rows::{Cell, chat_row, dollars, grouped, kinds, pick_row, provider_row, sources, strip};
 use super::report::CostMetric;
 use crate::settings::SettingsDialog;
-use crate::settings::controls::{list_box, section_heading, segmented};
+use crate::settings::controls::{empty, list_box, section_heading, segmented};
 use patchwork_ui::theme::{fs_sm, radius_lg, radius_sm, theme};
 use patchwork_ui::{agent_label, button, format_tokens, icon, spinner};
 
@@ -95,18 +95,16 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .flex()
         .items_center()
         .gap(px(8.))
-        .pb(px(8.))
+        // The pane starts here, without a row's own space above it.
+        .pt(px(12.))
+        .pb(px(4.))
         .child(metric)
         .child(picker)
         .children(clear)
         .child(div().flex_1())
         .child(export);
     if report.all.replies == 0 {
-        return div()
-            .py(px(10.))
-            .text_color(t.text_muted)
-            .child("No replies with token counts yet")
-            .into_any_element();
+        return empty("No replies with token counts yet", &t).into_any_element();
     }
     let range = &report.in_range;
     let by_cost = d.costs.metric == CostMetric::Cost;
@@ -228,6 +226,8 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             .role(Role::List)
             .aria_label(SharedString::from(label))
     };
+    // 16 above a heading and 8 below it, as in the other panes, with the column's 8 gap.
+    let heading = |text: &'static str| section_heading(text, false, &t).mt(px(8.)).mb(px(0.));
     div()
         .flex()
         .flex_col()
@@ -236,21 +236,23 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .child(overview)
         .child(summary)
         .children(lines(&report, by_cost, &t))
-        .child(section_heading("Tokens", false, &t))
+        .child(heading("Tokens"))
         .child(kinds(range, &t))
         .when(range.subagent_tokens > 0, |d| {
-            d.child(section_heading("By source", false, &t))
-                .child(sources(range, &t))
+            d.child(heading("By source")).child(sources(range, &t))
         })
         .when(!chats.is_empty(), |d| {
-            d.child(section_heading("Most expensive chats", false, &t))
-                .child(list(chats, "costs-chats", "Most expensive chats"))
+            d.child(heading("Most expensive chats")).child(list(
+                chats,
+                "costs-chats",
+                "Most expensive chats",
+            ))
         })
-        .child(section_heading("By provider", false, &t))
+        .child(heading("By provider"))
         .child(list(providers, "costs-providers", "Cost by provider"))
-        .child(section_heading("By model", false, &t))
+        .child(heading("By model"))
         .child(list(models, "costs-models", "Cost by model"))
-        .child(section_heading("By project", false, &t))
+        .child(heading("By project"))
         .child(list(projects, "costs-projects", "Cost by project"))
         .child(
             div()

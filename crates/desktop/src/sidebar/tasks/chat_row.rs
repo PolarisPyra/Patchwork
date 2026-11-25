@@ -23,7 +23,7 @@ use crate::chat::TabGhost;
 use crate::workspace::{Workspace, is_busy};
 
 /// The scrollbar's gutter at the tree's right edge, which its thumb sits in.
-pub(super) const TREE_GUTTER: f32 = 10.;
+pub(in crate::sidebar) const TREE_GUTTER: f32 = 10.;
 
 /// The line from a project's or folder's chevron down through its rows, shown while the tree is
 /// hovered.

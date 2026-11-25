@@ -164,7 +164,7 @@ impl Composer {
                 t.shadow.opacity(0.5),
             )
             .role(Role::Status)
-            .mb(px(8.))
+            .mb(px(6.))
             .flex()
             .flex_wrap()
             .items_center()

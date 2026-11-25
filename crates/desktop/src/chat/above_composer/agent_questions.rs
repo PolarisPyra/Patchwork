@@ -314,7 +314,7 @@ pub fn choice_panel(
         .w_full()
         .gap(px(12.))
         .rounded(px(radius_sm()))
-        .px(px(10.))
+        .px(px(8.))
         .py(px(6.))
         .text_size(px(fs_md()))
         .text_color(t.text)

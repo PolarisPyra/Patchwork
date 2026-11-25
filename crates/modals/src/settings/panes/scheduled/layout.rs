@@ -258,6 +258,8 @@ pub fn render(
                 .flex()
                 .items_center()
                 .gap(px(8.))
+                // The pane starts here, without a row's own space above it.
+                .pt(px(12.))
                 .pb(px(12.))
                 .child(
                     btn("sched-new", "New task", BtnKind::Plain, false, &t)
