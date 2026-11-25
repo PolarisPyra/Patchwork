@@ -138,7 +138,17 @@ impl Core {
         let store = Store::open(&dirs.data)?;
         settings::follow(&store.settings());
         logging::start(&logs, &store.settings().logging);
-        logging::system::record(&logs);
+        let (mcp_servers, mcp_on, mcp_shared) = provider::mcp::counts(&dirs.config);
+        logging::system::record(
+            &logs,
+            logging::system::Extensions {
+                agents: agents.list().len(),
+                hooks: extensions::hooks::agent_hooks(&store.settings()).len(),
+                mcp_servers,
+                mcp_on,
+                mcp_shared,
+            },
+        );
         vault::open(
             &dirs.data,
             &dirs.config,

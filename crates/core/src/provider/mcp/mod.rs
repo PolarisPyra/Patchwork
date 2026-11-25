@@ -21,7 +21,7 @@ mod relay;
 #[doc(inline)]
 pub use config::{
     McpServer, ServerView, ToolInfo, TurnTool, init, dir, list, save, remove, restart,
-    shared_servers, identity, same_server,
+    shared_servers, identity, same_server, counts,
 };
 use config::{
     CALL_TIMEOUT, MAX_NAME, MAX_TOOLS, POLL, PROTOCOL, REQUEST_TIMEOUT, RETRY_AFTER, START_TIMEOUT,

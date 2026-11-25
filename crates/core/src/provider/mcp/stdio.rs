@@ -42,9 +42,9 @@ impl StdioServer {
         // Its own process group, so stopping it also stops what it started (npx's node).
         #[cfg(unix)]
         std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
-        let mut child = cmd
-            .spawn()
-            .map_err(|e| format!("Could not start {command}: {e}"))?;
+        let mut child =
+            crate::provider::command_size::spawn(&mut cmd, &format!("the MCP server {command}"))
+                .map_err(|e| format!("Could not start {command}: {e}"))?;
         let mut pipe = child.stdin.take().ok_or("No stdin")?;
         let (stdin, lines) = mpsc::channel::<String>();
         std::thread::spawn(move || {

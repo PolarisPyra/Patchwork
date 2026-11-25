@@ -139,8 +139,22 @@ fn file(name: &str) -> PathBuf {
 /// Each `.json` file in `mcp/`, by its name without `.json`; a file that is not valid JSON is
 /// left out.
 pub(super) fn read_config() -> Config {
+    read_config_in(&dir())
+}
+
+/// How many servers `config_dir` configures, how many of them are on, and how many of those are
+/// shared, for the launch's system report; it reads before [`init`] sets the folder.
+#[must_use]
+pub fn counts(config_dir: &Path) -> (usize, usize, usize) {
+    let servers = read_config_in(&config_dir.join(CONFIG_DIR)).mcp_servers;
+    let on: Vec<_> = servers.values().filter(|s| !s.disabled).collect();
+    let shared = on.iter().filter(|s| s.share).count();
+    (servers.len(), on.len(), shared)
+}
+
+fn read_config_in(folder: &Path) -> Config {
     let mut mcp_servers = BTreeMap::new();
-    for entry in std::fs::read_dir(dir()).into_iter().flatten().flatten() {
+    for entry in std::fs::read_dir(folder).into_iter().flatten().flatten() {
         let path = entry.path();
         let Some(name) = path
             .file_name()

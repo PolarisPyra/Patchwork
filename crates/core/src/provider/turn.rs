@@ -277,7 +277,6 @@ pub fn turn_args(agent: AgentKind, spec: &TurnSpec) -> Vec<String> {
             codex::turn_args(),
             crate::provider::mcp::overrides::overrides(agent, spec.root, spec.chat_id),
             crate::provider::hooks::codex_args(spec),
-            codex::agents_args(spec),
             codex::compact_args(spec),
         ]
         .concat(),

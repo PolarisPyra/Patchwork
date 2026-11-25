@@ -45,16 +45,21 @@ pub fn compact_args(spec: &TurnSpec) -> Vec<String> {
     ]
 }
 
-/// `-c` overrides that give Codex the custom agents as roles its `spawn_agent` starts by name.
-/// A role's instructions and model live in a file of their own, which the role points to.
-#[must_use]
-pub fn agents_args(spec: &TurnSpec) -> Vec<String> {
+/// The custom agents as the `agents` table of a chat's config, so Codex's `spawn_agent` can start
+/// them by name. A role's instructions and model live in a file of their own, which the role
+/// points to. None when there are none.
+///
+/// They go in `thread/start` and `thread/resume`, which reach Codex on its input, rather than as
+/// `-c` overrides: those go on the command line, which Windows refuses past 32,767 characters,
+/// and every custom agent would add to it whether or not the chat uses one. An agent the chat is
+/// set to or summons reaches Codex through the message, not this list.
+fn agents_config(spec: &TurnSpec) -> Option<Value> {
     // Listing the models runs the CLI, which a turn with no custom agent has no use for.
     if spec.agents.is_empty() {
-        return Vec::new();
+        return None;
     }
     let models = models();
-    let mut args = Vec::new();
+    let mut roles = serde_json::Map::new();
     for agent in spec.agents {
         // JSON strings are TOML strings too.
         let mut role = format!("developer_instructions = {}\n", json!(agent.prompt.trim()));
@@ -64,30 +69,25 @@ pub fn agents_args(spec: &TurnSpec) -> Vec<String> {
         }) {
             let _ = writeln!(role, "model = {}", json!(model));
         }
-        let file = match crate::extensions::agents::launch_file(
+        match crate::extensions::agents::launch_file(
             "codex",
             spec.root,
             &format!("{}.toml", agent.name),
             &role,
         ) {
-            Ok(file) => file,
-            Err(e) => {
-                log::warn!(
-                    agent:% = agent.name, error:% = e;
-                    "failed to hand Codex the {{agent}} agent: {{error}}"
+            Ok(file) => {
+                roles.insert(
+                    agent.name.clone(),
+                    json!({"description": agent.about(), "config_file": file}),
                 );
-                continue;
             }
-        };
-        let key = format!("agents.{}", agent.name);
-        args.extend([
-            "-c".to_string(),
-            format!("{key}.description={}", json!(agent.about())),
-            "-c".to_string(),
-            format!("{key}.config_file={}", json!(file.to_string_lossy())),
-        ]);
+            Err(e) => log::warn!(
+                agent:% = agent.name, error:% = e;
+                "failed to hand Codex the {{agent}} agent: {{error}}"
+            ),
+        }
     }
-    args
+    (!roles.is_empty()).then(|| json!({"agents": roles}))
 }
 
 /// Request id of `chat/start` / `chat/resume`; its response carries the chat id.
@@ -101,6 +101,9 @@ pub(super) fn chat_params(spec: &TurnSpec, resume: Option<&str>) -> Value {
     }
     if let Some(text) = spec.instructions {
         chat["developerInstructions"] = json!(text);
+    }
+    if let Some(config) = agents_config(spec) {
+        chat["config"] = config;
     }
     if let Some(id) = resume {
         chat["threadId"] = json!(id);

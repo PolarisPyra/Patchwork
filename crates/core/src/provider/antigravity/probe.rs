@@ -195,7 +195,7 @@ fn run_acp_probe() -> AcpProbe {
         .stderr(Stdio::null());
     #[cfg(unix)]
     cmd.process_group(0);
-    let Ok(mut child) = cmd.spawn() else {
+    let Ok(mut child) = crate::provider::command_size::spawn(&mut cmd, "agy acp") else {
         return AcpProbe::Unavailable("Could not start Antigravity ACP server".into());
     };
     let pid = child.id();

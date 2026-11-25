@@ -313,12 +313,11 @@ fn list_codex_hooks(
             )
             .ok()?;
     }
-    let mut child = cmd
-        .stdin(std::process::Stdio::piped())
+    cmd.stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .ok()?;
+        .stderr(std::process::Stdio::null());
+    let mut child =
+        crate::provider::command_size::spawn(&mut cmd, "Codex to list its hooks").ok()?;
     let mut stdin = child.stdin.take()?;
     let stdout = child.stdout.take()?;
     let requests = [

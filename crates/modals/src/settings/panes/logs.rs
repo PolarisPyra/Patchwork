@@ -65,11 +65,7 @@ impl SettingsDialog {
                 cx.notify();
             });
             let exported = cx
-                .background_spawn(async move {
-                    let mut system = patchwork_core::logging::system::report().clone();
-                    system["settings"] = serde_json::json!(core.settings());
-                    patchwork_core::logging::export(&path, &system)
-                })
+                .background_spawn(async move { core.export_logs(&path) })
                 .await;
             let _ = this.update(cx, |d, cx| {
                 d.logs.exporting = false;
