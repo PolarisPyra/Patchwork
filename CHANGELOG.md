@@ -3,6 +3,20 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.155] - 2026-11-24
+
+## What's Changed
+* feat(sidebar): drag tasks to reorder them in a project or move them into a folder by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/358
+* docs(agents): finished changes are pushed and merged without waiting to be asked by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/360
+* fix(settings): no more big gaps under the page header and release versions by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/359
+* docs(agents): AGENTS.md is a short set of Git rules by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/361
+* fix(antigravity): resumed chats run the current Patchwork's hooks, not a stale program path by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/362
+* chore(status-bar): drop the working, done and idle text by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/363
+* fix(linux): the title bar and taskbar show Patchwork's icon on KDE Wayland by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/364
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.154...26.11.155
+
 ## [26.11.154] - 2026-11-24
 
 ## What's Changed
