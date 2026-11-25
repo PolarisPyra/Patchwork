@@ -3,6 +3,14 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.162] - 2026-11-25
+
+## What's Changed
+* fix(ui): even out spacing and padding across the app by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/375
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.161...26.11.162
+
 ## [26.11.161] - 2026-11-25
 
 ## What's Changed
