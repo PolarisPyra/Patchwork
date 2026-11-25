@@ -3,6 +3,16 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.160] - 2026-11-25
+
+## What's Changed
+* feat(gateway): send pictures and screenshots to chat apps, with a separate permission to see the screen by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/370
+* feat(keys): Meta+Q quits Patchwork by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/371
+* fix(settings): line the permissions scope dropdown up with the separator by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/372
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.159...26.11.160
+
 ## [26.11.159] - 2026-11-25
 
 ## What's Changed
