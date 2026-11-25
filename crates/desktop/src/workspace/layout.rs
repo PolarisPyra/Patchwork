@@ -2,11 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
-use std::time::Duration;
 use gpui::{
-    Animation, AnimationExt, ease_out_quint, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, NavigationDirection, Role, StyleRefinement, Window, deferred, div, prelude::*,
-    px, relative,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, NavigationDirection, Role,
+    StyleRefinement, Window, deferred, div, prelude::*, px, relative,
 };
 use crate::chat::backdrop::quilts_scheme;
 use crate::chat::text_colors::in_scheme;
@@ -16,12 +14,6 @@ use patchwork_ui::theme::{font_ui, fs_md, radius, radius_sm, STATUSBAR_H, Theme,
 use patchwork_ui::{button, display_title, icon};
 use super::window::{Page, Place, SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
 use super::bars;
-
-/// How long the error toast stays before it slides away, and how long the slide takes.
-const ERROR_SHOWN: Duration = Duration::from_secs(5);
-const ERROR_SLIDE: Duration = Duration::from_millis(200);
-/// How often a toast the mouse holds checks whether it was let go.
-const ERROR_HOLD: Duration = Duration::from_millis(250);
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -105,7 +97,6 @@ impl Render for Workspace {
             .read(cx)
             .is_open()
             .then(|| deferred(credentials).with_priority(4));
-        self.time_error(cx);
         let error = self.error_toast(&t, cx);
         let quilt_chat = self.quilt_chat_card(&t, cx);
         div()
@@ -639,14 +630,10 @@ impl Workspace {
     ) -> Option<impl IntoElement + use<>> {
         let error = self.error.clone()?;
         let (hover, fg) = (t.bg_hover, t.text);
-        let leaving = self.error_leaving;
         Some(
             deferred(
                 div()
                     .id("error-toast")
-                    .on_hover(cx.listener(|this, hovered: &bool, _, _| {
-                        this.error_hovered = *hovered;
-                    }))
                     .absolute()
                     .right(px(16.))
                     .bottom(px(STATUSBAR_H + 12.))
@@ -654,17 +641,41 @@ impl Workspace {
                     .flex()
                     .items_center()
                     .gap(px(8.))
+                    // The surface of the app's other popups; the warning icon says it is an error.
                     .rounded(px(radius()))
                     .border_1()
-                    .border_color(t.danger)
+                    .border_color(t.border_strong)
                     .bg(t.bg_elevated)
-                    .py(px(8.))
-                    .pr(px(8.))
+                    .py(px(6.))
+                    .pr(px(6.))
                     .pl(px(12.))
                     .text_size(px(patchwork_ui::theme::fs_sm()))
+                    .text_color(t.text)
                     .shadow(patchwork_ui::popup_shadow(t))
                     .role(Role::Alert)
-                    .child(div().min_w_0().child(error))
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_color(t.danger)
+                            .child(icon("warning", 14.)),
+                    )
+                    .child(div().min_w_0().flex_1().child(error.clone()))
+                    // An agent that would not start is worth a bug report, so its logs are a
+                    // click away; they say how long its command was and what Windows answered.
+                    .when(error.starts_with("Failed to start agent"), |toast| {
+                        toast.child(
+                            button("save-logs", "Save logs")
+                                .h(px(28.))
+                                .px(px(8.))
+                                .flex_none()
+                                .items_center()
+                                .rounded(px(radius_sm()))
+                                .text_color(t.text_muted)
+                                .hover(move |s| s.bg(hover).text_color(fg))
+                                .child("Save logs")
+                                .on_click(cx.listener(|this, _, _, cx| this.save_logs(cx))),
+                        )
+                    })
                     .child(
                         button("dismiss-error", "Dismiss")
                             .size(px(28.))
@@ -678,73 +689,34 @@ impl Workspace {
                                 this.error = None;
                                 cx.notify();
                             })),
-                    )
-                    .with_animation(
-                        if leaving {
-                            "error-toast-leave"
-                        } else {
-                            "error-toast"
-                        },
-                        Animation::new(ERROR_SLIDE).with_easing(ease_out_quint()),
-                        move |toast, delta| {
-                            if leaving {
-                                toast.right(px(16. - 436. * delta)).opacity(1. - delta)
-                            } else {
-                                toast
-                            }
-                        },
                     ),
             )
             .with_priority(1),
         )
     }
 
-    /// Starts, once for each error, the timer that slides the error toast away after
-    /// [`ERROR_SHOWN`]. The mouse over the toast holds it; with reduced motion it goes without
-    /// sliding.
-    fn time_error(&mut self, cx: &mut Context<Self>) {
-        let Some(error) = self.error.clone() else {
-            self.error_timer = None;
-            self.error_leaving = false;
-            self.error_hovered = false;
-            return;
-        };
-        if self
-            .error_timer
-            .as_ref()
-            .is_some_and(|(timed, _)| *timed == error)
-        {
-            return;
-        }
-        self.error_leaving = false;
-        let shown = error.clone();
-        let timer = cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(ERROR_SHOWN).await;
-            while this
-                .update(cx, |this, _| this.error_hovered)
-                .unwrap_or(false)
-            {
-                cx.background_executor().timer(ERROR_HOLD).await;
-            }
-            let slide = this.update(cx, |this, cx| {
-                let slide = !patchwork_ui::theme::applied(cx).reduce_motion;
-                this.error_leaving = slide;
-                cx.notify();
-                slide
-            });
-            if slide.unwrap_or(false) {
-                cx.background_executor().timer(ERROR_SLIDE).await;
-            }
-            // The window closing drops the toast with it, so there is nothing to do then.
-            let _ = this.update(cx, |this, cx| {
-                if this.error.as_ref() == Some(&shown) {
-                    this.error = None;
-                    this.error_leaving = false;
+    /// Asks where to save a zip of the logs, as Settings' Export logs does, and writes it there.
+    /// The error stays until it is dismissed; a failure to save takes its place.
+    fn save_logs(&mut self, cx: &mut Context<Self>) {
+        let stamp = chrono::Local::now().format("%Y%m%dT%H%M%S");
+        let home = patchwork_core::system::files::paths::home_dir().unwrap_or_default();
+        let picked = cx.prompt_for_new_path(&home, Some(&format!("patchwork-logs-{stamp}.zip")));
+        let core = std::sync::Arc::clone(&self.core);
+        cx.spawn(async move |this, cx| {
+            let Ok(Ok(Some(path))) = picked.await else {
+                return;
+            };
+            let saved = cx
+                .background_spawn(async move { core.export_logs(&path) })
+                .await;
+            if let Err(e) = saved {
+                let _ = this.update(cx, |this, cx| {
+                    this.error = Some(format!("Could not save the logs: {e}"));
                     cx.notify();
-                }
-            });
-        });
-        self.error_timer = Some((error, timer));
+                });
+            }
+        })
+        .detach();
     }
 
     pub(crate) fn on_resize(
