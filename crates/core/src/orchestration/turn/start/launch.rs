@@ -431,9 +431,29 @@ impl Runner {
         .stderr(Stdio::piped());
         #[cfg(unix)]
         cmd.process_group(0);
-        let mut child = cmd
-            .spawn()
-            .map_err(|e| format!("Failed to start agent: {e}"))?;
+        let size = provider::command_size::CommandSize::of(&cmd);
+        // One line per turn in main.log, so a report says which agent and model a chat ran
+        // with even when the agent log is off. Counts and sizes only: no prompt or path.
+        log::info!(
+            chat:% = chat_id, agent:? = agent, model:% = model.as_deref().unwrap_or("default"),
+            effort:% = effort.as_deref().unwrap_or("default"),
+            resumed:% = session_id.is_some(), remote:% = remote, agents:% = agents.len(),
+            hooks:% = hooks.len(), args:% = size.args, chars:% = size.total;
+            "turn: chat {{chat}} on {{agent}}, model {{model}}, effort {{effort}}, resumed \
+             {{resumed}}, remote {{remote}}, {{agents}} custom agents, {{hooks}} hooks, \
+             {{args}} arguments, {{chars}} chars"
+        );
+        // Windows answers a command line past its limit with only "The filename or extension is
+        // too long", so it is refused before it starts, with what makes it long.
+        let mut child = provider::command_size::spawn(&mut cmd, &format!("the {agent:?} agent"))
+            .map_err(|e| {
+                let meaning = e
+                    .raw_os_error()
+                    .and_then(provider::command_size::os_error_meaning)
+                    .map(|m| format!(": {m}"))
+                    .unwrap_or_default();
+                format!("Failed to start agent: {e}{meaning}")
+            })?;
         let pid = child.id();
         if AGENT_LOG.logs(LogLevel::Info) {
             // Below Trace only flags are kept, since an argument can be the prompt.

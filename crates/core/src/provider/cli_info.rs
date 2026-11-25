@@ -88,12 +88,12 @@ const MAX_OUTPUT: usize = 60_000;
 /// Returns an error when the program cannot be started, runs past the time limit, or exits with a
 /// failure and prints nothing.
 pub fn run(binary: &Path, args: &[&str]) -> Result<String, Error> {
-    let mut child = crate::system::host_command(binary)
-        .args(args)
+    let mut cmd = crate::system::host_command(binary);
+    cmd.args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+        .stderr(Stdio::piped());
+    let mut child = crate::provider::command_size::spawn(&mut cmd, "an agent CLI")
         .map_err(|e| format!("Could not run {}: {e}", binary.display()))?;
     let out = child.stdout.take().map(drain);
     let err = child.stderr.take().map(drain);

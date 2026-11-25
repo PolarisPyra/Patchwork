@@ -47,6 +47,7 @@ pub use types::{
 pub mod claude;
 pub mod cli_info;
 pub mod hooks;
+pub mod command_size;
 pub mod codex;
 pub mod antigravity;
 pub mod opencode;

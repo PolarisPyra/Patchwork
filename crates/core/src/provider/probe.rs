@@ -67,7 +67,7 @@ fn run_probe(
         .stderr(Stdio::piped());
     #[cfg(unix)]
     cmd.process_group(0);
-    let mut child = cmd.spawn().ok()?;
+    let mut child = crate::provider::command_size::spawn(&mut cmd, "an agent CLI probe").ok()?;
     let (out, out_reader) = read_pipe(child.stdout.take()?);
     let (err, err_reader) = read_pipe(child.stderr.take()?);
 

@@ -213,6 +213,20 @@ pub fn read(channel: &str, offset: u64) -> Result<LogChunk, Error> {
     })
 }
 
+impl crate::Core {
+    /// Writes the zip [`export`] makes at `dest`, with this launch's system report and the
+    /// settings: what Settings' Export logs and an error's Save logs save.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when [`export`] does.
+    pub fn export_logs(&self, dest: &Path) -> Result<(), Error> {
+        let mut system = super::system::report().clone();
+        system["settings"] = serde_json::json!(self.settings());
+        export(dest, &system)
+    }
+}
+
 /// Writes a zip at `dest` of every kept launch's log folder, plus `system.json`: what a
 /// friend sends with a bug report. Records still queued are not waited for.
 ///

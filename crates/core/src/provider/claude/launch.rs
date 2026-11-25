@@ -263,14 +263,14 @@ pub fn clear_own_goal(session_id: &str, root: &str, compact_window: u64) {
     let Some(binary) = super::cli::binary() else {
         return;
     };
-    let child = crate::system::host_command(binary)
-        .args(["-p", "--resume", session_id, "/goal clear"])
+    let mut cmd = crate::system::host_command(binary);
+    cmd.args(["-p", "--resume", session_id, "/goal clear"])
         .envs(launch_env(compact_window))
         .current_dir(root)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn();
+        .stderr(std::process::Stdio::null());
+    let child = crate::provider::command_size::spawn(&mut cmd, "Claude to clear its goal");
     let mut child = match child {
         Ok(child) => child,
         Err(e) => {

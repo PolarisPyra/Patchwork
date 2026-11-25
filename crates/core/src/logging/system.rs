@@ -18,6 +18,25 @@ use crate::system::files::paths::home_dir;
 /// This launch's report, worked out by the first caller.
 static REPORT: OnceLock<Value> = OnceLock::new();
 
+/// What the user added that goes on an agent's command line, as counts; set by [`record`].
+static EXTENSIONS: OnceLock<Extensions> = OnceLock::new();
+
+/// How many custom agents, agent hooks, and MCP servers the user has, which each add to an
+/// agent's command line or config. Counts only: no name or command.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Extensions {
+    /// Custom agents in the library.
+    pub agents: usize,
+    /// Hooks of enabled bundles that the agent CLIs run.
+    pub hooks: usize,
+    /// MCP servers configured.
+    pub mcp_servers: usize,
+    /// MCP servers turned on.
+    pub mcp_on: usize,
+    /// MCP servers turned on and shared with the CLIs.
+    pub mcp_shared: usize,
+}
+
 /// Environment variables that change how the window draws or how agents start. Their values are
 /// switches and names, never secrets.
 const ENV: [&str; 6] = [
@@ -29,9 +48,10 @@ const ENV: [&str; 6] = [
     "FLATPAK_ID",
 ];
 
-/// Writes this launch's `system.json` in `session` and logs a summary to `main.log`, on its own
-/// thread, since asking each agent CLI its version takes a moment.
-pub fn record(session: &Path) {
+/// Writes this launch's `system.json` in `session` with `extensions`, and logs a summary to
+/// `main.log`, on its own thread, since asking each agent CLI its version takes a moment.
+pub fn record(session: &Path, extensions: Extensions) {
+    let _ = EXTENSIONS.set(extensions);
     let session = session.to_path_buf();
     std::thread::spawn(move || {
         let report = report();
@@ -73,6 +93,13 @@ pub fn report() -> &'static Value {
             "wayland": std::env::var_os("WAYLAND_DISPLAY").is_some(),
             "env": env,
             "agents": agents(),
+            "extensions": EXTENSIONS.get().map(|e| json!({
+                "customAgents": e.agents,
+                "agentHooks": e.hooks,
+                "mcpServers": e.mcp_servers,
+                "mcpServersOn": e.mcp_on,
+                "mcpServersShared": e.mcp_shared,
+            })),
         })
     })
 }
@@ -85,12 +112,25 @@ fn summary(report: &Value) -> String {
         .map(|agents| {
             agents
                 .iter()
-                .map(|(name, agent)| format!("{name} {}", agent["version"].as_str().unwrap_or("?")))
+                .map(|(name, agent)| {
+                    let shim = if agent["shim"] == true {
+                        " (.cmd shim)"
+                    } else {
+                        ""
+                    };
+                    format!("{name} {}{shim}", agent["version"].as_str().unwrap_or("?"))
+                })
                 .collect()
         })
         .unwrap_or_default();
+    let count = |key: &str| {
+        report["extensions"][key]
+            .as_u64()
+            .map_or("?".into(), |n| n.to_string())
+    };
     format!(
-        "Patchwork {} ({}) on {} {}, kernel {}, {} session; agents: {}",
+        "Patchwork {} ({}) on {} {}, kernel {}, {} session; agents: {}; {} custom agents, {} \
+         agent hooks, {} MCP servers ({} on, {} shared)",
         text("version"),
         text("build"),
         text("distro"),
@@ -102,10 +142,17 @@ fn summary(report: &Value) -> String {
         } else {
             agents.join(", ")
         },
+        count("customAgents"),
+        count("agentHooks"),
+        count("mcpServers"),
+        count("mcpServersOn"),
+        count("mcpServersShared"),
     )
 }
 
-/// Each agent CLI that is installed: where it is and its version. Patchwork's own agent has none.
+/// Each agent CLI that is installed: where it is, its version, and whether Windows starts it
+/// through a `.cmd` shim, whose command line is held to 8,191 characters. Patchwork's own agent
+/// has none.
 fn agents() -> serde_json::Map<String, Value> {
     AgentKind::ALL
         .into_iter()
@@ -115,6 +162,7 @@ fn agents() -> serde_json::Map<String, Value> {
             let agent = json!({
                 "path": shown(Path::new(&path)),
                 "version": provider::cli_version(kind),
+                "shim": provider::command_size::is_shim(&path),
             });
             Some((format!("{kind:?}"), agent))
         })

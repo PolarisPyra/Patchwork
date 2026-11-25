@@ -38,7 +38,9 @@ pub(super) fn run_hook_process(
     } else {
         Stdio::null()
     };
+    let size = crate::provider::command_size::CommandSize::of(&cmd);
     let (mut child, range) = crate::system::processes::contained::spawn(cmd, stdin)
+        .inspect_err(|e| crate::provider::command_size::log_failure("a hook", e, &size))
         .map_err(|e| format!("did not start: {e}"))?;
     let stdout = read(
         child

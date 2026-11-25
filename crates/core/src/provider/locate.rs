@@ -169,9 +169,13 @@ fn program_command(bin: &Path) -> Command {
     }
 }
 
+/// Shims already warned about, so a launch says it once for each.
+static WARNED_SHIMS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
 /// What an npm `.cmd` shim on Windows starts: node with the CLI's script, or a native binary.
 /// Through the shim the agent runs under `cmd.exe`, which cannot take arguments with newlines
-/// or `%` (Rust refuses to start it with them), so a turn's instructions would fail it.
+/// or `%` (Rust refuses to start it with them) and holds the command line to 8,191 characters
+/// rather than 32,767, so a turn's instructions or custom agents would fail it.
 fn unwrap_cmd_shim(bin: &Path) -> Option<(PathBuf, Option<PathBuf>)> {
     let is_cmd = bin
         .extension()
@@ -179,27 +183,50 @@ fn unwrap_cmd_shim(bin: &Path) -> Option<(PathBuf, Option<PathBuf>)> {
     if !cfg!(windows) || !is_cmd {
         return None;
     }
-    let text = std::fs::read_to_string(bin).ok()?;
-    let dir = bin.parent()?;
-    // The target is the last quoted path in the shim's folder: "%dp0%\node_modules\…".
-    let target = text
-        .split('"')
-        .filter_map(|part| part.strip_prefix("%dp0%\\"))
-        .next_back()?;
+    let unwrapped = shim_target(bin);
+    if let Err(why) = &unwrapped
+        && !WARNED_SHIMS.locked().contains(&bin.to_path_buf())
+    {
+        WARNED_SHIMS.locked().push(bin.to_path_buf());
+        log::warn!(
+            shim:% = crate::logging::system::shown(bin), why:% = why;
+            "{{shim}} runs through cmd.exe, whose command line is held to 8,191 characters: {{why}}"
+        );
+    }
+    unwrapped.ok()
+}
+
+/// The program and script behind the `.cmd` shim at `bin`, or why there is none.
+fn shim_target(bin: &Path) -> Result<(PathBuf, Option<PathBuf>), &'static str> {
+    let text = std::fs::read_to_string(bin).map_err(|_e| "the shim cannot be read")?;
+    let dir = bin.parent().ok_or("the shim has no folder")?;
+    let target = cmd_shim_target(&text).ok_or("the shim names no script in its folder")?;
     let target = dir.join(target);
     if !target.is_file() {
-        return None;
+        return Err("the script the shim names is missing");
     }
     if target
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
     {
-        return Some((target, None));
+        return Ok((target, None));
     }
     let node = Some(dir.join("node.exe"))
         .filter(|p| p.is_file())
-        .or_else(|| find_binary("node"))?;
-    Some((node, Some(target)))
+        .or_else(|| find_binary("node"))
+        .ok_or("node is not found")?;
+    Ok((node, Some(target)))
+}
+
+/// The script a `.cmd` shim runs, relative to its folder: the last quoted path that starts at
+/// the shim's folder, written `%dp0%\` by npm and `%~dp0\` by pnpm and yarn.
+fn cmd_shim_target(text: &str) -> Option<&str> {
+    text.split('"')
+        .filter_map(|part| {
+            part.strip_prefix("%dp0%\\")
+                .or_else(|| part.strip_prefix("%~dp0\\"))
+        })
+        .rfind(|rest| !rest.eq_ignore_ascii_case("node.exe"))
 }
 
 /// A command the user configured, such as an MCP server: found and run with the PATH their
@@ -282,5 +309,29 @@ pub fn agent_shell(agent: AgentKind) -> Option<String> {
         | AgentKind::Kimi
         | AgentKind::Auggie
         | AgentKind::Api => command_shell(),
+    }
+}
+
+#[cfg(test)]
+mod shim_tests {
+    use super::cmd_shim_target;
+
+    #[test]
+    fn reads_npm_and_pnpm_shims() {
+        let npm = "@ECHO off\r\nSET dp0=%~dp0\r\nIF EXIST \"%dp0%\\node.exe\" (\r\n  SET \"_prog=%dp0%\\node.exe\"\r\n) \
+                   ELSE (\r\n  SET \"_prog=node\"\r\n)\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & \
+                   \"%_prog%\"  \"%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js\" %*\r\n";
+        assert_eq!(
+            cmd_shim_target(npm),
+            Some("node_modules\\@openai\\codex\\bin\\codex.js")
+        );
+        let pnpm = "@SETLOCAL\r\n@IF EXIST \"%~dp0\\node.exe\" (\r\n  \"%~dp0\\node.exe\"  \
+                    \"%~dp0\\global\\5\\node_modules\\@openai\\codex\\bin\\codex.js\" %*\r\n) ELSE (\r\n  node  \
+                    \"%~dp0\\global\\5\\node_modules\\@openai\\codex\\bin\\codex.js\" %*\r\n)\r\n";
+        assert_eq!(
+            cmd_shim_target(pnpm),
+            Some("global\\5\\node_modules\\@openai\\codex\\bin\\codex.js")
+        );
+        assert_eq!(cmd_shim_target("@echo off\r\nnode codex.js %*"), None);
     }
 }

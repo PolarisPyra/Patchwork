@@ -27,8 +27,8 @@ impl Server {
             uuid::Uuid::new_v4().simple(),
             uuid::Uuid::new_v4().simple()
         );
-        let mut child = crate::system::host_command(&request.bin)
-            .args(["serve", "--hostname", "127.0.0.1", "--port", "0"])
+        let mut cmd = crate::system::host_command(&request.bin);
+        cmd.args(["serve", "--hostname", "127.0.0.1", "--port", "0"])
             .current_dir(&request.root)
             // 2.x works in the folder `PWD` names, and takes its password from OPENCODE_PASSWORD.
             .env("PWD", &request.root)
@@ -36,8 +36,8 @@ impl Server {
             .env_remove("OPENCODE_SERVER_PASSWORD")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
+            .stderr(Stdio::piped());
+        let mut child = crate::provider::command_size::spawn(&mut cmd, "opencode serve")
             .map_err(|e| format!("Failed to start OpenCode: {e}"))?;
         let stdout = child
             .stdout
