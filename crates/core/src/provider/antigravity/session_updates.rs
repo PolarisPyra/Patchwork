@@ -13,6 +13,7 @@ use crate::provider::{
 
 use super::edits::edit_lines;
 use super::errors::{limit_notice, limit_window};
+use super::questions::asked;
 use super::swarm::{format_swarm_tool, invoke_subagent_descriptor};
 use super::tool_fields::{tool_args, tool_output, tool_paths, tool_summary};
 
@@ -124,6 +125,7 @@ pub(super) fn parse_session_update(
                 tool.lines = edit_lines(update);
             }
             out.push(started);
+            out.extend(asked(update, name));
 
             let status = update["status"].as_str();
             if matches!(status, Some("completed" | "failed")) {

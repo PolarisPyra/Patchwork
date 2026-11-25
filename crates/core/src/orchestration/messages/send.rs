@@ -3,6 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use crate::Error;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -15,6 +16,7 @@ use crate::provider::AgentKind;
 use crate::settings::LogLevel;
 use crate::chats::{
     Role, MessageStatus, StepStatus, Attachment, Message, GoalStatus, BackgroundTask, Chat,
+    Approval, ApprovalStatus,
 };
 use crate::extensions::skills;
 use crate::{orchestration, provider};
@@ -29,6 +31,24 @@ fn user_message(text: &str, attachments: Vec<Attachment>) -> Message {
         attachments,
         ..Message::new(Role::User, text.into(), MessageStatus::Complete)
     }
+}
+
+/// Closes the questions in `chat` the agent ended its reply on, which the message being sent
+/// answers instead. Returns each one's message id and approval id.
+fn answer_open_questions(chat: &mut Chat) -> Vec<(String, String)> {
+    let mut answered = Vec::new();
+    for message in &mut chat.messages {
+        let open = |a: &Approval| a.by_message && a.status == ApprovalStatus::Pending;
+        if !message.approvals.iter().any(open) {
+            continue;
+        }
+        let message = Arc::make_mut(message);
+        for approval in message.approvals.iter_mut().filter(|a| open(a)) {
+            approval.status = ApprovalStatus::Denied;
+            answered.push((message.id.clone(), approval.id.clone()));
+        }
+    }
+    answered
 }
 
 impl Core {
@@ -187,7 +207,7 @@ impl Core {
         queue: bool,
         via: Option<Platform>,
     ) -> Result<Message, Error> {
-        let images = provider::load_images(&attachments)?;
+        let mut images = provider::load_images(&attachments)?;
         // Refused before anything is stored: a turn still starting has no agent to write to.
         if self.runner.is_starting(&chat_id) {
             return Err(crate::orchestration::turn::start::STILL_STARTING.into());
@@ -256,7 +276,9 @@ impl Core {
         let mut session_id = None;
         let mut subagents = Vec::new();
         let mut first_title = None;
+        let mut answered = Vec::new();
         self.store.update_chat(&chat_id, |t| {
+            answered = answer_open_questions(t);
             // A sub agent's chat is named after what it was asked to do when it is made.
             if t.messages.is_empty() && t.parent.is_none() {
                 first_title = Some((
@@ -279,6 +301,25 @@ impl Core {
             t.messages.push(Arc::new(m));
             session_id.clone_from(&t.session_id);
         })?;
+        // The agent takes this message as the answer to the question it ended its reply on, and
+        // Antigravity refuses images in an answer. The text still names each image's path.
+        if !answered.is_empty() {
+            images.clear();
+        }
+        for (message_id, approval_id) in answered {
+            orchestration::publish(
+                self,
+                &chat_id,
+                AgentEvent::ApprovalResolved {
+                    message_id,
+                    approval_id,
+                    allowed: false,
+                    answers: HashMap::new(),
+                    rule: None,
+                    auto: false,
+                },
+            );
+        }
         if let Some((placeholder, agent, model, project_id)) = first_title {
             let root = project_id.and_then(|id| {
                 self.store

@@ -461,10 +461,11 @@ pub(in crate::orchestration) fn apply(chat: &mut Chat, event: &AgentEvent) {
             msg.error.clone_from(error);
             msg.finished_at = Some(now_ms());
             msg.hide_secrets();
-            // Unanswered requests lapse with the turn.
+            // Unanswered requests lapse with the turn, but for a question the next message
+            // answers.
             msg.approvals
                 .iter_mut()
-                .filter(|a| a.status == ApprovalStatus::Pending)
+                .filter(|a| a.status == ApprovalStatus::Pending && !a.by_message)
                 .for_each(|approval| {
                     approval.status = ApprovalStatus::Denied;
                     if let Some(secret) = &mut approval.secret {

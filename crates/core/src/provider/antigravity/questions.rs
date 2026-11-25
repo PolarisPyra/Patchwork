@@ -1,5 +1,7 @@
 //! Questions agy asks the user. It sends them as permission requests whose call id starts with
 //! `interaction_`, with one option per choice, and takes the chosen option's id as the answer.
+//! agy 1.5.16 also asks with its `ask_question` tool: it ends its reply on the pending call and
+//! takes the next prompt's text as the answer.
 
 // Rust guideline compliant 2026-11-23
 
@@ -62,6 +64,66 @@ pub(super) fn question(v: &Value) -> Option<Parsed> {
     })
 }
 
+/// The questions of agy's `ask_question` call in `update`, once it waits on them. agy ends its
+/// reply there and takes the next prompt as the answer, so the request is answered by a message
+/// (see [`BY_MESSAGE`]). None for any other call, or one with no question to ask.
+pub(super) fn asked(update: &Value, name: &str) -> Option<Parsed> {
+    if name != "ask_question" || update["status"].as_str() != Some("pending") {
+        return None;
+    }
+    let call = update["toolCallId"].as_str()?;
+    let args = if update["rawInput"]["questions"].is_array() {
+        &update["rawInput"]
+    } else {
+        &update["args"]
+    };
+    let questions: Vec<Question> = args["questions"]
+        .as_array()?
+        .iter()
+        .enumerate()
+        .filter_map(|(at, q)| {
+            let question = q["question"]
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())?;
+            let options = q["options"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|o| o.as_str().or_else(|| o["label"].as_str()))
+                .map(str::trim)
+                .filter(|o| !o.is_empty())
+                .map(|label| QuestionOption {
+                    label: label.into(),
+                    description: String::new(),
+                })
+                .collect();
+            let multi_select = ["isMultiSelect", "is_multi_select", "multiSelect"]
+                .iter()
+                .any(|key| q[*key] == true);
+            Some(Question {
+                id: format!("{call}-{at}"),
+                header: "Question".into(),
+                question: question.into(),
+                options,
+                multi_select,
+            })
+        })
+        .collect();
+    let first = questions.first()?.question.clone();
+    Some(Parsed::Approval {
+        title: "Question".into(),
+        detail: first,
+        reply: json!({ BY_MESSAGE: true }),
+        questions,
+        target: None,
+    })
+}
+
+/// The key in an approval's reply that marks a question answered by the user's next message
+/// rather than by a reply to a request, for agy's `ask_question`.
+pub const BY_MESSAGE: &str = "by_message";
+
 /// The option agy offered for the user's answer to the question in `reply`. None when the
 /// question was declined, or answered with something agy did not offer.
 pub(super) fn picked<'a>(
@@ -72,4 +134,54 @@ pub(super) fn picked<'a>(
     let id = reply["question"].as_str()?;
     let answer = answers.get(id).filter(|_| allow)?.first()?;
     reply["picks"][answer.as_str()].as_str()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The pending `ask_question` call agy 1.5.16 sent before ending its reply.
+    fn pending_call(status: &str) -> Value {
+        let input = json!({"questions": [
+            {"question": "Which aspect ratio?", "options": ["16:9", "9:16"]},
+            {"question": "What should the pane show?", "options": ["A", "B", "C"]},
+        ]});
+        json!({
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": "call_1",
+            "name": "ask_question",
+            "args": input,
+            "rawInput": input,
+            "status": status,
+            "kind": "other",
+        })
+    }
+
+    #[test]
+    fn pending_ask_question_is_answered_by_message() {
+        let Some(Parsed::Approval {
+            reply, questions, ..
+        }) = asked(&pending_call("pending"), "ask_question")
+        else {
+            panic!("expected a question");
+        };
+        assert_eq!(reply[BY_MESSAGE], true);
+        let asked: Vec<_> = questions
+            .iter()
+            .map(|q| (q.id.as_str(), q.question.as_str(), q.options.len()))
+            .collect();
+        assert_eq!(
+            asked,
+            [
+                ("call_1-0", "Which aspect ratio?", 2),
+                ("call_1-1", "What should the pane show?", 3),
+            ]
+        );
+    }
+
+    #[test]
+    fn running_or_other_calls_ask_nothing() {
+        assert!(asked(&pending_call("in_progress"), "ask_question").is_none());
+        assert!(asked(&pending_call("pending"), "read_file").is_none());
+    }
 }

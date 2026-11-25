@@ -263,6 +263,10 @@ pub struct Approval {
     /// Set when the agent asks for a secret, which the user enters in a private card.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub secret: Option<crate::vault::requests::Secret>,
+    /// The agent ended its reply to wait for the answer, which reaches it as the user's next
+    /// message. The request stays open after the reply ends, until a message answers it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub by_message: bool,
 }
 
 impl Approval {
@@ -281,6 +285,7 @@ impl Approval {
             rule: None,
             auto: false,
             secret: None,
+            by_message: false,
         }
     }
 }
