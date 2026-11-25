@@ -72,8 +72,10 @@ skip it, such as OpenCode for a hook after a tool call.
 ## Computer use
 
 `crates/core/src/computer/` gives Patchwork's own agent a screenshot and the pointer and keyboard
-under it. It is off until Settings → Permissions turns it on; `set_enabled` mirrors the setting so
-the tool list and the approval rules can ask without a database read.
+under it. Each is off until Settings → Permissions turns it on: "Let the agent see the screen"
+(`seeScreen`) offers the screenshot, and "Let the agent use the screen" (`computerUse`) the pointer
+and keyboard. `set_seeing` and `set_enabled` mirror the two settings so the tool list and the
+approval rules can ask without a database read.
 
 - `crates/core/src/computer/` captures the primary monitor. On Windows and macOS that is `xcap`.
   On Linux it is the desktop portal under Wayland, cut to the primary monitor that XWayland
@@ -86,5 +88,7 @@ the tool list and the approval rules can ask without a database read.
   screen. That is the cost of the screenshot, not of the scaling.
 - Input uses `enigo`: move, click, type, press a key with modifiers, and scroll.
 - The tools are `computer_screenshot`, `computer_move`, `computer_click`, `computer_type`,
-  `computer_key`, and `computer_scroll`. They are offered only when the setting is on, never in plan
-  mode, and they ask under the `screen` permission kind unless a rule allows the screen.
+  `computer_key`, and `computer_scroll`. `computer_screenshot` is offered while the agent may see the
+  screen and asks in no mode, since that switch is the answer; the rest are offered while computer
+  use is on, never in plan mode, and ask under the `screen` permission kind unless a rule allows
+  the screen.

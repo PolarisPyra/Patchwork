@@ -228,7 +228,7 @@ impl Connector for Slack {
         let response = self
             .http
             .post(url)
-            .header("Content-Type", mime(name))
+            .header("Content-Type", mime(bytes))
             .send(bytes)
             .map_err(|e| failed("Slack could not be reached", e, &self.bot))?;
         if !response.status().is_success() {

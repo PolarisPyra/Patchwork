@@ -173,8 +173,8 @@ pub(crate) fn write(what: &str, socket: &mut Socket, value: &Value) -> Result<()
         .map_err(|e| failed(what, e, ""))
 }
 
-/// A `multipart/form-data` body of the text `fields` and the text file `name` holding `bytes`
-/// under `field`, and the content type to send it with.
+/// A `multipart/form-data` body of the text `fields` and the file `name` holding `bytes` under
+/// `field`, and the content type to send it with.
 pub(crate) fn multipart(
     fields: &[(&str, &str)],
     field: &str,
@@ -182,6 +182,18 @@ pub(crate) fn multipart(
     bytes: &[u8],
 ) -> (String, Vec<u8>) {
     let boundary = format!("patchwork-{}", uuid::Uuid::new_v4().simple());
+    // A quote or line break in the name would end its header and let the rest of it be read as
+    // more of the request.
+    let name: String = name
+        .chars()
+        .map(|c| {
+            if matches!(c, '"' | '\\' | '\r' | '\n') {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
     let mut body = Vec::with_capacity(bytes.len() + 512);
     for (key, value) in fields {
         body.extend_from_slice(
@@ -194,7 +206,7 @@ pub(crate) fn multipart(
     body.extend_from_slice(
         format!(
             "--{boundary}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{name}\"\r\nContent-Type: {}\r\n\r\n",
-            mime(name)
+            mime(bytes)
         )
         .as_bytes(),
     );
@@ -203,17 +215,30 @@ pub(crate) fn multipart(
     (format!("multipart/form-data; boundary={boundary}"), body)
 }
 
-/// The media type of the file `name` Patchwork sends: a picture when it ends in `.png`, and text
-/// otherwise.
-pub(super) fn mime(name: &str) -> &'static str {
-    let picture = std::path::Path::new(name)
-        .extension()
-        .is_some_and(|end| end.eq_ignore_ascii_case("png"));
-    if picture {
+/// The media type of a file Patchwork sends, read from its first bytes: one of the pictures chat
+/// apps show inline, text when it is UTF-8 without a NUL, and plain bytes otherwise.
+///
+/// The bytes decide rather than the name, so a picture saved under another extension still shows
+/// as one, and a file named `.png` that is not one is not offered to a chat app as a picture.
+pub(crate) fn mime(bytes: &[u8]) -> &'static str {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         "image/png"
-    } else {
+    } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        "image/jpeg"
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        "image/gif"
+    } else if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        "image/webp"
+    } else if !bytes.contains(&0) && std::str::from_utf8(bytes).is_ok() {
         "text/plain; charset=utf-8"
+    } else {
+        "application/octet-stream"
     }
+}
+
+/// Whether `bytes` are a picture chat apps show inline.
+pub(crate) fn is_picture(bytes: &[u8]) -> bool {
+    mime(bytes).starts_with("image/")
 }
 
 /// Splits `text` into pieces of at most `limit` characters, at line breaks where it can.
@@ -252,4 +277,27 @@ pub(crate) fn encode(text: &str) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mime_reads_the_bytes_not_the_name() {
+        assert_eq!(mime(b"\x89PNG\r\n\x1a\n...."), "image/png");
+        assert_eq!(mime(&[0xFF, 0xD8, 0xFF, 0xE0]), "image/jpeg");
+        assert_eq!(mime(b"GIF89a...."), "image/gif");
+        assert_eq!(mime(b"RIFF\0\0\0\0WEBPVP8 "), "image/webp");
+        assert_eq!(mime(b"plain words"), "text/plain; charset=utf-8");
+        assert_eq!(mime(&[0, 1, 2, 3]), "application/octet-stream");
+        assert!(!is_picture(b"RIFF\0\0\0\0WAVE"));
+    }
+
+    #[test]
+    fn multipart_name_cannot_end_its_header() {
+        let (_, body) = multipart(&[], "file", "a\"b\r\nc.png", b"x");
+        let body = String::from_utf8(body).expect("the body is text");
+        assert!(body.contains("filename=\"a_b__c.png\""));
+    }
 }

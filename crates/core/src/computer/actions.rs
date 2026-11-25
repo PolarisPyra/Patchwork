@@ -23,8 +23,22 @@ pub fn enabled() -> bool {
     ENABLED.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-/// Refuses while computer use is off, so a stray call cannot look at the screen or act on it.
-/// `screenshot` and `perform` call it first.
+/// Whether Settings → Permissions lets the agent see the screen, apart from computer use. Kept
+/// here for the same reason as [`ENABLED`].
+static SEEING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Follows the setting that lets the agent see the screen; called with [`set_enabled`].
+pub fn set_seeing(seeing: bool) {
+    SEEING.store(seeing, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether the agent may see the screen.
+pub fn seeing() -> bool {
+    SEEING.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Refuses while computer use is off, so a stray call cannot act on the screen. `perform` calls
+/// it first, and `screenshot`, which the Screen tab shows beside computer use.
 fn ensure_enabled() -> Result<(), Error> {
     if enabled() {
         Ok(())
@@ -86,14 +100,25 @@ pub(super) fn left() -> String {
     "left".into()
 }
 
-/// The primary monitor as a PNG, at its own size.
+/// The primary monitor as a PNG, at its own size, for an agent using the computer.
+///
+/// # Errors
+///
+/// Returns an error when computer use is off, the screen cannot be listed or captured, or the
+/// picture cannot be encoded as PNG.
+pub fn screenshot() -> Result<Screenshot, Error> {
+    ensure_enabled()?;
+    look()
+}
+
+/// The primary monitor as a PNG, whether computer use is on or not. Only looks; the caller
+/// checks the person allowed whatever it is for, as the chat apps' own screenshot setting.
 ///
 /// # Errors
 ///
 /// Returns an error when the screen cannot be listed or captured, or the picture cannot be encoded
 /// as PNG.
-pub fn screenshot() -> Result<Screenshot, Error> {
-    ensure_enabled()?;
+pub(crate) fn look() -> Result<Screenshot, Error> {
     let Capture {
         image,
         screen_width,
@@ -114,9 +139,13 @@ pub fn screenshot() -> Result<Screenshot, Error> {
 }
 
 /// Writes a screenshot to `dir` as PNG and returns the path, for an agent that reads images
-/// with its file tools rather than receiving them inline.
+/// with its file tools rather than receiving them inline. Refuses unless the agent may see the
+/// screen; computer use need not be on.
 pub(crate) fn screenshot_to_file(dir: &std::path::Path) -> Result<PathBuf, Error> {
-    let png = screenshot()?.png;
+    if !seeing() {
+        return Err("Seeing the screen is off in Settings → Permissions".into());
+    }
+    let png = look()?.png;
     std::fs::create_dir_all(dir).map_err(|e| format!("Could not make {}: {e}", dir.display()))?;
     let path = dir.join(format!("screen-{}.png", crate::system::now_ms()));
     std::fs::write(&path, png).map_err(|e| format!("Could not write {}: {e}", path.display()))?;

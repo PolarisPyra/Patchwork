@@ -137,14 +137,16 @@ pub fn definitions() -> Value {
             json!({"type": "object", "properties": {}}),
         ),
     ]);
-    // Computer use is only offered once Settings → Permissions has turned it on.
+    // Seeing the screen and driving it are each offered once Settings → Permissions turns them on.
+    if crate::computer::seeing() {
+        tools.push(tool(
+            "computer_screenshot",
+            "Look at the screen. Returns the path of a PNG screenshot, which read_file can show you. Take one before and after each group of actions, since the screen changes only when you act.",
+            json!({"type": "object", "properties": {}}),
+        ));
+    }
     if crate::computer::enabled() {
         tools.extend([
-            tool(
-                "computer_screenshot",
-                "Look at the screen. Returns the path of a PNG screenshot, which read_file can show you. Take one before and after each group of actions, since the screen changes only when you act.",
-                json!({"type": "object", "properties": {}}),
-            ),
             tool(
                 "computer_move",
                 "Move the pointer, in screen pixels, without clicking.",
@@ -345,26 +347,21 @@ pub fn approval(
             let asks = matches!(mode, AccessMode::Supervised | AccessMode::AutoAcceptEdits);
             Some(("Fetch a web page".into(), url.into(), target, asks))
         }
-        // Looking at the screen and driving it are the same permission, named for the screen.
-        "computer_screenshot"
-        | "computer_move"
-        | "computer_click"
-        | "computer_type"
-        | "computer_key"
-        | "computer_scroll" => {
-            let verb = if name == "computer_screenshot" {
-                "Look at"
-            } else {
-                "Use"
-            };
-            let target = Target::new(PermissionKind::Screen, ["screen"]);
-            Some((
-                format!("{verb} the screen"),
-                "the whole screen".into(),
-                target,
-                matches!(mode, AccessMode::Supervised | AccessMode::AutoAcceptEdits),
-            ))
-        }
+        // Looking at the screen and driving it fall under the same permission kind, named for the
+        // screen. Looking asks in no mode: the switch that offers it is the person's answer.
+        "computer_screenshot" => Some((
+            "Look at the screen".into(),
+            "the whole screen".into(),
+            Target::new(PermissionKind::Screen, ["screen"]),
+            false,
+        )),
+        "computer_move" | "computer_click" | "computer_type" | "computer_key"
+        | "computer_scroll" => Some((
+            "Use the screen".into(),
+            "the whole screen".into(),
+            Target::new(PermissionKind::Screen, ["screen"]),
+            matches!(mode, AccessMode::Supervised | AccessMode::AutoAcceptEdits),
+        )),
         _ => None,
     }
 }

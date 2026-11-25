@@ -33,6 +33,8 @@ fn note_of(tool: &ToolCall) -> (&'static str, String) {
         "export_chat" => ("export", "Exported a chat"),
         "scan_imports" | "import_chats" => ("file-text", "Imported chats"),
         "send_project_file" => ("file-text", "Sent a file"),
+        "send_picture" => ("image", "Sent a picture"),
+        "send_screenshot" => ("image", "Sent a screenshot"),
         "send_chat_changes" => ("file-text", "Sent changes"),
         "list_projects" => ("list-bullets", "Listed projects"),
         "list_project_files" => ("magnifying-glass", "Browsed project files"),

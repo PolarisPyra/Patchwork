@@ -24,7 +24,9 @@ mod telegram;
 mod types;
 mod watch;
 
+pub(crate) use files::FILE_LIMIT;
 pub use hub::Hub;
+pub(crate) use net::is_picture;
 pub use personalities::Personality;
 pub use platform::{Field, Need, Platform};
 pub use types::{

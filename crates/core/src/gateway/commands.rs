@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use super::files::SCREENSHOTS_OFF;
 use super::hub::Place;
 use super::platform::Platform;
 use super::types::Incoming;
@@ -19,6 +20,7 @@ const HELP: &str = "Say what you want in your own words: ask what is running, st
 /new <project>: talk straight to a new chat in a project
 /stop: stop the reply being written
 /clear: delete the messages here and start this conversation over
+/screenshot: see the computer's screen, while Settings → Permissions lets the agent see it
 
 When the agent asks before acting, reply allow, always or deny, or press a button. When it asks a question, reply with the numbers of the answers, one line per question.";
 
@@ -107,6 +109,13 @@ impl Core {
                 self.clear_conversation(platform, conversation);
                 return true;
             }
+            "screenshot" => {
+                if settings.see_screen {
+                    self.screenshot_later(platform, conversation);
+                    return true;
+                }
+                format!("{SCREENSHOTS_OFF}.")
+            }
             "mute" => self.mute_notices(rest),
             "resume" => self.resume_at_reset(rest),
             "answer" => {
@@ -118,6 +127,27 @@ impl Core {
         };
         self.say(platform, conversation, &reply);
         true
+    }
+
+    /// Sends a screenshot to `conversation` off the caller's thread: the desktop may ask the
+    /// person to allow screenshots first, and the chat app's messages wait on this thread.
+    fn screenshot_later(self: &Arc<Self>, platform: Platform, conversation: &str) {
+        let (weak, to) = (Arc::downgrade(self), conversation.to_string());
+        let spawned = std::thread::Builder::new()
+            .name("gateway-screenshot".to_string())
+            .spawn(move || {
+                if let Some(core) = weak.upgrade() {
+                    core.send_screenshot(platform, &to);
+                }
+            });
+        if let Err(error) = spawned {
+            log::error!(error:% = error; "could not start a screenshot: {{error}}");
+            self.say(
+                platform,
+                conversation,
+                "Patchwork could not take a screenshot.",
+            );
+        }
     }
 
     /// Starts the conversation `chat` over and deletes the messages in it that its chat app lets

@@ -12,5 +12,5 @@ mod actions;
 #[cfg(target_os = "linux")]
 mod linux;
 
-pub use actions::{set_enabled, enabled, Screenshot, Action, screenshot, describe};
-pub(crate) use actions::{screenshot_to_file, perform};
+pub use actions::{set_enabled, enabled, set_seeing, seeing, Screenshot, Action, screenshot, describe};
+pub(crate) use actions::{look, screenshot_to_file, perform};

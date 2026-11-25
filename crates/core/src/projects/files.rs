@@ -125,19 +125,7 @@ pub fn missing_files(root: &str, rels: &[String]) -> Vec<String> {
 /// Returns an error when the path is outside the project, is not a file, cannot be read, is larger
 /// than 2 MB, or is binary.
 pub fn read_file(root: &str, rel: &str) -> Result<String, Error> {
-    let bytes = if let Some(at) = ssh::split(root) {
-        ssh::fs::read_inside(at.host, at.path, rel, MAX_READ_BYTES)?
-    } else {
-        let path = resolve_inside(root, rel)?;
-        if !path.is_file() {
-            return Err(format!("{rel} is not a file").into());
-        }
-        let mut bytes = Vec::new();
-        std::fs::File::open(&path)
-            .and_then(|f| f.take(MAX_READ_BYTES + 1).read_to_end(&mut bytes))
-            .map_err(|e| e.to_string())?;
-        bytes
-    };
+    let bytes = read_bytes(root, rel, MAX_READ_BYTES)?;
     if bytes.len() as u64 > MAX_READ_BYTES {
         return Err("File is larger than 2 MB".into());
     }
@@ -145,4 +133,25 @@ pub fn read_file(root: &str, rel: &str) -> Result<String, Error> {
         return Err("Binary file".into());
     }
     Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// The bytes of the project file `rel`, text or not, reading at most one byte past `limit` so a
+/// caller can tell a file over it from one that fits.
+///
+/// # Errors
+///
+/// Returns an error when the path is outside the project, is not a file, or cannot be read.
+pub(crate) fn read_bytes(root: &str, rel: &str, limit: u64) -> Result<Vec<u8>, Error> {
+    if let Some(at) = ssh::split(root) {
+        return ssh::fs::read_inside(at.host, at.path, rel, limit);
+    }
+    let path = resolve_inside(root, rel)?;
+    if !path.is_file() {
+        return Err(format!("{rel} is not a file").into());
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(&path)
+        .and_then(|f| f.take(limit + 1).read_to_end(&mut bytes))
+        .map_err(|e| e.to_string())?;
+    Ok(bytes)
 }
