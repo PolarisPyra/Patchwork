@@ -3,6 +3,15 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.161] - 2026-11-25
+
+## What's Changed
+* fix(composer): list a CLI's models once it is installed after launch by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/373
+* fix(setup): restart after setup installs an agent CLI by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/374
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.160...26.11.161
+
 ## [26.11.160] - 2026-11-25
 
 ## What's Changed
