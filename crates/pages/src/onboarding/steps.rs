@@ -111,6 +111,9 @@ pub struct Onboarding {
     /// Agents whose CLI is downloading, and why the last download of each failed.
     pub(super) installing: HashSet<AgentKind>,
     pub(super) install_errors: HashMap<AgentKind, String>,
+    /// The CLIs installed here. Parts of the app looked for each CLI at launch, so finishing
+    /// setup restarts Patchwork to find them.
+    pub(super) installed: HashSet<AgentKind>,
     /// Connected agents, in `AGENT_KINDS` order, once every probe has answered.
     pub(super) agents: Option<Vec<AgentKind>>,
     /// The agent new tasks start with; saved first in `settings.agents`, which is what marks it.
@@ -170,6 +173,7 @@ impl Onboarding {
             probes: HashMap::new(),
             installing: HashSet::new(),
             install_errors: HashMap::new(),
+            installed: HashSet::new(),
             agents: None,
             scans: Vec::new(),
             scan_run: 0,
@@ -235,6 +239,12 @@ impl Onboarding {
         window.focus(&self.heading, cx);
         self.scroll.set_offset(gpui::Point::default());
         cx.notify();
+    }
+
+    /// Whether finishing setup restarts Patchwork, because a CLI was installed during it.
+    #[must_use]
+    pub fn restarts(&self) -> bool {
+        !self.installed.is_empty()
     }
 
     pub(super) fn complete(&mut self, cx: &mut Context<Self>) {

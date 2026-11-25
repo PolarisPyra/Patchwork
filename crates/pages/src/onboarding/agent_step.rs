@@ -55,6 +55,7 @@ impl Onboarding {
                 this.installing.remove(&kind);
                 match installed {
                     Ok(()) => {
+                        this.installed.insert(kind);
                         if let Some(agents) = this.agents.as_mut()
                             && !agents.contains(&kind)
                         {

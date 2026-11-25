@@ -24,12 +24,16 @@ impl Workspace {
             cx.subscribe_in(
                 &onboarding,
                 window,
-                |this, _, event, window, cx| match event {
+                |this, onboarding, event, window, cx| match event {
                     OnboardingEvent::Changed => {
                         this.settings = this.core.settings();
                         // Setup may have added projects and imported chats.
                         this.reload(cx);
-                        if this.settings.onboarded {
+                        // A CLI installed during setup is missing from what was read at launch,
+                        // such as each agent's models.
+                        if this.settings.onboarded && onboarding.read(cx).restarts() {
+                            crate::workspace::updates::restart(cx);
+                        } else if this.settings.onboarded {
                             this.onboarding = None;
                             let composer = this.composer.read(cx).editor.focus_handle(cx);
                             window.focus(&composer, cx);

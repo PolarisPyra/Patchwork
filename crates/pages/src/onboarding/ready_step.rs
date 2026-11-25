@@ -86,6 +86,13 @@ pub fn ready_step(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) ->
         .gap(px(16.))
         .child(div().flex().flex_col().children(list))
         .child(runs_on(this, t, cx))
+        .when(this.restarts(), |d| {
+            d.child(
+                div()
+                    .text_color(t.text_muted)
+                    .child("Patchwork restarts once to finish setting up the CLI it installed."),
+            )
+        })
         .into_any_element()
 }
 
