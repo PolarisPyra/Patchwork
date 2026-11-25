@@ -3,6 +3,14 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.158] - 2026-11-25
+
+## What's Changed
+* feat(palette): prompt for layout name after selecting Save layout by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/368
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.157...26.11.158
+
 ## [26.11.157] - 2026-11-25
 
 ## What's Changed
