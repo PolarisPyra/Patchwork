@@ -79,8 +79,11 @@ pub fn render(
         .gap(px(8.))
         .border_b_1()
         .border_color(t.border)
+        .mt(px(8.))
         .pb(px(10.))
-        .child(scope_chip)
+        // The chip's own padding is pulled out past the edge, so its text lines up with the
+        // separator and the rows below.
+        .child(scope_chip.ml(px(-6.)))
         .when(everywhere, |row| {
             row.child(
                 btn(
