@@ -15,7 +15,9 @@ use patchwork_core::chats::{ApprovalStatus, MessageStatus, Chat};
 use patchwork_core::worktree::WorktreeMark;
 use patchwork_ui::controls::avatar::{Mood, avatar};
 use patchwork_ui::theme::{fs_sm, radius_sm, Theme, theme};
-use patchwork_ui::{agent_label, agent_logo, button, display_title, format_relative, icon, now_ms};
+use patchwork_ui::{
+    agent_label, agent_logo, button, display_title, format_relative, icon, now_ms, spinner,
+};
 use crate::chat::panes::TabDrag;
 use crate::chat::TabGhost;
 use crate::workspace::{Workspace, is_busy};
@@ -211,16 +213,23 @@ pub(super) fn chat_row(
     } else {
         None
     };
-    // The shield sits in the archive button's 20px box, so hovering swaps one for the other in
-    // place. A working task shows its time like any other: its tab shows that it is working.
-    let state: AnyElement = if needs_approval {
+    // The spinner and shield sit in the archive button's 20px box, so hovering swaps one for the
+    // other in place. The spinner shows a task working in a project whose tabs are not open.
+    let state: AnyElement = if needs_approval || busy {
+        let mark = if needs_approval {
+            icon("shield-warning", 15.)
+                .text_color(t.warning)
+                .into_any_element()
+        } else {
+            spinner(12., t.accent_text).into_any_element()
+        };
         // At the box's right edge, in line with the times of the rows around it.
         div()
             .size(px(20.))
             .flex()
             .items_center()
             .justify_end()
-            .child(icon("shield-warning", 15.).text_color(t.warning))
+            .child(mark)
             .into_any_element()
     } else {
         let at = last.map_or(th.created_at, |m| m.created_at);
