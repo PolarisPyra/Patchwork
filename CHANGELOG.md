@@ -3,6 +3,14 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.157] - 2026-11-25
+
+## What's Changed
+* fix(sidebar): working tasks show a spinner again, so work in other projects is visible by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/367
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.156...26.11.157
+
 ## [26.11.156] - 2026-11-25
 
 ## What's Changed
