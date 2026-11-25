@@ -124,7 +124,7 @@ pub(crate) fn items(w: &Workspace) -> Vec<Item> {
 }
 
 /// The pane commands with their keys, the layouts to lay the panes out as, and saving the
-/// layout under the name typed.
+/// current layout.
 fn pane_items(w: &Workspace, items: &mut Vec<Item>) {
     let item = |label: String, hint: Option<String>, action| Item {
         group: "Panes".into(),
@@ -160,5 +160,9 @@ fn pane_items(w: &Workspace, items: &mut Vec<Item>) {
             Action::RemoveLayout(name.clone()),
         ));
     }
-    items.push(item(String::new(), None, Action::SaveLayout(String::new())));
+    items.push(item(
+        "Save layout…".into(),
+        None,
+        Action::SaveLayout(String::new()),
+    ));
 }
