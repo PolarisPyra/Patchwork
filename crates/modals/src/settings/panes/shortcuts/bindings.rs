@@ -660,7 +660,7 @@ const SKIP_SHELL: &[&str] = &[
 
 /// Builds the window's keymap.
 ///
-/// It holds moving focus, quitting, the text fields' keys, and each command's key as the user
+/// It holds moving focus, quitting (Ctrl+Q or Meta+Q), the text fields' keys, and each command's key as the user
 /// left it. In a terminal, Tab and the commands' keys other than the panel's,
 /// search's and settings' go to the shell.
 pub fn bind_keys(core: &Core, cx: &mut App) {
@@ -670,6 +670,8 @@ pub fn bind_keys(core: &Core, cx: &mut App) {
         KeyBinding::new("tab", patchwork_ui::FocusNext, None),
         KeyBinding::new("shift-tab", patchwork_ui::FocusPrev, None),
         KeyBinding::new("ctrl-q", patchwork_ui::Quit, None),
+        // Meta on Linux, Command on macOS, the Windows key on Windows.
+        KeyBinding::new("super-q", patchwork_ui::Quit, None),
         KeyBinding::new("tab", NoAction, Some("Terminal")),
         KeyBinding::new("shift-tab", NoAction, Some("Terminal")),
     ]);
