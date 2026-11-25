@@ -118,11 +118,12 @@ impl Core {
     }
 }
 
-/// Hands the agent paths and the computer use switch to the code that reads them outside the
-/// settings; called whenever the settings are loaded or changed.
+/// Hands the agent paths and the computer use and screen switches to the code that reads them
+/// outside the settings; called whenever the settings are loaded or changed.
 pub(crate) fn follow(settings: &Settings) {
     crate::provider::set_agent_paths(&settings.agent_paths);
     crate::computer::set_enabled(settings.computer_use);
+    crate::computer::set_seeing(settings.see_screen);
 }
 
 /// The top-level sections of the settings that differ, for `main.log`. Values are left out, since

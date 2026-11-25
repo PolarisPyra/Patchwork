@@ -84,6 +84,7 @@ pub fn bridge_request(spec: &TurnSpec) -> String {
         "unlimitedSteps": spec.unlimited_steps,
         "tokenLimit": spec.token_limit,
         "computerUse": !spec.dispatcher && crate::computer::enabled(),
+        "seeScreen": !spec.dispatcher && crate::computer::seeing(),
         "dispatcher": spec.dispatcher,
         "instructions": spec.instructions,
         "command": command,

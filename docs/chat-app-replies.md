@@ -221,7 +221,7 @@ answer it. A denied call fails with "The user declined this call", and nothing i
 | `projects` | `list_projects`, `list_project_files`, `add_project`, `rename_project`, `remove_project` |
 | `settings` | `get_settings`, `set_setting` |
 | `navigation` | `open_project`, `open_file`, `open_settings` |
-| `files` | `send_project_file`, `send_chat_changes` |
+| `files` | `send_project_file`, `send_picture`, `send_screenshot`, `send_chat_changes` |
 | `import-export` | `export_chat`, `scan_imports`, `import_chats` |
 | `themes` | `list_themes`, `read_theme`, `preview_theme`, `save_theme`, `apply_theme`, `delete_theme` |
 | `usage` | `usage_limits`, `resume_chat_at_reset` |
@@ -282,9 +282,23 @@ ask which.
 
 ### Files, exports and imports
 
-`send_project_file` sends a text file of a project, up to 2 MB, to the conversation. A name that
-looks like it holds secrets (`.env`, a key, `credentials`, …) asks the person in every access
-mode. `send_chat_changes` sends a chat's changes as a diff file, and `export_chat` sends a chat as
+`send_project_file` sends a file of a project, text or not, up to 8 MB, to the conversation. A
+name that looks like it holds secrets (`.env`, a key, `credentials`, …) asks the person in every
+access mode.
+
+`send_picture` sends a PNG, JPEG, GIF or WebP picture, from a project or by its whole path on the
+computer, shown in the chat. The file's bytes decide whether it is a picture, not its name. A
+picture outside the projects asks the person in every access mode, and none goes from a path
+that looks like it holds secrets. A picture over 8 MB is saved again as a JPEG, and scaled to
+2560 pixels when that is not enough. Telegram gets pictures through `sendPhoto`, and a picture it
+refuses there goes through `sendDocument`.
+
+`send_screenshot` sends a screenshot of the screen. It and `/screenshot` work only while "Let
+the agent see the screen" is on in Settings → Permissions (`seeScreen`). That setting is apart
+from computer use: it lets agents see the screen, and lets none click or type. A chat app cannot
+change it with `set_setting`.
+
+`send_chat_changes` sends a chat's changes as a diff file, and `export_chat` sends a chat as
 Markdown. `scan_imports` counts the chats other agent apps left on the computer and `import_chats`
 brings them in.
 
@@ -318,10 +332,11 @@ connected after the restart, the conversation is told Patchwork is back and on w
 
 ### Slash commands
 
-Four are left, for what acts on the conversation itself and needs no model: `/help`, `/new`
+Five are left, for what acts on the conversation itself and needs no model: `/help`, `/new`
 (start the conversation over, or `/new <project>` to talk straight to a new chat in a project),
-`/stop` and `/clear` (start the conversation over and delete its messages in the chat app; only
-Discord deletes them, and in a direct message only Patchwork's own). The buttons under notices send their own (`/answer`, `/mute`, `/resume`). The
+`/stop`, `/clear` (start the conversation over and delete its messages in the chat app; only
+Discord deletes them, and in a direct message only Patchwork's own) and `/screenshot` (send a
+screenshot, while the agent may see the screen). The buttons under notices send their own (`/answer`, `/mute`, `/resume`). The
 others (`/status`, `/running`, `/threads`, `/use`, `/projects`, `/diff`, `/model`, `/agent`,
 `/plan`, `/access`, `/unmute`) are gone: sent now, they reach the dispatcher as words, which does
 the same through the capabilities. `pass_on` takes the leading slash off a dispatcher's message,

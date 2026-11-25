@@ -6,7 +6,8 @@ use std::sync::atomic::Ordering;
 
 use serde_json::{Value, json};
 
-use super::net::{client, download, failed, json, multipart};
+use super::net::{client, download, failed, json, mime, multipart};
+use crate::provider::clip;
 use super::platform::Platform;
 use super::types::{Button, Connector, Incoming, Listener};
 use crate::Error;
@@ -18,6 +19,13 @@ const POLL_SECONDS: u64 = 10;
 
 /// How many buttons share a row; more go one to a row.
 const ROW: usize = 2;
+
+/// The largest picture sent as a photo, which Telegram shows in the chat; a larger one goes as a
+/// document. The Bot API takes photos up to 10 MB.
+const PHOTO_LIMIT: usize = 10 * 1024 * 1024;
+
+/// The most characters of a caption. The Bot API refuses a caption over 1024.
+const CAPTION_LIMIT: usize = 1000;
 
 pub(crate) struct Telegram {
     token: String,
@@ -41,6 +49,33 @@ impl Telegram {
             .send_json(body)
             .map_err(|e| failed("Telegram could not be reached", e, &self.token))?;
         result(response)
+    }
+
+    /// Uploads `bytes` as the file `name` through the Bot API method `method`, which takes it
+    /// under `field`.
+    fn upload(
+        &self,
+        method: &str,
+        field: &str,
+        conversation: &str,
+        name: &str,
+        bytes: &[u8],
+        caption: &str,
+    ) -> Result<(), Error> {
+        let (kind, body) = multipart(
+            &[("chat_id", conversation), ("caption", caption)],
+            field,
+            name,
+            bytes,
+        );
+        let url = format!("{API}/bot{}/{method}", self.token);
+        let response = self
+            .http
+            .post(&url)
+            .header("Content-Type", &kind)
+            .send(body.as_slice())
+            .map_err(|e| failed("Telegram could not be reached", e, &self.token))?;
+        result(response).map(drop)
     }
 
     /// The pictures sent with a message, the largest size of each.
@@ -172,20 +207,27 @@ impl Connector for Telegram {
         bytes: &[u8],
         caption: &str,
     ) -> Result<(), Error> {
-        let (kind, body) = multipart(
-            &[("chat_id", conversation), ("caption", caption)],
+        let caption = clip(caption, CAPTION_LIMIT);
+        if bytes.len() <= PHOTO_LIMIT
+            && matches!(mime(bytes), "image/png" | "image/jpeg" | "image/webp")
+        {
+            // Telegram refuses some pictures as photos, such as a very wide screenshot, and
+            // takes them as documents still.
+            match self.upload("sendPhoto", "photo", conversation, name, bytes, &caption) {
+                Ok(()) => return Ok(()),
+                Err(error) => {
+                    log::debug!(error:% = error; "Telegram took no photo, sending a document: {{error}}");
+                }
+            }
+        }
+        self.upload(
+            "sendDocument",
             "document",
+            conversation,
             name,
             bytes,
-        );
-        let url = format!("{API}/bot{}/sendDocument", self.token);
-        let response = self
-            .http
-            .post(&url)
-            .header("Content-Type", &kind)
-            .send(body.as_slice())
-            .map_err(|e| failed("Telegram could not be reached", e, &self.token))?;
-        result(response).map(drop)
+            &caption,
+        )
     }
 
     fn edit(&self, conversation: &str, id: &str, text: &str) -> Result<(), Error> {

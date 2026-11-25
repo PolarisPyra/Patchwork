@@ -190,7 +190,7 @@ pub fn render(
         && permissions.everywhere.defaults.get(&PermissionKind::Screen) == Some(&Effect::Allow);
     let computer_use = token_row(
         "Let the agent use the screen",
-        Some("Adds screenshot, click, type, key and scroll tools to Patchwork's own agent."),
+        Some("Lets Patchwork's own agent use the computer."),
         &t,
     )
     .child(
@@ -199,6 +199,9 @@ pub fn render(
                 d.update(
                     |s| {
                         s.computer_use = !screen_on;
+                        // Using the screen needs seeing it, so seeing follows this switch both
+                        // ways; it can still be turned on or off by itself.
+                        s.see_screen = !screen_on;
                         let defaults = &mut s.permissions.everywhere.defaults;
                         if screen_on {
                             defaults.remove(&PermissionKind::Screen);
@@ -209,6 +212,19 @@ pub fn render(
                     cx,
                 );
             },
+        )),
+    );
+
+    // Apart from computer use: seeing the screen lets no agent click or type.
+    let seeing = d.settings.see_screen;
+    let see_screen = token_row(
+        "Let the agent see the screen",
+        Some("Adds a screenshot tool to Patchwork's own agent, and lets paired chat apps ask for a screenshot with /screenshot."),
+        &t,
+    )
+    .child(
+        switch("perm-see-screen", "See the screen", seeing, &t).on_click(cx.listener(
+            move |d, _, _, cx| d.update(|s| s.see_screen = !seeing, cx),
         )),
     );
 
@@ -235,6 +251,8 @@ pub fn render(
         .child(add)
         .child(heading("Computer use", &t))
         .child(computer_use)
+        .child(heading("Screenshots", &t))
+        .child(see_screen)
         .child(heading("Android", &t))
         .child(android_use)
         .into_any_element()

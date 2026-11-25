@@ -178,8 +178,12 @@ pub struct Settings {
     /// Hook bundles switched off in Settings, by folder name.
     #[serde(alias = "disabledPlugins")]
     pub disabled_hooks: Vec<String>,
-    /// Whether the agent may look at the screen and drive the pointer and keyboard.
+    /// Whether Patchwork's own agent may drive the pointer and keyboard.
     pub computer_use: bool,
+    /// Whether agents may see the screen: Patchwork's own agent's `computer_screenshot`, and a
+    /// paired chat app conversation's `/screenshot` and `send_screenshot`. Apart from
+    /// `computer_use`: seeing the screen lets no agent click or type.
+    pub see_screen: bool,
     /// Whether a project's own check command runs after every task.
     pub checks: CheckSettings,
     /// Where a fork works, and when a task's worktree is cleaned up.

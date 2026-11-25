@@ -85,6 +85,9 @@ pub(super) struct Request {
     /// never loads the settings, so the turn carries it.
     #[serde(default)]
     pub(super) computer_use: bool,
+    /// Settings → Permissions lets the agent see the screen, carried for the same reason.
+    #[serde(default)]
+    pub(super) see_screen: bool,
     /// Patchwork's instructions about the user's shell.
     #[serde(default)]
     pub(super) instructions: Option<String>,
@@ -267,6 +270,7 @@ impl Agent {
             .build()
             .into();
         crate::computer::set_enabled(request.computer_use);
+        crate::computer::set_seeing(request.see_screen);
         let mut tools = if request.dispatcher {
             json!([])
         } else {

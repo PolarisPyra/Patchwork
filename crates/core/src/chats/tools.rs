@@ -81,7 +81,8 @@ imports and updates with their capabilities. When the person names a chat, proje
 setting or color scheme loosely, find it first; when several fit, show them and ask which.
 - To show the person something on their computer, open it in Patchwork's window with \
 open_chat, open_project, open_file or open_settings; never answer with a path or a link \
-instead. To show it to them here, send it: send_project_file, send_chat_changes, export_chat.
+instead. To show it to them here, send it: send_project_file, send_picture, send_screenshot, \
+send_chat_changes, export_chat.
 - After install_update returns, say Patchwork is restarting and end your reply; it restarts \
 once the reply is sent and says here when it is back.
 - Some capabilities ask the person to allow them before they run. Patchwork does the asking; \

@@ -9,7 +9,7 @@ use std::sync::Mutex;
 
 use serde_json::{Value, json};
 
-use super::net::{authorized, client, download, encode, failed, json, mime};
+use super::net::{authorized, client, download, encode, failed, is_picture, json, mime};
 use super::platform::Platform;
 use super::types::{Button, Connector, Incoming, Listener};
 use crate::Error;
@@ -205,7 +205,7 @@ impl Connector for Matrix {
             .http
             .post(&url)
             .header("Authorization", &self.auth())
-            .header("Content-Type", mime(name))
+            .header("Content-Type", mime(bytes))
             .send(bytes)
             .map_err(|e| failed("The homeserver could not be reached", e, &self.token))?;
         let uploaded = json("The homeserver", response)?;
@@ -215,7 +215,8 @@ impl Connector for Matrix {
         if !caption.is_empty() {
             self.put_message(conversation, &json!({"msgtype": "m.text", "body": caption}))?;
         }
-        let picture = mime(name) == "image/png";
+        let kind = mime(bytes);
+        let picture = is_picture(bytes);
         self.put_message(
             conversation,
             &json!({
@@ -223,7 +224,7 @@ impl Connector for Matrix {
                 "body": name,
                 "filename": name,
                 "url": uri,
-                "info": {"mimetype": if picture { "image/png" } else { "text/plain" }, "size": bytes.len()},
+                "info": {"mimetype": kind, "size": bytes.len()},
             }),
         )
         .map(drop)

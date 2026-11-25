@@ -15,6 +15,7 @@ pub mod watch;
 
 #[doc(inline)]
 pub use files::{missing_files, read_file, resolve_inside};
+pub(crate) use files::read_bytes;
 pub(crate) use files::make_project;
 #[doc(inline)]
 pub use manage::folder_found;

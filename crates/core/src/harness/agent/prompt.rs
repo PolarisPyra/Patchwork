@@ -27,8 +27,17 @@ pub(super) fn system_prompt(request: &Request, root_dir: &Path) -> String {
     if let Some(instructions) = &request.instructions {
         let _ = write!(prompt, "\n\n{instructions}");
     }
-    if crate::computer::enabled() {
-        let _ = write!(prompt, "\n\n{COMPUTER_USE}");
+    match (crate::computer::seeing(), crate::computer::enabled()) {
+        (true, true) => {
+            let _ = write!(prompt, "\n\n{SEE_SCREEN}\n{COMPUTER_USE}");
+        }
+        (true, false) => {
+            let _ = write!(prompt, "\n\n{SEE_SCREEN}");
+        }
+        (false, true) => {
+            let _ = write!(prompt, "\n\n{COMPUTER_USE_BLIND}");
+        }
+        (false, false) => {}
     }
     for name in ["AGENTS.md", "CLAUDE.md"] {
         if let Ok(text) = std::fs::read_to_string(root_dir.join(name)) {
@@ -60,10 +69,23 @@ Help with software engineering tasks: fixing bugs, adding features, refactoring,
 - When a tool is denied, do not retry it; find another way or ask.
 - Be brief. Write in Markdown, and say what you changed and anything left undone when you finish.";
 
+/// What the agent is told while it may see the screen.
+const SEE_SCREEN: &str = "\
+You may see the screen. computer_screenshot writes a PNG of the screen and returns its path; read \
+it with read_file to see the screen. The picture is the screen at its own size. Only on a scaled \
+display is its width not screenWidth; then multiply a position by screenWidth divided by the \
+picture's width.";
+
+/// What the agent is told while it may drive the pointer and keyboard.
 const COMPUTER_USE: &str = "\
-Computer use is on. computer_screenshot writes a PNG of the screen and returns its path; read it \
-with read_file to see the screen. The picture is the screen at its own size, so click where you see \
-something. Only on a scaled display is its width not screenWidth; then multiply a position by \
-screenWidth divided by the picture's width. Take a screenshot \
-before acting, and again after, because the screen only changes when you act. Prefer a tool over \
-the screen whenever one exists. Stop and report when a step needs the user's password.";
+Computer use is on: you can move, click, type, press keys and scroll. Click where you see \
+something in a screenshot. Take a screenshot before acting, and again after, because the screen \
+only changes when you act. Prefer a tool over the screen whenever one exists. Stop and report \
+when a step needs the user's password.";
+
+/// What the agent is told while it may drive the screen but not see it.
+const COMPUTER_USE_BLIND: &str = "\
+Computer use is on: you can move, click, type, press keys and scroll. But you cannot see the \
+screen, since the user has not turned on \u{201c}Let the agent see the screen\u{201d} in \
+Settings → Permissions. Do not act on the screen without seeing it; ask the user to turn it on \
+when a task needs the screen.";

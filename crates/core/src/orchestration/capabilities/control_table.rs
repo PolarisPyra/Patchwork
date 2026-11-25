@@ -91,7 +91,7 @@ pub(super) const CONTROL: &[Capability] = &[
     Capability {
         id: "send_project_file",
         area: "files",
-        about: "Send a text file of a project to this conversation as a file. Give its path in the project or just its name. A file that looks like it holds secrets needs the person's OK first.",
+        about: "Send a file of a project to this conversation as a file, text or not, up to 8 MB. Give its path in the project or just its name. A file that looks like it holds secrets needs the person's OK first. For a picture the person should see in the chat, use send_picture.",
         args: &[
             needed(
                 "project",
@@ -106,6 +106,42 @@ pub(super) const CONTROL: &[Capability] = &[
         asynchronous: false,
         events: &[],
         run: navigate::send_file,
+    },
+    Capability {
+        id: "send_picture",
+        area: "files",
+        about: "Send a PNG, JPEG, GIF or WebP picture to this conversation, shown in the chat: a project's, or one anywhere on the computer by its whole path, such as one an agent made or saved. A picture over 8 MB is made smaller first. Only pictures go; a picture outside the projects needs the person's OK first, and none goes from where keys or passwords are kept.",
+        args: &[
+            needed(
+                "file",
+                "The picture's path in the project, or its name, when project is given; otherwise its whole path on the computer.",
+            ),
+            text(
+                "project",
+                "The project the picture is in, by its name or id. Leave it out for a whole path.",
+            ),
+            text("caption", "What to say beside the picture."),
+        ],
+        returns: "The picture that was sent and how many conversations took it.",
+        resources: &["file"],
+        permission: Permission::Change,
+        reversible: false,
+        asynchronous: false,
+        events: &[],
+        run: navigate::send_picture,
+    },
+    Capability {
+        id: "send_screenshot",
+        area: "files",
+        about: "Take a screenshot of the computer's screen and send it to this conversation as a picture. Use it when the person asks to see the screen or how something looks now. It works only while \u{201c}Let the agent see the screen\u{201d} is on in Settings → Permissions, which the person turns on at the computer; computer use need not be on. The first one may wait for the person to allow screenshots on the computer. Give each another caption, since the same call twice in a row sends once.",
+        args: &[text("caption", "What to say beside the screenshot.")],
+        returns: "The screenshot's name and size, and how many conversations took it.",
+        resources: &["file"],
+        permission: Permission::Change,
+        reversible: false,
+        asynchronous: false,
+        events: &[],
+        run: navigate::send_screenshot,
     },
     Capability {
         id: "send_chat_changes",

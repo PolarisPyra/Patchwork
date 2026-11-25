@@ -134,6 +134,7 @@ const INDEX: &[(&str, &[&str])] = &[
         &[
             "Let agents use Android devices",
             "Let the agent use the screen",
+            "Let the agent see the screen",
             "Restore defaults",
         ],
     ),

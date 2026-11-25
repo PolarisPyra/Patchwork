@@ -51,6 +51,10 @@ const LOCKED: &[(&str, &str)] = &[
     ),
     ("androidSdk", "it is changed in Settings on the computer"),
     (
+        "seeScreen",
+        "letting the agent see the screen is turned on in Settings → Permissions on the computer",
+    ),
+    (
         "defaultMachine",
         "it is changed in Settings on the computer",
     ),

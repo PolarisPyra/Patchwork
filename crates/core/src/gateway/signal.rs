@@ -134,13 +134,15 @@ impl Connector for Signal {
     ) -> Result<(), Error> {
         let mut params = Self::to(conversation);
         params["message"] = json!(caption);
+        // The name sits between the data URI's own separators, so one of them in it would cut
+        // the URI short.
+        let name: String = name
+            .chars()
+            .map(|c| if matches!(c, ';' | ',') { '_' } else { c })
+            .collect();
         params["attachments"] = json!([format!(
             "data:{};filename={name};base64,{}",
-            if mime(name) == "image/png" {
-                "image/png"
-            } else {
-                "text/plain"
-            },
+            mime(bytes).split(';').next().unwrap_or_default(),
             STANDARD.encode(bytes)
         )]);
         self.call("send", params).map(drop)
