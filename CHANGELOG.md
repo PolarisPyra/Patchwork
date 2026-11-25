@@ -3,6 +3,15 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.156] - 2026-11-25
+
+## What's Changed
+* fix(windows): agents no longer fail to start because the command line is too long by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/365
+* fix(workspace): the error toast stays until closed and can save the logs by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/366
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.155...26.11.156
+
 ## [26.11.155] - 2026-11-24
 
 ## What's Changed
