@@ -202,6 +202,7 @@ impl Workspace {
                     .flex()
                     .items_center()
                     .gap(px(4.))
+                    .children(super::hot_reload::bar(&t, cx))
                     .child(
                         div()
                             .px(px(6.))

@@ -12,6 +12,7 @@ mod bars;
 mod dialogs;
 pub(crate) mod dock;
 mod hosts;
+pub(crate) mod hot_reload;
 mod layout;
 mod window;
 mod updates;

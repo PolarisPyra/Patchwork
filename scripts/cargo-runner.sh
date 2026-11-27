@@ -28,8 +28,15 @@ if ! command -v dx >/dev/null; then
     echo "hot reload needs the dx CLI: cargo binstall dioxus-cli@0.7.10" >&2
     exit 1
 fi
+if ! command -v uv >/dev/null; then
+    echo "hot reload needs uv: https://docs.astral.sh/uv/" >&2
+    exit 1
+fi
 # GPUI's `hot-reload` feature connects the app to dx and renders every view through a function
-# dx can patch. After a change a patch can't carry, such as a struct's fields, press `r` in dx's
-# terminal to rebuild and restart the app.
+# dx can patch. After a change a patch can't carry, such as a struct's fields, press Shift+F5 (in
+# dx's terminal or the app) to rebuild and restart the app; F5 applies changes by hand and F7
+# pauses hot reload. dx-serve.py gives dx's shortcuts function keys and lets the app's toolbar
+# send them.
 cd "$root"
-exec dx serve --desktop --hot-patch --package patchwork --features hot-reload "$@"
+exec uv run --no-project python3 scripts/dx-serve.py \
+    --desktop --hot-patch --package patchwork --features hot-reload "$@"

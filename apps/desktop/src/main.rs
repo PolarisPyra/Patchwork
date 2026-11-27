@@ -279,6 +279,7 @@ fn main() {
             let typed = Arc::clone(&core);
             cx.intercept_keystrokes(move |_, _, _| typed.note_activity())
                 .detach();
+            workspace::hot_reload::init(cx);
             cx.on_system_notification_response(move |response, cx| {
                 let chat_id = response
                     .tag

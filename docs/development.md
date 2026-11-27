@@ -33,9 +33,34 @@ app, and every window draws again with the new code, keeping its state. Every GP
 through a patchable function, so this covers all of the UI, in every workspace crate.
 
 Not every change can be patched in: after changing a struct's fields, or code that only runs at
-startup, press `r` in dx's terminal to rebuild and restart the app.
-Options after `desktop` go to `dx serve`. It needs the dx CLI at the version GPUI's `subsecond`
-pins: `cargo binstall dioxus-cli@0.7.10`.
+startup, press Shift+F5 to rebuild and restart the app. If dx fails to build a patch, it rebuilds
+and restarts the app by itself.
+
+`scripts/dx-serve.py` runs dx in a pseudo-terminal and gives its shortcuts function keys, in its
+terminal and in the app:
+
+| Key | What it does |
+| --- | --- |
+| F7 | Pause or resume hot reload (dx's `p`) |
+| F5 | Apply changes: patch every Rust file saved since the last F5 into the app |
+| Shift+F5 | Rebuild and restart the app (`r`) |
+| F8 | Verbose logging, in dx's terminal (`v`) |
+| F1 | More commands, in dx's terminal (`/`) |
+
+Saves apply by themselves; F5 is the fallback for one that was missed. While hot reload is paused
+dx ignores saves: F5 patches them in and stays paused, and resuming patches them too. dx patches
+only files it sees change, so `dx-serve.py` rewrites each Rust file saved since the last F5 with the
+bytes it already holds, and dx skips the ones it has already patched. While paused it resumes dx
+first and pauses it again after.
+
+The toolbar shows a bar before the version while the app runs under dx: what dx is doing (patching,
+rebuilding, a failed build, paused) and buttons for the keys above. In the app, F5, Shift+F5 and F7
+go to dx even in a terminal tab. GPUI reports dx's status to the app as its `HotReloadStatus`
+global, and the app sends the keys to `dx-serve.py` over the Unix socket it names in
+`PATCHWORK_DX_CONTROL`.
+
+Options after `desktop` go to `dx serve`. It needs `uv` and the dx CLI at the version GPUI's
+`subsecond` pins: `cargo binstall dioxus-cli@0.7.10`.
 
 ## Vendored GPUI and icons
 
