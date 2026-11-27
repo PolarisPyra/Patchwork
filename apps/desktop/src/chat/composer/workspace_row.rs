@@ -4,7 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, MouseButton, Window, div, prelude::*, px};
-use patchwork_ui_theme::{IconName, Theme, fs, fs_xs};
+use patchwork_ui_theme::{IconName, Theme, fs_xs};
 use patchwork_ui_components::{button, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -33,7 +33,7 @@ impl Composer {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
-        let hover = t.bg_hover;
+        let fg = t.text;
         let (name, tip) = match &s.project {
             Some((name, path)) => (name.clone(), path.clone()),
             None => (
@@ -45,30 +45,30 @@ impl Composer {
             .h(px(TRIGGER_H))
             .min_w_0()
             .max_w(px(300.))
-            .gap(px(6.))
+            .gap(px(4.))
             .px(px(6.))
             .rounded(px(8.))
-            .text_size(px(fs(15.)))
-            .text_color(t.text)
-            .hover(move |s| s.bg(hover))
+            .text_size(px(fs_xs()))
+            .line_height(px(16.))
+            .text_color(t.text_muted)
+            .hover(move |s| s.text_color(fg))
             .tooltip(tooltip(tip))
             .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
             .child(div().min_w_0().flex_1().truncate().child(name))
-            .child(icon(IconName::CaretDown, 14.).text_color(t.text_muted));
+            .child(icon(IconName::CaretDown, 12.));
         let project = self.chip_with_menu(Menu::Project, project, picks, false, t, window, cx);
         let machine_tip = match &s.host {
             Some(host) => format!("Machine: {host}"),
             None => "Machine: this computer".to_owned(),
         };
         let machine = button("machine", "Machine")
-            .size(px(24.))
+            .size(px(20.))
             .flex_none()
             .justify_center()
-            .rounded(px(6.))
             .text_color(t.text_muted)
-            .hover(move |s| s.bg(hover))
+            .hover(move |s| s.text_color(fg))
             .tooltip(tooltip(machine_tip))
-            .child(icon(IconName::Desktop, 15.))
+            .child(icon(IconName::Desktop, 13.))
             .on_click(cx.listener(|this, _, window, cx| {
                 // Settings' Devices pane, where the machines are added and picked.
                 let _ = this
@@ -90,7 +90,7 @@ impl Composer {
             .justify_between()
             .gap(px(4.))
             .pl(px(4.))
-            .pr(px(2.))
+            .pr(px(6.))
             .child(
                 div()
                     .flex_1()
