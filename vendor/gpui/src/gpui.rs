@@ -67,6 +67,8 @@ pub use debug_overlay::*;
 
 #[cfg(gpui_hot_reload)]
 mod hot_reload;
+// Patchwork: hot reload status.
+mod hot_reload_status;
 #[cfg(any(
     test,
     target_os = "windows",
@@ -131,6 +133,7 @@ pub use executor::*;
 pub use geometry::*;
 pub use gestures::*;
 pub use global::*;
+pub use hot_reload_status::HotReloadStatus; // Patchwork: hot reload status.
 pub use gpui_macros::{
     AppContext, IntoElement, Render, VisualContext, bench, property_test, register_action, test,
 };

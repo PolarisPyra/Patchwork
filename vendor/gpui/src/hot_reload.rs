@@ -1,10 +1,17 @@
-use crate::{App, AppContext as _, Global, Task};
+use crate::{App, AppContext as _, Global, HotReloadStatus, Task};
 use anyhow::{Context as _, Result};
 use async_tungstenite::tungstenite::Message;
 use dioxus_devtools_types::DevserverMsg;
 use futures::StreamExt;
 use std::net::SocketAddr;
 use subsecond::JumpTable;
+
+/// What the websocket hands the foreground: a patch to apply, or dx's status.
+// Patchwork: hot reload status.
+enum Event {
+    Patch(JumpTable),
+    Status(HotReloadStatus),
+}
 
 struct HotReload {
     _task: Task<()>,
@@ -41,19 +48,28 @@ pub(crate) fn init(cx: &mut App) {
     });
     let task = cx.spawn(async move |cx| {
         let _connection = connection;
-        while let Ok(table) = receiver.recv().await {
-            cx.update(|cx| {
-                // Patches are executable code from the developer's trusted dx server. Applying
-                // them between foreground updates avoids replacing code during a render.
-                match unsafe { subsecond::apply_patch(table) } {
-                    Ok(()) => {
-                        cx.refresh_windows();
-                        log::info!("GPUI hot reload applied");
+        while let Ok(event) = receiver.recv().await {
+            cx.update(|cx| match event {
+                Event::Status(status) => cx.set_global(status),
+                Event::Patch(table) => {
+                    // Patches are executable code from the developer's trusted dx server.
+                    // Applying them between foreground updates avoids replacing code during a
+                    // render.
+                    match unsafe { subsecond::apply_patch(table) } {
+                        Ok(()) => {
+                            cx.set_global(HotReloadStatus::Patched);
+                            cx.refresh_windows();
+                            log::info!("GPUI hot reload applied");
+                        }
+                        Err(error) => {
+                            cx.set_global(HotReloadStatus::Failed);
+                            log::error!("GPUI hot reload failed: {error}");
+                        }
                     }
-                    Err(error) => log::error!("GPUI hot reload failed: {error}"),
                 }
             });
         }
+        cx.update(|cx| cx.set_global(HotReloadStatus::Disconnected));
     });
     cx.set_global(HotReload { _task: task });
 }
@@ -63,7 +79,7 @@ async fn receive_patches(
     endpoint: String,
     build_id: u64,
     process_id: u32,
-    sender: async_channel::Sender<JumpTable>,
+    sender: async_channel::Sender<Event>,
 ) -> Result<()> {
     let stream = smol::net::TcpStream::connect(address)
         .await
@@ -72,14 +88,21 @@ async fn receive_patches(
         .await
         .context("opening the dx development websocket")?;
     log::info!("GPUI hot reload connected");
+    if sender
+        .send(Event::Status(HotReloadStatus::Ready))
+        .await
+        .is_err()
+    {
+        return Ok(());
+    }
 
     while let Some(message) = websocket.next().await {
         match message.context("reading the dx development websocket")? {
             Message::Text(text) => {
                 let message = serde_json::from_str::<DevserverMsg>(&text)
                     .context("decoding a dx development message")?;
-                if let Some(table) = patch_for_process(message, build_id, process_id) {
-                    if sender.send(table).await.is_err() {
+                if let Some(event) = event_for_process(message, build_id, process_id) {
+                    if sender.send(event).await.is_err() {
                         return Ok(());
                     }
                 }
@@ -92,17 +115,21 @@ async fn receive_patches(
     Ok(())
 }
 
-fn patch_for_process(message: DevserverMsg, build_id: u64, process_id: u32) -> Option<JumpTable> {
+fn event_for_process(message: DevserverMsg, build_id: u64, process_id: u32) -> Option<Event> {
     match message {
         DevserverMsg::HotReload(message)
             if message.for_build_id == Some(build_id) && message.for_pid == Some(process_id) =>
         {
-            message.jump_table
+            message.jump_table.map(Event::Patch)
         }
         DevserverMsg::FullReloadCommand => {
             log::warn!("GPUI hot reload requires a full application restart");
             None
         }
+        // Patchwork: hot reload status.
+        DevserverMsg::HotPatchStart => Some(Event::Status(HotReloadStatus::Patching)),
+        DevserverMsg::FullReloadStart => Some(Event::Status(HotReloadStatus::Rebuilding)),
+        DevserverMsg::FullReloadFailed => Some(Event::Status(HotReloadStatus::Failed)),
         _ => None,
     }
 }
@@ -161,10 +188,18 @@ mod tests {
                 server,
                 receive_patches(address, format!("ws://{address}/_dioxus"), 1, 2, sender)
             )?;
-            assert_eq!(
-                receiver.recv().await?.lib,
-                std::path::Path::new("unused-test-patch")
-            );
+            assert!(matches!(
+                receiver.recv().await?,
+                Event::Status(HotReloadStatus::Ready)
+            ));
+            assert!(matches!(
+                receiver.recv().await?,
+                Event::Status(HotReloadStatus::Patching)
+            ));
+            let Event::Patch(table) = receiver.recv().await? else {
+                panic!("expected a patch");
+            };
+            assert_eq!(table.lib, std::path::Path::new("unused-test-patch"));
             assert!(receiver.recv().await.is_err());
             Ok(())
         })

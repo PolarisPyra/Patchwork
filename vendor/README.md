@@ -59,6 +59,14 @@ is marked with a `Patchwork: Android support` comment:
 - `gpui_platform/src/gpui_platform.rs`: `current_platform` returns
   `gpui_android::current_platform` on Android.
 
+Patchwork also reports GPUI's hot reload status to the app. These edits are marked with a
+`Patchwork: hot reload status` comment:
+
+- `gpui/src/hot_reload_status.rs`: the `HotReloadStatus` global (new file).
+- `gpui/src/gpui.rs`: declares the module and exports `HotReloadStatus`.
+- `gpui/src/hot_reload.rs`: sets `HotReloadStatus` when it connects, when dx starts a patch or a
+  rebuild, when a patch applies or fails, and when the connection closes.
+
 ## How to Regenerate or Upgrade
 
 1. Check out the desired revision of `zed-industries/zed` locally (or use the cached Cargo checkout).
@@ -77,3 +85,4 @@ is marked with a `Patchwork: Android support` comment:
    scripts/check.sh
    cargo run android --no-run
    ```
+
