@@ -1,0 +1,18 @@
+[package]
+name = "patchwork-rpc-protocol"
+description = "The typed messages Patchwork's server and its phone and web clients exchange"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_json = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

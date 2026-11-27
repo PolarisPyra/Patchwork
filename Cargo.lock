@@ -1359,7 +1359,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1620,7 +1620,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4527,53 +4527,63 @@ dependencies = [
  "image",
  "log",
  "mimalloc",
- "patchwork-core",
- "patchwork-modals",
- "patchwork-pages",
- "patchwork-sidecar",
- "patchwork-ui",
+ "patchwork-backend",
+ "patchwork-daemon",
+ "patchwork-desktop-android",
+ "patchwork-desktop-browser",
+ "patchwork-desktop-dialogs",
+ "patchwork-desktop-onboarding",
+ "patchwork-desktop-quilts",
+ "patchwork-desktop-search",
+ "patchwork-desktop-settings",
+ "patchwork-desktop-shared",
+ "patchwork-dylib",
+ "patchwork-oxidation-client",
+ "patchwork-platform",
+ "patchwork-themes",
+ "patchwork-ui-backdrop",
+ "patchwork-ui-components",
+ "patchwork-ui-editor",
+ "patchwork-ui-markdown",
+ "patchwork-ui-theme",
+ "serde",
  "serde_json",
  "vt100",
 ]
 
 [[package]]
-name = "patchwork-android"
+name = "patchwork-backend"
 version = "26.11.162"
 dependencies = [
- "futures",
- "http",
- "image",
- "libc",
- "log",
- "patchwork-system",
- "prost",
- "serde",
- "serde_json",
- "tokio",
- "tonic",
- "tonic-prost",
-]
-
-[[package]]
-name = "patchwork-core"
-version = "26.11.162"
-dependencies = [
- "argon2",
+ "anyhow",
  "base64 0.22.1",
- "chacha20poly1305",
  "chrono",
  "enigo",
  "futures",
  "globset",
+ "http",
  "ignore",
  "image",
  "libc",
  "log",
- "minisign-verify",
  "notify",
- "patchwork-android",
- "patchwork-system",
+ "patchwork-daemon",
+ "patchwork-git",
+ "patchwork-oxidation-client",
+ "patchwork-platform",
+ "patchwork-provider-acp",
+ "patchwork-provider-antigravity",
+ "patchwork-provider-api",
+ "patchwork-provider-claude",
+ "patchwork-provider-codex",
+ "patchwork-provider-core",
+ "patchwork-provider-opencode",
+ "patchwork-rpc-protocol",
+ "patchwork-rpc-server",
+ "patchwork-themes",
+ "patchwork-vault",
  "portable-pty",
+ "prost",
  "pulldown-cmark",
  "regex",
  "resvg",
@@ -4581,7 +4591,10 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "tokio",
  "toml 1.1.8+spec-1.1.0",
+ "tonic",
+ "tonic-prost",
  "tungstenite",
  "ureq",
  "url",
@@ -4598,7 +4611,109 @@ dependencies = [
 ]
 
 [[package]]
-name = "patchwork-modals"
+name = "patchwork-daemon"
+version = "26.11.162"
+dependencies = [
+ "chrono",
+ "log",
+ "minisign-verify",
+ "patchwork-platform",
+ "patchwork-provider-core",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "ureq",
+ "zeroize",
+ "zip",
+]
+
+[[package]]
+name = "patchwork-desktop-android"
+version = "26.11.162"
+dependencies = [
+ "futures",
+ "gpui",
+ "image",
+ "log",
+ "patchwork-backend",
+ "patchwork-platform",
+ "patchwork-ui-components",
+ "patchwork-ui-editor",
+ "patchwork-ui-theme",
+]
+
+[[package]]
+name = "patchwork-desktop-browser"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "image",
+ "patchwork-backend",
+ "patchwork-ui-components",
+ "patchwork-ui-editor",
+ "patchwork-ui-theme",
+]
+
+[[package]]
+name = "patchwork-desktop-dialogs"
+version = "26.11.162"
+dependencies = [
+ "dirs",
+ "gpui",
+ "patchwork-backend",
+ "patchwork-desktop-shared",
+ "patchwork-platform",
+ "patchwork-ui-components",
+ "patchwork-ui-editor",
+ "patchwork-ui-markdown",
+ "patchwork-ui-theme",
+ "zeroize",
+]
+
+[[package]]
+name = "patchwork-desktop-onboarding"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "log",
+ "patchwork-backend",
+ "patchwork-desktop-shared",
+ "patchwork-platform",
+ "patchwork-ui-components",
+ "patchwork-ui-editor",
+ "patchwork-ui-theme",
+]
+
+[[package]]
+name = "patchwork-desktop-quilts"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "image",
+ "log",
+ "patchwork-backend",
+ "patchwork-desktop-browser",
+ "patchwork-platform",
+ "patchwork-ui-components",
+ "patchwork-ui-editor",
+ "patchwork-ui-markdown",
+ "patchwork-ui-theme",
+]
+
+[[package]]
+name = "patchwork-desktop-search"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "patchwork-backend",
+ "patchwork-ui-components",
+ "patchwork-ui-editor",
+ "patchwork-ui-theme",
+]
+
+[[package]]
+name = "patchwork-desktop-settings"
 version = "26.11.162"
 dependencies = [
  "base64 0.22.1",
@@ -4608,51 +4723,107 @@ dependencies = [
  "gpui",
  "image",
  "log",
- "patchwork-core",
- "patchwork-ui",
+ "patchwork-backend",
+ "patchwork-desktop-shared",
+ "patchwork-platform",
+ "patchwork-themes",
+ "patchwork-ui-backdrop",
+ "patchwork-ui-components",
+ "patchwork-ui-editor",
+ "patchwork-ui-markdown",
+ "patchwork-ui-theme",
  "serde_json",
  "zeroize",
 ]
 
 [[package]]
-name = "patchwork-pages"
+name = "patchwork-desktop-shared"
 version = "26.11.162"
 dependencies = [
- "futures",
  "gpui",
+ "patchwork-backend",
+ "patchwork-ui-theme",
+]
+
+[[package]]
+name = "patchwork-dylib"
+version = "26.11.162"
+dependencies = [
+ "anyhow",
+ "argon2",
+ "base64 0.22.1",
+ "chacha20poly1305",
+ "chrono",
+ "dirs",
+ "enigo",
+ "futures",
+ "globset",
+ "gpui",
+ "gpui_platform",
+ "ignore",
  "image",
  "log",
- "patchwork-core",
- "patchwork-modals",
- "patchwork-sidecar",
- "patchwork-ui",
-]
-
-[[package]]
-name = "patchwork-remote"
-version = "26.11.162"
-dependencies = [
- "base64 0.22.1",
- "libc",
- "patchwork-core",
- "patchwork-system",
+ "minisign-verify",
+ "notify",
+ "portable-pty",
+ "pulldown-cmark",
+ "qrcodegen",
+ "regex",
+ "resvg",
  "serde",
  "serde_json",
- "windows-sys 0.60.2",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "toml 1.1.8+spec-1.1.0",
+ "tungstenite",
+ "unicode-segmentation",
+ "ureq",
+ "url",
+ "uuid",
+ "vt100",
+ "x11rb",
+ "zbus",
+ "zeroize",
+ "zip",
+ "zune-jpeg",
 ]
 
 [[package]]
-name = "patchwork-sidecar"
+name = "patchwork-git"
 version = "26.11.162"
 dependencies = [
- "gpui",
- "image",
- "patchwork-core",
- "patchwork-ui",
+ "log",
+ "patchwork-platform",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
-name = "patchwork-system"
+name = "patchwork-oxidation"
+version = "26.11.162"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "globset",
+ "libc",
+ "notify",
+ "patchwork-oxidation-client",
+ "serde",
+ "serde_json",
+ "toml 1.1.8+spec-1.1.0",
+]
+
+[[package]]
+name = "patchwork-oxidation-client"
+version = "26.11.162"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "patchwork-platform"
 version = "26.11.162"
 dependencies = [
  "async-io",
@@ -4675,20 +4846,214 @@ dependencies = [
 ]
 
 [[package]]
-name = "patchwork-ui"
+name = "patchwork-provider-acp"
+version = "26.11.162"
+dependencies = [
+ "patchwork-platform",
+ "patchwork-provider-core",
+ "serde_json",
+]
+
+[[package]]
+name = "patchwork-provider-antigravity"
+version = "26.11.162"
+dependencies = [
+ "patchwork-platform",
+ "patchwork-provider-core",
+ "serde_json",
+]
+
+[[package]]
+name = "patchwork-provider-api"
+version = "26.11.162"
+dependencies = [
+ "log",
+ "patchwork-platform",
+ "patchwork-provider-core",
+ "patchwork-vault",
+ "serde",
+ "serde_json",
+ "ureq",
+]
+
+[[package]]
+name = "patchwork-provider-claude"
+version = "26.11.162"
+dependencies = [
+ "patchwork-platform",
+ "patchwork-provider-core",
+ "serde_json",
+]
+
+[[package]]
+name = "patchwork-provider-codex"
+version = "26.11.162"
+dependencies = [
+ "patchwork-platform",
+ "patchwork-provider-core",
+ "serde_json",
+ "toml 1.1.8+spec-1.1.0",
+]
+
+[[package]]
+name = "patchwork-provider-core"
+version = "26.11.162"
+dependencies = [
+ "log",
+ "patchwork-platform",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "patchwork-provider-opencode"
 version = "26.11.162"
 dependencies = [
  "base64 0.22.1",
+ "patchwork-platform",
+ "patchwork-provider-core",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "ureq",
+ "uuid",
+]
+
+[[package]]
+name = "patchwork-remote"
+version = "26.11.162"
+dependencies = [
+ "base64 0.22.1",
+ "libc",
+ "patchwork-backend",
+ "patchwork-platform",
+ "serde",
+ "serde_json",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
+name = "patchwork-rpc-client"
+version = "26.11.162"
+dependencies = [
+ "patchwork-platform",
+ "patchwork-rpc-protocol",
+ "patchwork-rpc-server",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tungstenite",
+ "ureq",
+ "url",
+]
+
+[[package]]
+name = "patchwork-rpc-protocol"
+version = "26.11.162"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "patchwork-rpc-server"
+version = "26.11.162"
+dependencies = [
+ "base64 0.22.1",
+ "chacha20poly1305",
+ "log",
+ "patchwork-platform",
+ "patchwork-rpc-protocol",
+ "qrcodegen",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tungstenite",
+ "url",
+]
+
+[[package]]
+name = "patchwork-themes"
+version = "26.11.162"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "patchwork-ui-backdrop"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "log",
+ "patchwork-themes",
+ "patchwork-ui-components",
+ "patchwork-ui-theme",
+]
+
+[[package]]
+name = "patchwork-ui-components"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "log",
+ "patchwork-ui-theme",
+]
+
+[[package]]
+name = "patchwork-ui-editor"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "log",
+ "patchwork-ui-components",
+ "patchwork-ui-markdown",
+ "patchwork-ui-theme",
+ "pulldown-cmark",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "patchwork-ui-markdown"
+version = "26.11.162"
+dependencies = [
  "chrono",
  "gpui",
  "log",
- "patchwork-core",
+ "patchwork-ui-components",
+ "patchwork-ui-theme",
  "pulldown-cmark",
- "rust-embed",
  "serde_json",
  "syntect",
  "two-face",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "patchwork-ui-theme"
+version = "26.11.162"
+dependencies = [
+ "base64 0.22.1",
+ "gpui",
+ "log",
+ "patchwork-themes",
+ "rust-embed",
+]
+
+[[package]]
+name = "patchwork-vault"
+version = "26.11.162"
+dependencies = [
+ "argon2",
+ "base64 0.22.1",
+ "chacha20poly1305",
+ "log",
+ "patchwork-platform",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "zeroize",
 ]
 
 [[package]]
@@ -5079,6 +5444,12 @@ checksum = "7f6d64c71eb498fe9eae14ce4ec935c555749aef511cca85b5568910d6e48001"
 dependencies = [
  "bytemuck",
 ]
+
+[[package]]
+name = "qrcodegen"
+version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4339fc7a1021c9c1621d87f5e3505f2805c8c105420ba2f2a4df86814590c142"
 
 [[package]]
 name = "quick-error"
@@ -5550,7 +5921,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6044,7 +6415,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6297,7 +6668,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6761,7 +7132,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7525,7 +7896,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8018,7 +8389,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d6f32a0ff4a9f6f01231eb2059cc85479330739333e0e58cadf03b6af2cca10"
 dependencies = [
  "cfg-if",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

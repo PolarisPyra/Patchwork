@@ -12,3 +12,18 @@ Run all Git commands from the repository root.
 - **Ask before deleting, moving, or renaming files.**
 - **No AI attribution.** Never add `Co-Authored-By: Claude` or "Generated with" lines to commits or PRs.
 - **Don't watch GitHub Actions runs** unless explicitly asked.
+
+# Patchwork: Running things
+
+Run nothing the user already has running.
+
+- **Don't start the dev server.** The user already has one running (`pnpm dev`, Vite on :1430 with the
+  server from source). Starting another takes the port, spawns a second Electron window, and can grab
+  the app's single-instance lock so the user's own launch quits with no message. To check the UI, open
+  or reload the window that is already up.
+- **Don't launch Electron.** Unless the user asks, drive the window that exists — over its debugging
+  port if it has one, `computer_screenshot` otherwise. A launch of your own is a second window over a
+  second server and shows you the wrong app.
+- **Clean up what you do start.** A server, a Vite process or an Electron window you started must be
+  stopped before you finish, and a stale `~/.config/Patchwork Next/Singleton*` left by a killed window
+  must be removed, or the user's next launch exits silently.

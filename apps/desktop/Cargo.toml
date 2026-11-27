@@ -1,0 +1,58 @@
+[package]
+name = "patchwork"
+description = "Patchwork's native window, drawn with GPUI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-oxidation-client.workspace = true
+patchwork-backend.workspace = true
+patchwork-daemon.workspace = true
+patchwork-desktop-android.workspace = true
+patchwork-desktop-browser.workspace = true
+patchwork-desktop-dialogs.workspace = true
+patchwork-desktop-onboarding.workspace = true
+patchwork-desktop-quilts.workspace = true
+patchwork-desktop-search.workspace = true
+patchwork-desktop-settings.workspace = true
+patchwork-desktop-shared.workspace = true
+patchwork-dylib = { workspace = true, optional = true }
+patchwork-platform.workspace = true
+patchwork-themes.workspace = true
+patchwork-ui-backdrop.workspace = true
+patchwork-ui-components.workspace = true
+patchwork-ui-editor.workspace = true
+patchwork-ui-markdown.workspace = true
+patchwork-ui-theme.workspace = true
+
+chrono = { workspace = true, features = ["clock"] }
+dirs.workspace = true
+futures = { workspace = true, default-features = true }
+gpui = { workspace = true, default-features = true }
+gpui_platform = { workspace = true, default-features = true, features = ["font-kit", "wayland", "x11"] }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+log = { workspace = true, default-features = true }
+# The global allocator: it is faster than the system one on the allocation-heavy paths of
+# layout and text shaping.
+mimalloc = { workspace = true, default-features = true }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_json = { workspace = true, default-features = true }
+vt100 = { workspace = true, default-features = true }
+
+[features]
+# Links the dependencies from one shared library, so a debug rebuild relinks only Patchwork.
+# For development only: the binary then needs the library and Rust's own beside it.
+dynamic = ["dep:patchwork-dylib"]
+
+[build-dependencies]
+# Embeds the Windows icon in the exe.
+embed-resource.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,27 @@
+[package]
+name = "patchwork-provider-api"
+description = "OpenAI-compatible API provider store, vault-backed secrets, local server discovery, and model listing"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+log = { workspace = true, default-features = true }
+patchwork-provider-core.workspace = true
+patchwork-platform.workspace = true
+patchwork-vault = { workspace = true, default-features = false }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_json = { workspace = true, default-features = true }
+ureq = { workspace = true, default-features = true, features = ["json"] }
+
+[features]
+default = ["keychain"]
+keychain = ["patchwork-platform/keychain", "patchwork-vault/keychain"]
+
+[lints]
+workspace = true

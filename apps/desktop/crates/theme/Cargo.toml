@@ -1,0 +1,22 @@
+[package]
+name = "patchwork-ui-theme"
+description = "Patchwork's GPUI design tokens, palette, sizing, embedded assets, icons, brand marks and view task helpers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-themes.workspace = true
+
+base64 = { workspace = true, default-features = true }
+gpui = { workspace = true, default-features = true }
+log = { workspace = true, default-features = true }
+rust-embed = { workspace = true, default-features = true, features = ["include-exclude"] }
+
+[lints]
+workspace = true

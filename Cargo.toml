@@ -1,18 +1,43 @@
 [workspace]
 resolver = "3"
 members = [
-  "crates/system",
-  "crates/android",
-  "crates/core",
-  "crates/ui",
-  "crates/sidecar",
-  "crates/modals",
-  "crates/pages",
-  "crates/desktop",
-  "crates/remote",
+  "apps/desktop",
+  "apps/desktop/crates/theme",
+  "apps/desktop/crates/components",
+  "apps/desktop/crates/markdown",
+  "apps/desktop/crates/editor",
+  "apps/desktop/crates/backdrop",
+  "apps/desktop/crates/shared",
+  "apps/desktop/crates/browser",
+  "apps/desktop/crates/android",
+  "apps/desktop/crates/settings",
+  "apps/desktop/crates/search",
+  "apps/desktop/crates/onboarding",
+  "apps/desktop/crates/quilts",
+  "apps/desktop/crates/dialogs",
+  "apps/desktop/crates/dylib",
+  "apps/remote",
+  "crates/patchwork_platform",
+  "crates/patchwork_daemon",
+  "crates/rpc_protocol",
+  "crates/patchwork_themes",
+  "crates/patchwork_vault",
+  "crates/patchwork_git",
+  "crates/provider_core",
+  "crates/provider_acp",
+  "crates/provider_api",
+  "crates/provider_claude",
+  "crates/provider_codex",
+  "crates/provider_antigravity",
+  "crates/provider_opencode",
+  "crates/rpc_server",
+  "crates/rpc_client",
+  "crates/patchwork_backend",
+  "crates/patchwork_oxidation_client",
+  "crates/patchwork_oxidation",
 ]
 # A bare `cargo run` or `cargo build` is for the app.
-default-members = ["crates/desktop"]
+default-members = ["apps/desktop"]
 
 # The app's version, which Settings → Updates compares with the latest release.
 [workspace.package]
@@ -28,14 +53,39 @@ categories = ["development-tools"]
 # Every crate the workspace uses, so all members resolve to the same version. Features are turned
 # on by the member that needs them.
 [workspace.dependencies]
-patchwork-android = { path = "crates/android" }
-patchwork-core = { path = "crates/core" }
-patchwork-modals = { path = "crates/modals" }
-patchwork-pages = { path = "crates/pages" }
-patchwork-system = { path = "crates/system" }
-patchwork-sidecar = { path = "crates/sidecar" }
-patchwork-ui = { path = "crates/ui" }
+patchwork-oxidation-client = { path = "crates/patchwork_oxidation_client" }
+patchwork-rpc-client = { path = "crates/rpc_client" }
+patchwork-backend = { path = "crates/patchwork_backend" }
+patchwork-daemon = { path = "crates/patchwork_daemon" }
+patchwork-desktop-android = { path = "apps/desktop/crates/android" }
+patchwork-desktop-browser = { path = "apps/desktop/crates/browser" }
+patchwork-desktop-dialogs = { path = "apps/desktop/crates/dialogs" }
+patchwork-desktop-onboarding = { path = "apps/desktop/crates/onboarding" }
+patchwork-desktop-quilts = { path = "apps/desktop/crates/quilts" }
+patchwork-desktop-search = { path = "apps/desktop/crates/search" }
+patchwork-desktop-settings = { path = "apps/desktop/crates/settings" }
+patchwork-desktop-shared = { path = "apps/desktop/crates/shared" }
+patchwork-dylib = { path = "apps/desktop/crates/dylib" }
+patchwork-rpc-protocol = { path = "crates/rpc_protocol" }
+patchwork-provider-acp = { path = "crates/provider_acp" }
+patchwork-provider-antigravity = { path = "crates/provider_antigravity" }
+patchwork-provider-api = { path = "crates/provider_api" }
+patchwork-provider-claude = { path = "crates/provider_claude" }
+patchwork-provider-codex = { path = "crates/provider_codex" }
+patchwork-provider-core = { path = "crates/provider_core" }
+patchwork-provider-opencode = { path = "crates/provider_opencode" }
+patchwork-rpc-server = { path = "crates/rpc_server" }
+patchwork-git = { path = "crates/patchwork_git" }
+patchwork-platform = { path = "crates/patchwork_platform" }
+patchwork-themes = { path = "crates/patchwork_themes" }
+patchwork-ui-backdrop = { path = "apps/desktop/crates/backdrop" }
+patchwork-ui-components = { path = "apps/desktop/crates/components" }
+patchwork-ui-editor = { path = "apps/desktop/crates/editor" }
+patchwork-ui-markdown = { path = "apps/desktop/crates/markdown" }
+patchwork-ui-theme = { path = "apps/desktop/crates/theme" }
+patchwork-vault = { path = "crates/patchwork_vault" }
 
+anyhow = { version = "1", default-features = false }
 async-io = { version = "2", default-features = false }
 argon2 = { version = "0.6", default-features = false }
 base64 = { version = "0.22", default-features = false }
@@ -62,6 +112,7 @@ notify = { version = "8", default-features = false }
 portable-pty = { version = "0.9", default-features = false }
 prost = { version = "0.14", default-features = false }
 pulldown-cmark = { version = "0.13", default-features = false }
+qrcodegen = { version = "1.8", default-features = false }
 regex = { version = "1", default-features = false }
 resvg = { version = "0.46", default-features = false }
 rusqlite = { version = "0.41", default-features = false }
@@ -130,6 +181,8 @@ allow_attributes_without_reason = "warn"
 as_pointer_underscore = "warn"
 assertions_on_result_states = "warn"
 clone_on_ref_ptr = "warn"
+# Only a binary's `main` ends the process; anywhere else it would skip saving and cleanup.
+exit = "warn"
 deref_by_slicing = "warn"
 disallowed_script_idents = "warn"
 empty_drop = "warn"

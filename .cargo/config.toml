@@ -1,0 +1,3 @@
+[alias]
+# Rebuilds the app on each save and restarts it; see oxidation.toml.
+oxidation = "run --quiet --package patchwork-oxidation --"

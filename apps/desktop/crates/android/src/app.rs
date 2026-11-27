@@ -1,0 +1,413 @@
+//! The app on the device picked: the variant runs build, reloading and stopping a run that
+//! stays attached, installing an APK, and the bar under the header that holds their controls.
+
+// Rust guideline compliant 2026-10-09
+
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use gpui::{AnyElement, ClickEvent, ExternalPaths, Role, Window, div, prelude::*, px};
+use patchwork_backend::android::{self as android, Device, DeviceState, Framework, Reload, Variant};
+use patchwork_backend::{Error, Core};
+
+use super::devices::{AndroidEvent, AndroidPanel, Run};
+use patchwork_ui_components::menu::{Menu, MenuItem};
+use patchwork_ui_theme::{fs_sm, Theme};
+use patchwork_ui_components::{dropdown_chip, icon_button, spinner, tooltip};
+
+/// What stops a command in a terminal: the interrupt key.
+const INTERRUPT: &str = "\u{3}";
+
+/// How long saves must stop before the app is built again: an editor saving several files, or
+/// an agent writing them one by one, builds once.
+const SETTLE: std::time::Duration = std::time::Duration::from_millis(800);
+
+impl AndroidPanel {
+    /// Reads the variants the app can be built as, and the one last picked for the project.
+    pub(super) fn load_variants(&self, cx: &mut Context<Self>) {
+        let (core, id) = (Arc::clone(&self.core), self.project_id.clone());
+        let project = self.project.clone();
+        let task = cx.background_spawn(async move {
+            (
+                android::variants(&project),
+                core.android().variant(&id, &project),
+            )
+        });
+        cx.spawn(async move |this, cx| {
+            let (variants, variant) = task.await;
+            this.update(cx, |this, cx| {
+                this.variants = variants;
+                this.variant = variant;
+                cx.notify();
+            })
+        })
+        .detach();
+    }
+
+    /// Builds `variant` from the next run on, and remembers it for the project.
+    fn pick_variant(&mut self, variant: Variant, cx: &mut Context<Self>) {
+        if self.variant == variant {
+            return;
+        }
+        self.variant = variant.clone();
+        // Another variant may install under another id, whose lines the log then shows.
+        if self.log.take().is_some() {
+            self.open_log(cx);
+        }
+        let (core, id) = (Arc::clone(&self.core), self.project_id.clone());
+        cx.background_spawn(async move {
+            if let Err(e) = core.android().set_variant(&id, &variant) {
+                log::warn!(error:% = e; "could not remember the build variant: {{error}}");
+            }
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn open_variant_menu(&mut self, e: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let this = cx.entity().downgrade();
+        let items = self
+            .variants
+            .iter()
+            .map(|variant| {
+                let (this, picked) = (this.clone(), variant.clone());
+                MenuItem::new(variant.name(), move |_, cx| {
+                    let _ = this.update(cx, |this, cx| this.pick_variant(picked.clone(), cx));
+                })
+                .radio(*variant == self.variant)
+            })
+            .collect();
+        self.open_menu("Build variant", items, e, window, cx);
+    }
+
+    /// Opens a menu of the panel's at the pointer; its `label` also says which one is open.
+    pub(super) fn open_menu(
+        &mut self,
+        label: &str,
+        items: Vec<MenuItem>,
+        e: &ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let menu = Menu::open_for(label.to_string(), items, window, cx, |this, window, cx| {
+            this.menu = None;
+            window.focus(&this.focus, cx);
+            cx.notify();
+        });
+        self.menu = Some((label.to_string(), menu, e.position()));
+        cx.notify();
+    }
+
+    pub(super) fn menu_open(&self, label: &str) -> bool {
+        self.menu.as_ref().is_some_and(|(of, _, _)| of == label)
+    }
+
+    /// The device picked, when it is running and ready.
+    pub(super) fn picked_device(&self) -> Option<&Device> {
+        let key = self.selected.as_deref()?;
+        self.devices().iter().find(|d| {
+            d.state == DeviceState::Online && (d.serial == key || d.avd.as_deref() == Some(key))
+        })
+    }
+
+    /// Whether the run under way stays attached to the app, to reload it.
+    pub(super) fn attached(&self) -> bool {
+        self.run == Run::Running && self.project.framework.reload().is_some()
+    }
+
+    /// What to type into the run's terminal now that the project-relative `paths` were saved.
+    /// None when no run is attached, or the framework reloads by itself.
+    #[must_use]
+    pub fn reload_on_save(&self, paths: &[String]) -> Option<&'static str> {
+        let framework = self.project.framework;
+        if self.run != Run::Running || !paths.iter().any(|path| framework.reloads_on_save(path)) {
+            return None;
+        }
+        match framework.reload() {
+            Some(Reload::Typed(keys)) => Some(keys),
+            _ => None,
+        }
+    }
+
+    /// Builds and installs a Kotlin or Java app again once the project-relative `paths` were
+    /// saved, on the device it last ran on. A burst of saves rebuilds once, after the last.
+    pub fn rebuild_on_save(&mut self, paths: &[String], cx: &mut Context<Self>) {
+        let framework = self.project.framework;
+        if self.last_run.is_none() || !paths.iter().any(|path| framework.rebuilds_on_save(path)) {
+            return;
+        }
+        self.saves += 1;
+        let saves = self.saves;
+        self.rebuild_after(saves, cx);
+    }
+
+    /// Rebuilds after [`SETTLE`], unless another save came since save number `saves`.
+    fn rebuild_after(&self, saves: u64, cx: &mut Context<Self>) {
+        patchwork_ui_theme::after(cx, SETTLE, move |this, cx| {
+            if this.saves == saves {
+                this.rebuild(saves, cx);
+            }
+        });
+    }
+
+    /// Builds and installs the app again on the device it last ran on, once the build under way
+    /// has ended.
+    fn rebuild(&mut self, saves: u64, cx: &mut Context<Self>) {
+        if self.run != Run::Idle {
+            self.rebuild_after(saves, cx);
+            return;
+        }
+        let Some((serial, avd)) = self.last_run.clone() else {
+            return;
+        };
+        let online = self
+            .devices()
+            .iter()
+            .any(|d| d.serial == serial && d.state == DeviceState::Online);
+        if online {
+            self.launch(serial, avd, cx);
+        }
+    }
+
+    /// Reloads the running app with the code as it is now, keeping its state; a restart starts
+    /// it over.
+    fn reload(&mut self, restart: bool, cx: &mut Context<Self>) {
+        let framework = self.project.framework;
+        let keys = if restart {
+            framework.restart()
+        } else {
+            match framework.reload() {
+                Some(Reload::Typed(keys)) => Some(keys),
+                Some(Reload::DeviceKeys) => {
+                    let Some(serial) = self.running_on.clone() else {
+                        return;
+                    };
+                    let root = self.project.root.clone();
+                    return self.device_action("Reloading the app", None, cx, move |core| {
+                        core.android().reload(&root, &serial)
+                    });
+                }
+                None => None,
+            }
+        };
+        self.type_in_run(keys, cx);
+    }
+
+    /// Ends the run that stays attached to the app.
+    fn stop_run(&mut self, cx: &mut Context<Self>) {
+        self.stop_asked = true;
+        let keys = if self.project.framework == Framework::Flutter {
+            "q"
+        } else {
+            INTERRUPT
+        };
+        self.type_in_run(Some(keys), cx);
+    }
+
+    fn type_in_run(&self, keys: Option<&'static str>, cx: &mut Context<Self>) {
+        if let Some(keys) = keys {
+            cx.emit(AndroidEvent::Type(keys));
+        }
+    }
+
+    /// Asks a device to do something off the UI thread, showing `doing` until it has and `done`
+    /// after.
+    pub(super) fn device_action(
+        &mut self,
+        doing: &str,
+        done: Option<String>,
+        cx: &mut Context<Self>,
+        act: impl FnOnce(&Core) -> Result<(), Error> + Send + 'static,
+    ) {
+        self.working = Some(doing.to_string());
+        self.failure = None;
+        self.notice = None;
+        let core = Arc::clone(&self.core);
+        patchwork_ui_theme::off_thread(
+            cx,
+            move || act(&core),
+            move |this, result, cx| {
+                this.working = None;
+                match result {
+                    Ok(()) => this.notice = done,
+                    Err(e) => this.failure = Some(e),
+                }
+                this.load_states(cx);
+                this.refresh(cx);
+                cx.notify();
+            },
+        );
+        cx.notify();
+    }
+
+    /// Installs the APK files among `paths` on the device picked.
+    pub(super) fn install(&mut self, paths: &[PathBuf], cx: &mut Context<Self>) {
+        let apks: Vec<PathBuf> = paths
+            .iter()
+            .filter(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("apk"))
+            })
+            .cloned()
+            .collect();
+        let names: Vec<String> = apks
+            .iter()
+            .filter_map(|apk| Some(apk.file_name()?.to_string_lossy().into_owned()))
+            .collect();
+        self.notice = None;
+        if apks.is_empty() {
+            self.failure = Some("Only .apk files can be installed on a device.".into());
+            return cx.notify();
+        }
+        let Some(device) = self.picked_device() else {
+            self.failure = Some("Start or connect the device picked, then install.".into());
+            return cx.notify();
+        };
+        let (serial, root) = (device.serial.clone(), self.project.root.clone());
+        let names = names.join(", ");
+        self.device_action(
+            &format!("Installing {names}"),
+            Some(format!("Installed {names}")),
+            cx,
+            move |core| {
+                apks.iter()
+                    .try_for_each(|apk| core.android().install(&root, &serial, apk))
+            },
+        );
+    }
+
+    /// Asks for APK files, then installs them on the device picked.
+    pub(super) fn choose_apk(&mut self, cx: &mut Context<Self>) {
+        patchwork_ui_theme::pick_paths(
+            cx,
+            gpui::PathPromptOptions {
+                files: true,
+                directories: false,
+                multiple: true,
+                prompt: Some("Install".into()),
+            },
+            move |this, paths, cx| this.install(&paths, cx),
+        );
+    }
+
+    pub(super) fn dropped(&mut self, files: &ExternalPaths, cx: &mut Context<Self>) {
+        self.install(files.paths(), cx);
+    }
+
+    /// The bar under the header: the variant runs build, the controls of an attached run, and
+    /// the log's switch.
+    pub(super) fn run_bar(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.sdk()?;
+        if self.create.is_some() || self.sheet.is_some() {
+            return None;
+        }
+        let variant = (self.variants.len() > 1).then(|| {
+            dropdown_chip(
+                "android-variant",
+                format!("Build variant: {}", self.variant.name()),
+                self.variant.name(),
+                self.menu_open("Build variant"),
+                t,
+            )
+            .tooltip(tooltip("Build variant"))
+            .on_click(cx.listener(Self::open_variant_menu))
+        });
+        let mut controls: Vec<AnyElement> = Vec::new();
+        if self.attached() {
+            controls.push(
+                icon_button(
+                    "android-reload",
+                    "Reload the app",
+                    "arrow-clockwise",
+                    14.,
+                    cx,
+                )
+                .tooltip(tooltip("Reload"))
+                .on_click(cx.listener(|this, _, _, cx| this.reload(false, cx)))
+                .into_any_element(),
+            );
+            if self.project.framework.restart().is_some() {
+                controls.push(
+                    icon_button(
+                        "android-restart",
+                        "Restart the app",
+                        "arrow-clockwise",
+                        14.,
+                        cx,
+                    )
+                    .tooltip(tooltip("Restart"))
+                    .on_click(cx.listener(|this, _, _, cx| this.reload(true, cx)))
+                    .into_any_element(),
+                );
+            }
+            controls.push(
+                icon_button("android-stop-run", "Stop the run", "stop", 14., cx)
+                    .tooltip(tooltip("Stop the run"))
+                    .on_click(cx.listener(|this, _, _, cx| this.stop_run(cx)))
+                    .into_any_element(),
+            );
+        }
+        let log_open = self.log.is_some();
+        controls.push(
+            icon_button("android-log", "App log", "list-bullets", 14., cx)
+                .aria_toggled(log_open.into())
+                .when(log_open, |button| button.bg(t.bg_selected_muted))
+                .tooltip(tooltip("Log"))
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_log(cx)))
+                .into_any_element(),
+        );
+        Some(
+            div()
+                .id("android-app-bar")
+                .role(Role::Toolbar)
+                .aria_label("App")
+                .flex()
+                .flex_none()
+                .items_center()
+                .gap(px(4.))
+                .min_h(px(40.))
+                .px(px(14.))
+                .border_b_1()
+                .border_color(t.border)
+                .children(variant)
+                .child(div().flex_1())
+                .children(controls)
+                .into_any_element(),
+        )
+    }
+
+    /// What a device is being asked to do, and what the last action did.
+    pub(super) fn progress(&self, t: &Theme, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let row = |id: &'static str, text: String| {
+            div()
+                .id(id)
+                .role(Role::Status)
+                .aria_label(text)
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .text_size(px(fs_sm()))
+                .text_color(t.text_muted)
+        };
+        let working = self.working.as_ref().map(|doing| {
+            row("android-working", doing.clone())
+                .child(spinner(14., t.text_muted))
+                .child(div().flex_1().min_w_0().truncate().child(doing.clone()))
+                .into_any_element()
+        });
+        let notice = self.notice.as_ref().map(|done| {
+            row("android-notice", done.clone())
+                .child(div().flex_1().min_w_0().truncate().child(done.clone()))
+                .child(
+                    icon_button("android-notice-dismiss", "Dismiss", "x", 12., cx)
+                        .size(px(20.))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.notice = None;
+                            cx.notify();
+                        })),
+                )
+                .into_any_element()
+        });
+        working.into_iter().chain(notice).collect()
+    }
+}

@@ -1,0 +1,20 @@
+[package]
+name = "patchwork-themes"
+description = "Patchwork's theme, scene and code theme files as data, which the core keeps and the views draw"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+serde = { workspace = true, default-features = true, features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { workspace = true, default-features = true }
+
+[lints]
+workspace = true
