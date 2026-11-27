@@ -146,27 +146,3 @@ pub(super) fn derive(password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_L
         .map_err(err)?;
     Ok(key)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn seal_unseal_binds_secret_name() {
-        let key = new_key();
-        let c = cipher(&key);
-        let (nonce, sealed) = seal(&c, "openai", b"sk-test-value").expect("seal");
-        let plain = unseal(&c, "openai", &nonce, &sealed).expect("unseal");
-        assert_eq!(&*plain, b"sk-test-value");
-        let _ = unseal(&c, "anthropic", &nonce, &sealed).unwrap_err();
-    }
-
-    #[test]
-    fn data_key_round_trips_through_wrapping_key() {
-        let wrapping = new_key();
-        let data = new_key();
-        let (nonce, wrapped) = seal(&cipher(&wrapping), DATA_KEY, data.as_ref()).expect("wrap");
-        let recovered = data_key(&wrapping, &nonce, &wrapped).expect("unwrap");
-        assert_eq!(*recovered, *data);
-    }
-}

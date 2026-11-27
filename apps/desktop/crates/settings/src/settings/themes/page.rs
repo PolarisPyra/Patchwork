@@ -24,7 +24,7 @@ use crate::settings::{SettingsDialog, SettingsEvent};
 use patchwork_ui_backdrop::PreviewFlight;
 use crate::settings::controls::{FieldKind, Section, alert, anchored, segmented, sought, token_row};
 use crate::background_picker::BackgroundPicker;
-use patchwork_ui_theme::{fs_sm, theme};
+use patchwork_ui_theme::{IconName, fs_sm, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button, spinner};
 
 /// How often a folder is looked at for the file a chat is writing, and how many times before
@@ -305,7 +305,7 @@ pub(super) fn generator(
     let open_folder = icon_button(
         SharedString::from(format!("folder-{}", kind.field())),
         format!("Open the {noun} folder"),
-        "folder-open",
+        IconName::FolderOpen,
         16.,
         cx,
     )

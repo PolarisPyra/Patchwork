@@ -4,6 +4,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+mod access_picker;
+mod agent_picker;
 mod chips;
 mod footer;
 mod launch;

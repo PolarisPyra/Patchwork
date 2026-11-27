@@ -10,7 +10,7 @@ use super::vault::{ASK, CONFIRM, CURRENT, Change, Entry, FIELD_WIDTH, NEW, RECOV
 use super::rows::{activity_rows, protected_row, recovery_row, saved_rows, timeout_row};
 use crate::settings::controls::{FieldKind, Section, alert, token_row, vault_notice};
 use crate::settings::dialog::SettingsDialog;
-use patchwork_ui_theme::{fs_sm, theme};
+use patchwork_ui_theme::{IconName, fs_sm, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button, spinner};
 use patchwork_ui_theme::icon;
 
@@ -81,7 +81,11 @@ pub(super) fn reveal_button(
     icon_button(
         SharedString::from(id),
         label,
-        if shown { "eye-slash" } else { "eye" },
+        if shown {
+            IconName::EyeSlash
+        } else {
+            IconName::Eye
+        },
         14.,
         cx,
     )
@@ -156,7 +160,7 @@ fn actions(
             .gap(px(4.))
             .text_size(px(fs_sm()))
             .text_color(t.success)
-            .child(icon("check", 13.).text_color(t.success))
+            .child(icon(IconName::Check, 13.).text_color(t.success))
             .child(done)
     });
     div()

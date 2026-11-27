@@ -12,21 +12,21 @@ use gpui::{
 use patchwork_backend::browser::{INSTALL_URL, MouseAction};
 
 use super::headless_page::BrowserView;
-use patchwork_ui_theme::{Theme, fs_sm, theme};
+use patchwork_ui_theme::{IconName, Theme, fs_sm, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button, input_box, spinner, tooltip};
 
 impl BrowserView {
     fn toolbar(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let focused = gpui::Focusable::focus_handle(self.address.read(cx), cx).is_focused(window);
-        let nav = |id: &'static str, label: &'static str, glyph: &'static str, on: bool| {
+        let nav = |id: &'static str, label: &'static str, glyph: IconName, on: bool| {
             icon_button(id, label, glyph, 16., cx)
                 .tooltip(tooltip(label))
                 .when(!on, |b| b.opacity(0.4).cursor_default())
         };
         let (reload_label, reload_icon) = if self.loading && self.sender.is_some() {
-            ("Stop", "x")
+            ("Stop", IconName::X)
         } else {
-            ("Reload", "arrow-clockwise")
+            ("Reload", IconName::ArrowClockwise)
         };
         div()
             .id("browser-toolbar")
@@ -41,7 +41,7 @@ impl BrowserView {
             .border_b_1()
             .border_color(t.border)
             .child(
-                nav("browser-back", "Back", "arrow-left", self.back).on_click(cx.listener(
+                nav("browser-back", "Back", IconName::ArrowLeft, self.back).on_click(cx.listener(
                     |this, _, _, _| {
                         if this.back {
                             this.send(patchwork_backend::browser::BrowserCommand::Back);
@@ -50,13 +50,17 @@ impl BrowserView {
                 )),
             )
             .child(
-                nav("browser-forward", "Forward", "arrow-right", self.forward).on_click(
-                    cx.listener(|this, _, _, _| {
-                        if this.forward {
-                            this.send(patchwork_backend::browser::BrowserCommand::Forward);
-                        }
-                    }),
-                ),
+                nav(
+                    "browser-forward",
+                    "Forward",
+                    IconName::ArrowRight,
+                    self.forward,
+                )
+                .on_click(cx.listener(|this, _, _, _| {
+                    if this.forward {
+                        this.send(patchwork_backend::browser::BrowserCommand::Forward);
+                    }
+                })),
             )
             .child(
                 nav("browser-reload", reload_label, reload_icon, true)
@@ -71,7 +75,7 @@ impl BrowserView {
                 icon_button(
                     "browser-external",
                     "Open in browser",
-                    "arrow-square-out",
+                    IconName::ArrowSquareOut,
                     16.,
                     cx,
                 )

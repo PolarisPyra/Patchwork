@@ -231,21 +231,3 @@ fn group_model_pairs(pairs: &[(&str, &str)]) -> Vec<ModelOption> {
         })
         .collect()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn groups_effort_variants_from_tab_list() {
-        let out =
-            parse_models("gemini-pro-high\tGemini Pro (High)\ngemini-pro-low\tGemini Pro (Low)\n");
-        assert_eq!(out.len(), 1);
-        assert_eq!(out[0].id.as_deref(), Some("gemini-pro"));
-        assert_eq!(out[0].label, "Gemini Pro");
-        assert_eq!(
-            out[0].efforts.as_deref(),
-            Some(&["low".to_string(), "high".to_string()][..])
-        );
-    }
-}

@@ -16,7 +16,7 @@ use gpui::{
 use patchwork_backend::chats::{Attachment, AttachmentKind, Message};
 
 use patchwork_ui_markdown::markdown::{FindIn, markdown_found};
-use patchwork_ui_theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_sm, fs_xs, radius, radius_sm, Theme};
 use patchwork_ui_components::{button, tooltip};
 use patchwork_ui_markdown::format_clock;
 use patchwork_ui_theme::icon;
@@ -88,11 +88,11 @@ fn image_end(text: &str) -> Option<usize> {
         .then(|| text.len() - path.len() + end + 2)
 }
 
-fn kind_name(kind: AttachmentKind) -> &'static str {
+fn kind_name(kind: AttachmentKind) -> IconName {
     match kind {
-        AttachmentKind::Image => "image",
-        AttachmentKind::File => "file",
-        AttachmentKind::Folder => "folder",
+        AttachmentKind::Image => IconName::Image,
+        AttachmentKind::File => IconName::File,
+        AttachmentKind::Folder => IconName::Folder,
     }
 }
 
@@ -117,7 +117,7 @@ pub fn attachment_chip(id: impl Into<SharedString>, a: &Attachment, t: &Theme) -
             .rounded(px(2.))
             .object_fit(ObjectFit::Cover)
             .with_fallback(move || {
-                icon("image", 13.)
+                icon(IconName::Image, 13.)
                     .flex_none()
                     .text_color(muted)
                     .into_any_element()
@@ -153,7 +153,7 @@ pub fn attachment_chip(id: impl Into<SharedString>, a: &Attachment, t: &Theme) -
                 .flex_none()
                 .text_size(px(fs_xs()))
                 .text_color(t.text_subtle)
-                .child(name.to_uppercase()),
+                .child(name.kebab_name().to_uppercase()),
         )
 }
 
@@ -405,7 +405,7 @@ pub fn user_message(
             .tooltip(tooltip(
                 "Put the project's files back as they were before this message",
             ))
-            .child(icon("arrow-u-up-left", 13.))
+            .child(icon(IconName::ArrowUUpLeft, 13.))
             .child("Restore")
             .on_click(
                 cx.listener(move |w, _, window, cx| w.restore_checkpoint(&message_id, window, cx)),

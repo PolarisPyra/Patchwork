@@ -6,7 +6,7 @@ use gpui::{ClickEvent, Div, Focusable, Role, SharedString, Stateful, Window, div
 use patchwork_backend::source_control::{CommitOptions, PullRequest, RepoAction};
 
 use patchwork_ui_components::menu::MenuItem;
-use patchwork_ui_theme::{fs_md, fs_sm, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_sm, radius_sm, Theme};
 use patchwork_ui_components::{button, spinner, tooltip};
 use patchwork_ui_theme::icon;
 use super::file_groups::group_button;
@@ -24,14 +24,14 @@ impl ChangesView {
         let ((primary, primary_label), menu) = git_actions(self.sync.as_ref(), has_changes);
         let busy = self.busy.is_some();
         let lead_icon = if primary_label == "Publish Branch" {
-            "cloud-arrow-up"
+            IconName::CloudArrowUp
         } else {
             match primary {
-                Some(GitAction::Push) => "arrow-up",
-                Some(GitAction::Pull) => "arrow-down",
-                Some(GitAction::OpenPr | GitAction::ViewPr) => "git-pull-request",
-                Some(GitAction::Sync) => "arrows-clockwise",
-                _ => "check",
+                Some(GitAction::Push) => IconName::ArrowUp,
+                Some(GitAction::Pull) => IconName::ArrowDown,
+                Some(GitAction::OpenPr | GitAction::ViewPr) => IconName::GitPullRequest,
+                Some(GitAction::Sync) => IconName::ArrowsClockwise,
+                _ => IconName::Check,
             }
         };
         let focused = self.message.read(cx).focus_handle(cx).is_focused(window);
@@ -104,7 +104,7 @@ impl ChangesView {
                                 b.hover(move |s| s.bg(hover).text_color(fg))
                             })
                             .when(!write_enabled, |b| b.opacity(0.5).cursor_default())
-                            .child(icon("sparkle", 14.))
+                            .child(icon(IconName::Sparkle, 14.))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if write_enabled {
                                     this.write_message(cx);
@@ -164,7 +164,7 @@ impl ChangesView {
                             .tooltip(tooltip("More actions"))
                             .when(menu_enabled, |b| b.hover(move |s| s.bg(accent_hover)))
                             .when(!menu_enabled, |b| b.opacity(0.5).cursor_default())
-                            .child(icon("caret-down", 12.))
+                            .child(icon(IconName::CaretDown, 12.))
                             .on_click(cx.listener(move |this, e: &ClickEvent, window, cx| {
                                 if !menu_enabled || this.just_dismissed(e) {
                                     return;
@@ -243,7 +243,7 @@ impl ChangesView {
                                             this.act("Undoing…", RepoAction::UndoCommit, cx);
                                         });
                                     })
-                                    .icon("arrow-counter-clockwise")
+                                    .icon(IconName::ArrowCounterClockwise)
                                     .separated(),
                                 );
                                 this.open_menu("Commit actions", items, at, None, window, cx);
@@ -328,7 +328,7 @@ impl ChangesView {
                             .text_color(t.text)
                             .hover(gpui::Styled::underline)
                             .tooltip(tooltip(url.clone()))
-                            .child(icon("git-pull-request", 14.))
+                            .child(icon(IconName::GitPullRequest, 14.))
                             .child(format!("#{number}"))
                             .on_click(move |_, _, cx| cx.open_url(&url)),
                     )
@@ -358,7 +358,7 @@ impl ChangesView {
                                 if busy {
                                     spinner(12., t.text_subtle).into_any_element()
                                 } else {
-                                    icon("paper-plane-right", 14.).into_any_element()
+                                    icon(IconName::PaperPlaneRight, 14.).into_any_element()
                                 },
                                 t,
                             )

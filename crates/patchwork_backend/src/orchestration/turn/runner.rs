@@ -157,12 +157,6 @@ impl Runner {
         })
     }
 
-    /// How many chats the runner keeps a run for.
-    #[cfg(test)]
-    pub(in crate::orchestration) fn tracked(&self) -> usize {
-        self.runs.locked().len()
-    }
-
     /// Whether a reply is under way in the chat. An agent that is only kept up by shell
     /// commands it left running does not count.
     pub fn is_running(&self, chat_id: &str) -> bool {

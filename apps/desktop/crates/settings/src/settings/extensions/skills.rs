@@ -13,7 +13,7 @@ use patchwork_backend::extensions::skills::{self, Skill};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, letter_badge, switch, token_row};
-use patchwork_ui_theme::{fs_sm, theme};
+use patchwork_ui_theme::{IconName, theme};
 use patchwork_ui_components::{BtnKind, btn};
 use patchwork_ui_theme::icon;
 
@@ -197,7 +197,7 @@ pub fn render(
         .child(
             btn("skills-open", "Open folder", BtnKind::Plain, false, &t)
                 .px(px(10.))
-                .child(icon("folder-simple", 13.))
+                .child(icon(IconName::FolderSimple, 13.))
                 .child("Open folder")
                 .on_click(cx.listener(move |d, _, _, cx| d.open_folder(open_dir.clone(), cx))),
         );
@@ -217,22 +217,12 @@ pub fn render(
                 .when(!enabled, |row| row.opacity(0.55))
                 .child(letter_badge(&skill.name, 24.))
                 .child(
-                    div()
-                        .min_w_0()
-                        .flex_1()
-                        .child(
-                            div()
-                                .truncate()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(label.clone()),
-                        )
-                        .child(
-                            div()
-                                .truncate()
-                                .text_size(px(fs_sm()))
-                                .text_color(t.text_muted)
-                                .child(skill.description.clone().unwrap_or_default()),
-                        ),
+                    div().min_w_0().flex_1().child(
+                        div()
+                            .truncate()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(label.clone()),
+                    ),
                 )
                 .child(
                     btn(

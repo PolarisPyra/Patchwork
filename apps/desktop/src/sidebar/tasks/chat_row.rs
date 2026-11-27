@@ -16,7 +16,7 @@ use patchwork_backend::gateway::{ChatApps, Platform, Presence};
 use patchwork_backend::chats::{ApprovalStatus, MessageStatus, Chat};
 use patchwork_backend::worktree::WorktreeMark;
 use patchwork_ui_components::avatar::{Mood, avatar};
-use patchwork_ui_theme::{fs_sm, radius_sm, Theme, theme};
+use patchwork_ui_theme::{IconName, fs_sm, radius_sm, Theme, theme};
 use patchwork_ui_components::{button, spinner};
 use patchwork_ui_markdown::{display_title, format_relative};
 use patchwork_ui_theme::icon;
@@ -78,7 +78,7 @@ pub(crate) fn tree_row(
 }
 
 /// A 24px icon button a row shows while hovered.
-pub(super) fn reveal_button(id: &str, label: String, name: &str, t: &Theme) -> Stateful<Div> {
+pub(super) fn reveal_button(id: &str, label: String, name: IconName, t: &Theme) -> Stateful<Div> {
     let (hover, fg) = (t.bg_hover, t.text);
     button(SharedString::from(format!("reveal:{id}")), label)
         .size(px(24.))
@@ -133,8 +133,8 @@ impl Workspace {
 /// to do.
 fn worktree_mark(mark: WorktreeMark, t: &Theme) -> Option<(AnyElement, &'static str)> {
     let (label, color, name) = match mark {
-        WorktreeMark::Unmerged => ("Unmerged changes", t.accent_text, "git-pull-request"),
-        WorktreeMark::OffBranch => ("Worktree on another branch", t.warning, "warning"),
+        WorktreeMark::Unmerged => ("Unmerged changes", t.accent_text, IconName::GitPullRequest),
+        WorktreeMark::OffBranch => ("Worktree on another branch", t.warning, IconName::Warning),
         WorktreeMark::Clean => return None,
     };
     let element = div()
@@ -202,13 +202,13 @@ pub(super) fn chat_row(
         Some(avatar(&agent.id, &agent.name, mood, 16.).into_any_element())
     } else if th.favorite {
         Some(
-            icon("star-fill", 13.)
+            icon(IconName::StarFill, 13.)
                 .text_color(t.text_muted)
                 .into_any_element(),
         )
     } else if th.pinned {
         Some(
-            icon("push-pin-fill", 13.)
+            icon(IconName::PushPinFill, 13.)
                 .text_color(t.text_muted)
                 .into_any_element(),
         )
@@ -219,7 +219,7 @@ pub(super) fn chat_row(
     // other in place. The spinner shows a task working in a project whose tabs are not open.
     let state: AnyElement = if needs_approval || busy {
         let mark = if needs_approval {
-            icon("shield-warning", 15.)
+            icon(IconName::ShieldWarning, 15.)
                 .text_color(t.warning)
                 .into_any_element()
         } else {
@@ -348,7 +348,7 @@ pub(super) fn chat_row(
                     .opacity(0.)
                     .group_hover(group, |s| s.opacity(1.))
                     .focus(|s| s.opacity(1.))
-                    .child(icon("archive", 15.))
+                    .child(icon(IconName::Archive, 15.))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.archive(&archive_id, cx);
@@ -455,6 +455,6 @@ pub(super) fn phone_mark(
         .items_center()
         .justify_center()
         .text_color(colour)
-        .child(icon("device-mobile", 14.))
+        .child(icon(IconName::DeviceMobile, 14.))
         .into_any_element()
 }

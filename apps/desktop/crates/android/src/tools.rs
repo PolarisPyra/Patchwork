@@ -16,7 +16,7 @@ use patchwork_backend::android::{Device, NetworkSpeed, StateAction, WifiDevice};
 use super::devices::AndroidPanel;
 use patchwork_ui_components::menu::MenuItem;
 use patchwork_ui_editor::{Submitted, TextArea};
-use patchwork_ui_theme::{font_mono, fs_sm, radius, Theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, radius, Theme};
 use patchwork_ui_components::{BtnKind, btn, button, icon_button, input_box, spinner, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -94,7 +94,7 @@ impl AndroidPanel {
                         });
                     }
                 })
-                .icon("arrow-clockwise"),
+                .icon(IconName::ArrowClockwise),
             );
             items.push(
                 MenuItem::new("Set location…", {
@@ -105,7 +105,7 @@ impl AndroidPanel {
                         });
                     }
                 })
-                .icon("globe"),
+                .icon(IconName::Globe),
             );
             items.push(
                 MenuItem::new("Saved states…", {
@@ -116,7 +116,7 @@ impl AndroidPanel {
                         });
                     }
                 })
-                .icon("camera"),
+                .icon(IconName::Camera),
             );
             for (i, speed) in NetworkSpeed::ALL.into_iter().enumerate() {
                 let (this, serial) = (this.clone(), serial.clone());
@@ -142,7 +142,7 @@ impl AndroidPanel {
                 this.choose_apk(cx);
             });
         })
-        .icon("export");
+        .icon(IconName::Export);
         items.push(if items.is_empty() {
             install
         } else {
@@ -500,7 +500,7 @@ impl AndroidPanel {
                         icon_button(
                             ("android-state-load", i),
                             format!("Load {name}"),
-                            "arrow-counter-clockwise",
+                            IconName::ArrowCounterClockwise,
                             14.,
                             cx,
                         )
@@ -516,7 +516,7 @@ impl AndroidPanel {
                         icon_button(
                             ("android-state-delete", i),
                             format!("Delete {name}"),
-                            "trash",
+                            IconName::Trash,
                             14.,
                             cx,
                         )
@@ -565,7 +565,7 @@ impl AndroidPanel {
                 .rounded(px(radius()))
                 .px(px(8.))
                 .hover(move |s| s.bg(hover))
-                .child(icon("plugs-connected", 16.).text_color(t.text_muted))
+                .child(icon(IconName::PlugsConnected, 16.).text_color(t.text_muted))
                 .child(
                     div()
                         .flex_1()

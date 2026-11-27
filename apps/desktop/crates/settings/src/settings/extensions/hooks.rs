@@ -10,7 +10,7 @@ use patchwork_backend::extensions::hooks::{self, HookEvent, Bundle, Hook, HookHa
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, switch, token_row};
-use patchwork_ui_theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_xs, radius, radius_sm, Theme, theme};
 use patchwork_ui_components::{BtnKind, btn};
 use patchwork_ui_theme::icon;
 
@@ -199,7 +199,14 @@ fn hook_row(
                     .flex_none()
                     .when(skipped.is_empty(), gpui::Styled::ml_auto)
                     .text_color(t.text_subtle)
-                    .child(icon(if open { "caret-down" } else { "caret-right" }, 12.)),
+                    .child(icon(
+                        if open {
+                            IconName::CaretDown
+                        } else {
+                            IconName::CaretRight
+                        },
+                        12.,
+                    )),
             ),
     )
     .child(
@@ -289,7 +296,7 @@ fn bundle_card(
                         .mt(px(2.))
                         .flex_none()
                         .text_color(t.text_muted)
-                        .child(icon("puzzle-piece", 18.)),
+                        .child(icon(IconName::PuzzlePiece, 18.)),
                 )
                 .child(
                     div()
@@ -313,13 +320,6 @@ fn bundle_card(
                                         .child(v)
                                 })),
                         )
-                        .children(bundle.description.clone().map(|desc| {
-                            div()
-                                .mt(px(2.))
-                                .text_size(px(fs_sm()))
-                                .text_color(t.text_muted)
-                                .child(desc)
-                        }))
                         .when(!hooks.is_empty(), |d| {
                             d.child(
                                 div()
@@ -384,7 +384,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .child(
             btn("hooks-open", "Open folder", BtnKind::Plain, false, &t)
                 .px(px(10.))
-                .child(icon("folder-simple", 13.))
+                .child(icon(IconName::FolderSimple, 13.))
                 .child("Open folder")
                 .on_click(cx.listener(move |d, _, _, cx| d.open_folder(open_top.clone(), cx))),
         );

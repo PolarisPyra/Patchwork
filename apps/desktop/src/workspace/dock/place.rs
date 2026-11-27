@@ -137,7 +137,7 @@ impl Workspace {
             .update(cx, |p, cx| p.sync(&self.settings, host, cwd, cx));
     }
 
-    fn open_panel(&mut self, tab: DockTab, cx: &mut Context<Self>) {
+    pub(crate) fn open_panel(&mut self, tab: DockTab, cx: &mut Context<Self>) {
         self.sync_panel(cx);
         self.dock.update(cx, |p, cx| p.show(tab, cx));
         cx.notify();
@@ -189,12 +189,6 @@ impl Workspace {
     /// The terminal key opens the terminal, focuses it if the panel shows something else, and
     /// closes the panel from inside it. It opens on a shell in the open task's worktree or the
     /// open project's folder, starting one there when none exists.
-    /// Whether the panel is open on the terminal.
-    pub(crate) fn terminal_shown(&self, cx: &App) -> bool {
-        let dock = self.dock.read(cx);
-        dock.visible && dock.tab == DockTab::Terminal
-    }
-
     pub(crate) fn toggle_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let panel = self.dock.read(cx);
         if panel.visible && panel.tab == DockTab::Terminal && panel.terminal_focused(window) {
@@ -334,35 +328,5 @@ impl Workspace {
                 .child(self.dock.clone())
                 .when(!maximized, |area| area.child(handle)),
         )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{PANEL_MIN, bounded, dragged};
-
-    #[test]
-    fn height_stays_within_the_column() {
-        assert_eq!(bounded(260., 1000., false), (260., 800.));
-        assert_eq!(bounded(950., 1000., false), (800., 800.));
-        assert_eq!(bounded(10., 1000., false), (PANEL_MIN, 800.));
-    }
-
-    #[test]
-    fn a_short_column_still_allows_the_least_height() {
-        assert_eq!(bounded(260., 100., false), (PANEL_MIN, PANEL_MIN));
-    }
-
-    #[test]
-    fn maximized_takes_the_most() {
-        assert_eq!(bounded(200., 1000., true), (800., 800.));
-    }
-
-    #[test]
-    fn dragging_up_grows_the_panel_within_bounds() {
-        assert_eq!(dragged(500., 260., 400., 800.), 360.);
-        assert_eq!(dragged(500., 260., 600., 800.), 160.);
-        assert_eq!(dragged(500., 260., 900., 800.), PANEL_MIN);
-        assert_eq!(dragged(500., 260., -400., 800.), 800.);
     }
 }

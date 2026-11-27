@@ -8,7 +8,7 @@ use gpui::{
     App, BoxShadow, Div, ElementId, FontWeight, Hsla, Role, SharedString, Stateful,
     StyleRefinement, div, point, prelude::*, px,
 };
-use patchwork_ui_theme::{fs_md, fs_sm, radius_sm, Theme, theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_sm, radius_sm, Theme, theme};
 use patchwork_ui_theme::icon;
 
 /// `:focus-visible`: the 2px outline a control shows while the keyboard, not the mouse, focused it.
@@ -41,7 +41,7 @@ pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> State
 pub fn icon_button(
     id: impl Into<ElementId>,
     label: impl Into<SharedString>,
-    name: &str,
+    name: IconName,
     size: f32,
     cx: &App,
 ) -> Stateful<Div> {
@@ -89,7 +89,7 @@ pub fn checkbox(
                         b.border_color(t.accent)
                             .bg(t.accent)
                             .text_color(t.text_on_accent)
-                            .child(icon("check", 10.))
+                            .child(icon(IconName::Check, 10.))
                     } else {
                         b.border_color(t.border_strong).bg(t.bg_editor)
                     }
@@ -196,7 +196,7 @@ pub fn dropdown_chip(
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))
         .child(div().max_w(px(180.)).truncate().child(current.into()))
-        .child(icon("caret-down", 14.))
+        .child(icon(IconName::CaretDown, 14.))
 }
 
 /// The input every form shares: one height, border and focus colour.

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use gpui::{AnyElement, Div, Hsla, Role, SharedString, div, prelude::*, px};
 use patchwork_backend::chats::{CheckStatus, Message, TurnChecks};
 
-use patchwork_ui_theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
 use patchwork_ui_components::{BtnKind, btn, button, spinner, tooltip};
 use patchwork_ui_markdown::full_elapsed;
 use patchwork_ui_theme::icon;
@@ -73,10 +73,10 @@ impl Workspace {
 fn status_icon(status: CheckStatus, t: &Theme) -> AnyElement {
     let (name, color) = match status {
         CheckStatus::Running => return spinner(14., t.text_muted).into_any_element(),
-        CheckStatus::Passed => ("check-circle", t.success),
-        CheckStatus::Failed => ("x-circle", t.danger),
-        CheckStatus::TimedOut => ("clock", t.warning),
-        CheckStatus::NotRun => ("minus-circle", t.text_subtle),
+        CheckStatus::Passed => (IconName::CheckCircle, t.success),
+        CheckStatus::Failed => (IconName::XCircle, t.danger),
+        CheckStatus::TimedOut => (IconName::Clock, t.warning),
+        CheckStatus::NotRun => (IconName::MinusCircle, t.text_subtle),
     };
     icon(name, 14.)
         .flex_none()
@@ -179,9 +179,16 @@ pub fn checks_card(
             .child(command)
     }))
     .child(
-        icon(if open { "caret-down" } else { "caret-right" }, 12.)
-            .flex_none()
-            .text_color(t.text_subtle),
+        icon(
+            if open {
+                IconName::CaretDown
+            } else {
+                IconName::CaretRight
+            },
+            12.,
+        )
+        .flex_none()
+        .text_color(t.text_subtle),
     )
     .on_click(cx.listener({
         let id = id.clone();
@@ -270,7 +277,14 @@ pub fn checks_card(
                 .text_size(px(fs_xs()))
                 .text_color(t.text_muted)
                 .hover(move |s| s.text_color(fg))
-                .child(icon(if shown { "caret-down" } else { "caret-right" }, 11.))
+                .child(icon(
+                    if shown {
+                        IconName::CaretDown
+                    } else {
+                        IconName::CaretRight
+                    },
+                    11.,
+                ))
                 .child("Output")
                 .on_click(cx.listener({
                     let id = id.clone();

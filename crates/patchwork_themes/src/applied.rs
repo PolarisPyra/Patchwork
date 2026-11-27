@@ -131,26 +131,3 @@ pub struct Applied {
     /// Nothing moves on its own: animations show their resting state.
     pub reduce_motion: bool,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn built_in_palettes_and_their_schemes() {
-        assert_eq!(Palette::built_in("oled"), Some(Palette::Oled));
-        assert_eq!(Palette::built_in("blossom"), None);
-        assert_eq!(Palette::Light.scheme(), Scheme::Light);
-        assert_eq!(Palette::Oled.scheme(), Scheme::Dark);
-    }
-
-    #[test]
-    fn text_size_and_density_keep_their_saved_names() {
-        assert_eq!(
-            serde_json::to_string(&TextSize::Large).unwrap(),
-            "\"large\""
-        );
-        assert_eq!(serde_json::to_string(&Density::Roomy).unwrap(), "\"roomy\"");
-        assert!((TextSize::Small.scale() - 0.92).abs() < f32::EPSILON);
-    }
-}

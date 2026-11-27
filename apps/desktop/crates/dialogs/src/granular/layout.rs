@@ -12,7 +12,7 @@ use super::menus::below;
 use super::card::{GranularDialog, GranularScope, Part, Slot, agent_of, pick_of};
 use patchwork_ui_markdown::effort_label;
 use patchwork_ui_components::dialog;
-use patchwork_ui_theme::{fs_md, fs_sm, radius, Theme, theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_sm, radius, Theme, theme};
 use patchwork_ui_components::{BtnKind, btn, button, icon_button};
 use patchwork_ui_theme::icon;
 
@@ -62,7 +62,7 @@ fn select(
         .hover(move |s| s.bg(hover))
         .children(field.mark)
         .child(div().flex_1().min_w_0().truncate().child(field.shown))
-        .child(icon("caret-down", 12.).text_color(t.text_subtle))
+        .child(icon(IconName::CaretDown, 12.).text_color(t.text_subtle))
 }
 
 impl GranularDialog {
@@ -130,7 +130,7 @@ impl GranularDialog {
         let model = pick_of(value, main).and_then(|p| p.model.as_deref());
         let mark = match agent {
             Some(agent) => agent_logo(agent, model, 16.),
-            None => icon("prohibit", 16.).into_any_element(),
+            None => icon(IconName::Prohibit, 16.).into_any_element(),
         };
         let name = agent.map_or("None", agent_label);
         let picker = if main == Slot::Main && dialog.agent_fixed {
@@ -147,7 +147,7 @@ impl GranularDialog {
                 .font_weight(FontWeight::MEDIUM)
                 .child(mark)
                 .child(div().flex_1().min_w_0().truncate().child(name))
-                .child(icon("lock-simple", 14.).text_color(t.text_subtle))
+                .child(icon(IconName::LockSimple, 14.).text_color(t.text_subtle))
         } else {
             let field = Field {
                 shown: name.into(),
@@ -159,7 +159,7 @@ impl GranularDialog {
         let reset = icon_button(
             SharedString::from(format!("granular-reset-{}", main.name())),
             format!("Reset {}", main.name().to_lowercase()),
-            "arrow-counter-clockwise",
+            IconName::ArrowCounterClockwise,
             14.,
             cx,
         )
@@ -252,7 +252,7 @@ impl Render for GranularDialog {
                 b.border_color(t.accent)
                     .bg(t.bg_accent_soft)
                     .text_color(t.accent_text)
-                    .child(icon("check", 14.))
+                    .child(icon(IconName::Check, 14.))
             })
             .child(shown)
             .on_click(cx.listener(|this, _, _, cx| this.toggle_default(cx)))
@@ -291,7 +291,7 @@ impl Render for GranularDialog {
             .p(px(16.))
             .child(dialog::title_row(
                 dialog.title.clone(),
-                icon_button("granular-close", "Close", "x", 16., cx)
+                icon_button("granular-close", "Close", IconName::X, 16., cx)
                     .on_click(cx.listener(|this, _, _, cx| this.close(false, cx))),
             ))
             .child(panels)

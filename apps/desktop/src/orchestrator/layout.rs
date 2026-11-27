@@ -19,7 +19,9 @@ use patchwork_backend::chats::AskKind;
 
 use super::requests::Orchestrator;
 use patchwork_ui_backdrop::{Fallback, butterfly_field, preset_fill, scene_field};
-use patchwork_ui_theme::{applied, font_ui, fs_lg, fs_sm, glass_over, ink_over, radius_lg, theme};
+use patchwork_ui_theme::{
+    IconName, applied, font_ui, fs_lg, fs_sm, glass_over, ink_over, radius_lg, theme,
+};
 use patchwork_ui_components::pill::{PILL_PAD, SEND, pill, send_button};
 use patchwork_ui_components::button;
 use patchwork_ui_markdown::display_title;
@@ -116,7 +118,7 @@ impl Place {
         let chat = div().min_w_0().truncate().child(self.chat.clone());
         match &self.project {
             Some(project) => row
-                .child(div().flex_none().child(icon("folder-fill", 13.)))
+                .child(div().flex_none().child(icon(IconName::FolderFill, 13.)))
                 .child(
                     div()
                         .flex_none()
@@ -128,7 +130,7 @@ impl Place {
                 .child(div().flex_none().opacity(0.5).child("›"))
                 .child(chat),
             None => row
-                .child(div().flex_none().child(icon("chat-circle", 13.)))
+                .child(div().flex_none().child(icon(IconName::ChatCircle, 13.)))
                 .child(chat),
         }
     }
@@ -292,7 +294,7 @@ impl Orchestrator {
                 .gap(px(4.))
         };
         let place = self.place(self.pinned.as_ref()?, cx);
-        let pin = div().flex_none().child(icon("push-pin", 12.));
+        let pin = div().flex_none().child(icon(IconName::PushPin, 12.));
         let shown = route_chip(&place).child(pin);
         Some(
             status(format!("Goes to {}, pinned", place.spoken))
@@ -347,6 +349,16 @@ impl Orchestrator {
 
 impl Render for Orchestrator {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.render_orchestrator(window, cx)
+    }
+}
+
+impl Orchestrator {
+    fn render_orchestrator(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let dark = applied(cx)
             .backdrop
             .scheme
@@ -361,10 +373,10 @@ impl Render for Orchestrator {
         let asked = self.asked().map(|(_, waiting)| waiting.ask.kind.clone());
         // What Enter does, which is what the button does.
         let (action, glyph, ready) = match &asked {
-            Some(AskKind::Permission) => ("Allow", "check-bold", true),
-            Some(AskKind::Question(_)) => ("Answer", "arrow-up-bold", !empty),
-            Some(AskKind::InChat) => ("Open the chat", "arrow-right-bold", true),
-            None => ("Send", "arrow-up-bold", !empty),
+            Some(AskKind::Permission) => ("Allow", IconName::CheckBold, true),
+            Some(AskKind::Question(_)) => ("Answer", IconName::ArrowUpBold, !empty),
+            Some(AskKind::InChat) => ("Open the chat", IconName::ArrowRightBold, true),
+            None => ("Send", IconName::ArrowUpBold, !empty),
         };
         let workspace = self.workspace.upgrade();
         let (chats, projects) = workspace.as_ref().map_or_else(Default::default, |w| {

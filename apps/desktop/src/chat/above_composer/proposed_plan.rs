@@ -14,7 +14,7 @@ use gpui::{
 
 use patchwork_ui_markdown::markdown::markdown;
 use super::plan_steps::plan_title;
-use patchwork_ui_theme::{fs_md, fs_sm, radius, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_sm, radius, radius_sm, Theme};
 use patchwork_ui_components::{BtnKind, badge, btn, button, popup_shadow};
 use patchwork_ui_theme::icon;
 use patchwork_ui_markdown::slug_file_name;
@@ -206,7 +206,7 @@ pub fn proposed_plan(
         .border_color(t.border)
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))
-        .child(icon("dots-three", 14.))
+        .child(icon(IconName::DotsThree, 14.))
         .on_click(cx.listener(move |w, _, _, cx| {
             w.proposed.menu = if w.proposed.menu.as_ref() == Some(&key) {
                 None

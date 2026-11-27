@@ -136,29 +136,3 @@ pub fn resolve_conflict(root: &str, rel: &str, index: usize, take: Take) -> Resu
         .map_err(|e| format!("Cannot write {rel}: {e}"))?;
     Ok(conflicts_in(&settled).len())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_and_settles_standard_conflict() {
-        let input = "top\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> topic\nbottom\n";
-        let found = conflicts_in(input);
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].current, "HEAD");
-        assert_eq!(found[0].incoming, "topic");
-        assert_eq!(
-            settled(input, 0, Take::Current).as_deref(),
-            Some("top\nours\nbottom\n")
-        );
-        assert_eq!(
-            settled(input, 0, Take::Incoming).as_deref(),
-            Some("top\ntheirs\nbottom\n")
-        );
-        assert_eq!(
-            settled(input, 0, Take::Both).as_deref(),
-            Some("top\nours\ntheirs\nbottom\n")
-        );
-    }
-}

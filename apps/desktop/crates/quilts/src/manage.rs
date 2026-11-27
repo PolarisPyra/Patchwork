@@ -9,7 +9,7 @@ use gpui::{Pixels, Point, PromptLevel, Window, prelude::*};
 
 use super::catalog::QuiltsPage;
 use patchwork_ui_components::menu::{Menu, MenuItem};
-use patchwork_ui_theme::off_thread;
+use patchwork_ui_theme::{IconName, off_thread};
 use patchwork_ui_editor::{Submitted, TextArea};
 
 impl QuiltsPage {
@@ -27,7 +27,7 @@ impl QuiltsPage {
         let pinned = quilt.pinned;
         let this = cx.entity().downgrade();
         let item = |label: &str,
-                    icon: &'static str,
+                    icon: IconName,
                     act: fn(&mut Self, &str, &mut Window, &mut Context<Self>)| {
             let (this, id) = (this.clone(), id.to_owned());
             MenuItem::new(label.to_owned(), move |window, cx| {
@@ -37,16 +37,16 @@ impl QuiltsPage {
         };
         let items = vec![
             if pinned {
-                item("Unpin", "push-pin-slash", |this, id, _, cx| {
+                item("Unpin", IconName::PushPinSlash, |this, id, _, cx| {
                     this.pin(id.to_owned(), false, cx);
                 })
             } else {
-                item("Pin", "push-pin", |this, id, _, cx| {
+                item("Pin", IconName::PushPin, |this, id, _, cx| {
                     this.pin(id.to_owned(), true, cx);
                 })
             },
-            item("Rename", "pencil-simple", Self::start_rename),
-            item("Delete", "trash", |this, id, window, cx| {
+            item("Rename", IconName::PencilSimple, Self::start_rename),
+            item("Delete", IconName::Trash, |this, id, window, cx| {
                 this.delete(id.to_owned(), window, cx);
             })
             .separated()

@@ -7,7 +7,7 @@ use std::time::Duration;
 use gpui::{Div, FontWeight, Role, div, prelude::*, px, relative};
 use patchwork_backend::chats::{PlanStep, Role as MessageRole, StepStatus};
 
-use patchwork_ui_theme::{fs_sm, radius, Theme};
+use patchwork_ui_theme::{IconName, fs_sm, radius, Theme};
 use patchwork_ui_components::{button, mix, spinner};
 use patchwork_ui_theme::icon;
 use crate::workspace::{Workspace, is_working};
@@ -100,14 +100,14 @@ fn step_icon(status: StepStatus, t: &Theme) -> gpui::AnyElement {
     let slot = div().flex_none().mt(px(2.));
     match status {
         StepStatus::Done => slot
-            .child(icon("check", 14.).text_color(t.accent_text))
+            .child(icon(IconName::Check, 14.).text_color(t.accent_text))
             .into_any_element(),
         StepStatus::Running => slot.child(spinner(14., t.accent_text)).into_any_element(),
         StepStatus::Error => slot
-            .child(icon("x-circle", 14.).text_color(t.danger))
+            .child(icon(IconName::XCircle, 14.).text_color(t.danger))
             .into_any_element(),
         StepStatus::Pending => slot
-            .child(icon("circle", 14.).text_color(t.text_subtle))
+            .child(icon(IconName::Circle, 14.).text_color(t.text_subtle))
             .into_any_element(),
     }
 }
@@ -162,7 +162,7 @@ pub fn plan_panel(
                 .py(px(6.))
                 .text_color(t.text_muted)
                 .hover(move |s| s.text_color(fg))
-                .child(icon("list-checks", 14.).flex_none())
+                .child(icon(IconName::ListChecks, 14.).flex_none())
                 .child(
                     div()
                         .flex_none()
@@ -192,7 +192,17 @@ pub fn plan_panel(
                             ),
                     )
                 })
-                .child(icon(if open { "caret-down" } else { "caret-right" }, 12.).flex_none())
+                .child(
+                    icon(
+                        if open {
+                            IconName::CaretDown
+                        } else {
+                            IconName::CaretRight
+                        },
+                        12.,
+                    )
+                    .flex_none(),
+                )
                 .on_click(cx.listener(|w, _, _, cx| {
                     w.plan_open = !w.plan_open;
                     cx.notify();

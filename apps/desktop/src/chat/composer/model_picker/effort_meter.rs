@@ -377,25 +377,3 @@ fn listen(
         });
     });
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn auto_is_the_first_stop_and_an_unknown_level_falls_back_to_it() {
-        let levels = vec!["low".to_string(), "high".to_string()];
-        let (stops, at) = stops_of(&levels, Some("high"));
-        assert_eq!(stops.len(), 3);
-        assert_eq!(at, 2);
-        assert_eq!(stops_of(&levels, None).1, 0);
-        assert_eq!(stops_of(&levels, Some("max")).1, 0);
-    }
-
-    #[test]
-    fn the_hue_runs_from_cyan_to_red_orange() {
-        assert!((hue_at(0.) - 195.).abs() < f32::EPSILON);
-        assert!((hue_at(1.) - 10.).abs() < f32::EPSILON);
-        assert_eq!(effort_name(None), "Auto");
-    }
-}

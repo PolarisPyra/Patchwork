@@ -6,6 +6,7 @@
 use patchwork_backend::chats::{Message, MessageStatus, Part, StepStatus, ToolCall};
 
 use patchwork_ui_markdown::full_elapsed;
+use patchwork_ui_theme::IconName;
 
 /// A call or a block of reasoning: the smallest thing a row shows.
 pub enum Entry<'a> {
@@ -317,16 +318,16 @@ pub enum Action {
 
 impl Action {
     /// The glyph a row shows for it.
-    pub fn icon(self) -> &'static str {
+    pub fn icon(self) -> IconName {
         match self {
-            Action::Edit => "note-pencil",
-            Action::Command => "terminal",
-            Action::Read => "eye",
-            Action::Search => "magnifying-glass",
-            Action::Web => "globe",
-            Action::Agent => "robot",
-            Action::Skill => "books",
-            Action::Other => "wrench",
+            Action::Edit => IconName::NotePencil,
+            Action::Command => IconName::Terminal,
+            Action::Read => IconName::Eye,
+            Action::Search => IconName::MagnifyingGlass,
+            Action::Web => IconName::Globe,
+            Action::Agent => IconName::Robot,
+            Action::Skill => IconName::Books,
+            Action::Other => IconName::Wrench,
         }
     }
 }

@@ -5,7 +5,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, FontWeight, Role, SharedString, div, prelude::*, px};
-use patchwork_ui_theme::{Theme, fs_lg, fs_sm, fs_xs, radius_sm};
+use patchwork_ui_theme::{IconName, Theme, fs_lg, fs_sm, fs_xs, radius_sm};
 use patchwork_ui_components::{BtnKind, btn, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -67,7 +67,7 @@ fn command_card(
     let changed = index.overrides.contains_key(id);
     let clash = index.conflicts(id);
     let (hover, muted, fg) = (t.bg_hover, t.text_muted, t.text);
-    let small = |name: &str, at: usize, label: String, glyph: &str| {
+    let small = |name: &str, at: usize, label: String, glyph: IconName| {
         patchwork_ui_components::button(SharedString::from(format!("{name}-{at}")), label)
             .size(px(22.))
             .flex_none()
@@ -121,7 +121,7 @@ fn command_card(
                             "change-key",
                             at,
                             format!("Change this key for {}", c.title),
-                            "pencil-simple",
+                            IconName::PencilSimple,
                         )
                         .tooltip(tooltip("Change"))
                         .on_click(cx.listener(move |d, _, window, cx| {
@@ -133,7 +133,7 @@ fn command_card(
                             "remove-key",
                             at,
                             format!("Remove this key from {}", c.title),
-                            "x",
+                            IconName::X,
                         )
                         .tooltip(tooltip("Remove"))
                         .on_click(cx.listener(move |d, _, _, cx| {
@@ -170,7 +170,7 @@ fn command_card(
                     .items_center()
                     .h(px(18.))
                     .text_color(t.warning)
-                    .child(icon("warning", 12.)),
+                    .child(icon(IconName::Warning, 12.)),
             )
             .child(
                 div()
@@ -221,14 +221,10 @@ fn command_card(
                 .child(c.page)
                 .when(c.fixed, |r| {
                     r.child("·")
-                        .child(icon("lock-simple", 10.))
+                        .child(icon(IconName::LockSimple, 10.))
                         .child("Built in")
                 })
                 .when(changed, |r| r.child("·").child("Changed")),
-        )
-        .children(
-            c.desc
-                .map(|desc| div().mt(px(6.)).child(note(desc, t.text_muted))),
         )
         .child(label("KEYS", t))
         .children(keys)
@@ -270,7 +266,7 @@ fn command_card(
                     .gap(px(6.))
                     .child(
                         btn("add-key", "Add a key", BtnKind::Plain, recording, t)
-                            .child(icon("plus", 12.))
+                            .child(icon(IconName::Plus, 12.))
                             .child("Add a key")
                             .when(!recording, |b| {
                                 b.on_click(cx.listener(move |d, _, window, cx| {
@@ -290,7 +286,7 @@ fn command_card(
                     .when(changed && !recording, |r| {
                         r.child(
                             btn("reset-key", "Reset to default", BtnKind::Plain, false, t)
-                                .child(icon("arrow-counter-clockwise", 12.))
+                                .child(icon(IconName::ArrowCounterClockwise, 12.))
                                 .child("Reset")
                                 .tooltip(tooltip(default_label(id)))
                                 .on_click(cx.listener(move |d, _, _, cx| {
@@ -337,7 +333,7 @@ fn fixed_key(at: usize, t: &Theme) -> AnyElement {
                 .text_color(t.text_subtle)
                 .child(page)
                 .child("·")
-                .child(icon("lock-simple", 10.))
+                .child(icon(IconName::LockSimple, 10.))
                 .child("Built in"),
         )
         .child(label("KEYS", t))

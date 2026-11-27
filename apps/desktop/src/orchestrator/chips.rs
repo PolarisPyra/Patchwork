@@ -9,7 +9,7 @@ use super::layout::{PILL_W, ink};
 use super::requests::Orchestrator;
 use crate::chat::composer::Composer;
 use patchwork_ui_components::pill::pill_chip;
-use patchwork_ui_theme::icon;
+use patchwork_ui_theme::{IconName, icon};
 
 /// A chip under the pill that opens a menu.
 fn launch_chip(id: &'static str, label: String, open: bool) -> gpui::Stateful<gpui::Div> {
@@ -64,7 +64,7 @@ impl Orchestrator {
         let model_chip = launch_chip("orchestrator-model", format!("Choose model: {name}"), open)
             .child(agent_logo(agent, model.as_deref(), 14.))
             .child(div().max_w(px(220.)).truncate().child(name))
-            .child(icon("caret-down", 12.))
+            .child(icon(IconName::CaretDown, 12.))
             .on_click(move |event, window, cx| {
                 composer.update(cx, |composer, cx| {
                     composer.toggle_launch_picker(event, window, cx);
@@ -77,9 +77,9 @@ impl Orchestrator {
                 format!("Effort: {effort}"),
                 effort_open,
             )
-            .child(icon("lightbulb", 14.))
+            .child(icon(IconName::Lightbulb, 14.))
             .child(effort)
-            .child(icon("caret-down", 12.))
+            .child(icon(IconName::CaretDown, 12.))
             .on_click(move |event, window, cx| {
                 composer.update(cx, |composer, cx| {
                     composer.toggle_launch_effort(event, window, cx);
@@ -124,9 +124,9 @@ impl Orchestrator {
             .and_then(|id| settings.projects.iter().find(|p| &p.id == id))
             .map_or_else(|| "No project".to_string(), |p| p.name.clone());
         let glyph = if project.is_some() {
-            "folder-fill"
+            IconName::FolderFill
         } else {
-            "chat-circle"
+            IconName::ChatCircle
         };
         let open = composer.launch_project_open();
         let menu = self.composer.update(cx, Composer::launch_project_menu);
@@ -134,7 +134,7 @@ impl Orchestrator {
         let chip = launch_chip("orchestrator-project", format!("Project: {name}"), open)
             .child(icon(glyph, 14.))
             .child(div().max_w(px(180.)).truncate().child(name))
-            .child(icon("caret-down", 12.))
+            .child(icon(IconName::CaretDown, 12.))
             .on_click(move |event, window, cx| {
                 composer.update(cx, |composer, cx| {
                     composer.toggle_launch_project(event, window, cx);

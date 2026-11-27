@@ -9,9 +9,9 @@ mod sizes;
 mod tasks;
 
 #[doc(inline)]
-pub use brand::{Assets, asset, fonts, logo_file, provider_logo, svgs_changed};
+pub use brand::{Assets, asset, fonts, logo_file, provider_logo};
 #[doc(inline)]
-pub use icons::{Icon, icon};
+pub use icons::{Icon, IconName, icon, icon_by_name};
 #[doc(inline)]
 pub use palette::{
     InScheme, Theme, applied, apply, border_focus, follow, glass_over, ink_over, input_placeholder,

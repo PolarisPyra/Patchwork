@@ -8,7 +8,7 @@ use gpui::{
     FocusHandle, Subscription, WeakEntity,
 };
 use patchwork_backend::chats::Chat;
-use patchwork_ui_theme::{InScheme, Theme, fs_sm, fs_xl, fs_xs, radius_sm, theme};
+use patchwork_ui_theme::{IconName, InScheme, Theme, fs_sm, fs_xl, fs_xs, radius_sm, theme};
 use patchwork_ui_components::{button, icon_button, tooltip};
 use patchwork_ui_markdown::{display_title, format_tokens};
 use patchwork_ui_theme::icon;
@@ -164,7 +164,7 @@ pub(super) fn subagent_footer(
         let back = icon_button(
             "peek-back",
             "Back to the orchestrator",
-            "arrow-left",
+            IconName::ArrowLeft,
             14.,
             cx,
         )
@@ -200,7 +200,7 @@ pub(super) fn subagent_footer(
     // Back to the chat shown before, or to the parent when the subagent was opened first.
     let parent_id = found.map(|p| p.id.clone());
     let back = (w.can_go_back() || parent_id.is_some()).then(|| {
-        icon_button("subagent-back", "Go back", "arrow-left", 14., cx)
+        icon_button("subagent-back", "Go back", IconName::ArrowLeft, 14., cx)
             .flex_none()
             .tooltip(tooltip("Go back"))
             .on_click(cx.listener(move |w, _, _, cx| {
@@ -351,7 +351,7 @@ pub(crate) fn usage_line(chat: &Chat, warn_above: u64, t: &Theme) -> Div {
                 .flex()
                 .items_center()
                 .gap(px(4.))
-                .when(large, |d| d.child(icon("warning", 13.)))
+                .when(large, |d| d.child(icon(IconName::Warning, 13.)))
                 .child(if large {
                     format!("Context over {}", format_tokens(warn_above))
                 } else {

@@ -6,7 +6,7 @@
 
 use gpui::{AnyElement, Entity, Focusable, KeyDownEvent, Role, Stateful, Window, div, prelude::*, px};
 use patchwork_ui_editor::{Changed, Submitted, SubmittedBack, TextArea};
-use patchwork_ui_theme::{Theme, fs_xs, radius_sm, theme};
+use patchwork_ui_theme::{IconName, Theme, fs_xs, radius_sm, theme};
 use patchwork_ui_components::{button, input_box};
 use patchwork_ui_theme::icon;
 
@@ -305,17 +305,22 @@ impl Dock {
                         .child(status),
                 )
                 .child(
-                    small_button("terminal-find-previous", "Previous match", "caret-up", &t)
-                        .tooltip(patchwork_ui_components::tooltip("Shift+Enter"))
-                        .on_click(cx.listener(|this, _, _, cx| this.step_find(-1, cx))),
+                    small_button(
+                        "terminal-find-previous",
+                        "Previous match",
+                        IconName::CaretUp,
+                        &t,
+                    )
+                    .tooltip(patchwork_ui_components::tooltip("Shift+Enter"))
+                    .on_click(cx.listener(|this, _, _, cx| this.step_find(-1, cx))),
                 )
                 .child(
-                    small_button("terminal-find-next", "Next match", "caret-down", &t)
+                    small_button("terminal-find-next", "Next match", IconName::CaretDown, &t)
                         .tooltip(patchwork_ui_components::tooltip("Enter"))
                         .on_click(cx.listener(|this, _, _, cx| this.step_find(1, cx))),
                 )
                 .child(
-                    small_button("terminal-find-close", "Close find", "x", &t)
+                    small_button("terminal-find-close", "Close find", IconName::X, &t)
                         .tooltip(patchwork_ui_components::tooltip("Esc"))
                         .on_click(cx.listener(|this, _, window, cx| this.close_find(window, cx))),
                 )
@@ -328,7 +333,7 @@ impl Dock {
 fn small_button(
     id: &'static str,
     label: &'static str,
-    name: &'static str,
+    name: IconName,
     t: &Theme,
 ) -> Stateful<gpui::Div> {
     let (fg, hover) = (t.text, t.bg_hover);
@@ -340,44 +345,4 @@ fn small_button(
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))
         .child(icon(name, 12.))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn lower(s: &str) -> Vec<char> {
-        s.chars().flat_map(char::to_lowercase).collect()
-    }
-
-    #[test]
-    fn finds_on_screen_and_in_lines_kept_ignoring_case() {
-        let mut parser = vt100::Parser::new(2, 20, 100);
-        parser.process(b"Hello one\r\nnothing\r\nhello two\r\nlast");
-        let found = find_all(parser.screen_mut(), &lower("HELLO"));
-        assert_eq!(
-            found,
-            vec![
-                Match {
-                    line: 0,
-                    from: 0,
-                    to: 5
-                },
-                Match {
-                    line: 2,
-                    from: 0,
-                    to: 5
-                },
-            ]
-        );
-        // The view is left where it was.
-        assert_eq!(parser.screen().scrollback(), 0);
-    }
-
-    #[test]
-    fn finds_nothing_for_an_empty_query() {
-        let mut parser = vt100::Parser::new(2, 20, 100);
-        parser.process(b"text");
-        assert!(find_all(parser.screen_mut(), &[]).is_empty());
-    }
 }

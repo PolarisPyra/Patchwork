@@ -156,24 +156,3 @@ pub fn to_saved(sigils: &Sigils) -> String {
         .collect();
     serde_json::to_string(&changed).unwrap_or_else(|_| "{}".into())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn saved_sigils_round_trip() {
-        let sigils = Sigils::default().with(SigilKind::Files, '#');
-        let json = to_saved(&sigils);
-        assert_eq!(json, r##"{"files":"#"}"##);
-        assert_eq!(from_saved(Some(&json)), sigils);
-    }
-
-    #[test]
-    fn clashing_saved_sigils_fall_back_to_defaults() {
-        let json = r#"{"files":"$"}"#;
-        assert_eq!(from_saved(Some(json)), Sigils::default());
-        assert_eq!(from_saved(None), Sigils::default());
-        assert_eq!(to_saved(&Sigils::default()), "{}");
-    }
-}

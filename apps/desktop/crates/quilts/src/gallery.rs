@@ -18,7 +18,7 @@ use patchwork_backend::quilts::{Quilt, QuiltKind};
 use super::patch::{Act, patch};
 use super::layout::kind_icon;
 use super::catalog::{QuiltsPage, Place};
-use patchwork_ui_theme::{Theme, fs_lg, fs_md, fs_sm, fs_xxl, radius, radius_sm};
+use patchwork_ui_theme::{IconName, Theme, fs_lg, fs_md, fs_sm, fs_xxl, radius, radius_sm};
 use patchwork_ui_components::{button, focus_ring, icon_button, input_box, scrollbar, spinner, tooltip};
 use patchwork_ui_markdown::format_relative;
 use patchwork_ui_theme::icon;
@@ -62,7 +62,7 @@ impl QuiltsPage {
                 input_box(focused, t)
                     .w(px(320.))
                     .gap(px(8.))
-                    .child(icon("magnifying-glass", 16.))
+                    .child(icon(IconName::MagnifyingGlass, 16.))
                     .child(div().flex_1().min_w_0().child(self.search.clone())),
             )
             .child(
@@ -73,7 +73,11 @@ impl QuiltsPage {
                     } else {
                         "Show as cards"
                     },
-                    if grid { "list-bullets" } else { "square" },
+                    if grid {
+                        IconName::ListBullets
+                    } else {
+                        IconName::Square
+                    },
                     16.,
                     cx,
                 )
@@ -627,5 +631,5 @@ fn pin_marker(t: &Theme) -> Div {
         .rounded(px(radius_sm()))
         .bg(t.bg_panel)
         .text_color(t.text_muted)
-        .child(icon("push-pin", 12.))
+        .child(icon(IconName::PushPin, 12.))
 }

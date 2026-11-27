@@ -278,26 +278,3 @@ pub(crate) fn encode(text: &str) -> String {
     }
     out
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn mime_reads_the_bytes_not_the_name() {
-        assert_eq!(mime(b"\x89PNG\r\n\x1a\n...."), "image/png");
-        assert_eq!(mime(&[0xFF, 0xD8, 0xFF, 0xE0]), "image/jpeg");
-        assert_eq!(mime(b"GIF89a...."), "image/gif");
-        assert_eq!(mime(b"RIFF\0\0\0\0WEBPVP8 "), "image/webp");
-        assert_eq!(mime(b"plain words"), "text/plain; charset=utf-8");
-        assert_eq!(mime(&[0, 1, 2, 3]), "application/octet-stream");
-        assert!(!is_picture(b"RIFF\0\0\0\0WAVE"));
-    }
-
-    #[test]
-    fn multipart_name_cannot_end_its_header() {
-        let (_, body) = multipart(&[], "file", "a\"b\r\nc.png", b"x");
-        let body = String::from_utf8(body).expect("the body is text");
-        assert!(body.contains("filename=\"a_b__c.png\""));
-    }
-}

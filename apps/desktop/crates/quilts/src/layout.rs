@@ -10,7 +10,7 @@ use gpui::{
 use patchwork_backend::quilts::{Quilt, QuiltKind, ChangeRow};
 
 use super::catalog::{QuiltsPage, Show};
-use patchwork_ui_theme::{Theme, font_mono, fs_md, fs_sm, radius_sm, theme};
+use patchwork_ui_theme::{IconName, Theme, font_mono, fs_md, fs_sm, radius_sm, theme};
 use patchwork_ui_components::menu::Menu;
 use patchwork_ui_components::{button, focus_ring, icon_button, input_box, scrollbar, tooltip};
 use patchwork_ui_markdown::format_relative;
@@ -24,7 +24,7 @@ fn language(quilt: &Quilt) -> &str {
         QuiltKind::Html | QuiltKind::Slides | QuiltKind::Design | QuiltKind::Data => "html",
         QuiltKind::Svg | QuiltKind::Whiteboard => "xml",
         QuiltKind::Markdown | QuiltKind::Doc => "markdown",
-        QuiltKind::Sheet | QuiltKind::Mermaid => "",
+        QuiltKind::Sheet => "",
         QuiltKind::React => "jsx",
         QuiltKind::Code => quilt.language.as_deref().unwrap_or_default(),
     }
@@ -32,18 +32,18 @@ fn language(quilt: &Quilt) -> &str {
 
 /// The icon each type is listed with.
 #[must_use]
-pub fn kind_icon(kind: QuiltKind) -> &'static str {
+pub fn kind_icon(kind: QuiltKind) -> IconName {
     match kind {
-        QuiltKind::Html | QuiltKind::React => "globe",
-        QuiltKind::Svg | QuiltKind::Mermaid => "sparkle",
-        QuiltKind::Markdown => "eye",
-        QuiltKind::Code => "code",
-        QuiltKind::Doc => "file-text",
-        QuiltKind::Slides => "play",
-        QuiltKind::Sheet => "list-numbers",
-        QuiltKind::Design => "palette",
-        QuiltKind::Data => "chart-bar",
-        QuiltKind::Whiteboard => "note-pencil",
+        QuiltKind::Html | QuiltKind::React => IconName::Globe,
+        QuiltKind::Svg => IconName::Sparkle,
+        QuiltKind::Markdown => IconName::Eye,
+        QuiltKind::Code => IconName::Code,
+        QuiltKind::Doc => IconName::FileText,
+        QuiltKind::Slides => IconName::Play,
+        QuiltKind::Sheet => IconName::ListNumbers,
+        QuiltKind::Design => IconName::Palette,
+        QuiltKind::Data => IconName::ChartBar,
+        QuiltKind::Whiteboard => IconName::NotePencil,
     }
 }
 
@@ -120,7 +120,7 @@ impl QuiltsPage {
         );
         let step = |id: &'static str,
                     label: &'static str,
-                    glyph: &'static str,
+                    glyph: IconName,
                     to: Option<u32>,
                     cx: &mut Context<Self>| {
             icon_button(id, label, glyph, 14., cx)
@@ -143,7 +143,7 @@ impl QuiltsPage {
             .child(step(
                 "quilt-older",
                 "Older version",
-                "arrow-left",
+                IconName::ArrowLeft,
                 before,
                 cx,
             ))
@@ -178,7 +178,7 @@ impl QuiltsPage {
             .child(step(
                 "quilt-newer",
                 "Newer version",
-                "arrow-right",
+                IconName::ArrowRight,
                 after,
                 cx,
             ))
@@ -229,7 +229,7 @@ impl QuiltsPage {
             .border_color(t.border)
             .when(!docked, |d| {
                 d.child(
-                    icon_button("quilt-back", "Back to quilts", "arrow-left", 16., cx)
+                    icon_button("quilt-back", "Back to quilts", IconName::ArrowLeft, 16., cx)
                         .tooltip(tooltip("Back to quilts"))
                         .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
                 )
@@ -238,7 +238,7 @@ impl QuiltsPage {
             .when(!docked && self.renaming.is_none(), |d| {
                 let id = id.clone();
                 d.child(
-                    icon_button("quilt-rename", "Rename", "pencil-simple", 16., cx)
+                    icon_button("quilt-rename", "Rename", IconName::PencilSimple, 16., cx)
                         .tooltip(tooltip("Rename"))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.start_rename(&id, window, cx);
@@ -248,7 +248,7 @@ impl QuiltsPage {
             .when(!docked, |d| {
                 let id = id.clone();
                 d.child(
-                    icon_button("quilt-pin", "Pin", "push-pin", 16., cx)
+                    icon_button("quilt-pin", "Pin", IconName::PushPin, 16., cx)
                         .tooltip(tooltip(if pinned { "Unpin" } else { "Pin" }))
                         .aria_toggled(pinned.into())
                         .when(pinned, |b| b.bg(t.bg_selected_muted))
@@ -261,24 +261,24 @@ impl QuiltsPage {
             .child(self.tabs(quilt.kind.drawn(), t, cx))
             .when(!docked, |d| {
                 d.child(
-                    icon_button("quilt-copy", "Copy", "copy", 16., cx)
+                    icon_button("quilt-copy", "Copy", IconName::Copy, 16., cx)
                         .tooltip(tooltip("Copy"))
                         .on_click(cx.listener(|this, _, _, cx| this.copy(cx))),
                 )
                 .child(
-                    icon_button("quilt-save", "Save as", "export", 16., cx)
+                    icon_button("quilt-save", "Save as", IconName::Export, 16., cx)
                         .tooltip(tooltip("Save as"))
                         .on_click(cx.listener(|this, _, _, cx| this.save_as(cx))),
                 )
                 .child(
-                    icon_button("quilt-chat", "Chat", "chat-circle", 16., cx)
+                    icon_button("quilt-chat", "Chat", IconName::ChatCircle, 16., cx)
                         .tooltip(tooltip("Chat"))
                         .aria_expanded(chat_shown)
                         .when(chat_shown, |b| b.bg(t.bg_selected_muted))
                         .on_click(cx.listener(|this, _, _, cx| this.open_chat(cx))),
                 )
                 .child(
-                    icon_button("quilt-delete", "Delete", "trash", 16., cx)
+                    icon_button("quilt-delete", "Delete", IconName::Trash, 16., cx)
                         .tooltip(tooltip("Delete"))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.delete(id.clone(), window, cx);
@@ -287,7 +287,7 @@ impl QuiltsPage {
             })
             .when(quilt.kind == QuiltKind::Slides, |d| {
                 d.child(
-                    icon_button("quilt-present", "Present", "play", 16., cx)
+                    icon_button("quilt-present", "Present", IconName::Play, 16., cx)
                         .tooltip(tooltip("Present"))
                         .on_click(cx.listener(|this, _, _, cx| this.open_outside(cx))),
                 )
@@ -295,7 +295,7 @@ impl QuiltsPage {
             .when(quilt.kind.drawn() && self.show == Show::Preview, |d| {
                 let picking = self.picking(cx);
                 d.child(
-                    icon_button("quilt-pick", "Pick an element", "target", 16., cx)
+                    icon_button("quilt-pick", "Pick an element", IconName::Target, 16., cx)
                         .tooltip(tooltip(if picking {
                             "Stop picking (Esc)"
                         } else {
@@ -308,19 +308,31 @@ impl QuiltsPage {
             })
             .when(quilt.kind.drawn(), |d| {
                 d.child(
-                    icon_button("quilt-open", "Open in browser", "arrow-square-out", 16., cx)
-                        .tooltip(tooltip("Open in browser"))
-                        .on_click(cx.listener(|this, _, _, cx| this.open_outside(cx))),
+                    icon_button(
+                        "quilt-open",
+                        "Open in browser",
+                        IconName::ArrowSquareOut,
+                        16.,
+                        cx,
+                    )
+                    .tooltip(tooltip("Open in browser"))
+                    .on_click(cx.listener(|this, _, _, cx| this.open_outside(cx))),
                 )
             })
             .when(docked, |d| {
                 d.child(
-                    icon_button("quilt-full", "Open on Quilts page", "code-block", 16., cx)
-                        .tooltip(tooltip("Open on Quilts page"))
-                        .on_click(cx.listener(|this, _, _, cx| this.open_full(cx))),
+                    icon_button(
+                        "quilt-full",
+                        "Open on Quilts page",
+                        IconName::CodeBlock,
+                        16.,
+                        cx,
+                    )
+                    .tooltip(tooltip("Open on Quilts page"))
+                    .on_click(cx.listener(|this, _, _, cx| this.open_full(cx))),
                 )
                 .child(
-                    icon_button("quilt-close", "Close quilt", "x", 16., cx)
+                    icon_button("quilt-close", "Close quilt", IconName::X, 16., cx)
                         .tooltip(tooltip("Close"))
                         .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
                 )

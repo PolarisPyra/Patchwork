@@ -12,7 +12,7 @@ use patchwork_backend::{Error, Core};
 
 use super::devices::{AndroidEvent, AndroidPanel, Run};
 use patchwork_ui_components::menu::{Menu, MenuItem};
-use patchwork_ui_theme::{fs_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_sm, Theme};
 use patchwork_ui_components::{dropdown_chip, icon_button, spinner, tooltip};
 
 /// What stops a command in a terminal: the interrupt key.
@@ -318,7 +318,7 @@ impl AndroidPanel {
                 icon_button(
                     "android-reload",
                     "Reload the app",
-                    "arrow-clockwise",
+                    IconName::ArrowClockwise,
                     14.,
                     cx,
                 )
@@ -331,7 +331,7 @@ impl AndroidPanel {
                     icon_button(
                         "android-restart",
                         "Restart the app",
-                        "arrow-clockwise",
+                        IconName::ArrowClockwise,
                         14.,
                         cx,
                     )
@@ -341,7 +341,7 @@ impl AndroidPanel {
                 );
             }
             controls.push(
-                icon_button("android-stop-run", "Stop the run", "stop", 14., cx)
+                icon_button("android-stop-run", "Stop the run", IconName::Stop, 14., cx)
                     .tooltip(tooltip("Stop the run"))
                     .on_click(cx.listener(|this, _, _, cx| this.stop_run(cx)))
                     .into_any_element(),
@@ -349,7 +349,7 @@ impl AndroidPanel {
         }
         let log_open = self.log.is_some();
         controls.push(
-            icon_button("android-log", "App log", "list-bullets", 14., cx)
+            icon_button("android-log", "App log", IconName::ListBullets, 14., cx)
                 .aria_toggled(log_open.into())
                 .when(log_open, |button| button.bg(t.bg_selected_muted))
                 .tooltip(tooltip("Log"))
@@ -399,7 +399,7 @@ impl AndroidPanel {
             row("android-notice", done.clone())
                 .child(div().flex_1().min_w_0().truncate().child(done.clone()))
                 .child(
-                    icon_button("android-notice-dismiss", "Dismiss", "x", 12., cx)
+                    icon_button("android-notice-dismiss", "Dismiss", IconName::X, 12., cx)
                         .size(px(20.))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.notice = None;

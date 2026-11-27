@@ -9,7 +9,7 @@ use gpui::{
     AnyElement, Image, ImageFormat, ObjectFit, Pixels, Role, Size, Task, Window, canvas, div, img,
     prelude::*, px,
 };
-use patchwork_ui_theme::{fs_sm, radius_sm, theme};
+use patchwork_ui_theme::{IconName, fs_sm, radius_sm, theme};
 use patchwork_ui_components::{BtnKind, btn, spinner};
 use patchwork_ui_theme::icon;
 
@@ -145,7 +145,7 @@ impl Dock {
                             .child(if busy {
                                 spinner(13., t.text_muted).into_any_element()
                             } else {
-                                icon("camera", 13.).into_any_element()
+                                icon(IconName::Camera, 13.).into_any_element()
                             })
                             .child("Capture")
                             .when(!busy, |b| {

@@ -8,7 +8,7 @@ use gpui::{
     prelude::*, px, relative, uniform_list,
 };
 use patchwork_backend::chats::{Message, StepStatus};
-use patchwork_ui_theme::{font_mono, fs_md, fs_sm, Theme, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_md, fs_sm, Theme, theme};
 use patchwork_ui_components::{BtnKind, btn, spinner, tooltip};
 use patchwork_ui_markdown::base_name;
 use patchwork_ui_theme::icon;
@@ -123,11 +123,11 @@ impl Canvas {
                     .flex_col()
                     .gap(px(12.))
                     .text_color(t.text_muted)
-                    .child(icon("film-strip", 32.))
+                    .child(icon(IconName::Play, 32.))
                     .child(base_name(&path).to_string())
                     .child(
                         btn("play-video", "Play", BtnKind::Plain, false, &t)
-                            .child(icon("play", 14.))
+                            .child(icon(IconName::Play, 14.))
                             .child("Play")
                             .on_click(move |_, _, cx| cx.open_with_system(&file)),
                     )
@@ -270,7 +270,7 @@ impl Canvas {
                 .flex()
                 .items_center()
                 .gap(px(6.))
-                .child(icon("check", 14.).text_color(t.success))
+                .child(icon(IconName::Check, 14.).text_color(t.success))
                 .child(
                     div()
                         .font_weight(FontWeight::SEMIBOLD)
@@ -312,7 +312,14 @@ impl Canvas {
                         )
                         .child(
                             btn("stage-file", accept, BtnKind::Success, busy || unsettled, t)
-                                .child(icon(if conflicted { "check" } else { "plus" }, 14.))
+                                .child(icon(
+                                    if conflicted {
+                                        IconName::Check
+                                    } else {
+                                        IconName::Plus
+                                    },
+                                    14.,
+                                ))
                                 .child(accept)
                                 .when(!busy && !unsettled, |b| {
                                     b.on_click(cx.listener(|this, _, _, cx| this.stage_file(cx)))
@@ -352,12 +359,14 @@ pub(super) fn plan_view(message: Option<&Message>, t: &Theme) -> gpui::Div {
                 .gap(px(8.))
                 .children(steps.iter().map(|step| {
                     let mark = match step.status {
-                        StepStatus::Done => icon("check", 14.)
+                        StepStatus::Done => icon(IconName::Check, 14.)
                             .text_color(t.accent_text)
                             .into_any_element(),
                         StepStatus::Running => spinner(14., t.accent_text).into_any_element(),
-                        StepStatus::Error => icon("x", 14.).text_color(t.danger).into_any_element(),
-                        StepStatus::Pending => icon("circle", 14.)
+                        StepStatus::Error => icon(IconName::X, 14.)
+                            .text_color(t.danger)
+                            .into_any_element(),
+                        StepStatus::Pending => icon(IconName::Circle, 14.)
                             .text_color(t.text_subtle)
                             .into_any_element(),
                     };

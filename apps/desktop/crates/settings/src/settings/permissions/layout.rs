@@ -17,7 +17,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, choices, segmented, select_box, switch, token_row};
 use patchwork_ui_theme::theme;
 use patchwork_ui_components::{BtnKind, btn, tooltip};
-use patchwork_ui_theme::icon;
+use patchwork_ui_theme::{IconName, icon};
 
 pub fn render(
     d: &mut SettingsDialog,
@@ -89,7 +89,7 @@ pub fn render(
                 )
                 .px(px(10.))
                 .gap(px(6.))
-                .child(icon("arrow-counter-clockwise", 14.))
+                .child(icon(IconName::ArrowCounterClockwise, 14.))
                 .child("Restore defaults")
                 .map(|b| {
                     if restorable {

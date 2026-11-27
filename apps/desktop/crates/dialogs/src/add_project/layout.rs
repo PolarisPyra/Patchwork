@@ -9,7 +9,7 @@ use gpui::{
     prelude::*, px,
 };
 use patchwork_ui_components::dialog;
-use patchwork_ui_theme::{font_mono, fs_md, fs_sm, fs_xs, radius, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_md, fs_sm, fs_xs, radius, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button, spinner, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -118,7 +118,7 @@ impl Render for AddProject {
                             div()
                                 .flex_none()
                                 .text_color(t.text_muted)
-                                .child(icon("folder", 16.)),
+                                .child(icon(IconName::Folder, 16.)),
                         )
                         .child(
                             div()
@@ -154,7 +154,7 @@ impl Render for AddProject {
                                 icon_button(
                                     "add-project-back",
                                     "Back to machines",
-                                    "caret-left",
+                                    IconName::CaretLeft,
                                     16.,
                                     cx,
                                 )
@@ -165,16 +165,20 @@ impl Render for AddProject {
                             )
                         })
                         .child(
-                            icon_button("add-project-up", "Parent folder", "arrow-up", 16., cx)
-                                .tooltip(tooltip("Parent folder"))
-                                .map(|b| match parent {
-                                    Some(parent) => {
-                                        b.on_click(cx.listener(move |this, _, _, cx| {
-                                            this.browse(Some(parent.clone()), cx);
-                                        }))
-                                    }
-                                    None => b.opacity(0.4).cursor_default(),
-                                }),
+                            icon_button(
+                                "add-project-up",
+                                "Parent folder",
+                                IconName::ArrowUp,
+                                16.,
+                                cx,
+                            )
+                            .tooltip(tooltip("Parent folder"))
+                            .map(|b| match parent {
+                                Some(parent) => b.on_click(cx.listener(move |this, _, _, cx| {
+                                    this.browse(Some(parent.clone()), cx);
+                                })),
+                                None => b.opacity(0.4).cursor_default(),
+                            }),
                         )
                         .children(self.host.clone().map(|host| {
                             div()
@@ -281,7 +285,7 @@ impl Render for AddProject {
                                     div()
                                         .flex_none()
                                         .text_color(t.text_muted)
-                                        .child(icon("desktop", 16.)),
+                                        .child(icon(IconName::Desktop, 16.)),
                                 )
                                 .child(div().min_w_0().flex_1().truncate().child(local_name))
                                 .child(
@@ -295,7 +299,7 @@ impl Render for AddProject {
                                     div()
                                         .flex_none()
                                         .text_color(t.text_subtle)
-                                        .child(icon("caret-right", 12.)),
+                                        .child(icon(IconName::CaretRight, 12.)),
                                 )
                                 .on_click(
                                     cx.listener(|this, _, _, cx| this.open_machine(None, cx)),
@@ -327,7 +331,7 @@ impl Render for AddProject {
                                     div()
                                         .flex_none()
                                         .text_color(t.text_muted)
-                                        .child(icon("hard-drives", 16.)),
+                                        .child(icon(IconName::HardDrives, 16.)),
                                 )
                                 .child(div().min_w_0().flex_1().truncate().child(name.clone()))
                                 .children(hostname.clone().map(|h| {

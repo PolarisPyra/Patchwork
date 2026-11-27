@@ -8,7 +8,7 @@ use patchwork_platform::now_ms;
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{list_box, token_row};
-use patchwork_ui_theme::{font_mono, fs_sm, roomy, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, roomy, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button};
 use patchwork_ui_theme::icon;
 
@@ -76,7 +76,7 @@ pub(super) fn pairing_row(
             .gap(px(6.))
             .py(px(roomy(10.)))
             .text_color(t.success)
-            .child(icon("check-circle", 15.).text_color(t.success))
+            .child(icon(IconName::CheckCircle, 15.).text_color(t.success))
             .child(text)
     });
     div()
@@ -111,7 +111,7 @@ pub(super) fn paired(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> An
                     icon_button(
                         SharedString::from(format!("gw-unpair-{}-{}", platform.id(), paired.id)),
                         format!("Remove {name}"),
-                        "x",
+                        IconName::X,
                         14.,
                         cx,
                     )

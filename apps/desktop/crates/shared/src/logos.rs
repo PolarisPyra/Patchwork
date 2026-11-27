@@ -13,14 +13,14 @@ use patchwork_backend::import::ImportSource;
 use patchwork_backend::provider::api::ApiProvider;
 use patchwork_backend::provider::{AgentKind, Logo};
 use patchwork_ui_theme::brand::logo_file;
-use patchwork_ui_theme::{icon, provider_logo};
+use patchwork_ui_theme::{icon_by_name, provider_logo};
 
 /// An agent's mark. A one-colour mark takes the text colour.
 /// An API chat shows its provider's preset mark, found from the `provider/model` id.
 pub fn agent_logo(kind: AgentKind, model: Option<&str>, size: f32) -> AnyElement {
     match kind.identity().logo {
         Logo::File { file, mono } => logo_file(file, mono, size),
-        Logo::Icon(name) => icon(name, size).into_any_element(),
+        Logo::Icon(name) => icon_by_name(name, size).into_any_element(),
         Logo::ApiProvider => {
             let provider = model.and_then(api_provider_of);
             provider_logo(

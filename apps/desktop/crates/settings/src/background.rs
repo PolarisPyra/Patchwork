@@ -12,6 +12,7 @@ use crate::background_picker::BackgroundPicker;
 use patchwork_ui_components::dialog;
 use patchwork_ui_components::icon_button;
 use patchwork_ui_theme::theme;
+use patchwork_ui_theme::IconName;
 
 /// The user closed the card.
 #[derive(Debug, Clone, Copy)]
@@ -88,7 +89,7 @@ impl Render for BackgroundDialog {
                 .child(
                     dialog::title_row(
                         self.title.clone(),
-                        icon_button("background-dialog-close", "Close", "x", 16., cx)
+                        icon_button("background-dialog-close", "Close", IconName::X, 16., cx)
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(Closed))),
                     )
                     // In line with the cards' pictures.

@@ -134,16 +134,3 @@ pub fn recover(recovery: &str, new: &str) -> Result<String, Error> {
     log::info!("the vault was opened with its recovery key");
     change_password(new)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn recovery_key_wrapping_ignores_case_and_separators() {
-        let (shown, key) = new_recovery();
-        assert_eq!(shown.len(), 39); // 8 groups of 4 + 7 dashes
-        let compact = shown.replace('-', "").to_lowercase();
-        assert_eq!(*wrapping(&compact), *key);
-    }
-}

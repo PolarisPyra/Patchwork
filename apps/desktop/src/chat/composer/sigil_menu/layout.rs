@@ -14,7 +14,7 @@ use patchwork_backend::provider::{AgentKind, ProviderSlashCommand};
 use crate::chat::composer::Composer;
 use crate::chat::composer::menus::Roles;
 use patchwork_ui_markdown::sigils::{SigilKind, Sigils};
-use patchwork_ui_theme::{Theme, font_mono, fs_xs};
+use patchwork_ui_theme::{IconName, Theme, font_mono, fs_xs};
 use patchwork_ui_components::button;
 use patchwork_ui_theme::icon;
 
@@ -108,10 +108,10 @@ impl Composer {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let (label, empty, lead) = match kind {
-            SigilKind::Files => ("Files", "No matching files", "file"),
-            SigilKind::Commands => ("Commands", "No matching command.", "terminal"),
-            SigilKind::Skills => ("Skills", "No matching skill.", "sparkle"),
-            SigilKind::Agents => ("Agents", "No matching agent.", "robot"),
+            SigilKind::Files => ("Files", "No matching files", IconName::File),
+            SigilKind::Commands => ("Commands", "No matching command.", IconName::Terminal),
+            SigilKind::Skills => ("Skills", "No matching skill.", IconName::Sparkle),
+            SigilKind::Agents => ("Agents", "No matching agent.", IconName::Robot),
         };
         let sigil = sigils.of(kind);
         let rows = items.iter().enumerate().map(|(i, item)| {
@@ -156,9 +156,16 @@ impl Composer {
                 let is_folder = item.name.ends_with('/');
                 row.font_family(font_mono())
                     .child(
-                        icon(if is_folder { "folder-simple" } else { "file" }, 12.)
-                            .flex_none()
-                            .text_color(t.text_muted),
+                        icon(
+                            if is_folder {
+                                IconName::FolderSimple
+                            } else {
+                                IconName::File
+                            },
+                            12.,
+                        )
+                        .flex_none()
+                        .text_color(t.text_muted),
                     )
                     .child(
                         div()

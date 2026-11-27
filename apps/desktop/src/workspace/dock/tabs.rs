@@ -9,7 +9,7 @@ use gpui::{
     prelude::*, px,
 };
 use patchwork_ui_components::menu::MenuItem;
-use patchwork_ui_theme::{fs_md, fs_xs, radius_sm, theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_xs, radius_sm, theme};
 use patchwork_ui_components::{button, icon_button, tooltip};
 use patchwork_ui_theme::icon;
 use super::open_tabs::{MenuFor, Dock, DockTab};
@@ -65,7 +65,7 @@ impl Dock {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let t = *theme(cx);
-        let tool = |id: &'static str, label: &'static str, name: &'static str, cx: &App| {
+        let tool = |id: &'static str, label: &'static str, name: IconName, cx: &App| {
             icon_button(id, label, name, 14., cx)
                 .size(px(TOOL))
                 .tooltip(tooltip(label))
@@ -92,15 +92,15 @@ impl Dock {
                         .text_color(t.text_muted)
                         .hover(move |s| s.bg(hover).text_color(fg))
                         .tooltip(tooltip("Open terminals"))
-                        .child(icon("terminal-window", 14.))
+                        .child(icon(IconName::TerminalWindow, 14.))
                         .child(div().max_w(px(140.)).truncate().child(name))
-                        .child(icon("caret-down", 11.))
+                        .child(icon(IconName::CaretDown, 11.))
                         .on_click(cx.listener(Dock::terminals_menu))
                         .into_any_element(),
                 );
                 // New terminal, with its shell beside it, as VS Code's `+ ⌄` is.
                 let mut new = div().flex().items_center().child(
-                    icon_button("terminal-new", "New terminal", "plus", 15., cx)
+                    icon_button("terminal-new", "New terminal", IconName::Plus, 15., cx)
                         .size(px(TOOL))
                         .tooltip(tooltip("New terminal (Ctrl+Shift+`)"))
                         .on_click(cx.listener(|this, _, _, cx| this.start(true, None, cx))),
@@ -118,14 +118,14 @@ impl Dock {
                             .text_color(t.text_muted)
                             .hover(move |s| s.bg(hover).text_color(fg))
                             .tooltip(tooltip("New terminal in a shell"))
-                            .child(icon("caret-down", 11.))
+                            .child(icon(IconName::CaretDown, 11.))
                             .on_click(cx.listener(Dock::shells_menu)),
                     );
                 }
                 tools.push(new.into_any_element());
                 let active = current.map(|(id, _)| id);
                 tools.push(
-                    tool("terminal-kill", "Kill the terminal", "trash", cx)
+                    tool("terminal-kill", "Kill the terminal", IconName::Trash, cx)
                         .when(active.is_none(), |b| b.opacity(0.5).cursor_default())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             if let Some(id) = active {
@@ -138,7 +138,7 @@ impl Dock {
                     icon_button(
                         "terminal-more",
                         "More terminal actions",
-                        "dots-three",
+                        IconName::DotsThree,
                         16.,
                         cx,
                     )
@@ -183,14 +183,19 @@ impl Dock {
                     );
                 }
                 tools.push(
-                    tool("output-folder", "Open logs folder", "folder-open", cx)
-                        .on_click(|_, _, cx| match patchwork_backend::logging::logs_folder() {
-                            Ok(logs) => cx.open_with_system(&logs),
-                            Err(e) => {
-                                log::warn!(error:% = e; "could not open the logs folder: {{error}}");
-                            }
-                        })
-                        .into_any_element(),
+                    tool(
+                        "output-folder",
+                        "Open logs folder",
+                        IconName::FolderOpen,
+                        cx,
+                    )
+                    .on_click(|_, _, cx| match patchwork_backend::logging::logs_folder() {
+                        Ok(logs) => cx.open_with_system(&logs),
+                        Err(e) => {
+                            log::warn!(error:% = e; "could not open the logs folder: {{error}}");
+                        }
+                    })
+                    .into_any_element(),
                 );
                 tools
             }
@@ -225,7 +230,7 @@ impl Dock {
                 .text_color(t.text_muted)
                 .hover(move |s| s.bg(hover).text_color(fg))
                 .tooltip(tooltip("Kill terminal"))
-                .child(icon("x", 11.))
+                .child(icon(IconName::X, 11.))
                 .opacity(0.)
                 .group_hover(group.clone(), |s| s.opacity(1.))
                 .focus(|s| s.opacity(1.))
@@ -288,7 +293,7 @@ impl Dock {
                             MenuItem::new("Kill terminal", move |_, cx| {
                                 let _ = weak.update(cx, |p, cx| p.kill(id, cx));
                             })
-                            .icon("trash")
+                            .icon(IconName::Trash)
                             .danger(),
                         ];
                         this.open_menu(
@@ -351,7 +356,7 @@ impl Dock {
             MenuItem::new("Find…", move |window, cx| {
                 let _ = find.update(cx, |p, cx| p.open_find(window, cx));
             })
-            .icon("magnifying-glass")
+            .icon(IconName::MagnifyingGlass)
             .separated(),
         );
         items.push(
@@ -362,7 +367,7 @@ impl Dock {
                     }
                 });
             })
-            .icon("trash"),
+            .icon(IconName::Trash),
         );
         self.toggle_menu(MenuFor::Terminals, "Terminals", items, e, window, cx);
     }
@@ -380,7 +385,7 @@ impl Dock {
             MenuItem::new("Find…", move |window, cx| {
                 let _ = find.update(cx, |p, cx| p.open_find(window, cx));
             })
-            .icon("magnifying-glass"),
+            .icon(IconName::MagnifyingGlass),
             MenuItem::new("Clear the screen", move |_, cx| {
                 let _ = clear.update(cx, Dock::clear_screen);
             }),

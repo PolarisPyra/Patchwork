@@ -15,9 +15,6 @@ use std::time::{Duration, Instant};
 
 use portable_pty::{ChildKiller, MasterPty};
 
-#[cfg(unix)]
-use super::handover::{self, Handover};
-
 use super::activity::{self, Activity, ShellActivity};
 use super::{AttachedTerminal, Launch, TerminalFrame, TerminalInfo, pty, range};
 use crate::Error;
@@ -318,128 +315,6 @@ impl Terminals {
             range::kill(&term);
             remove(term.dir.as_deref());
         }
-    }
-
-    /// Hands the running terminals to the next run of the app: what each showed, with a
-    /// duplicate of its pseudo-terminal's controlling side. They leave this run, so quitting
-    /// leaves their shells running.
-    #[cfg(unix)]
-    pub fn hand_over(&self) -> Vec<(Handover, std::os::fd::OwnedFd)> {
-        use std::os::fd::BorrowedFd;
-
-        let mut handed = Vec::new();
-        let mut open = self.open.locked();
-        let mut ids: Vec<u32> = open.keys().copied().collect();
-        ids.sort_unstable();
-        for id in ids {
-            let Some(term) = open.get(&id).map(Arc::clone) else {
-                continue;
-            };
-            if term.exited.load(Ordering::Acquire) {
-                continue;
-            }
-            let state = term.lock();
-            if state.closing {
-                continue;
-            }
-            let Some(raw) = term.master.locked().as_raw_fd() else {
-                continue;
-            };
-            // SAFETY: the master stays open while `term` is held, which outlasts the borrow.
-            let fd = match unsafe { BorrowedFd::borrow_raw(raw) }.try_clone_to_owned() {
-                Ok(fd) => fd,
-                Err(e) => {
-                    log::warn!(id:%, error:% = e; "terminal {{id}}: could not hand it over: {{error}}");
-                    continue;
-                }
-            };
-            if let Some(dir) = &term.dir {
-                handover::mark_handed(dir);
-            }
-            handed.push((
-                Handover {
-                    info: state.info.clone(),
-                    pid: term.pid,
-                    screen: state.replay(),
-                    dir: term.dir.clone(),
-                },
-                fd,
-            ));
-            drop(state);
-            open.remove(&id);
-            log::info!(id:%; "terminal {{id}}: handed over");
-        }
-        handed
-    }
-
-    /// Takes over the terminals an earlier run handed over, each with its pseudo-terminal.
-    #[cfg(unix)]
-    pub fn take_over(&self, handed: Vec<(Handover, std::os::fd::OwnedFd)>) {
-        for (handover, fd) in handed {
-            let id = handover.info.id;
-            if let Err(e) = self.adopt(handover, fd) {
-                log::warn!(id:%, error:% = e; "terminal {{id}}: could not take it over: {{error}}");
-            }
-        }
-    }
-
-    #[cfg(unix)]
-    fn adopt(&self, handover: Handover, fd: std::os::fd::OwnedFd) -> Result<(), Error> {
-        let Handover {
-            info,
-            pid,
-            screen,
-            dir,
-        } = handover;
-        let id = info.id;
-        let Some(pid) = pid else {
-            return Err("its shell's pid is unknown".into());
-        };
-        let master = handover::Master::new(fd);
-        let view = master.get_size().map_err(|e| e.to_string())?;
-        let reader = master.try_clone_reader().map_err(|e| e.to_string())?;
-        let writer = master.take_writer().map_err(|e| e.to_string())?;
-        let shell = handover::Adopted::new(pid);
-        let killer = shell.clone_killer();
-        if let (Some(dir), Some(instance)) = (&dir, range::instance()) {
-            handover::mark_held(dir, instance);
-        }
-        let mut model = vt100::Parser::new(view.rows, view.cols, 0);
-        model.process(screen.as_bytes());
-        let term = Arc::new(Term {
-            pid: Some(pid),
-            root: running::find(pid),
-            master: Mutex::new(Box::new(master)),
-            writer: Mutex::new(writer),
-            killer: Mutex::new(killer),
-            exited: AtomicBool::new(false),
-            activity: dir.as_deref().and_then(activity::resume),
-            dir,
-            tracked: Mutex::default(),
-            observed: Mutex::default(),
-            closing: Mutex::new(()),
-            state: Mutex::new(State {
-                info,
-                screen,
-                trimmed: false,
-                model,
-                followers: Vec::new(),
-                controller: None,
-                closing: false,
-                retry_at: None,
-                epoch: 0,
-                idle: None,
-            }),
-        });
-        self.next.fetch_max(id, Ordering::Relaxed);
-        self.open.locked().insert(id, Arc::clone(&term));
-        log::info!(id:%, pid:%; "terminal {{id}}: taken over, shell {{pid}}");
-        pty::pump(id, term, reader, Box::new(shell));
-        let open = Arc::clone(&self.open);
-        if !self.reclaiming.swap(true, Ordering::Relaxed) {
-            std::thread::spawn(move || reclaim(&open));
-        }
-        Ok(())
     }
 
     fn get(&self, id: u32) -> Result<Arc<Term>, Error> {

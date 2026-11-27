@@ -6,7 +6,7 @@ use std::rc::Rc;
 use gpui::{AnyElement, Div, FontWeight, Hsla, Role, SharedString, Stateful, div, hsla, prelude::*, px};
 use patchwork_ui_components::menu::MenuItem;
 use crate::settings::SettingsDialog;
-use patchwork_ui_theme::{font_mono, fs_md, fs_sm, fs_xs, radius, radius_sm, theme, Theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_md, fs_sm, fs_xs, radius, radius_sm, theme, Theme};
 use super::found::anchored;
 use patchwork_ui_components::{BtnKind, btn, button};
 use patchwork_ui_theme::icon;
@@ -139,7 +139,7 @@ pub fn detail_header(
             patchwork_ui_components::icon_button(
                 format!("{id}-back"),
                 "Back",
-                "caret-left",
+                IconName::CaretLeft,
                 16.,
                 cx,
             )
@@ -170,7 +170,7 @@ pub fn search_box(field: Div, t: &Theme) -> Div {
                 .absolute()
                 .left(px(8.))
                 .text_color(t.text_muted)
-                .child(icon("magnifying-glass", 13.)),
+                .child(icon(IconName::MagnifyingGlass, 13.)),
         )
 }
 
@@ -359,7 +359,7 @@ pub fn select_box(
         .text_color(t.text)
         .hover(move |s| s.border_color(strong).text_color(fg))
         .child(div().min_w_0().truncate().child(current.into()))
-        .child(icon("caret-down", 12.))
+        .child(icon(IconName::CaretDown, 12.))
 }
 
 /// A menu row that runs `pick` on the dialog, marked when it is the current choice.
@@ -372,7 +372,11 @@ pub fn choice(
     let item = MenuItem::new(label, move |_, cx| {
         let _ = dialog.update(cx, |d, cx| pick(d, cx));
     });
-    if checked { item.icon("check") } else { item }
+    if checked {
+        item.icon(IconName::Check)
+    } else {
+        item
+    }
 }
 
 /// A click handler that opens the dropdown `key`'s menu of `options`, or closes it when open.
@@ -417,7 +421,7 @@ pub fn minutes_stepper(
     let at = CHECK_MINUTES.iter().position(|&m| m == value).unwrap_or(0);
     let change = Rc::new(change);
     let (hover, fg, muted) = (t.bg_hover, t.text, t.text_muted);
-    let step = |id: &'static str, name: &'static str, glyph: &str, to: Option<usize>| {
+    let step = |id: &'static str, name: &'static str, glyph: IconName, to: Option<usize>| {
         let change = Rc::clone(&change);
         button(id, name)
             .size(px(24.))
@@ -447,7 +451,12 @@ pub fn minutes_stepper(
         .rounded(px(radius_sm()))
         .border_1()
         .border_color(t.border_strong)
-        .child(step("less-often", "Less often", "minus", at.checked_sub(1)))
+        .child(step(
+            "less-often",
+            "Less often",
+            IconName::Minus,
+            at.checked_sub(1),
+        ))
         .child(
             div()
                 .w(px(56.))
@@ -460,7 +469,7 @@ pub fn minutes_stepper(
         .child(step(
             "more-often",
             "More often",
-            "plus",
+            IconName::Plus,
             (at + 1 < CHECK_MINUTES.len()).then_some(at + 1),
         ))
 }

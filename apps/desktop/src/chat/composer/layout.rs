@@ -8,14 +8,15 @@ use gpui::{
     prelude::*, px,
 };
 use patchwork_ui_editor::Paste;
-use patchwork_ui_theme::{fs, fs_xs, theme};
+use patchwork_ui_theme::{IconName, fs, fs_xs, theme};
 use patchwork_ui_components::button;
 use patchwork_ui_markdown::format_tokens;
 use patchwork_ui_theme::icon;
 
 use super::draft::{Composer, PLACEHOLDER};
 use super::footer::FooterState;
-use super::menus::{Menu, access_of, compact_label};
+use super::access_picker::access_of;
+use super::menus::{Menu, compact_label};
 use super::model_picker::effort_name;
 use super::send::queue_by_default;
 use super::workspace_row::WorkspaceState;
@@ -29,6 +30,12 @@ const MAX_W: f32 = 760.;
 
 impl Render for Composer {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.render_composer(window, cx)
+    }
+}
+
+impl Composer {
+    fn render_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) -> gpui::AnyElement {
         let t = *theme(cx);
         let Some(workspace) = self.workspace.upgrade() else {
             return div().into_any_element();
@@ -161,7 +168,7 @@ impl Render for Composer {
                     .rounded_full()
                     .text_color(t.text_muted)
                     .hover(move |s| s.bg(hover).text_color(fg))
-                    .child(icon("x", 10.))
+                    .child(icon(IconName::X, 10.))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         if i < this.attachments.len() {
                             this.attachments.remove(i);

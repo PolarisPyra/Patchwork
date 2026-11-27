@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app has no Java code: NativeActivity loads libpatchwork_android.so and runs android_main. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dev.patchwork.ade.android"
+    android:versionCode="1"
+    android:versionName="0.1.0">
+
+    <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="37" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="Patchwork"
+        android:hasCode="false"
+        android:debuggable="true"
+        android:extractNativeLibs="false">
+        <activity
+            android:name="android.app.NativeActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|density|uiMode">
+            <meta-data android:name="android.app.lib_name" android:value="patchwork_android" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

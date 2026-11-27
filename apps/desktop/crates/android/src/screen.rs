@@ -427,9 +427,24 @@ impl Render for DeviceScreen {
             .h(px(NAV))
             .children(
                 [
-                    ("device-back", "Back", "caret-left", "GoBack"),
-                    ("device-home", "Home", "circle", "GoHome"),
-                    ("device-overview", "Overview", "square", "AppSwitch"),
+                    (
+                        "device-back",
+                        "Back",
+                        patchwork_ui_theme::IconName::CaretLeft,
+                        "GoBack",
+                    ),
+                    (
+                        "device-home",
+                        "Home",
+                        patchwork_ui_theme::IconName::Circle,
+                        "GoHome",
+                    ),
+                    (
+                        "device-overview",
+                        "Overview",
+                        patchwork_ui_theme::IconName::Square,
+                        "AppSwitch",
+                    ),
                 ]
                 .map(|(id, label, glyph, key)| {
                     icon_button(id, label, glyph, 16., cx)

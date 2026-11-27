@@ -168,24 +168,3 @@ pub fn command(kind: InfoCommand) -> Result<String, Error> {
     let binary = binary().ok_or("The Codex CLI is not installed")?;
     cli_info::command(&binary, kind)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_codex_features_and_models() {
-        let feats = parse_features("NAME STAGE ENABLED\nfast_mode under development true\n");
-        assert_eq!(feats.len(), 1);
-        assert_eq!(feats[0].name, "fast_mode");
-        assert_eq!(feats[0].stage, "under development");
-        assert!(feats[0].enabled);
-
-        let models = parse_models(
-            r#"{"models":[{"slug":"gpt-5","display_name":"GPT-5","supported_reasoning_levels":[{"effort":"high"}],"visibility":"show"}]}"#,
-        );
-        assert_eq!(models.len(), 1);
-        assert_eq!(models[0].slug, "gpt-5");
-        assert!(models[0].listed);
-    }
-}

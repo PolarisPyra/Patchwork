@@ -16,7 +16,7 @@ use patchwork_backend::chats::{Message, StepStatus, ToolCall};
 
 use patchwork_desktop_quilts::kind_icon;
 use crate::chat::transcript::turn_contents::is_running;
-use patchwork_ui_theme::{Theme, fs_md, fs_xs, radius_lg, radius_sm};
+use patchwork_ui_theme::{IconName, Theme, fs_md, fs_xs, radius_lg, radius_sm};
 
 use patchwork_ui_components::{button, next_step};
 use patchwork_ui_theme::icon;
@@ -77,7 +77,7 @@ pub(super) fn quilt_card(
             let noun = kind.map_or("a quilt", QuiltKind::noun);
             let verb = if changing { "Changing" } else { "Making" };
             (
-                kind.map_or("sparkle", kind_icon),
+                kind.map_or(IconName::Sparkle, kind_icon),
                 tool.title
                     .clone()
                     .unwrap_or_else(|| format!("{verb} {noun}")),
@@ -87,8 +87,12 @@ pub(super) fn quilt_card(
                 }),
             )
         }
-        None if failed => ("x-circle", "The quilt was not saved".to_owned(), None),
-        None => ("sparkle", "Quilt".to_owned(), None),
+        None if failed => (
+            IconName::XCircle,
+            "The quilt was not saved".to_owned(),
+            None,
+        ),
+        None => (IconName::Sparkle, "Quilt".to_owned(), None),
     };
     let picture = saved.and_then(|(quilt, n)| {
         if !quilt.kind.drawn() {
@@ -183,7 +187,7 @@ pub(super) fn quilt_card(
                     div()
                         .flex_none()
                         .text_color(t.text_muted)
-                        .child(icon("caret-right", 14.)),
+                        .child(icon(IconName::CaretRight, 14.)),
                 ),
             )
             .on_click(cx.listener(move |this: &mut Workspace, _, window, cx| {

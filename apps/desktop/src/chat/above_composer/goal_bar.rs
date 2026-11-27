@@ -7,7 +7,7 @@ use std::sync::Arc;
 use gpui::{FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
 use patchwork_backend::chats::{Goal, GoalStatus};
 
-use patchwork_ui_theme::{fs_sm, fs_xs, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_sm, fs_xs, radius_sm, Theme};
 use patchwork_ui_components::{button, tooltip};
 use patchwork_ui_markdown::full_elapsed;
 use patchwork_ui_theme::icon;
@@ -139,11 +139,11 @@ pub fn goal_banner(
         .text_color(muted)
         .hover(move |s| s.text_color(fg))
         .tooltip(tooltip(first_line))
-        .child(icon("target", 13.).flex_none().text_color(if active {
-            t.accent_text
-        } else {
-            t.text_subtle
-        }))
+        .child(
+            icon(IconName::Target, 13.)
+                .flex_none()
+                .text_color(if active { t.accent_text } else { t.text_subtle }),
+        )
         .child(
             div()
                 .id("goal-state")
@@ -164,9 +164,16 @@ pub fn goal_banner(
                 .child(usage)
         }))
         .child(
-            icon(if open { "caret-down" } else { "caret-right" }, 12.)
-                .ml_auto()
-                .flex_none(),
+            icon(
+                if open {
+                    IconName::CaretDown
+                } else {
+                    IconName::CaretRight
+                },
+                12.,
+            )
+            .ml_auto()
+            .flex_none(),
         )
         .on_click(cx.listener(move |w, _, _, cx| {
             w.goal_closed = if w.goal_closed == Some(started) {

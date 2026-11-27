@@ -9,7 +9,7 @@ use gpui::{
 use crate::chat::backdrop::quilts_scheme;
 use crate::chat::text_colors::in_scheme;
 use crate::chat::panes::{Dir, Zone};
-use patchwork_ui_theme::{font_ui, fs_md, radius, radius_sm, STATUSBAR_H, Theme, theme};
+use patchwork_ui_theme::{IconName, font_ui, fs_md, radius, radius_sm, STATUSBAR_H, Theme, theme};
 use patchwork_ui_components::button;
 use patchwork_ui_markdown::display_title;
 use patchwork_ui_theme::icon;
@@ -17,6 +17,16 @@ use super::window::{Page, Place, SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.render_workspace(window, cx)
+    }
+}
+
+impl Workspace {
+    fn render_workspace(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
         if !self.settings.onboarded {
             return self.onboarding_view(window, cx);
         }
@@ -538,7 +548,6 @@ impl Render for Workspace {
                     })),
             )
             .children(error)
-            .children(self.build_errors_panel(&t, cx))
             .children(self.update_card(&t, cx))
             .children({
                 let interrupted = self.dialogs.read(cx).interrupted.clone();
@@ -683,7 +692,7 @@ impl Workspace {
                         div()
                             .flex_none()
                             .text_color(t.danger)
-                            .child(icon("warning", 14.)),
+                            .child(icon(IconName::Warning, 14.)),
                     )
                     .child(div().min_w_0().flex_1().child(error.clone()))
                     // An agent that would not start is worth a bug report, so its logs are a
@@ -710,7 +719,7 @@ impl Workspace {
                             .rounded(px(radius_sm()))
                             .text_color(t.text_muted)
                             .hover(move |s| s.bg(hover).text_color(fg))
-                            .child(icon("x", 14.))
+                            .child(icon(IconName::X, 14.))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.error = None;
                                 cx.notify();

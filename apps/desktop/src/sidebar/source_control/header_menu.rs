@@ -13,7 +13,7 @@ use super::ref_pickers::{Pick, StashPick};
 use super::git_status::{ChangesView, GitAction};
 use patchwork_ui_components::menu::MenuItem;
 use patchwork_ui_editor::{Changed, Submitted, TextArea};
-use patchwork_ui_theme::{Theme, fs_md, radius_sm};
+use patchwork_ui_theme::{IconName, Theme, fs_md, radius_sm};
 use patchwork_ui_components::{button, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -119,7 +119,7 @@ impl ChangesView {
             item(&view, "Fetch", |this, _, cx| {
                 this.act("Fetching…", RepoAction::Fetch { all: false }, cx);
             })
-            .icon("arrow-down"),
+            .icon(IconName::ArrowDown),
             item(&view, "Fetch All Remotes", |this, _, cx| {
                 this.act("Fetching…", RepoAction::Fetch { all: true }, cx);
             }),
@@ -129,11 +129,11 @@ impl ChangesView {
             item(&view, "Push", move |this, window, cx| {
                 this.start(GitAction::Push, at, window, cx);
             })
-            .icon("arrow-up"),
+            .icon(IconName::ArrowUp),
             item(&view, "Sync", |this, _, cx| {
                 this.act("Syncing…", RepoAction::Sync, cx);
             })
-            .icon("arrows-clockwise"),
+            .icon(IconName::ArrowsClockwise),
             item(&view, "Force Push…", |this, window, cx| {
                 this.confirm(
                     "Force push",
@@ -155,7 +155,7 @@ impl ChangesView {
             item(&view, "Branch…", move |this, window, cx| {
                 this.open_branch_menu(at, window, cx);
             })
-            .icon("git-branch")
+            .icon(IconName::GitBranch)
             .separated(),
             item(&view, "Stash…", move |this, window, cx| {
                 this.open_stash_menu(at, window, cx);
@@ -192,7 +192,7 @@ impl ChangesView {
             item(&view, "New Branch…", |this, window, cx| {
                 this.ask(Ask::NewBranch { from: None }, window, cx);
             })
-            .icon("plus"),
+            .icon(IconName::Plus),
             pick("Check Out…", Pick::Checkout),
             item(&view, "Rename Branch…", |this, window, cx| {
                 this.ask(Ask::RenameBranch, window, cx);
@@ -238,7 +238,7 @@ impl ChangesView {
             item(&view, "New Tag…", |this, window, cx| {
                 this.ask(Ask::Tag { at: None }, window, cx);
             })
-            .icon("plus"),
+            .icon(IconName::Plus),
             item(&view, "Delete Tag…", move |this, window, cx| {
                 this.pick_ref(Pick::DeleteTag, at, window, cx);
             })
@@ -261,7 +261,7 @@ impl ChangesView {
             item(&view, "Add Remote…", |this, window, cx| {
                 this.ask(Ask::RemoteName, window, cx);
             })
-            .icon("plus"),
+            .icon(IconName::Plus),
         ];
         items.extend(remotes.into_iter().enumerate().map(|(i, name)| {
             let row = item(
@@ -402,7 +402,7 @@ impl ChangesView {
                         .text_color(t.text_muted)
                         .hover(move |s| s.bg(hover).text_color(fg))
                         .tooltip(tooltip("Cancel"))
-                        .child(icon("x", 12.))
+                        .child(icon(IconName::X, 12.))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.asking = None;
                             cx.notify();

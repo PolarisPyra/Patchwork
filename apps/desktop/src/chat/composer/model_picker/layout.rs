@@ -10,7 +10,7 @@ use gpui::{
     prelude::*, px,
 };
 use patchwork_backend::provider::AgentKind;
-use patchwork_ui_theme::{Theme, font_mono, fs, fs_md, fs_xs, radius};
+use patchwork_ui_theme::{IconName, Theme, font_mono, fs, fs_md, fs_xs, radius};
 use patchwork_ui_components::{button, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -127,7 +127,14 @@ impl Composer {
                 .text_color(if starred { t.accent_text } else { fg })
                 .hover(move |s| s.bg(hover))
                 .tooltip(tooltip(label))
-                .child(icon(if starred { "star-fill" } else { "star" }, 14.))
+                .child(icon(
+                    if starred {
+                        IconName::StarFill
+                    } else {
+                        IconName::Star
+                    },
+                    14.,
+                ))
                 .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
                 .on_click(cx.listener(|this, _, _, cx| this.star_spot(cx)))
         });
@@ -182,7 +189,7 @@ impl Composer {
                         window.focus(&search_focus, cx);
                     })
                     .child(
-                        icon("magnifying-glass", 14.)
+                        icon(IconName::MagnifyingGlass, 14.)
                             .flex_none()
                             .text_color(t.text_subtle),
                     )
@@ -240,7 +247,7 @@ fn swatch_of(each: Tab, open: bool, t: &Theme, cx: &mut Context<Composer>) -> An
         Tab::Favorites => (
             SharedString::from("model-tab-favorites"),
             "Starred",
-            icon("star-fill", 14.)
+            icon(IconName::StarFill, 14.)
                 .text_color(t.accent_text)
                 .into_any_element(),
         ),
@@ -366,7 +373,14 @@ fn row_of(
             s.opacity(0.).group_hover(group.clone(), |s| s.opacity(1.))
         })
         .hover(move |s| s.bg(hover))
-        .child(icon(if starred { "star-fill" } else { "star" }, 12.))
+        .child(icon(
+            if starred {
+                IconName::StarFill
+            } else {
+                IconName::Star
+            },
+            12.,
+        ))
         .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
         .on_click(cx.listener(move |this, _, _, cx| {
             cx.stop_propagation();
@@ -419,11 +433,15 @@ fn row_of(
                 .children(detail),
         )
         .when(needs_cli.is_some(), |r| {
-            r.child(icon("warning", 12.).flex_none().text_color(t.warning))
+            r.child(
+                icon(IconName::Warning, 12.)
+                    .flex_none()
+                    .text_color(t.warning),
+            )
         })
         .when(selected, |r| {
             r.child(
-                icon("check-bold", 12.)
+                icon(IconName::CheckBold, 12.)
                     .flex_none()
                     .text_color(t.accent_text),
             )

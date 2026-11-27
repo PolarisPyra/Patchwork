@@ -11,7 +11,7 @@ use patchwork_backend::projects::{Project, ProjectChanged};
 use patchwork_desktop_dialogs::add_project::{AddProject, Closed as AddProjectClosed};
 use patchwork_platform::files::browse::{self, Machine};
 use patchwork_platform::machine::device::{self, Kind};
-use patchwork_ui_theme::{fs_md, fs_sm, radius_sm, theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_sm, radius_sm, theme};
 use patchwork_ui_components::{button, icon_button, spinner};
 use patchwork_ui_theme::icon;
 
@@ -329,11 +329,11 @@ impl Workspace {
 
 /// The icon for a kind of machine: a desktop, a laptop, or a drive for anything else.
 #[must_use]
-pub(crate) fn kind_icon(kind: Kind) -> &'static str {
+pub(crate) fn kind_icon(kind: Kind) -> IconName {
     match kind {
-        Kind::Desktop => "desktop",
-        Kind::Laptop => "laptop",
-        Kind::Other => "hard-drives",
+        Kind::Desktop => IconName::Desktop,
+        Kind::Laptop => IconName::Laptop,
+        Kind::Other => IconName::HardDrives,
     }
 }
 
@@ -421,8 +421,14 @@ impl Render for DevicesView {
             .font_weight(FontWeight::SEMIBOLD)
             .child("Devices")
             .child(
-                icon_button("refresh-devices", "Refresh", "arrows-clockwise", 18., cx)
-                    .on_click(cx.listener(|this, _, _, cx| this.load(true, cx))),
+                icon_button(
+                    "refresh-devices",
+                    "Refresh",
+                    IconName::ArrowsClockwise,
+                    18.,
+                    cx,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.load(true, cx))),
             );
         let rows = self
             .devices
@@ -518,7 +524,7 @@ impl Render for DevicesView {
                                         .flex_none()
                                         .flex()
                                         .justify_center()
-                                        .child(icon("hard-drives", 16.)),
+                                        .child(icon(IconName::HardDrives, 16.)),
                                 )
                                 .child(
                                     div()

@@ -16,7 +16,7 @@ use patchwork_backend::backgrounds::ChatBackground;
 use super::choices::{BackgroundPicker, CARD, GAP, PICTURE, SHARED_VEIL};
 use patchwork_ui_backdrop::{PRESETS, butterfly_preview, preset_fill, scene_preview};
 use patchwork_ui_components::menu::Menu;
-use patchwork_ui_theme::{Theme, applied, fs_sm, radius, radius_sm, theme};
+use patchwork_ui_theme::{IconName, Theme, applied, fs_sm, radius, radius_sm, theme};
 use patchwork_ui_components::{button, focus_ring, spinner, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -64,7 +64,7 @@ impl BackgroundPicker {
                         .bg(t.bg_editor.opacity(SHARED_VEIL)),
                 )
             })
-            .child(div().relative().child(icon("prohibit", 26.)));
+            .child(div().relative().child(icon(IconName::Prohibit, 26.)));
         swatch(
             "background-none".into(),
             label.into(),
@@ -285,7 +285,7 @@ impl Render for BackgroundPicker {
                     .focus(|s| s.opacity(1.))
                     .hover(move |s| s.text_color(fg))
                     .tooltip(tooltip(format!("Remove {name}")))
-                    .child(icon("x", 9.))
+                    .child(icon(IconName::X, 9.))
                     .on_click(cx.listener(move |p, _, _, cx| {
                         p.remove_picture(&remove, removed_name.clone(), cx);
                     })),
@@ -353,7 +353,7 @@ impl Render for BackgroundPicker {
                             .border_color(t.border_strong)
                             .text_size(px(patchwork_ui_theme::fs_sm()))
                             .text_color(muted)
-                            .child(icon("plus", 16.))
+                            .child(icon(IconName::Plus, 16.))
                             .child("Add background")
                             .map(|b| {
                                 if importing {

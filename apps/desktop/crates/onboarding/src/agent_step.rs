@@ -11,7 +11,7 @@ use patchwork_backend::provider::AgentKind;
 
 use super::{AGENT_KINDS, Onboarding, Probe};
 use super::rows::{choice_row, heading, key_id, picked, row_end, tick};
-use patchwork_ui_theme::{fs_sm, radius, Theme};
+use patchwork_ui_theme::{IconName, fs_sm, radius, Theme};
 use patchwork_ui_components::{BtnKind, badge, btn, button, spinner};
 use patchwork_ui_theme::icon;
 
@@ -186,7 +186,7 @@ pub fn agent_step(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) ->
         .child(if checking {
             spinner(14., accent).into_any_element()
         } else {
-            icon("arrows-clockwise", 14.).into_any_element()
+            icon(IconName::ArrowsClockwise, 14.).into_any_element()
         })
         .child("Check again");
     let recheck = if checking {

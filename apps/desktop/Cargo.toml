@@ -11,7 +11,6 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-patchwork-oxidation-client.workspace = true
 patchwork-backend.workspace = true
 patchwork-daemon.workspace = true
 patchwork-desktop-android.workspace = true
@@ -49,6 +48,9 @@ vt100 = { workspace = true, default-features = true }
 # Links the dependencies from one shared library, so a debug rebuild relinks only Patchwork.
 # For development only: the binary then needs the library and Rust's own beside it.
 dynamic = ["dep:patchwork-dylib"]
+# Patches changed code into the running app in place: GPUI connects to `dx serve --hot-patch`
+# (`cargo run desktop`) and every view renders through a patchable function.
+hot-reload = ["gpui/hot-reload"]
 
 [build-dependencies]
 # Embeds the Windows icon in the exe.

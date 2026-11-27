@@ -16,7 +16,7 @@ use super::tasks::row_menu::Target;
 use super::{empty_row, twistie};
 use super::tasks::chat_row::{TREE_GUTTER, indent_guide, tree_row};
 use patchwork_ui_components::avatar::{Mood, avatar};
-use patchwork_ui_theme::{fs_md, fs_sm, radius_sm, theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_sm, radius_sm, theme};
 use patchwork_ui_components::{button, scrollbar};
 use patchwork_ui_markdown::display_title;
 use patchwork_ui_theme::icon;
@@ -79,7 +79,7 @@ pub fn archived_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl Int
                     .text_size(px(fs_sm()))
                     .text_color(muted)
                     .hover(move |s| s.text_color(fg))
-                    .child(icon("arrows-in-line-vertical", 15.))
+                    .child(icon(IconName::ArrowsInLineVertical, 15.))
                     .child("Collapse all")
                     .on_click(cx.listener(|this, _, _, cx| {
                         let projects = this.settings.projects.iter().map(|p| p.id.clone());
@@ -360,7 +360,7 @@ fn agents_group(w: &Workspace, agents: &[&Agent], cx: &mut Context<Workspace>) -
                 .rounded(px(radius_sm()))
                 .text_color(t.text_muted)
                 .hover(move |s| s.bg(btn_hover).text_color(fg))
-                .child(icon("arrow-counter-clockwise", 16.))
+                .child(icon(IconName::ArrowCounterClockwise, 16.))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.set_agent_archived(&restore, false, cx);
                 })),
@@ -443,7 +443,7 @@ fn archived_row(
             .opacity(0.)
             .group_hover(group, |s| s.opacity(1.))
             .focus(|s| s.opacity(1.))
-            .child(icon("arrow-counter-clockwise", 16.))
+            .child(icon(IconName::ArrowCounterClockwise, 16.))
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
                 let id = restore_id.clone();

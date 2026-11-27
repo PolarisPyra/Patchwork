@@ -4,7 +4,7 @@
 
 use gpui::{AnyElement, FontWeight, MouseButton, Role, Window, div, prelude::*, px};
 use patchwork_ui_components::menu::Menu;
-use patchwork_ui_theme::{fs_lg, fs_xs, theme};
+use patchwork_ui_theme::{IconName, fs_lg, fs_xs, theme};
 use patchwork_ui_components::{icon_button, overflows, scrollbar};
 use super::dialog::{SettingsDialog, SettingsEvent};
 use super::pages::{PAGES, page};
@@ -211,11 +211,19 @@ impl Render for SettingsDialog {
                                     .child(
                                         // Pulled up and out so the X sits in the corner, as on the web.
                                         div().mt(px(-4.)).mr(px(-12.)).child(
-                                            icon_button("settings-close", "Close", "x", 16., cx)
-                                                .tooltip(patchwork_ui_components::tooltip("Close"))
-                                                .on_click(cx.listener(|_, _, _, cx| {
+                                            icon_button(
+                                                "settings-close",
+                                                "Close",
+                                                IconName::X,
+                                                16.,
+                                                cx,
+                                            )
+                                            .tooltip(patchwork_ui_components::tooltip("Close"))
+                                            .on_click(
+                                                cx.listener(|_, _, _, cx| {
                                                     cx.emit(SettingsEvent::Closed);
-                                                })),
+                                                }),
+                                            ),
                                         ),
                                     ),
                             )

@@ -9,7 +9,7 @@ use gpui::{AnyElement, FontWeight, SharedString, Window, div, prelude::*, px};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, Section, letter_badge, token_row};
-use patchwork_ui_theme::{font_mono, fs_sm, fs_xs, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_xs, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button};
 use patchwork_ui_theme::icon;
 
@@ -160,7 +160,7 @@ pub fn render(
         .child(
             btn("agent-new", "New agent", BtnKind::Plain, false, &t)
                 .px(px(10.))
-                .child(icon("plus", 13.))
+                .child(icon(IconName::Plus, 13.))
                 .child("New agent")
                 .on_click(cx.listener(|d, _, window, cx| d.open_draft(window, cx))),
         );
@@ -211,11 +211,11 @@ pub fn render(
                     }),
                 )
                 .child(
-                    icon_button("agent-cancel", "Cancel", "x", 14., cx).on_click(cx.listener(
-                        |d, _, _, cx| {
+                    icon_button("agent-cancel", "Cancel", IconName::X, 14., cx).on_click(
+                        cx.listener(|d, _, _, cx| {
                             d.cancel_draft(cx);
-                        },
-                    )),
+                        }),
+                    ),
                 )
                 .into_any_element(),
         );
@@ -232,38 +232,28 @@ pub fn render(
                 .py(px(10.))
                 .child(letter_badge(&agent.name, 24.))
                 .child(
-                    div()
-                        .min_w_0()
-                        .flex_1()
-                        .child(
-                            div()
-                                .flex()
-                                .min_w_0()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(div().truncate().font_weight(FontWeight::SEMIBOLD).child(
-                                    format!("{}{}", default_sigil(SigilKind::Agents), agent.name),
-                                ))
-                                .when(agent.primary, |row| {
-                                    row.child(
-                                        div()
-                                            .flex_none()
-                                            .rounded(px(4.))
-                                            .bg(t.bg_accent_soft)
-                                            .px(px(6.))
-                                            .text_size(px(fs_xs()))
-                                            .text_color(t.accent_text)
-                                            .child("Primary"),
-                                    )
-                                }),
-                        )
-                        .child(
-                            div()
-                                .truncate()
-                                .text_size(px(fs_sm()))
-                                .text_color(t.text_muted)
-                                .child(agent.description.clone().unwrap_or_default()),
-                        ),
+                    div().min_w_0().flex_1().child(
+                        div()
+                            .flex()
+                            .min_w_0()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(div().truncate().font_weight(FontWeight::SEMIBOLD).child(
+                                format!("{}{}", default_sigil(SigilKind::Agents), agent.name),
+                            ))
+                            .when(agent.primary, |row| {
+                                row.child(
+                                    div()
+                                        .flex_none()
+                                        .rounded(px(4.))
+                                        .bg(t.bg_accent_soft)
+                                        .px(px(6.))
+                                        .text_size(px(fs_xs()))
+                                        .text_color(t.accent_text)
+                                        .child("Primary"),
+                                )
+                            }),
+                    ),
                 )
                 .children(agent.model.clone().map(|model| {
                     div()

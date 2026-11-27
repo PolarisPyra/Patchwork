@@ -4,6 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::Context;
+use patchwork_ui_theme::IconName;
 
 use super::tree::Split;
 use super::{Axis, Node, Pane, PaneId};
@@ -44,14 +45,14 @@ impl Preset {
     }
 
     /// The icon the menu shows, a picture of the layout.
-    pub(crate) fn icon(self) -> &'static str {
+    pub(crate) fn icon(self) -> IconName {
         match self {
-            Self::Single => "square",
-            Self::Columns => "square-split-horizontal",
-            Self::Rows => "square-split-vertical",
-            Self::ThreeColumns => "square-split-three",
-            Self::Grid => "square-grid-four",
-            Self::MainAndStack => "square-split-stack",
+            Self::Single => IconName::Square,
+            Self::Columns => IconName::SquareSplitHorizontal,
+            Self::Rows => IconName::SquareSplitVertical,
+            Self::ThreeColumns => IconName::SquareSplitThree,
+            Self::Grid => IconName::SquareGridFour,
+            Self::MainAndStack => IconName::SquareSplitStack,
         }
     }
 

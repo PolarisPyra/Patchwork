@@ -3,7 +3,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
-use patchwork_ui_theme::{fs_lg, fs_md, fs_sm, radius, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_lg, fs_md, fs_sm, radius, radius_sm, Theme};
 use patchwork_ui_theme::icon;
 use patchwork_ui_components::mix;
 
@@ -120,7 +120,7 @@ pub(super) fn tick(checked: bool, t: &Theme) -> AnyElement {
             if checked {
                 b.border_color(t.accent)
                     .bg(t.accent)
-                    .child(icon("check-bold", 12.))
+                    .child(icon(IconName::CheckBold, 12.))
             } else {
                 b.border_color(t.border_strong)
             }

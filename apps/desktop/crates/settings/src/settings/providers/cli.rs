@@ -8,7 +8,7 @@ use patchwork_backend::provider::cli_info::{
     CliPage, InfoCommand, CliFeature as Feature, CliRows as Rows, CliReading as Info,
 };
 use gpui::{prelude::*, px, AnyElement, FontWeight, Role, SharedString, Window, div};
-use patchwork_ui_theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, fs_xs, radius, radius_sm, theme};
 use patchwork_ui_components::{BtnKind, btn};
 use patchwork_ui_theme::icon;
 
@@ -266,7 +266,7 @@ pub fn render(
                 &t,
             )
             .when(command == InfoCommand::Doctor, |b| {
-                b.child(icon("stethoscope", 13.))
+                b.child(icon(IconName::Stethoscope, 13.))
             })
             .child(label)
             .when(!busy, |b| {
@@ -320,7 +320,7 @@ pub fn render(
                         .absolute()
                         .left(px(8.))
                         .text_color(muted)
-                        .child(icon("magnifying-glass", 13.)),
+                        .child(icon(IconName::MagnifyingGlass, 13.)),
                 )
         }))
         .child(

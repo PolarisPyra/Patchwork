@@ -191,13 +191,3 @@ __patchwork_shell_init() {
 typeset -ga precmd_functions
 precmd_functions+=(__patchwork_shell_init)
 "#;
-
-/// The prompt hooks [`prepare`] left in `dir` for a shell another run started, if it wrote any.
-#[cfg(unix)]
-pub(super) fn resume(dir: &Path) -> Option<ShellActivity> {
-    let hooked = dir.join("bashrc").exists() || dir.join(".zshenv").exists();
-    hooked.then(|| ShellActivity {
-        state: dir.join("state"),
-        seen: Mutex::default(),
-    })
-}

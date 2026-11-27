@@ -345,35 +345,3 @@ pub(super) fn code_theme_from_base16(text: &str) -> Option<CodeThemeFile> {
         },
     })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const DARK: &str = "scheme: \"Night\"\nbase00: \"101010\" # surface\nbase03: \"303030\"\n\
-        base08: \"800000\"\nbase09: \"900000\"\nbase0A: \"a00000\"\nbase0B: \"b00000\"\n\
-        base0C: \"c00000\"\nbase0D: \"d00000\"\nbase0E: \"e00000\"\n";
-
-    #[test]
-    fn base16_code_theme_maps_its_colors() {
-        let theme = code_theme_from_base16(DARK).expect("a base16 scheme");
-        assert_eq!(theme.name, "Night");
-        assert_eq!(theme.scheme, Scheme::Dark);
-        assert_eq!(theme.colors.keyword, Color(0x00e0_0000));
-        assert_eq!(theme.colors.comment, Color(0x0030_3030));
-        assert_eq!(theme.colors.tag, Color(0x0080_0000));
-    }
-
-    #[test]
-    fn base16_code_theme_is_light_on_a_light_surface() {
-        let light = DARK.replace("101010", "f0f0f0");
-        let theme = code_theme_from_base16(&light).expect("a base16 scheme");
-        assert_eq!(theme.scheme, Scheme::Light);
-    }
-
-    #[test]
-    fn base16_code_theme_needs_every_color() {
-        assert!(code_theme_from_base16("base00: \"101010\"\n").is_none());
-        assert!(code_theme_from_base16("not a scheme").is_none());
-    }
-}

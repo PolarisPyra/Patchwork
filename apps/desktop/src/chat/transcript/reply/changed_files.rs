@@ -16,7 +16,7 @@ use patchwork_backend::{
 };
 
 use crate::canvas::CanvasTab;
-use patchwork_ui_theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_sm, fs_xs, radius, radius_sm, Theme};
 use patchwork_ui_components::{BtnKind, btn, button, tooltip};
 use patchwork_ui_markdown::{base_name, dir_name};
 use patchwork_ui_theme::icon;
@@ -273,7 +273,7 @@ fn produced_file(
             .flex()
             .items_center()
             .justify_center()
-            .child(icon("file", 15.).text_color(t.text_muted))
+            .child(icon(IconName::File, 15.).text_color(t.text_muted))
             .into_any_element()
     };
     let hover = t.bg_hover;
@@ -370,7 +370,7 @@ fn produced_file(
                     .text_color(t.text_muted)
                     .hover(move |s| s.bg(hover).text_color(fg))
                     .tooltip(tooltip("Open in its app"))
-                    .child(icon("arrow-square-out", 14.))
+                    .child(icon(IconName::ArrowSquareOut, 14.))
                     .on_click(move |_, _, cx| {
                         match patchwork_backend::projects::resolve_inside(&root, &rel) {
                             Ok(file) => cx.open_with_system(&file),
@@ -458,7 +458,11 @@ fn change_summary(
                 .flex_wrap()
                 .items_center()
                 .gap(px(8.))
-                .child(icon("git-diff", 14.).flex_none().text_color(t.text_muted))
+                .child(
+                    icon(IconName::GitDiff, 14.)
+                        .flex_none()
+                        .text_color(t.text_muted),
+                )
                 .child(div().whitespace_nowrap().child(format!(
                     "{} {} changed",
                     paths.len(),

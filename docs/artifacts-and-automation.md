@@ -5,15 +5,15 @@ them changes how a turn is run.
 
 ## Scheduled tasks
 
-`crates/core/src/scheduled/` works out the next run from the shape of a schedule and the local
+`crates/patchwork_backend/src/scheduled/` works out the next run from the shape of a schedule and the local
 clock; there is no cron parser. The shapes are Codex's own: every few hours, every day, weekdays,
 or named days.
 
-- The row is in `scheduled_tasks` (`crates/core/src/persistence/scheduled.rs`), and saving a task
+- The row is in `scheduled_tasks` (`crates/patchwork_backend/src/persistence/scheduled.rs`), and saving a task
   reschedules it from now.
 - `Core::run_due_scheduled_tasks` starts the tasks whose time has come. The desktop app calls it
   every 30 seconds from a thread of its own (`start_scheduled_tasks` in
-  `crates/desktop/src/main.rs`).
+  `apps/desktop/src/main.rs`).
 - A task that starts makes an ordinary thread with the task's name, then sends the prompt as its
   first message, so everything after that is a normal turn: approvals, files, usage.
 - A task that fails to start is logged and its next run recorded, so it does not retry every tick.
@@ -33,7 +33,7 @@ hooks/guard/
 A bundle that runs hooks alone is that one file. A bundle that also carries apps has a
 `plugin.json` beside it, with its hooks inline or in a `hooks.json` the manifest names.
 
-`crates/core/src/extensions/hooks/` reads the manifest from `.patchwork-plugin/plugin.json`,
+`crates/patchwork_backend/src/extensions/hooks/` reads the manifest from `.patchwork-plugin/plugin.json`,
 `.codex-plugin/plugin.json`, or a plain `plugin.json`, so a Codex bundle works as it is, and from
 a `hooks.json` for a folder with none of those. A bundle's name is its folder's unless the file
 gives `name`. `hooks` and `apps` are each either inline or a path, relative to the bundle
@@ -71,13 +71,13 @@ skip it, such as OpenCode for a hook after a tool call.
 
 ## Computer use
 
-`crates/core/src/computer/` gives Patchwork's own agent a screenshot and the pointer and keyboard
+`crates/patchwork_backend/src/computer/` gives Patchwork's own agent a screenshot and the pointer and keyboard
 under it. Each is off until Settings → Permissions turns it on: "Let the agent see the screen"
 (`seeScreen`) offers the screenshot, and "Let the agent use the screen" (`computerUse`) the pointer
 and keyboard. `set_seeing` and `set_enabled` mirror the two settings so the tool list and the
 approval rules can ask without a database read.
 
-- `crates/core/src/computer/` captures the primary monitor. On Windows and macOS that is `xcap`.
+- `crates/patchwork_backend/src/computer/` captures the primary monitor. On Windows and macOS that is `xcap`.
   On Linux it is the desktop portal under Wayland, cut to the primary monitor that XWayland
   reports, and the root window under X11. It uses `zbus` and `x11rb`, which the app already builds
   for notifications and the clipboard. `xcap` is not used on Linux, since it would also build

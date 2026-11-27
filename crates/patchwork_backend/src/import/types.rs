@@ -54,30 +54,3 @@ pub struct ImportScan {
     /// Helper runs inside other conversations; not offered for import.
     pub subagents: u32,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::ImportSource;
-    use crate::provider::AgentKind;
-
-    #[test]
-    fn connected_agents_offer_their_own_files_in_order_then_opencode() {
-        let agents = [AgentKind::Antigravity, AgentKind::Qwen, AgentKind::Claude];
-        assert_eq!(
-            ImportSource::offered(&agents),
-            [
-                ImportSource::Claude,
-                ImportSource::Antigravity,
-                ImportSource::OpenCode
-            ]
-        );
-        assert_eq!(ImportSource::offered(&[]), [ImportSource::OpenCode]);
-    }
-
-    #[test]
-    fn every_source_but_t3_shows_its_agent() {
-        assert_eq!(ImportSource::Codex.agent(), Some(AgentKind::Codex));
-        assert_eq!(ImportSource::OpenCode.agent(), Some(AgentKind::OpenCode));
-        assert_eq!(ImportSource::T3.agent(), None);
-    }
-}

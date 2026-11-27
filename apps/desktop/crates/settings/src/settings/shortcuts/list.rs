@@ -14,7 +14,7 @@ use gpui::{
 };
 use patchwork_ui_markdown::sigils::SigilKind;
 use patchwork_ui_editor::{Arrow, Changed, Submitted, TextArea};
-use patchwork_ui_theme::{Theme, fs_md, fs_sm, fs_xs, radius, radius_lg, radius_sm, theme};
+use patchwork_ui_theme::{IconName, Theme, fs_md, fs_sm, fs_xs, radius, radius_lg, radius_sm, theme};
 use patchwork_ui_components::{BtnKind, btn, focus_ring, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -423,6 +423,7 @@ pub fn render(
         none_changed,
         &t,
     )
+    .h(px(FIELD_H))
     .child("Reset all")
     .when(!none_changed, |b| {
         b.on_click(cx.listener(|d, _, _, cx| {
@@ -437,7 +438,7 @@ pub fn render(
         .flex_col()
         .flex_1()
         .min_h_0()
-        .gap(px(10.))
+        .gap(px(12.))
         .child(
             div()
                 .flex()
@@ -448,7 +449,7 @@ pub fn render(
                     div()
                         .flex_1()
                         .min_w_0()
-                        .h(px(32.))
+                        .h(px(FIELD_H))
                         .flex()
                         .items_center()
                         .gap(px(8.))
@@ -466,7 +467,7 @@ pub fn render(
                             div()
                                 .flex_none()
                                 .text_color(t.text_subtle)
-                                .child(icon("magnifying-glass", 13.)),
+                                .child(icon(IconName::MagnifyingGlass, 13.)),
                         )
                         .child(div().flex_1().min_w_0().child(search)),
                 )
@@ -645,7 +646,6 @@ fn chips(
         .items_center()
         .gap(px(6.))
         .overflow_x_scroll()
-        .pb(px(2.))
         .children(pages)
         .child(div().w(px(1.)).h(px(16.)).mx(px(4.)).bg(t.border))
         .children(filters)
@@ -710,9 +710,15 @@ fn heading(page: &'static str, first: bool, t: &Theme) -> AnyElement {
 }
 
 /// The space between one page's card of shortcuts and the next page's heading.
-const GROUP_GAP: f32 = 20.;
+const GROUP_GAP: f32 = 24.;
 
-/// One row: the command's name and what it does, and its keys.
+/// A shortcut row's height: one line, its keys beside it.
+const ROW_H: f32 = 40.;
+
+/// The height of the search field and the Reset all button beside it.
+const FIELD_H: f32 = 32.;
+
+/// One row: the command's name, and its keys.
 fn row(
     d: &SettingsDialog,
     item: Item,
@@ -724,9 +730,9 @@ fn row(
 ) -> AnyElement {
     let spot = item.spot();
     let selected = d.shortcuts.spot == spot;
-    let (fixed, desc, clash) = match item {
-        Item::Command(c) => (c.fixed, c.desc, !index.conflicts(c.id).is_empty()),
-        Item::Fixed(_) => (true, None, false),
+    let (fixed, clash) = match item {
+        Item::Command(c) => (c.fixed, !index.conflicts(c.id).is_empty()),
+        Item::Fixed(_) => (true, false),
     };
     let changed = matches!(item, Item::Command(c) if index.overrides.contains_key(c.id));
     let parts = index.parts(item);
@@ -744,9 +750,8 @@ fn row(
         .flex()
         .items_center()
         .gap(px(10.))
-        .min_h(px(48.))
+        .h(px(ROW_H))
         .px(px(16.))
-        .py(px(8.))
         .border_x_1()
         .border_t_1()
         .border_color(t.border)
@@ -773,47 +778,37 @@ fn row(
         })
         .on_click(cx.listener(move |d, _, _, cx| d.show_spot(spot, cx)))
         .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(5.))
-                        .text_color(if fixed { t.text_muted } else { t.text })
-                        .child(div().truncate().child(item.title()))
-                        .when(fixed, |r| {
-                            r.child(
-                                div()
-                                    .id(("shortcut-lock", at))
-                                    .flex_none()
-                                    .flex()
-                                    .items_center()
-                                    .text_color(t.text_subtle)
-                                    .tooltip(tooltip("Built in: this key can't be changed"))
-                                    .child(icon("lock-simple", 11.)),
-                            )
-                        })
-                        .when(changed, |r| {
-                            r.child(
-                                div()
-                                    .id(("shortcut-changed", at))
-                                    .flex_none()
-                                    .size(px(5.))
-                                    .rounded_full()
-                                    .bg(t.accent)
-                                    .tooltip(tooltip("Changed from its default")),
-                            )
-                        }),
-                )
-                .children(desc.map(|desc| {
-                    div()
-                        .truncate()
-                        .text_size(px(fs_sm()))
-                        .text_color(t.text_muted)
-                        .child(desc)
-                })),
+            div().flex_1().min_w_0().child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(5.))
+                    .text_color(if fixed { t.text_muted } else { t.text })
+                    .child(div().truncate().child(item.title()))
+                    .when(fixed, |r| {
+                        r.child(
+                            div()
+                                .id(("shortcut-lock", at))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .text_color(t.text_subtle)
+                                .tooltip(tooltip("Built in: this key can't be changed"))
+                                .child(icon(IconName::LockSimple, 11.)),
+                        )
+                    })
+                    .when(changed, |r| {
+                        r.child(
+                            div()
+                                .id(("shortcut-changed", at))
+                                .flex_none()
+                                .size(px(5.))
+                                .rounded_full()
+                                .bg(t.accent)
+                                .tooltip(tooltip("Changed from its default")),
+                        )
+                    }),
+            ),
         )
         .when(clash, |r| {
             r.child(
@@ -824,7 +819,7 @@ fn row(
                     .items_center()
                     .text_color(t.warning)
                     .tooltip(tooltip("Shares a key with another command"))
-                    .child(icon("warning", 13.)),
+                    .child(icon(IconName::Warning, 13.)),
             )
         })
         .child(

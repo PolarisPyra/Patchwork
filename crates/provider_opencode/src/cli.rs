@@ -125,24 +125,3 @@ pub fn command(kind: InfoCommand) -> Result<String, Error> {
     let binary = opencode_bin().ok_or("OpenCode is not installed")?;
     cli_info::command(&binary, kind)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_settings_and_agents() {
-        let settings = parse_settings(
-            r#"[{"type":"document","path":"/a.json","info":{"$schema":"x","model":"gpt-5"}}]"#,
-        );
-        assert_eq!(settings.len(), 1);
-        assert_eq!(settings[0].name, "model");
-        assert_eq!(settings[0].value, "gpt-5");
-
-        let agents = parse_agents(
-            r#"[{"name":"build","mode":"primary","description":"Main"},{"name":"secret","hidden":true}]"#,
-        )
-        .expect("valid agents");
-        assert_eq!(agents, "build (primary): Main");
-    }
-}

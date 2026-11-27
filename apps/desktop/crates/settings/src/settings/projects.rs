@@ -12,7 +12,7 @@ use patchwork_backend::import::{ImportScan, ImportSource};
 use crate::settings::controls::{Section, alert, switch, token_row};
 use super::themes::project_look;
 use crate::settings::{SettingsDialog, SettingsEvent};
-use patchwork_ui_theme::{fs_sm, theme};
+use patchwork_ui_theme::{IconName, fs_sm, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button, tooltip};
 
 #[derive(Default)]
@@ -197,7 +197,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 icon_button(
                     SharedString::from(format!("project-remove-{}", p.id)),
                     format!("Remove {}", p.name),
-                    "trash",
+                    IconName::Trash,
                     14.,
                     cx,
                 )

@@ -9,7 +9,7 @@ use gpui::{
     AnyElement, ClickEvent, Div, Focusable, MouseButton, PathBuilder, Stateful, Window, canvas,
     div, point, prelude::*, px,
 };
-use patchwork_ui_theme::{Theme, fs};
+use patchwork_ui_theme::{IconName, Theme, fs};
 use patchwork_ui_components::{above, button};
 use patchwork_ui_theme::icon;
 use super::menus::{Menu, Pick};
@@ -47,6 +47,7 @@ impl Composer {
         self.menu = Some(menu);
         self.launching = false;
         self.picker = None;
+        self.agent_picker = None;
         self.highlight = usize::MAX;
         match menu {
             Menu::Model => {
@@ -58,8 +59,11 @@ impl Composer {
                 }
             }
             Menu::Agent => {
-                self.load_roles(cx);
-                window.focus(&self.menu_focus, cx);
+                let current = self
+                    .workspace
+                    .upgrade()
+                    .and_then(|w| self.picks(w.read(cx)).role);
+                self.open_agent_picker(current.as_deref(), window, cx);
             }
             _ => window.focus(&self.menu_focus, cx),
         }
@@ -69,6 +73,7 @@ impl Composer {
     pub(super) fn close_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         self.picker = None;
+        self.agent_picker = None;
         self.effort_drag = None;
         self.restore_focus(window, cx);
         cx.notify();
@@ -257,6 +262,12 @@ impl Composer {
                     cx,
                 );
             }
+            if menu == Menu::Agent {
+                return self.agent_picker(picks.role.as_deref(), t, window, cx);
+            }
+            if menu == Menu::Access {
+                return self.access_picker(picks.access, t, cx);
+            }
             let rows = if menu == Menu::Project {
                 self.workspace
                     .upgrade()
@@ -297,7 +308,7 @@ pub(super) fn chip(
     trigger(id, aria, t)
         .child(lead)
         .child(div().min_w_0().max_w(px(180.)).truncate().child(label))
-        .child(icon("caret-down", 12.).text_color(t.text_muted))
+        .child(icon(IconName::CaretDown, 12.).text_color(t.text_muted))
 }
 
 /// The bare button a picker opens from, for a caller to fill.

@@ -9,7 +9,7 @@ use patchwork_platform::machine::device::Kind;
 use crate::workspace::{Page, View, Workspace};
 use patchwork_ui_components::menu::{Dismissed, Menu, MenuItem};
 use patchwork_ui_theme::{
-    ACTIVITY_BAR_W, fs_xs, radius, radius_sm, STATUSBAR_H, TOOLBAR_H, Theme, theme,
+    IconName, ACTIVITY_BAR_W, fs_xs, radius, STATUSBAR_H, TOOLBAR_H, Theme, theme,
 };
 use patchwork_ui_components::{button, spinner};
 use patchwork_ui_theme::icon;
@@ -116,7 +116,7 @@ impl Workspace {
                 MenuItem::new(label, move |_, cx| {
                     let _ = this.update(cx, |w, cx| w.pick_machine(host.clone(), cx));
                 })
-                .icon(kind.map_or("hard-drives", kind_icon))
+                .icon(kind.map_or(IconName::HardDrives, kind_icon))
                 .radio(picked.as_ref() == Some(&m.name))
             })
             .collect();
@@ -193,7 +193,7 @@ impl Workspace {
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(name),
                     )
-                    .child(icon("caret-down", 14.)),
+                    .child(icon(IconName::CaretDown, 14.)),
             )
             .child(
                 div()
@@ -201,18 +201,13 @@ impl Workspace {
                     .flex_none()
                     .flex()
                     .items_center()
-                    .gap(px(6.))
+                    .gap(px(4.))
                     .child(
                         div()
-                            .rounded(px(radius_sm()))
-                            .border_1()
-                            .border_color(t.border)
-                            .bg(t.text_tint_6)
-                            .px(px(8.))
-                            .py(px(1.))
+                            .px(px(6.))
                             .text_size(px(fs_xs()))
                             .line_height(px(16.))
-                            .text_color(t.text_muted)
+                            .text_color(t.text_subtle)
                             .child(patchwork_platform::VERSION),
                     ),
             )
@@ -231,48 +226,46 @@ impl Workspace {
 
     pub(crate) fn activity_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let t = *theme(cx);
-        let entry =
-            |view: View, label: &'static str, name: &'static str, cx: &mut Context<Self>| {
-                let active = self.page == Page::Chats && self.sidebar_view() == Some(view);
-                let count = self.changes.len();
-                let badge = (view == View::Changes && count > 0).then(|| {
-                    div()
-                        .absolute()
-                        .right(px(-3.))
-                        .bottom(px(-2.))
-                        .min_w(px(14.))
-                        .rounded_full()
-                        .bg(t.accent)
-                        .px(px(3.))
-                        .text_size(px(patchwork_ui_theme::fs(10.)))
-                        .line_height(px(14.))
-                        .text_color(t.text_on_accent)
-                        .flex()
-                        .justify_center()
-                        .child(count.to_string())
-                });
-                let aria = if badge.is_some() {
-                    format!("{label}, {count} changes")
-                } else {
-                    label.to_string()
-                };
-                activity_button(label, aria, &t, active)
-                    .aria_toggled(active.into())
-                    .child(icon(name, 20.))
-                    .children(badge)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        // From the orchestrator page, a view's icon goes to that view.
-                        this.view = if this.page == Page::Chats && this.sidebar_view() == Some(view)
-                        {
-                            None
-                        } else {
-                            Some(view)
-                        };
-                        this.page = Page::Chats;
-                        this.peeking = false;
-                        cx.notify();
-                    }))
+        let entry = |view: View, label: &'static str, name: IconName, cx: &mut Context<Self>| {
+            let active = self.page == Page::Chats && self.sidebar_view() == Some(view);
+            let count = self.changes.len();
+            let badge = (view == View::Changes && count > 0).then(|| {
+                div()
+                    .absolute()
+                    .right(px(-3.))
+                    .bottom(px(-2.))
+                    .min_w(px(14.))
+                    .rounded_full()
+                    .bg(t.accent)
+                    .px(px(3.))
+                    .text_size(px(patchwork_ui_theme::fs(10.)))
+                    .line_height(px(14.))
+                    .text_color(t.text_on_accent)
+                    .flex()
+                    .justify_center()
+                    .child(count.to_string())
+            });
+            let aria = if badge.is_some() {
+                format!("{label}, {count} changes")
+            } else {
+                label.to_string()
             };
+            activity_button(label, aria, &t, active)
+                .aria_toggled(active.into())
+                .child(icon(name, 20.))
+                .children(badge)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    // From the orchestrator page, a view's icon goes to that view.
+                    this.view = if this.page == Page::Chats && this.sidebar_view() == Some(view) {
+                        None
+                    } else {
+                        Some(view)
+                    };
+                    this.page = Page::Chats;
+                    this.peeking = false;
+                    cx.notify();
+                }))
+        };
         // Lit while its page shows, with the task list open or closed. Toggled follows the list.
         let on_page = self.page == Page::Orchestrator;
         let orchestrating = on_page && self.orchestrator_tasks;
@@ -294,7 +287,7 @@ impl Workspace {
             .child(
                 activity_button("Orchestrator", "Orchestrator".into(), &t, on_page)
                     .aria_toggled(orchestrating.into())
-                    .child(icon("butterfly", 20.))
+                    .child(icon(IconName::Butterfly, 20.))
                     .on_click(cx.listener(|this, e, window, cx| {
                         // A click leaves the focus on nothing, so typing goes to the pill and
                         // Space still opens and closes the list. A key press keeps it here.
@@ -304,34 +297,42 @@ impl Workspace {
                         this.toggle_orchestrator(cx);
                     })),
             )
-            .child(entry(View::Tasks, "Tasks", "chats", cx))
-            .child(entry(View::Changes, "Source Control", "git-diff", cx))
-            .child(entry(View::Issues, "Issues", "list-checks", cx))
+            .child(entry(View::Tasks, "Tasks", IconName::Chats, cx))
+            .child(entry(
+                View::Changes,
+                "Source Control",
+                IconName::GitDiff,
+                cx,
+            ))
+            .child(entry(View::Issues, "Issues", IconName::ListChecks, cx))
             .child(
                 activity_button("Quilts", "Quilts".into(), &t, on_quilts)
                     .aria_toggled(on_quilts.into())
-                    .child(icon("code-block", 20.))
+                    .child(icon(IconName::CodeBlock, 20.))
                     .on_click(cx.listener(|this, _, _, cx| this.show_quilts_page(cx))),
             )
-            .child(entry(View::Archived, "Archived", "archive", cx))
+            .child(entry(View::Archived, "Archived", IconName::Archive, cx))
             .child(
                 activity_button("Settings", "Settings".into(), &t, false)
                     .mt_auto()
-                    .child(icon("gear-six", 20.))
+                    .child(icon(IconName::GearSix, 20.))
                     .on_click(
                         cx.listener(|this, _, window, cx| this.open_settings(None, window, cx)),
                     ),
             )
     }
 
-    /// The status bar: the project and its branch at the left, the project's uncommitted changes
-    /// at the right, a click on which opens Source Control.
+    /// The status bar: the project and its branch at the left, and uncommitted changes at the right.
     pub(crate) fn status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        self.render_status_bar(cx)
+    }
+
+    fn render_status_bar(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let t = *theme(cx);
         let project = self.project();
         let place = project.map_or_else(|| "No project".into(), |p| p.name.clone());
         // A segment: its mark, then its words, cut short past 280px.
-        let segment = |mark: &'static str, text: String| {
+        let segment = |mark: IconName, text: String| {
             div()
                 .flex()
                 .min_w_0()
@@ -349,7 +350,7 @@ impl Workspace {
                 format!("{changes} changes")
             };
             button("status-changes", label.clone())
-                .child(segment("git-diff", label))
+                .child(segment(IconName::GitDiff, label))
                 .hover(move |s| s.text_color(fg))
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.view = Some(View::Changes);
@@ -384,11 +385,11 @@ impl Workspace {
                     .overflow_hidden()
                     .whitespace_nowrap()
                     .child(
-                        segment("desktop", place)
+                        segment(IconName::Desktop, place)
                             .when(project.is_none(), |s| s.text_color(t.text_subtle)),
                     )
                     .when_some(self.branch.clone(), |row, branch| {
-                        row.child(segment("git-branch", branch).text_color(t.text_subtle))
+                        row.child(segment(IconName::GitBranch, branch).text_color(t.text_subtle))
                     }),
             )
             .child(
@@ -397,10 +398,11 @@ impl Workspace {
                     .flex()
                     .min_w_0()
                     .items_center()
-                    .gap(px(16.))
+                    .gap(px(10.))
                     .whitespace_nowrap()
                     .children(changes),
             )
+            .into_any_element()
     }
 }
 

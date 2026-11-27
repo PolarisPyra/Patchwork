@@ -9,7 +9,7 @@ use patchwork_backend::settings::VisionModel;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{choices, select_box, tile, tile_grid};
 use patchwork_ui_theme::theme;
-use patchwork_ui_theme::{icon, provider_logo};
+use patchwork_ui_theme::{IconName, icon, provider_logo};
 use super::catalog::VISION_AGENTS;
 use super::form;
 
@@ -131,7 +131,7 @@ impl SettingsDialog {
                 .border_dashed()
                 .border_color(t.border_strong)
                 .text_color(t.text_muted)
-                .child(icon("plus", 22.))
+                .child(icon(IconName::Plus, 22.))
                 .child(div().max_w_full().truncate().child("Add a server"))
                 .on_click(cx.listener(|d, _, window, cx| {
                     d.open_form(form::blank("custom", "", "", &[]), false, window, cx);

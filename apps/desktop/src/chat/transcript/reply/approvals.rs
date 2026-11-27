@@ -14,7 +14,7 @@ use patchwork_backend::permissions::{Effect, PermissionRule, PermissionScope, Pe
 use patchwork_platform::new_id;
 use patchwork_backend::chats::{Approval, ApprovalStatus, Message};
 use patchwork_desktop_settings::settings::{kind_label, scope_name};
-use patchwork_ui_theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
 use patchwork_ui_components::{button, popup};
 use patchwork_ui_theme::icon;
 use patchwork_backend::Core;
@@ -93,7 +93,7 @@ pub(in crate::chat) fn approval(
             .px(px(4.))
             .text_size(px(fs_sm()))
             .text_color(t.warning)
-            .child(icon("shield-warning", 15.))
+            .child(icon(IconName::ShieldWarning, 15.))
             .child(text);
     }
     let card = || {
@@ -133,9 +133,9 @@ pub(in crate::chat) fn approval(
     }
     let allowed = a.status == ApprovalStatus::Allowed;
     let mark = if allowed {
-        icon("check-circle", 15.).text_color(t.success)
+        icon(IconName::CheckCircle, 15.).text_color(t.success)
     } else {
-        icon("x-circle", 15.).text_color(t.danger)
+        icon(IconName::XCircle, 15.).text_color(t.danger)
     };
     let outcome = match (a.auto, allowed, a.rule.is_some()) {
         (true, true, _) => "Auto-allowed",
@@ -346,7 +346,7 @@ pub(in crate::chat) fn rule_menu(
             .gap(px(2.))
             .hover(gpui::Styled::underline)
             .child(label)
-            .child(icon("caret-down", 11.))
+            .child(icon(IconName::CaretDown, 11.))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.rule_menu = match this.rule_menu {

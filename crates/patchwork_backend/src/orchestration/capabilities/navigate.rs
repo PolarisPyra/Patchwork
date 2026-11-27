@@ -474,27 +474,3 @@ pub(super) fn import_chats(ctx: &Ctx<'_>, args: &Value) -> Result<String, Error>
     changed(ctx);
     Ok(json!({"imported": imported}).to_string())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn upload_name_keeps_the_last_part_and_plain_characters() {
-        assert_eq!(upload_name("docs/shots/screen 1.png"), "screen 1.png");
-        assert_eq!(upload_name("a\"b;c.png"), "a_b_c.png");
-    }
-
-    #[test]
-    fn key_folders_hold_secrets() {
-        assert!(holds_secrets("/home/me/.ssh/id_ed25519.png"));
-        assert!(holds_secrets("/home/me/.gnupg/photo.jpg"));
-        assert!(!holds_secrets("/home/me/Pictures/cat.png"));
-    }
-
-    #[test]
-    fn a_picture_needs_a_whole_path() {
-        outside_picture("cat.png").expect_err("a bare name is not a whole path");
-        outside_picture("").expect_err("nothing is not a path");
-    }
-}

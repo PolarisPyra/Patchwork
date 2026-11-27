@@ -13,8 +13,8 @@ use patchwork_backend::provider::AgentKind;
 use patchwork_backend::chats::AccessMode;
 
 use super::{Composer, Picks};
-use patchwork_ui_theme::{fs_sm, fs_xs, Theme};
-use patchwork_ui_components::{button, menu_item, popup};
+use patchwork_ui_theme::{IconName, Theme, fs_xs};
+use patchwork_ui_components::{menu_item, popup};
 use patchwork_ui_markdown::{effort_label, format_tokens};
 use patchwork_ui_theme::icon;
 
@@ -61,58 +61,31 @@ pub enum Pick {
 const WINDOWS: [u64; 5] = [128_000, 200_000, 256_000, 512_000, 0];
 
 /// The "+" menu's attach rows: whether it picks a folder, its label, and its icon.
-const ATTACH: [(bool, &str, &str); 2] = [(false, "Files", "paperclip"), (true, "Folder", "folder")];
+const ATTACH: [(bool, &str, IconName); 2] = [
+    (false, "Files", IconName::Paperclip),
+    (true, "Folder", IconName::Folder),
+];
 
 /// The "+" menu's rows that start a menu in the editor: the text they type, their label, and the
 /// glyph drawn in the icon's place, as the web's `At` and `Command` icons are not in the set.
 const SIGILS: [(&str, &str); 2] = [("@", "Mentions"), ("/", "Actions")];
 
 /// The format rows: label, icon, the marks put before and after the selection, and the shortcut.
-const FORMATS: [(&str, &str, &str, &str, Option<&str>); 7] = [
-    ("Bold", "text-b", "**", "**", Some("Ctrl+B")),
-    ("Italic", "text-italic", "*", "*", Some("Ctrl+I")),
-    ("Strikethrough", "text-strikethrough", "~~", "~~", None),
-    ("Inline code", "code", "`", "`", None),
-    ("Code block", "code-block", "```\n", "\n```", None),
-    ("Bulleted list", "list-bullets", "- ", "", None),
-    ("Numbered list", "list-numbers", "1. ", "", None),
+const FORMATS: [(&str, IconName, &str, &str, Option<&str>); 7] = [
+    ("Bold", IconName::TextB, "**", "**", Some("Ctrl+B")),
+    ("Italic", IconName::TextItalic, "*", "*", Some("Ctrl+I")),
+    (
+        "Strikethrough",
+        IconName::TextStrikethrough,
+        "~~",
+        "~~",
+        None,
+    ),
+    ("Inline code", IconName::Code, "`", "`", None),
+    ("Code block", IconName::CodeBlock, "```\n", "\n```", None),
+    ("Bulleted list", IconName::ListBullets, "- ", "", None),
+    ("Numbered list", IconName::ListNumbers, "1. ", "", None),
 ];
-
-const ACCESS_MODES: [(AccessMode, &str, &str, &str); 4] = [
-    (
-        AccessMode::Supervised,
-        "Supervised",
-        "Ask before commands and file changes.",
-        "lock-simple",
-    ),
-    (
-        AccessMode::AutoAcceptEdits,
-        "Auto-accept edits",
-        "Auto-approve edits, ask before other actions.",
-        "note-pencil",
-    ),
-    (
-        AccessMode::Auto,
-        "Auto",
-        "Supported providers approve routine actions; others still ask.",
-        "robot",
-    ),
-    (
-        AccessMode::FullAccess,
-        "Full access",
-        "Allow commands and edits without prompts.",
-        "lock-open",
-    ),
-];
-
-pub fn access_of(mode: AccessMode) -> (&'static str, &'static str) {
-    ACCESS_MODES
-        .iter()
-        .find(|(m, ..)| *m == mode)
-        .map_or(("Full access", "lock-open"), |(_, label, _, icon)| {
-            (*label, *icon)
-        })
-}
 
 pub fn compact_label(window: u64) -> String {
     if window == 0 {
@@ -163,7 +136,7 @@ impl Row {
 }
 
 /// A row's body: its icon, muted, before its label.
-pub fn with_icon(name: &'static str, label: impl Into<SharedString>, t: &Theme) -> AnyElement {
+pub fn with_icon(name: IconName, label: impl Into<SharedString>, t: &Theme) -> AnyElement {
     div()
         .flex()
         .items_center()
@@ -181,7 +154,7 @@ impl Composer {
             Row::new(pick, text(label.clone()), label, checked)
         };
         match menu {
-            Menu::Model | Menu::Project => Vec::new(),
+            Menu::Model | Menu::Project | Menu::Agent | Menu::Access => Vec::new(),
             Menu::Attach => {
                 let glyph = |sigil: &'static str, label: &'static str| {
                     div()
@@ -274,39 +247,6 @@ impl Composer {
                 }
                 rows
             }
-            Menu::Access => ACCESS_MODES
-                .iter()
-                .map(|&(mode, label, description, name)| Row {
-                    heading: None,
-                    hint: None,
-                    pick: Pick::Access(mode),
-                    body: div()
-                        .flex()
-                        .flex_col()
-                        .items_start()
-                        .gap(px(2.))
-                        .min_w(px(284.))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(icon(name, 14.).text_color(t.text_muted))
-                                .child(label),
-                        )
-                        .child(
-                            div()
-                                .pl(px(22.))
-                                .text_size(px(fs_sm()))
-                                .text_color(t.text_muted)
-                                .child(description),
-                        )
-                        .into_any_element(),
-                    label: label.into(),
-                    checked: picks.access == mode,
-                    ruled: false,
-                })
-                .collect(),
             Menu::Send => {
                 let queue_next = self.queues;
                 let mode = |queue: bool, label: &'static str, description: &'static str| Row {
@@ -344,44 +284,10 @@ impl Composer {
                     ),
                 ]
             }
-            Menu::Agent => {
-                let mut rows = vec![row(
-                    Pick::Role(None),
-                    "No agent".into(),
-                    picks.role.is_none(),
-                )];
-                if let Roles::Loaded(agents) = &self.roles {
-                    rows.extend(agents.iter().map(|agent| {
-                        let body = div()
-                            .flex()
-                            .flex_col()
-                            .min_w_0()
-                            .flex_1()
-                            .gap(px(2.))
-                            .child(div().truncate().child(agent.name.clone()))
-                            .when_some(agent.description.clone(), |col, description| {
-                                col.child(
-                                    div()
-                                        .truncate()
-                                        .text_size(px(fs_sm()))
-                                        .text_color(t.text_muted)
-                                        .child(description),
-                                )
-                            });
-                        Row::new(
-                            Pick::Role(Some(agent.name.clone())),
-                            body.into_any_element(),
-                            agent.name.clone(),
-                            picks.role.as_deref() == Some(&agent.name),
-                        )
-                    }));
-                }
-                rows
-            }
         }
     }
 
-    /// The open menu's box, its rows, and for the agent menu its state and edit buttons.
+    /// The open menu's box and its rows.
     pub(super) fn menu_box(
         &self,
         menu: Menu,
@@ -399,10 +305,6 @@ impl Composer {
             Menu::Send => "Send mode",
             Menu::Project => "Project",
             Menu::Attach => "Add context",
-        };
-        let agents: Vec<Agent> = match &self.roles {
-            Roles::Loaded(agents) if menu == Menu::Agent => agents.clone(),
-            _ => Vec::new(),
         };
         let items = rows.into_iter().enumerate().map(|(i, row)| {
             let pick = row.pick.clone();
@@ -431,27 +333,6 @@ impl Composer {
                 }
             }))
             .on_click(cx.listener(move |this, _, window, cx| this.apply(pick.clone(), window, cx)));
-            // A custom agent's row has its edit button beside it.
-            let edit = (menu == Menu::Agent && i > 0)
-                .then(|| agents.get(i - 1).cloned())
-                .flatten()
-                .map(|agent| {
-                    let (fg, hover) = (t.text, t.text_muted);
-                    button(
-                        SharedString::from(format!("edit-agent-{i}")),
-                        format!("Edit {}", agent.name),
-                    )
-                    .size(px(24.))
-                    .mr(px(4.))
-                    .flex_none()
-                    .justify_center()
-                    .text_color(hover)
-                    .hover(move |s| s.text_color(fg))
-                    .child(icon("pencil-simple", 14.))
-                    .on_click(
-                        cx.listener(move |this, _, window, cx| this.edit_agent(&agent, window, cx)),
-                    )
-                });
             div()
                 .flex()
                 .flex_col()
@@ -470,17 +351,7 @@ impl Composer {
                             .child(heading),
                     )
                 })
-                .child(div().flex().items_center().child(item).children(edit))
-        });
-        let status = (menu == Menu::Agent && matches!(self.roles, Roles::Loading)).then(|| {
-            div()
-                .id("agents-status")
-                .role(Role::Status)
-                .px(px(8.))
-                .py(px(6.))
-                .text_size(px(fs_sm()))
-                .text_color(t.text_muted)
-                .child("Loading agents…")
+                .child(item)
         });
         popup(t)
             .id("menu")
@@ -488,7 +359,6 @@ impl Composer {
             .aria_label(label)
             .track_focus(focus)
             .occlude()
-            .when(menu == Menu::Agent, |p| p.w(px(300.)))
             .on_key_down(cx.listener(Self::menu_key))
             // Tab leaves a menu the way Escape does, rather than moving on with it still open.
             .on_action(
@@ -513,14 +383,18 @@ impl Composer {
                     .flex_col()
                     .max_h(px(384.))
                     .overflow_y_scroll()
-                    .children(status)
                     .children(items),
             )
             .into_any_element()
     }
 
     /// Up and Down move the highlight, Enter or Space picks it, and Escape closes the menu.
-    fn menu_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn menu_key(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let count = self.menu_picks.len();
         match event.keystroke.key.as_str() {
             "down" if count > 0 => self.highlight = (self.highlight + 1) % count,
@@ -537,23 +411,5 @@ impl Composer {
         }
         cx.stop_propagation();
         cx.notify();
-    }
-
-    fn edit_agent(&mut self, agent: &Agent, window: &mut Window, cx: &mut Context<Self>) {
-        let path = std::path::PathBuf::from(&agent.path);
-        let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
-            return;
-        };
-        let (dir, name) = (
-            dir.to_string_lossy().into_owned(),
-            name.to_string_lossy().into_owned(),
-        );
-        cx.background_spawn(async move {
-            if let Err(e) = patchwork_platform::open_in_editor(&dir, &name, None) {
-                log::warn!(error:% = e; "could not open the agent: {{error}}");
-            }
-        })
-        .detach();
-        self.close_menu(window, cx);
     }
 }

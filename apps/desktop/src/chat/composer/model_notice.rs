@@ -12,7 +12,7 @@ use patchwork_backend::chats::AttachmentKind;
 use super::Composer;
 use super::menus::{Menu, Pick};
 use patchwork_ui_components::pill::pill;
-use patchwork_ui_theme::{fs_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_sm, Theme};
 use patchwork_ui_components::{BtnKind, btn, spinner};
 use patchwork_ui_theme::icon;
 
@@ -116,7 +116,7 @@ impl Composer {
                     if finding {
                         b.child(spinner(13., t.text_muted))
                     } else {
-                        b.child(icon("magnifying-glass", 13.))
+                        b.child(icon(IconName::MagnifyingGlass, 13.))
                     }
                 })
                 .child("Find server")
@@ -173,7 +173,11 @@ impl Composer {
             .px(px(14.))
             .py(px(6.))
             .text_size(px(fs_sm()))
-            .child(icon("warning", 14.).flex_none().text_color(t.warning))
+            .child(
+                icon(IconName::Warning, 14.)
+                    .flex_none()
+                    .text_color(t.warning),
+            )
             .child(
                 div()
                     .flex_1()

@@ -19,7 +19,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::general::app_icon_row;
 use crate::settings::controls::{FieldKind, Section, select_box, switch_row, token_row};
 use patchwork_ui_editor::Arrow;
-use patchwork_ui_theme::{FONT_UI, fs_md, radius_sm, theme};
+use patchwork_ui_theme::{IconName, FONT_UI, fs_md, radius_sm, theme};
 use patchwork_ui_theme::icon;
 use patchwork_ui_components::{popup, scrollbar};
 
@@ -256,7 +256,7 @@ fn font_list(
                         .when(!on, |row| row.hover(move |s| s.bg(t.bg_hover)))
                         .on_click(cx.listener(move |d, _, _, cx| d.pick_font(i, cx)))
                         .child(div().flex_1().min_w_0().truncate().child(name.clone()))
-                        .children((*family == current).then(|| icon("check", 14.)))
+                        .children((*family == current).then(|| icon(IconName::Check, 14.)))
                         .into_any_element()
                 })
                 .collect()

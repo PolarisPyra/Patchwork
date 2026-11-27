@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "apps/desktop",
+  "apps/desktop/crates/tokens",
   "apps/desktop/crates/theme",
   "apps/desktop/crates/components",
   "apps/desktop/crates/markdown",
@@ -17,6 +18,7 @@ members = [
   "apps/desktop/crates/dialogs",
   "apps/desktop/crates/dylib",
   "apps/remote",
+  "apps/android",
   "crates/patchwork_platform",
   "crates/patchwork_daemon",
   "crates/patchwork_themes",
@@ -30,9 +32,9 @@ members = [
   "crates/provider_antigravity",
   "crates/provider_opencode",
   "crates/patchwork_backend",
-  "crates/patchwork_oxidation_client",
-  "crates/patchwork_oxidation",
 ]
+# Vendored GPUI builds as path dependencies, not members, so workspace checks skip its upstream tests.
+exclude = ["vendor"]
 # A bare `cargo run` or `cargo build` is for the app.
 default-members = ["apps/desktop"]
 
@@ -50,7 +52,6 @@ categories = ["development-tools"]
 # Every crate the workspace uses, so all members resolve to the same version. Features are turned
 # on by the member that needs them.
 [workspace.dependencies]
-patchwork-oxidation-client = { path = "crates/patchwork_oxidation_client" }
 patchwork-backend = { path = "crates/patchwork_backend" }
 patchwork-daemon = { path = "crates/patchwork_daemon" }
 patchwork-desktop-android = { path = "apps/desktop/crates/android" }
@@ -77,6 +78,7 @@ patchwork-ui-components = { path = "apps/desktop/crates/components" }
 patchwork-ui-editor = { path = "apps/desktop/crates/editor" }
 patchwork-ui-markdown = { path = "apps/desktop/crates/markdown" }
 patchwork-ui-theme = { path = "apps/desktop/crates/theme" }
+patchwork-ui-tokens = { path = "apps/desktop/crates/tokens" }
 patchwork-vault = { path = "crates/patchwork_vault" }
 
 anyhow = { version = "1", default-features = false }
@@ -91,14 +93,15 @@ enigo = { version = "0.6", default-features = false }
 futures = { version = "0.3", default-features = false }
 globset = { version = "0.4", default-features = false }
 http = { version = "1", default-features = false }
-gpui = { git = "https://github.com/zed-industries/zed", rev = "d2a4fb6ded7c470be25d1541281da3882495b65b", default-features = false }
-gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "d2a4fb6ded7c470be25d1541281da3882495b65b", default-features = false }
+gpui = { path = "vendor/gpui", default-features = false }
+gpui_platform = { path = "vendor/gpui_platform", default-features = false }
 ignore = { version = "0.4", default-features = false }
 image = { version = "0.25", default-features = false }
 keyring = { version = "3", default-features = false }
 libc = { version = "0.2", default-features = false }
 log = { version = "0.4", default-features = false, features = ["kv"] }
 mimalloc = { version = "0.1", default-features = false }
+miniz_oxide = { version = "0.8", default-features = false }
 minisign-verify = { version = "0.3", default-features = false }
 # The Secret Service client GPUI builds on Linux, at the same revision so it is built once.
 oo7 = { git = "https://github.com/zed-industries/oo7", rev = "731c1215edb6905876c6137ab300428c7b8d7c13", default-features = false }

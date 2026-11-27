@@ -1,0 +1,31 @@
+# Written for Patchwork; not part of the upstream Zed vendor set, so scripts/vendor-gpui.py leaves
+# it alone on regeneration.
+
+[package]
+name = "gpui_android"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+
+[lints.rust]
+unexpected_cfgs = "allow"
+
+[lib]
+path = "src/gpui_android.rs"
+doctest = false
+test = false
+
+[dependencies]
+gpui = { path = "../gpui", default-features = false }
+
+[target."cfg(target_os = \"android\")".dependencies]
+android-activity = { version = "0.6", features = ["native-activity"] }
+anyhow = { version = "1.0.86" }
+futures = { version = "0.3.34" }
+gpui_wgpu = { path = "../gpui_wgpu" }
+log = { version = "0.4", default-features = false, features = ["std"] }
+ndk = { version = "0.9", default-features = false, features = ["rwh_06"] }
+parking_lot = { version = "0.12.1" }
+raw-window-handle = { version = "0.6" }
+uuid = { version = "1.1" }

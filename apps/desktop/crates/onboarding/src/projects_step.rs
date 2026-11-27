@@ -14,7 +14,7 @@ use patchwork_backend::Core;
 use super::{Onboarding, OnboardingEvent};
 use super::rows::picked;
 use patchwork_ui_components::input_box;
-use patchwork_ui_theme::{font_mono, fs_lg, fs_sm, radius, radius_lg, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_lg, fs_sm, radius, radius_lg, radius_sm, Theme};
 use patchwork_ui_components::{BtnKind, btn, button};
 use patchwork_ui_theme::icon;
 
@@ -125,7 +125,7 @@ impl Onboarding {
 fn way_in(
     id: &'static str,
     label: &'static str,
-    icon_name: &str,
+    icon_name: patchwork_ui_theme::IconName,
     busy: bool,
     t: &Theme,
 ) -> Stateful<Div> {
@@ -170,14 +170,26 @@ pub fn projects_step(
     cx: &mut Context<Onboarding>,
 ) -> AnyElement {
     let busy = this.busy;
-    let open = way_in("setup-open-folder", "Open a folder", "folder-open", busy, t);
+    let open = way_in(
+        "setup-open-folder",
+        "Open a folder",
+        patchwork_ui_theme::IconName::FolderOpen,
+        busy,
+        t,
+    );
     let open = if busy {
         open
     } else {
         open.on_click(cx.listener(|this, _, _, cx| this.open_existing(cx)))
     };
-    let new =
-        way_in("setup-new-project", "New project", "plus", busy, t).aria_expanded(this.creating);
+    let new = way_in(
+        "setup-new-project",
+        "New project",
+        patchwork_ui_theme::IconName::Plus,
+        busy,
+        t,
+    )
+    .aria_expanded(this.creating);
     let new = if this.creating { picked(new, t) } else { new };
     let new = if busy {
         new
@@ -246,7 +258,7 @@ pub fn projects_step(
                 .w(px(14.))
                 .flex_none()
                 .text_color(t.text)
-                .when(is_active, |d| d.child(icon("check-bold", 14.))),
+                .when(is_active, |d| d.child(icon(IconName::CheckBold, 14.))),
         )
         .child(
             div()

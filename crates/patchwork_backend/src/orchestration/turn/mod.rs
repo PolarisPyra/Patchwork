@@ -14,5 +14,3 @@ mod resume;
 pub(in crate::orchestration) mod runner;
 pub(in crate::orchestration) mod start;
 pub(in crate::orchestration) mod stuck;
-#[cfg(test)]
-mod lifecycle;

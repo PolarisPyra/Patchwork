@@ -8,7 +8,7 @@ use std::sync::Arc;
 use gpui::{Div, FontWeight, div, prelude::*, px};
 
 use super::goal_bar::strip_action;
-use patchwork_ui_theme::{fs_sm, fs_xs, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_sm, fs_xs, radius_sm, Theme};
 use patchwork_ui_theme::icon;
 use patchwork_ui_components::tooltip;
 use crate::workspace::Workspace;
@@ -132,7 +132,11 @@ pub fn missing_folder(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>)
                     .gap(px(8.))
                     .bg(t.bg_app)
                     .px(px(10.))
-                    .child(icon("folder", 13.).flex_none().text_color(t.text_subtle))
+                    .child(
+                        icon(IconName::Folder, 13.)
+                            .flex_none()
+                            .text_color(t.text_subtle),
+                    )
                     .child(
                         div()
                             .flex_none()

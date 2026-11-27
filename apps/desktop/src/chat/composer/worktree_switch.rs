@@ -11,7 +11,7 @@ use patchwork_platform::ssh::is_remote;
 use patchwork_backend::projects::Project;
 
 use crate::chat::above_composer::goal_bar::strip_action;
-use patchwork_ui_theme::{Theme, fs_sm, radius_sm};
+use patchwork_ui_theme::{IconName, Theme, fs_sm, radius_sm};
 use patchwork_ui_components::{button, icon_button, tooltip};
 use patchwork_ui_theme::icon;
 use crate::workspace::Workspace;
@@ -105,9 +105,9 @@ pub fn worktree_pick_chip(
         !w.settings.worktrees.disabled && !w.settings.edit_in_place.contains(&project.id)
     });
     let (label, glyph) = if on {
-        ("Worktree", "folders")
+        ("Worktree", IconName::Folders)
     } else {
-        ("Project folder", "folder")
+        ("Project folder", IconName::Folder)
     };
     let (muted, fg) = (t.text_muted, t.text);
     let chip = button("worktree-pick", format!("New tasks work in: {label}"))
@@ -168,7 +168,11 @@ pub fn worktree_told_line(
             .border_color(t.border_strong)
             .bg(t.bg_panel)
             .text_size(px(fs_sm()))
-            .child(icon("folders", 13.).flex_none().text_color(t.accent_text))
+            .child(
+                icon(IconName::Folders, 13.)
+                    .flex_none()
+                    .text_color(t.accent_text),
+            )
             .child(
                 div()
                     .id("worktree-told-text")
@@ -196,7 +200,7 @@ pub fn worktree_told_line(
                     })),
             )
             .child(
-                icon_button("worktree-told-close", "Dismiss", "x", 12., cx)
+                icon_button("worktree-told-close", "Dismiss", IconName::X, 12., cx)
                     .flex_none()
                     .on_click(cx.listener(move |w, _, _, cx| {
                         w.dismiss_worktree_told(id_done.clone(), false, cx);

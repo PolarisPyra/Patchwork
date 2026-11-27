@@ -19,7 +19,7 @@ use gpui::{
 use std::sync::Arc;
 
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Tag, TagEnd};
-use patchwork_ui_theme::{font_mono, fs_lg, fs_md, fs_sm, fs_xs, radius, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_lg, fs_md, fs_sm, fs_xs, radius, radius_sm, Theme};
 use crate::selection::{Kind, Selectable, selectable, text_id};
 use patchwork_ui_components::button;
 use patchwork_ui_theme::icon;
@@ -488,7 +488,7 @@ impl Markdown<'_> {
                             .rounded(px(radius_sm()))
                             .text_color(t.text_muted)
                             .hover(move |s| s.bg(hover).text_color(fg))
-                            .child(icon("copy", 13.))
+                            .child(icon(IconName::Copy, 13.))
                             .on_click(move |_, _, cx| {
                                 cx.write_to_clipboard(ClipboardItem::new_string(copy.to_string()));
                             }),
