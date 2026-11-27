@@ -24,7 +24,6 @@ pub use minisign_verify;
 pub use notify;
 pub use portable_pty;
 pub use pulldown_cmark;
-pub use qrcodegen;
 pub use regex;
 pub use resvg;
 pub use serde;

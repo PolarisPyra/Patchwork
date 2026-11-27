@@ -110,11 +110,6 @@ const LAYERS: &[(&str, Allow, &str)] = &[
         "themes is a leaf: theme, scene and code-theme data with no workspace crate under it",
     ),
     (
-        "rpc-protocol",
-        Allow::Only(&[]),
-        "protocol is a leaf: the wire types every transport shares",
-    ),
-    (
         "platform",
         Allow::Only(&[]),
         "system is the platform layer the backend is built on, not the other way round",
@@ -178,16 +173,6 @@ const LAYERS: &[(&str, Allow, &str)] = &[
         "daemon",
         Allow::Only(&["platform", "provider-core"]),
         "daemon handles updates, restarts, crashes, and logs without depending on backend or views",
-    ),
-    (
-        "rpc-server",
-        Allow::Only(&["rpc-protocol", "platform"]),
-        "rpc-server serves the RPC protocol and pairing without depending on core or views",
-    ),
-    (
-        "rpc-client",
-        Allow::Only(&["rpc-protocol", "rpc-server", "platform"]),
-        "client-runtime speaks the wire protocol to any Patchwork server without depending on core or views",
     ),
     (
         "ui-theme",
@@ -353,7 +338,6 @@ const AGENT_KIND_FILES: &[&str] = &[
     "crates/patchwork_backend/src/orchestration/turn/start/watch.rs",
     "crates/patchwork_backend/src/permissions/hook.rs",
     "crates/patchwork_backend/src/persistence/migrations/mod.rs",
-    "crates/patchwork_backend/src/server/wire.rs",
     "crates/patchwork_backend/src/service.rs",
     "crates/patchwork_backend/src/settings/types.rs",
     "crates/patchwork_backend/src/usage/antigravity.rs",

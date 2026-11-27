@@ -19,7 +19,6 @@ members = [
   "apps/remote",
   "crates/patchwork_platform",
   "crates/patchwork_daemon",
-  "crates/rpc_protocol",
   "crates/patchwork_themes",
   "crates/patchwork_vault",
   "crates/patchwork_git",
@@ -30,8 +29,6 @@ members = [
   "crates/provider_codex",
   "crates/provider_antigravity",
   "crates/provider_opencode",
-  "crates/rpc_server",
-  "crates/rpc_client",
   "crates/patchwork_backend",
   "crates/patchwork_oxidation_client",
   "crates/patchwork_oxidation",
@@ -54,7 +51,6 @@ categories = ["development-tools"]
 # on by the member that needs them.
 [workspace.dependencies]
 patchwork-oxidation-client = { path = "crates/patchwork_oxidation_client" }
-patchwork-rpc-client = { path = "crates/rpc_client" }
 patchwork-backend = { path = "crates/patchwork_backend" }
 patchwork-daemon = { path = "crates/patchwork_daemon" }
 patchwork-desktop-android = { path = "apps/desktop/crates/android" }
@@ -66,7 +62,6 @@ patchwork-desktop-search = { path = "apps/desktop/crates/search" }
 patchwork-desktop-settings = { path = "apps/desktop/crates/settings" }
 patchwork-desktop-shared = { path = "apps/desktop/crates/shared" }
 patchwork-dylib = { path = "apps/desktop/crates/dylib" }
-patchwork-rpc-protocol = { path = "crates/rpc_protocol" }
 patchwork-provider-acp = { path = "crates/provider_acp" }
 patchwork-provider-antigravity = { path = "crates/provider_antigravity" }
 patchwork-provider-api = { path = "crates/provider_api" }
@@ -74,7 +69,6 @@ patchwork-provider-claude = { path = "crates/provider_claude" }
 patchwork-provider-codex = { path = "crates/provider_codex" }
 patchwork-provider-core = { path = "crates/provider_core" }
 patchwork-provider-opencode = { path = "crates/provider_opencode" }
-patchwork-rpc-server = { path = "crates/rpc_server" }
 patchwork-git = { path = "crates/patchwork_git" }
 patchwork-platform = { path = "crates/patchwork_platform" }
 patchwork-themes = { path = "crates/patchwork_themes" }
@@ -112,7 +106,6 @@ notify = { version = "8", default-features = false }
 portable-pty = { version = "0.9", default-features = false }
 prost = { version = "0.14", default-features = false }
 pulldown-cmark = { version = "0.13", default-features = false }
-qrcodegen = { version = "1.8", default-features = false }
 regex = { version = "1", default-features = false }
 resvg = { version = "0.46", default-features = false }
 rusqlite = { version = "0.41", default-features = false }

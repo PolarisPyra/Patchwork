@@ -4578,8 +4578,6 @@ dependencies = [
  "patchwork-provider-codex",
  "patchwork-provider-core",
  "patchwork-provider-opencode",
- "patchwork-rpc-protocol",
- "patchwork-rpc-server",
  "patchwork-themes",
  "patchwork-vault",
  "portable-pty",
@@ -4767,7 +4765,6 @@ dependencies = [
  "notify",
  "portable-pty",
  "pulldown-cmark",
- "qrcodegen",
  "regex",
  "resvg",
  "serde",
@@ -4930,46 +4927,6 @@ dependencies = [
  "serde",
  "serde_json",
  "windows-sys 0.60.2",
-]
-
-[[package]]
-name = "patchwork-rpc-client"
-version = "26.11.162"
-dependencies = [
- "patchwork-platform",
- "patchwork-rpc-protocol",
- "patchwork-rpc-server",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tungstenite",
- "ureq",
- "url",
-]
-
-[[package]]
-name = "patchwork-rpc-protocol"
-version = "26.11.162"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "patchwork-rpc-server"
-version = "26.11.162"
-dependencies = [
- "base64 0.22.1",
- "chacha20poly1305",
- "log",
- "patchwork-platform",
- "patchwork-rpc-protocol",
- "qrcodegen",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tungstenite",
- "url",
 ]
 
 [[package]]
@@ -5444,12 +5401,6 @@ checksum = "7f6d64c71eb498fe9eae14ce4ec935c555749aef511cca85b5568910d6e48001"
 dependencies = [
  "bytemuck",
 ]
-
-[[package]]
-name = "qrcodegen"
-version = "1.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4339fc7a1021c9c1621d87f5e3505f2805c8c105420ba2f2a4df86814590c142"
 
 [[package]]
 name = "quick-error"

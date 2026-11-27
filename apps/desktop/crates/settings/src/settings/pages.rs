@@ -205,21 +205,6 @@ pub(super) const PAGES: &[Page] = &[
         words: &["Scheduled tasks", "Weekly report"],
     },
     Page {
-        id: "devices",
-        group: "Workspace",
-        label: "Devices",
-        icon: "devices",
-        icon_on: "devices-fill",
-        words: &[
-            "This computer",
-            "Address",
-            "Token",
-            "Let devices on my network connect",
-            "Pair a device",
-            "Paired devices",
-        ],
-    },
-    Page {
         id: "ssh",
         group: "Workspace",
         label: "SSH hosts",

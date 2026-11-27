@@ -5,8 +5,6 @@
 
 use std::sync::Arc;
 
-use patchwork_rpc_protocol::chats::ChatStatus;
-
 use super::{ApprovalStatus, Message, MessageStatus, Role, StepStatus, Chat};
 
 /// Where a chat's agent is.
@@ -76,25 +74,6 @@ impl Chat {
         match self.last_reply() {
             Some(reply) if reply.status == MessageStatus::Error => Standing::Failed,
             _ => Standing::Done,
-        }
-    }
-
-    /// The status web clients show: running, error or idle.
-    ///
-    /// Only the process counts as running; a reply left streaming without one reads idle. The
-    /// last message of any kind decides an error.
-    #[must_use]
-    pub fn client_status(&self, running: bool) -> ChatStatus {
-        if running {
-            ChatStatus::Running
-        } else if self
-            .messages
-            .last()
-            .is_some_and(|m| m.status == MessageStatus::Error)
-        {
-            ChatStatus::Error
-        } else {
-            ChatStatus::Idle
         }
     }
 
@@ -232,8 +211,6 @@ mod tests {
 
     use std::sync::Arc;
 
-    use patchwork_rpc_protocol::chats::ChatStatus;
-
     use super::Standing;
     use crate::chats::{
         AccessMode, Approval, BackgroundTask, Chat, Message, MessageStatus, Role, TaskStatus,
@@ -323,34 +300,6 @@ mod tests {
         let failed = chat(vec![reply(MessageStatus::Error)]);
         assert_eq!(failed.standing_while(true), Standing::Working);
         assert_eq!(chat(vec![asking()]).standing_while(true), Standing::Waiting);
-    }
-
-    #[test]
-    fn client_status_reads_the_last_message() {
-        assert_eq!(chat(Vec::new()).client_status(false), ChatStatus::Idle);
-        assert_eq!(chat(Vec::new()).client_status(true), ChatStatus::Running);
-        assert_eq!(
-            chat(vec![reply(MessageStatus::Error)]).client_status(false),
-            ChatStatus::Error
-        );
-        assert_eq!(
-            chat(vec![reply(MessageStatus::Error)]).client_status(true),
-            ChatStatus::Running
-        );
-        // Unlike the standing, a later message of any role clears the error.
-        assert_eq!(
-            chat(vec![
-                reply(MessageStatus::Error),
-                message(Role::User, MessageStatus::Complete)
-            ])
-            .client_status(false),
-            ChatStatus::Idle
-        );
-        // Without a process a streaming reply reads idle.
-        assert_eq!(
-            chat(vec![reply(MessageStatus::Streaming)]).client_status(false),
-            ChatStatus::Idle
-        );
     }
 
     #[test]

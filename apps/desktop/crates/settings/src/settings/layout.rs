@@ -8,7 +8,6 @@ use patchwork_ui_theme::{fs_lg, fs_xs, theme};
 use patchwork_ui_components::{icon_button, overflows, scrollbar};
 use super::dialog::{SettingsDialog, SettingsEvent};
 use super::pages::{PAGES, page};
-use super::devices;
 use super::chat;
 use super::logs;
 use super::controls;
@@ -69,7 +68,6 @@ impl SettingsDialog {
                 worktrees::render(self, cx),
             ]),
             "scheduled" => scheduled::render(self, window, cx),
-            "devices" => devices::render(self, cx),
             "ssh" => ssh::render(self, window, cx),
             "chat-apps" => gateway::render(self, window, cx),
             "usage" => stack(vec![

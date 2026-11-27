@@ -14,7 +14,6 @@ categories.workspace = true
 patchwork-oxidation-client.workspace = true
 patchwork-daemon.workspace = true
 patchwork-platform.workspace = true
-patchwork-rpc-protocol.workspace = true
 patchwork-themes.workspace = true
 patchwork-provider-acp.workspace = true
 patchwork-provider-antigravity.workspace = true
@@ -23,7 +22,6 @@ patchwork-provider-claude.workspace = true
 patchwork-provider-codex.workspace = true
 patchwork-provider-core.workspace = true
 patchwork-provider-opencode.workspace = true
-patchwork-rpc-server.workspace = true
 patchwork-git.workspace = true
 patchwork-vault = { workspace = true, default-features = false }
 base64 = { workspace = true, default-features = true }

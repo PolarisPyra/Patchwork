@@ -192,8 +192,6 @@ fn main() {
     core.start_update_checks();
     core.start_limit_resumes();
     core.start_worktree_cleanup();
-    // Only the Patchwork that owns the data serves phones and browsers; start_server checks.
-    core.start_server();
     gpui_platform::application()
         .with_assets(brand::Assets)
         .run(move |cx: &mut App| {

@@ -129,9 +129,6 @@ pub struct Settings {
     pub granular_chats: bool,
     /// Agents are not given Patchwork's tools to start, message and wait on other chats.
     pub chat_tools_off: bool,
-    /// Phones and other computers on the network may connect to the server inside the app. Off,
-    /// it listens on this computer alone. Read when the app starts, so a change waits for a restart.
-    pub devices_on_network: bool,
     /// Patchwork's own agent carries on calling tools for as long as it takes, instead of stopping
     /// after a set number of steps for the user to carry it on.
     pub unlimited_steps: bool,
@@ -212,7 +209,6 @@ impl Default for Settings {
             show_thoughts: false,
             granular_chats: false,
             chat_tools_off: false,
-            devices_on_network: false,
             unlimited_steps: true,
             turn_token_limit: 0,
             resume_at_launch: ResumeAtLaunch::default(),

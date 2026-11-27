@@ -36,7 +36,6 @@ minisign-verify.workspace = true
 notify.workspace = true
 portable-pty.workspace = true
 pulldown-cmark.workspace = true
-qrcodegen.workspace = true
 regex.workspace = true
 resvg.workspace = true
 serde.workspace = true

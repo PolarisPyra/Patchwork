@@ -149,23 +149,24 @@ mod tests {
         let old = Settings::default();
         let mut new = old.clone();
         new.window.active_project_id = Some("p-1".into());
-        new.devices_on_network = true;
+        new.show_thoughts = true;
         let mut changed = changed_sections(&old, &new);
         changed.sort();
-        assert_eq!(changed, ["activeProjectId", "devicesOnNetwork"]);
+        assert_eq!(changed, ["activeProjectId", "showThoughts"]);
         assert!(changed_sections(&old, &old).is_empty());
     }
 
     #[test]
-    fn the_network_switch_saves_through_the_core() {
+    fn settings_update_saves_through_the_core() {
         let dir = std::env::temp_dir().join(format!("patchwork-save-{}", crate::system::new_id()));
         std::fs::create_dir_all(&dir).expect("the temporary folder is made");
         let core = Core::for_tests(&dir, Box::new(|_| {}));
-        core.set_server_network(true).expect("the switch saves");
-        assert!(core.settings().devices_on_network);
-        let kept = core.update_settings(|s| std::mem::take(&mut s.devices_on_network));
+        core.update_settings(|s| s.show_thoughts = true)
+            .expect("the switch saves");
+        assert!(core.settings().show_thoughts);
+        let kept = core.update_settings(|s| std::mem::take(&mut s.show_thoughts));
         assert!(kept.expect("the settings save"));
-        assert!(!core.settings().devices_on_network);
+        assert!(!core.settings().show_thoughts);
         drop(core);
         let _ = std::fs::remove_dir_all(dir);
     }
