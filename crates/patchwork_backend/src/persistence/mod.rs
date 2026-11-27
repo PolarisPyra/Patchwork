@@ -4,14 +4,12 @@
 //! - `store`: the `Store` the rest of the app uses, with its in-memory cache.
 //! - `migrations`: the schema, as numbered SQL files, and the record of which have run.
 //! - `settings`, `chats`, `costs`, `quilts`: how each table's rows map to the app's types.
-//! - `devices`: the devices paired with this computer and the codes that pair them.
 
 // Rust guideline compliant 2026-10-09
 
 mod quilts;
 mod agents;
 mod costs;
-mod devices;
 mod folders;
 mod migrations;
 mod scheduled;

@@ -15,7 +15,6 @@ use patchwork_ui_editor::TextArea;
 use patchwork_ui_theme::theme;
 use super::controls::{Field, center_when_drawn, seek};
 use super::pages::resolve;
-use super::devices;
 use super::extensions;
 use super::gateway;
 use super::general;
@@ -87,7 +86,6 @@ pub struct SettingsDialog {
     pub(super) tokens: tokens::TokensState,
     pub(super) costs: costs::CostsState,
     pub(super) updates: updates::UpdatesState,
-    pub(super) devices: devices::DevicesState,
 }
 
 impl std::fmt::Debug for SettingsDialog {
@@ -153,7 +151,6 @@ impl SettingsDialog {
             tokens: tokens::TokensState::default(),
             costs: costs::CostsState::default(),
             updates: updates::UpdatesState::default(),
-            devices: devices::DevicesState::default(),
         };
         if jump.is_some() {
             center_when_drawn(dialog.scroll.clone(), window);

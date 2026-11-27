@@ -25,8 +25,6 @@ pub mod persistence;
 pub mod projects;
 pub mod provider;
 pub mod scheduled;
-
-pub mod server;
 pub mod service;
 pub mod settings;
 pub mod source_control;
@@ -96,8 +94,6 @@ pub struct Core {
     gateway: gateway::Hub,
     /// Whether the person is at Patchwork, for routing notifications.
     presence: notifications::Presence,
-    /// The server phones and browsers connect to, once `start_server` starts it.
-    server: server::Server,
     /// This core, for the settings changes that start work which outlives the call.
     me: std::sync::Weak<Core>,
 }
@@ -197,7 +193,6 @@ impl Core {
             emulators: crate::android::Emulators::default(),
             gateway: gateway::Hub::default(),
             presence: notifications::Presence::default(),
-            server: server::Server::default(),
             me: std::sync::Weak::clone(me),
         });
         core.purge_removed_backgrounds();
@@ -292,12 +287,11 @@ impl Core {
         tools
     }
 
-    /// Tells every observer of a chat event: the log, chat apps, the server's clients, desktop
-    /// notifications, and the window.
+    /// Tells every observer of a chat event: the log, chat apps, desktop notifications, and the
+    /// window.
     fn emit(&self, event: ChatEventEnvelope) {
         orchestration::log_event(&event);
         self.gateway.observe(&event);
-        self.server.observe(&event);
         self.notify_desktop(&event.chat_id, &event.event);
         (self.sink)(ToWindow::Event(event));
     }
@@ -338,7 +332,6 @@ impl Core {
             emulators: crate::android::Emulators::default(),
             gateway: gateway::Hub::default(),
             presence: notifications::Presence::default(),
-            server: server::Server::default(),
             me: std::sync::Weak::clone(me),
         });
         // A focused window keeps the tests from showing desktop notifications.

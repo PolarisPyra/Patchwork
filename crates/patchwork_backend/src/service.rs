@@ -184,7 +184,7 @@ impl Chats<'_> {
 
 impl Chats<'_> {
     /// Sends `text` with `attachments` to a chat: it starts a turn, steers the running one, or
-    /// with `queue` waits behind it. Paired devices are told of the message.
+    /// with `queue` waits behind it.
     ///
     /// # Errors
     ///
@@ -196,12 +196,8 @@ impl Chats<'_> {
         attachments: Vec<Attachment>,
         queue: bool,
     ) -> Result<Message, Error> {
-        let message = self
-            .core
-            .send_message(chat_id.to_string(), text, attachments, queue)?;
-        // The window adds the message itself, with no event, so the devices are told here.
-        self.core.server.touch_message(chat_id, &message.id);
-        Ok(message)
+        self.core
+            .send_message(chat_id.to_string(), text, attachments, queue)
     }
 
     /// Sends the queued message `message_id` into the running turn now.

@@ -13,7 +13,6 @@ mod nav;
 mod pages;
 mod chat;
 mod costs;
-mod devices;
 mod extensions;
 mod gateway;
 mod general;
