@@ -13,8 +13,5 @@ categories.workspace = true
 [dependencies]
 serde = { workspace = true, default-features = true, features = ["derive"] }
 
-[dev-dependencies]
-serde_json = { workspace = true, default-features = true }
-
 [lints]
 workspace = true

@@ -12,7 +12,7 @@ use patchwork_backend::vault::requests::SecretStatus;
 use patchwork_backend::chats::{Approval, ApprovalStatus};
 
 use patchwork_ui_editor::{Changed, Submitted, TextArea};
-use patchwork_ui_theme::{font_mono, fs_sm, radius, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, radius, radius_sm, Theme};
 use patchwork_ui_components::{BtnKind, btn};
 use patchwork_ui_theme::icon;
 use crate::workspace::Workspace;
@@ -132,9 +132,9 @@ pub fn secret_card(
     let field = w.secrets.fields.get(&a.id).filter(|_| waiting(a));
     let Some(field) = field else {
         let (name, color) = if status == SecretStatus::Saved {
-            ("check-circle", t.success)
+            (IconName::CheckCircle, t.success)
         } else {
-            ("x-circle", t.danger)
+            (IconName::XCircle, t.danger)
         };
         return div()
             .flex()
@@ -194,7 +194,7 @@ pub fn secret_card(
                 .items_center()
                 .gap(px(6.))
                 .text_color(t.warning)
-                .child(icon("key", 15.).flex_none())
+                .child(icon(IconName::Key, 15.).flex_none())
                 .child(
                     div()
                         .min_w_0()

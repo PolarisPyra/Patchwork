@@ -7,7 +7,7 @@ use gpui::{AnyElement, KeyDownEvent, SharedString, div, prelude::*, px};
 
 use crate::settings::SettingsDialog;
 use patchwork_ui_markdown::sigils::{SIGIL_KINDS, STATE_KEY, Sigils, default_sigil, to_saved};
-use patchwork_ui_theme::{fs_sm, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_sm, radius_sm, Theme};
 use patchwork_ui_components::{button, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -99,7 +99,7 @@ pub fn rows(
                                 .rounded(px(radius_sm()))
                                 .text_color(muted)
                                 .hover(move |s| s.bg(hover).text_color(fg))
-                                .child(icon("arrow-counter-clockwise", 12.))
+                                .child(icon(IconName::ArrowCounterClockwise, 12.))
                                 .tooltip(tooltip(format!("Reset to {}", default_sigil(kind))))
                                 .on_click(cx.listener(
                                     move |d, _, _, cx| {

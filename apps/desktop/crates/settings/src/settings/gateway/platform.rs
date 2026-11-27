@@ -10,7 +10,7 @@ use super::paired::pairing_row;
 use super::setup::setup;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, detail_header, switch, token_row, vault_notice};
-use patchwork_ui_theme::{fs_sm, theme};
+use patchwork_ui_theme::{IconName, fs_sm, theme};
 use patchwork_ui_components::{BtnKind, btn};
 use patchwork_ui_theme::icon;
 
@@ -168,7 +168,7 @@ fn credential_actions(
             .gap(px(4.))
             .text_size(px(fs_sm()))
             .text_color(t.success)
-            .child(icon("check", 13.).text_color(t.success))
+            .child(icon(IconName::Check, 13.).text_color(t.success))
             .child("Saved")
     });
     let cleared = field.clone();

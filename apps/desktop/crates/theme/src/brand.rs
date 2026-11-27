@@ -35,7 +35,6 @@
 // Rust guideline compliant 2026-10-09
 
 use std::borrow::Cow;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -45,12 +44,11 @@ use gpui::{
 use rust_embed::RustEmbed;
 use base64::Engine;
 
-use crate::icons::{icon, mono_svg};
+use crate::icons::{IconName, icon, mono_svg};
 
 #[derive(RustEmbed)]
 #[folder = "../../../../assets"]
 #[include = "fonts/*"]
-#[include = "icons/*"]
 struct Own;
 
 #[derive(RustEmbed)]
@@ -59,28 +57,10 @@ struct Own;
 #[exclude = "icons/*"]
 struct Logos;
 
-/// How many times SVG files changed while a development build ran.
-static GENERATION: AtomicU32 = AtomicU32::new(0);
-
 /// The asset at `path`, as views ask for it.
-///
-/// In a development build, once an SVG file has changed, the path is marked with the times they
-/// have, so the window reads the file again instead of drawing what it cached.
 #[must_use]
 pub fn asset(path: impl Into<SharedString>) -> SharedString {
-    let path = path.into();
-    match GENERATION.load(Ordering::Relaxed) {
-        0 => path,
-        n => format!("{path}?{n}").into(),
-    }
-}
-
-/// Notes that SVG files changed, in a development build, which reads them from disk; the
-/// windows must then be drawn again.
-pub fn svgs_changed() {
-    if cfg!(debug_assertions) {
-        GENERATION.fetch_add(1, Ordering::Relaxed);
-    }
+    path.into()
 }
 
 /// Serves `fonts/…` and `icons/…` from this app's assets, and from the shared ones `logos/…`, the
@@ -91,6 +71,9 @@ pub struct Assets;
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
         let path = path.split_once('?').map_or(path, |(path, _)| path);
+        if path.starts_with("icons/") {
+            return Ok(patchwork_ui_tokens::load_icon_svg(path));
+        }
         if let Some(name) = path.strip_prefix("app-icons/") {
             return Ok(Logos::get(&format!("logos/{name}")).map(|file| file.data));
         }
@@ -101,10 +84,16 @@ impl AssetSource for Assets {
     }
 
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
-        Ok(Own::iter()
+        let mut out: Vec<SharedString> = Own::iter()
             .filter(|name| name.starts_with(path))
             .map(SharedString::from)
-            .collect())
+            .collect();
+        out.extend(
+            patchwork_ui_tokens::list_icon_paths(path)
+                .into_iter()
+                .map(SharedString::from),
+        );
+        Ok(out)
     }
 }
 
@@ -135,7 +124,7 @@ pub fn provider_logo(preset: &str, logo: Option<&str>, size: f32) -> AnyElement 
     }
     match preset_logo(preset) {
         Some((file, mono)) => logo_file(file, mono, size),
-        None => icon("plugs-connected", size).into_any_element(),
+        None => icon(IconName::PlugsConnected, size).into_any_element(),
     }
 }
 

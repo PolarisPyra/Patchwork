@@ -14,7 +14,7 @@ use gpui::{
     Role, ScrollHandle, SharedString, Window, anchored, deferred, div, prelude::*, px,
 };
 
-use patchwork_ui_theme::{radius, radius_sm, theme};
+use patchwork_ui_theme::{IconName, radius, radius_sm, theme};
 use patchwork_ui_theme::icon;
 use crate::popup_shadow;
 
@@ -27,7 +27,7 @@ pub type Run = Rc<dyn Fn(&mut Window, &mut App)>;
 /// One row of a menu.
 pub struct MenuItem {
     pub label: SharedString,
-    pub icon: Option<&'static str>,
+    pub icon: Option<IconName>,
     pub danger: bool,
     /// One of a set of choices, marked with a dot: filled when it is the current one.
     pub checked: Option<bool>,
@@ -76,7 +76,7 @@ impl MenuItem {
     }
 
     #[must_use]
-    pub fn icon(mut self, name: &'static str) -> Self {
+    pub fn icon(mut self, name: IconName) -> Self {
         self.icon = Some(name);
         self
     }
@@ -283,7 +283,7 @@ impl Render for Menu {
                 } else {
                     t.text
                 })
-                .child(icon("magnifying-glass", 14.))
+                .child(icon(IconName::MagnifyingGlass, 14.))
                 .child(if text.is_empty() {
                     SharedString::from("Type to filter")
                 } else {

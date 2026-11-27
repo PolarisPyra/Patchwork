@@ -22,7 +22,7 @@ use crate::settings::{SettingsDialog, SettingsEvent};
 use patchwork_ui_backdrop::{PRESETS, butterfly_preview, preset_fill, scene_preview};
 use crate::background_picker::{BackgroundPicker, PickerEvent};
 use patchwork_ui_theme::icon;
-use patchwork_ui_theme::{fs_sm, theme};
+use patchwork_ui_theme::{IconName, fs_sm, theme};
 
 impl SettingsDialog {
     /// The kind of window the background cards pick for: the one showing while the app matches
@@ -101,7 +101,7 @@ pub(super) fn backdrop_cards(
                 .items_center()
                 .justify_center()
                 .bg(t.bg_hover)
-                .child(icon("prohibit", 26.)),
+                .child(icon(IconName::Prohibit, 26.)),
             BackdropChoice::None,
         ),
         ("Butterfly", butterfly, BackdropChoice::Butterfly),
@@ -160,7 +160,7 @@ pub(super) fn backdrop_cards(
                     vec![Tool::new(
                         format!("delete-{key}"),
                         (DELETE, format!("Delete {name}")),
-                        "trash",
+                        patchwork_ui_theme::IconName::Trash,
                         move |d, cx| d.remove_picture(&file, removed.clone(), cx),
                     )]
                 }

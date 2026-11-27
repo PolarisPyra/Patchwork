@@ -8,7 +8,7 @@ use patchwork_backend::provider::mcp::{self, McpServer, clis};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, letter_badge, switch};
-use patchwork_ui_theme::{font_mono, fs_lg, fs_sm, fs_xs, radius, radius_sm, Theme, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_lg, fs_sm, fs_xs, radius, radius_sm, Theme, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button};
 
 use crate::settings::mcp::{Card, Client, Draft, Own};
@@ -137,7 +137,7 @@ fn use_row(
                 icon_button(
                     SharedString::from(format!("mcp-restart-{name}")),
                     format!("Restart {name} for {client}"),
-                    "arrow-clockwise",
+                    IconName::ArrowClockwise,
                     15.,
                     cx,
                 )
@@ -192,7 +192,7 @@ fn use_row(
                 icon_button(
                     SharedString::from(format!("mcp-refresh-{key}")),
                     "List tools again",
-                    "arrows-clockwise",
+                    IconName::ArrowsClockwise,
                     15.,
                     cx,
                 )
@@ -258,7 +258,7 @@ pub fn render(
         .gap(px(12.))
         .pt(px(12.))
         .child(
-            icon_button("mcp-back", "Back", "caret-left", 16., cx)
+            icon_button("mcp-back", "Back", IconName::CaretLeft, 16., cx)
                 .tooltip(patchwork_ui_components::tooltip("Back"))
                 .on_click(cx.listener(|d, _, _, cx| {
                     d.mcp.open_id = None;
@@ -409,15 +409,6 @@ pub fn render(
                             .font_family(font_mono())
                             .text_size(px(fs_sm()))
                             .child(tool.name.clone()),
-                    )
-                    .child(
-                        div()
-                            .w_full()
-                            .line_clamp(2)
-                            .text_ellipsis()
-                            .text_size(px(fs_xs()))
-                            .text_color(t.text_muted)
-                            .child(tool.description.clone()),
                     )
             };
             let id = SharedString::from(format!("mcp-tool-{}", tool.name));

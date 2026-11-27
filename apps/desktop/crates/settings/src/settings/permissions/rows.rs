@@ -10,7 +10,7 @@ use gpui::{Div, SharedString, Window, div, prelude::*, px};
 use patchwork_backend::permissions::{PermissionRule, PermissionScope};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, choices, segmented, select_box};
-use patchwork_ui_theme::{font_mono, radius_sm, theme};
+use patchwork_ui_theme::{IconName, font_mono, radius_sm, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button, tooltip};
 
 pub(super) fn rule_row(
@@ -64,7 +64,7 @@ pub(super) fn rule_row(
     let move_button = icon_button(
         menu_key.clone(),
         format!("Move {}", rule.pattern),
-        "dots-three",
+        IconName::DotsThree,
         14.,
         cx,
     )
@@ -92,7 +92,7 @@ pub(super) fn rule_row(
     let delete = icon_button(
         SharedString::from(format!("perm-delete-{id}")),
         format!("Delete {}", rule.pattern),
-        "x",
+        IconName::X,
         14.,
         cx,
     )

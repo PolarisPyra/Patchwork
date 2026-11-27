@@ -7,7 +7,7 @@ use gpui::{
     AnyElement, Div, ExternalPaths, FontWeight, MouseButton, MouseDownEvent, Role, div, prelude::*,
     px,
 };
-use patchwork_ui_theme::{fs_md, fs_sm, radius_sm, Theme, theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_sm, radius_sm, Theme, theme};
 use patchwork_ui_components::button;
 use patchwork_ui_theme::icon;
 use crate::workspace::{SIDEBAR_MAX, SIDEBAR_MIN, View, Workspace};
@@ -15,6 +15,14 @@ use super::tasks::task_list::tasks_view;
 use super::usage;
 
 pub fn render(
+    w: &mut Workspace,
+    view: View,
+    cx: &mut Context<Workspace>,
+) -> impl IntoElement + use<> {
+    render_sidebar(w, view, cx)
+}
+
+fn render_sidebar(
     w: &mut Workspace,
     view: View,
     cx: &mut Context<Workspace>,
@@ -120,7 +128,7 @@ pub fn render(
                     .text_size(px(fs_md()))
                     .text_color(t.text_muted)
                     .hover(move |s| s.border_color(border_strong).text_color(fg))
-                    .child(icon("magnifying-glass", 18.))
+                    .child(icon(IconName::MagnifyingGlass, 18.))
                     .child("Search…")
                     .child(
                         div()
@@ -183,5 +191,12 @@ pub(super) fn twistie(open: bool) -> impl IntoElement {
         .justify_center()
         .ml(px(3.))
         .mr(px(3.))
-        .child(icon(if open { "twistie" } else { "twistie-closed" }, 16.))
+        .child(icon(
+            if open {
+                IconName::Twistie
+            } else {
+                IconName::TwistieClosed
+            },
+            16.,
+        ))
 }

@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use gpui::{AnyElement, Div, PromptLevel, Role, SharedString, Stateful, Window, div, prelude::*, px};
 use patchwork_backend::chats::TokenUsage;
-use patchwork_ui_theme::{Theme, font_mono, fs_md, fs_sm, fs_xs, radius_sm};
+use patchwork_ui_theme::{IconName, Theme, font_mono, fs_md, fs_sm, fs_xs, radius_sm};
 use patchwork_ui_components::{button, icon_button, spinner};
 use patchwork_ui_markdown::{display_title, format_relative, format_tokens};
 use patchwork_ui_theme::icon;
@@ -21,7 +21,7 @@ pub enum Drill {
 }
 
 /// A row of the details that acts when pressed: an icon, its name, and what is on its right.
-fn row(id: impl Into<SharedString>, label: &str, glyph: &str, t: &Theme) -> Stateful<Div> {
+fn row(id: impl Into<SharedString>, label: &str, glyph: IconName, t: &Theme) -> Stateful<Div> {
     let hover = t.bg_hover;
     button(id.into(), label.to_string())
         .gap(px(8.))
@@ -37,11 +37,11 @@ fn row(id: impl Into<SharedString>, label: &str, glyph: &str, t: &Theme) -> Stat
 }
 
 /// A row that opens a page or another place, with a caret on its right.
-fn link(id: &'static str, label: &str, glyph: &str, t: &Theme) -> Stateful<Div> {
+fn link(id: &'static str, label: &str, glyph: IconName, t: &Theme) -> Stateful<Div> {
     row(id, label, glyph, t).child(
         div()
             .text_color(t.text_muted)
-            .child(icon("caret-right", 12.)),
+            .child(icon(IconName::CaretRight, 12.)),
     )
 }
 
@@ -73,23 +73,28 @@ impl AgentPage {
                 .flex_col()
                 .child(heading("This conversation", t))
                 .child(
-                    row("agent-find", "Find in conversation", "magnifying-glass", t)
-                        .child(
-                            div()
-                                .flex_none()
-                                .text_size(px(fs_xs()))
-                                .text_color(t.text_muted)
-                                .child("Ctrl F"),
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.find_in_newest(window, cx);
-                        })),
+                    row(
+                        "agent-find",
+                        "Find in conversation",
+                        IconName::MagnifyingGlass,
+                        t,
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_size(px(fs_xs()))
+                            .text_color(t.text_muted)
+                            .child("Ctrl F"),
+                    )
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.find_in_newest(window, cx);
+                    })),
                 )
                 .child(
                     row(
                         "agent-start-fresh",
                         "Start fresh",
-                        "arrow-counter-clockwise",
+                        IconName::ArrowCounterClockwise,
                         t,
                     )
                     .on_click(cx.listener(move |this, _, window, cx| {
@@ -97,11 +102,11 @@ impl AgentPage {
                     })),
                 )
                 .child(
-                    link("agent-activity", "Activity", "chart-bar", t)
+                    link("agent-activity", "Activity", IconName::ChartBar, t)
                         .on_click(cx.listener(|this, _, _, cx| this.drill(Drill::Activity, cx))),
                 )
                 .child(
-                    link("agent-inspector", "Inspector", "eye", t)
+                    link("agent-inspector", "Inspector", IconName::Eye, t)
                         .on_click(cx.listener(|this, _, _, cx| this.drill(Drill::Inspector, cx))),
                 )
                 .into_any_element(),
@@ -131,16 +136,20 @@ impl AgentPage {
             .flex_col()
             .child(heading("Routines", t))
             .child(
-                link("agent-automations", "Automations", "calendar-blank", t).on_click(
-                    cx.listener(|this, _, window, cx| {
-                        let _ = this.workspace.update(cx, |w, cx| {
-                            w.open_settings(Some("scheduled"), window, cx);
-                        });
-                    }),
-                ),
+                link(
+                    "agent-automations",
+                    "Automations",
+                    IconName::CalendarBlank,
+                    t,
+                )
+                .on_click(cx.listener(|this, _, window, cx| {
+                    let _ = this.workspace.update(cx, |w, cx| {
+                        w.open_settings(Some("scheduled"), window, cx);
+                    });
+                })),
             )
             .child(
-                row("agent-add-routine", "Add a routine", "plus", t).on_click(cx.listener(
+                row("agent-add-routine", "Add a routine", IconName::Plus, t).on_click(cx.listener(
                     |this, _, window, cx| {
                         let agent = this.agent.clone();
                         let _ = this
@@ -227,12 +236,11 @@ impl AgentPage {
                     .pt(px(8.))
                     .ml(px(-6.))
                     .child(
-                        icon_button("agent-drill-back", "Back", "caret-left", 14., cx).on_click(
-                            cx.listener(|this, _, _, cx| {
+                        icon_button("agent-drill-back", "Back", IconName::CaretLeft, 14., cx)
+                            .on_click(cx.listener(|this, _, _, cx| {
                                 this.drill = None;
                                 cx.notify();
-                            }),
-                        ),
+                            })),
                     )
                     .child(heading(title, t).pt(px(0.)).pb(px(0.))),
             )

@@ -9,7 +9,7 @@ use gpui::{
     Anchor, Div, FontWeight, MouseButton, Role, SharedString, anchored, deferred, div, point,
     prelude::*, px,
 };
-use patchwork_ui_theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, fs_xs, radius, radius_sm, theme};
 use patchwork_ui_components::{button, popup};
 use patchwork_ui_theme::icon;
 use crate::workspace::Workspace;
@@ -173,7 +173,7 @@ impl Workspace {
                                 .w(px(1.))
                                 .bg(divider),
                         )
-                        .child(icon("caret-down", 12.))
+                        .child(icon(IconName::CaretDown, 12.))
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.allow_menu = match this.allow_menu {
@@ -207,7 +207,7 @@ impl Workspace {
                         .items_center()
                         .gap(px(6.))
                         .text_color(t.warning)
-                        .child(icon("shield-warning", 15.))
+                        .child(icon(IconName::ShieldWarning, 15.))
                         .child(
                             div()
                                 .min_w_0()

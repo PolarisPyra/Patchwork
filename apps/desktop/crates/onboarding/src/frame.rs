@@ -12,7 +12,7 @@ use super::{
     IMPORTS_STEP, LAST_STEP, LOGO_BLUE, LOGO_PINK, LOGO_VIOLET, Onboarding, OnboardingEvent,
     PROJECTS_STEP, STEPS, agent_step, imports_step, projects_step, ready_step,
 };
-use patchwork_ui_theme::{fs_lg, fs_sm, fs_xl, fs_xxl, radius_lg, radius_sm, Theme, theme};
+use patchwork_ui_theme::{IconName, fs_lg, fs_sm, fs_xl, fs_xxl, radius_lg, radius_sm, Theme, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button, spinner, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -59,7 +59,7 @@ fn stepper(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) -> impl I
             })
             .map(|d| {
                 if done {
-                    d.child(icon("check-bold", 14.))
+                    d.child(icon(IconName::CheckBold, 14.))
                 } else {
                     d.child((i + 1).to_string())
                 }
@@ -183,7 +183,7 @@ impl Render for Onboarding {
                         icon_button(
                             "setup-theme",
                             "Dark theme",
-                            if light { "sun" } else { "moon" },
+                            if light { IconName::Sun } else { IconName::Moon },
                             16.,
                             cx,
                         )
@@ -323,7 +323,7 @@ impl Render for Onboarding {
                                 .child(if self.saving {
                                     spinner(16., t.text_on_accent).into_any_element()
                                 } else {
-                                    icon("arrow-right", 16.).into_any_element()
+                                    icon(IconName::ArrowRight, 16.).into_any_element()
                                 });
                                 if can_continue {
                                     go.on_click(

@@ -172,7 +172,7 @@ impl Workspace {
     }
 
     /// Shows `place`, and whether it could be shown.
-    fn show(&mut self, place: &Place, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn show(&mut self, place: &Place, cx: &mut Context<Self>) -> bool {
         match place {
             Place::Orchestrator => {
                 self.page = crate::workspace::Page::Orchestrator;

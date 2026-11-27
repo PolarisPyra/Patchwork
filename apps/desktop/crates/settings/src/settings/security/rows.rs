@@ -11,7 +11,7 @@ use patchwork_backend::vault::{Method, VaultTimeout};
 use crate::settings::security::{ASK, Change, FIELD_WIDTH, password_field, reveal_button};
 use crate::settings::controls::{choices, list_box, select_box, token_row};
 use crate::settings::dialog::SettingsDialog;
-use patchwork_ui_theme::{Theme, font_mono, fs_sm, radius_sm, theme};
+use patchwork_ui_theme::{IconName, Theme, font_mono, fs_sm, radius_sm, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button, input_box, tooltip};
 use patchwork_ui_markdown::format_relative;
 
@@ -135,11 +135,17 @@ pub(super) fn recovery_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>)
     token_row("Recovery key", &t)
         .flex_wrap()
         .child(
-            icon_button("security-copy-key", "Copy recovery key", "copy", 14., cx)
-                .tooltip(tooltip("Copy"))
-                .on_click(cx.listener(move |_, _, _, cx| {
-                    cx.write_to_clipboard(ClipboardItem::new_string(copied.to_string()));
-                })),
+            icon_button(
+                "security-copy-key",
+                "Copy recovery key",
+                IconName::Copy,
+                14.,
+                cx,
+            )
+            .tooltip(tooltip("Copy"))
+            .on_click(cx.listener(move |_, _, _, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(copied.to_string()));
+            })),
         )
         .child(
             btn(
@@ -274,7 +280,7 @@ fn secret_field(
                 icon_button(
                     SharedString::from(format!("security-copy-{name}")),
                     format!("Copy {label}"),
-                    "copy",
+                    IconName::Copy,
                     14.,
                     cx,
                 )

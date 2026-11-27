@@ -19,7 +19,7 @@ use patchwork_ui_components::pill::pill;
 use patchwork_ui_components::pill::SEND;
 use patchwork_ui_theme::theme;
 use patchwork_ui_components::button;
-use patchwork_ui_theme::icon;
+use patchwork_ui_theme::{IconName, icon};
 
 impl Orchestrator {
     /// The plus button at the start of the pill, which opens a menu to attach files or a folder.
@@ -38,7 +38,7 @@ impl Orchestrator {
             .on_click(cx.listener(|this, e: &ClickEvent, window, cx| {
                 this.toggle_attach_menu(e.position(), window, cx);
             }))
-            .child(icon("plus", 16.))
+            .child(icon(IconName::Plus, 16.))
             .into_any_element()
     }
 
@@ -60,7 +60,7 @@ impl Orchestrator {
             return cx.notify();
         }
         let this = cx.entity().downgrade();
-        let item = |label: &'static str, name: &'static str, folders: bool| {
+        let item = |label: &'static str, name: IconName, folders: bool| {
             let this = this.clone();
             MenuItem::new(label, move |_, cx| {
                 let _ = this.update(cx, |this, cx| this.pick_attachments(folders, cx));
@@ -68,8 +68,8 @@ impl Orchestrator {
             .icon(name)
         };
         let items = vec![
-            item("Files", "paperclip", false),
-            item("Folder", "folder", true),
+            item("Files", IconName::Paperclip, false),
+            item("Folder", IconName::Folder, true),
         ];
         let menu = Menu::open_for(
             "Attach",
@@ -156,7 +156,7 @@ impl Orchestrator {
                     .rounded_full()
                     .text_color(ink(0.6))
                     .hover(|s| s.bg(ink(0.12)).text_color(ink(1.)))
-                    .child(icon("x", 10.))
+                    .child(icon(IconName::X, 10.))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         if i < this.attachments.len() {
                             this.attachments.remove(i);

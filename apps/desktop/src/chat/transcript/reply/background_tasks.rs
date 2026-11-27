@@ -8,7 +8,7 @@ use patchwork_platform::now_ms;
 use gpui::{Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px, relative};
 use patchwork_backend::chats::{BackgroundTask, TaskStatus};
 
-use patchwork_ui_theme::{fs_sm, radius, Theme};
+use patchwork_ui_theme::{IconName, fs_sm, radius, Theme};
 use patchwork_ui_components::{button, icon_button, spinner, tooltip};
 use crate::workspace::Workspace;
 
@@ -117,7 +117,7 @@ fn cut_off_row(i: usize, task: BackgroundTask, t: &Theme, cx: &mut Context<Works
             icon_button(
                 SharedString::from(format!("dismiss-cut-off-{i}")),
                 format!("Dismiss {description}"),
-                "x",
+                IconName::X,
                 12.,
                 cx,
             )

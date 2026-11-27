@@ -11,7 +11,7 @@ use gpui::{AnyElement, Entity, KeyDownEvent, Role, Window, div, prelude::*, px, 
 use patchwork_desktop_quilts::QuiltsPage;
 
 use crate::workspace::window::{Page, Place, Workspace};
-use patchwork_ui_theme::{Theme, fs_md, radius_lg};
+use patchwork_ui_theme::{IconName, Theme, fs_md, radius_lg};
 use patchwork_ui_markdown::display_title;
 use patchwork_ui_components::{icon_button, popup_shadow, tooltip};
 
@@ -205,7 +205,7 @@ impl Workspace {
                             .child(title),
                     )
                     .child(
-                        icon_button("quilt-chat-close", "Close chat", "x", 14., cx)
+                        icon_button("quilt-chat-close", "Close chat", IconName::X, 14., cx)
                             .tooltip(tooltip("Close chat"))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.close_quilt_chat(window, cx);

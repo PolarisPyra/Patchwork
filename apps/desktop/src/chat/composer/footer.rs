@@ -5,7 +5,7 @@
 
 use patchwork_desktop_shared::agent_logo;
 use gpui::{AnyElement, Div, MouseButton, Role, Stateful, Window, div, prelude::*, px};
-use patchwork_ui_theme::{Theme, fs};
+use patchwork_ui_theme::{IconName, Theme, fs};
 use patchwork_ui_components::{button, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -30,7 +30,7 @@ pub(super) struct FooterState {
     /// known.
     pub context: Option<(f32, u64, String)>,
     pub compact: String,
-    pub access: (&'static str, &'static str),
+    pub access: (&'static str, IconName),
     pub working: bool,
     pub busy: bool,
     pub editing: bool,
@@ -61,7 +61,7 @@ impl Composer {
                 .hover(move |s| s.bg(hover).text_color(fg))
                 .tooltip(tooltip("Add context and formatting"))
                 .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
-                .child(icon("plus", 16.));
+                .child(icon(IconName::Plus, 16.));
             self.chip_with_menu(Menu::Attach, plus, picks, s.can_compact, t, window, cx)
         };
         let model = {
@@ -83,7 +83,7 @@ impl Composer {
                         .clone()
                         .map(|effort| div().flex_none().text_color(t.text_muted).child(effort)),
                 )
-                .child(icon("caret-down", 12.).text_color(t.text_muted));
+                .child(icon(IconName::CaretDown, 12.).text_color(t.text_muted));
             self.chip_with_menu(Menu::Model, button, picks, s.can_compact, t, window, cx)
         };
         // The agent role the chat runs as: Rust's own, kept beside the model.
@@ -96,7 +96,7 @@ impl Composer {
                     Some(role) => format!("Agent: {role}"),
                     None => "Agent: none".into(),
                 },
-                icon("robot", 14.).into_any_element(),
+                icon(IconName::Robot, 14.).into_any_element(),
                 role.unwrap_or_else(|| "Agent".into()),
                 t,
             ),
@@ -114,7 +114,7 @@ impl Composer {
                 .tooltip(tooltip("What the agent may do without asking"))
                 .child(icon(access_icon, 14.))
                 .child(div().min_w_0().max_w(px(128.)).truncate().child(access))
-                .child(icon("caret-down", 14.).text_color(t.text_muted)),
+                .child(icon(IconName::CaretDown, 14.).text_color(t.text_muted)),
             picks,
             s.can_compact,
             t,
@@ -137,7 +137,7 @@ impl Composer {
                 .text_color(t.text)
                 .hover(move |s| s.bg(hover))
                 .tooltip(tooltip(if s.working { "Stop (Esc)" } else { label }))
-                .child(icon("stop-fill", 12.))
+                .child(icon(IconName::StopFill, 12.))
                 .on_click(cx.listener(|this, _, _, cx| {
                     let _ = this.workspace.update(cx, crate::workspace::Workspace::stop);
                 }))
@@ -200,7 +200,7 @@ impl Composer {
             None => chip(
                 "compact",
                 format!("Compact at: {compact}"),
-                icon("arrows-in-simple", 14.).into_any_element(),
+                icon(IconName::ArrowsInSimple, 14.).into_any_element(),
                 compact.clone(),
                 t,
             ),
@@ -270,7 +270,14 @@ impl Composer {
                         .on_click(cx.listener(|this, _, window, cx| this.send(false, window, cx)))
                 }
             })
-            .child(icon(if s.editing { "check" } else { "arrow-up-bold" }, 16.));
+            .child(icon(
+                if s.editing {
+                    IconName::Check
+                } else {
+                    IconName::ArrowUpBold
+                },
+                16.,
+            ));
         let mode = (split && !s.empty).then(|| {
             let hover = fill.opacity(0.9);
             let caret = button("send-mode", "Choose queue or steer")
@@ -286,7 +293,7 @@ impl Composer {
                 .text_color(glyph)
                 .hover(move |s| s.bg(hover))
                 .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
-                .child(icon("caret-down", 12.));
+                .child(icon(IconName::CaretDown, 12.));
             self.chip_with_menu(Menu::Send, caret, &s.picks, s.can_compact, t, window, cx)
         });
         Some(

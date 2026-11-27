@@ -5,7 +5,7 @@
 use std::ops::Range;
 use gpui::{Div, Role, SharedString, StyledText, div, prelude::*, px};
 use patchwork_backend::chats::{Message, StepStatus};
-use patchwork_ui_theme::{font_mono, fs_md, fs_sm, fs_xs, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_md, fs_sm, fs_xs, radius_sm, Theme};
 use patchwork_ui_components::{button, spinner};
 use patchwork_ui_theme::icon;
 use crate::workspace::Workspace;
@@ -131,7 +131,7 @@ pub(super) fn entry_row(
     // A reply that stopped leaves its last steps at rest.
     let active = m.is_streaming() && entry_active(entry);
     let glyph = match entry {
-        Entry::Thinking { .. } => "brain",
+        Entry::Thinking { .. } => IconName::Brain,
         Entry::Tool(tool) => action_of(tool).icon(),
     };
     let pill = |text: String, color: gpui::Hsla| {
@@ -177,11 +177,13 @@ pub(super) fn entry_row(
     };
     let mark = match entry {
         _ if active => Some(spinner(15., t.accent_text).into_any_element()),
-        Entry::Tool(tool) if tool.status == StepStatus::Error => {
-            Some(icon("x-bold", 14.).text_color(t.danger).into_any_element())
-        }
+        Entry::Tool(tool) if tool.status == StepStatus::Error => Some(
+            icon(IconName::XBold, 14.)
+                .text_color(t.danger)
+                .into_any_element(),
+        ),
         Entry::Tool(tool) if tool.status == StepStatus::Done => Some(
-            icon("check-bold", 14.)
+            icon(IconName::CheckBold, 14.)
                 .text_color(t.success)
                 .into_any_element(),
         ),
@@ -268,7 +270,14 @@ pub(super) fn entry_row(
                         .invisible()
                         .group_hover(group, gpui::Styled::visible)
                         .text_color(t.text_subtle)
-                        .child(icon(if open { "caret-down" } else { "caret-right" }, 12.)),
+                        .child(icon(
+                            if open {
+                                IconName::CaretDown
+                            } else {
+                                IconName::CaretRight
+                            },
+                            12.,
+                        )),
                 )
                 .on_click(cx.listener(move |w, _, _, cx| {
                     if !w.transcript.open_steps.remove(&toggle) {

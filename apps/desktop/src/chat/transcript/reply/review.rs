@@ -8,7 +8,7 @@ use gpui::{AnyElement, Div, Hsla, Role, SharedString, div, prelude::*, px};
 use patchwork_backend::chats::{Message, ReviewStatus, TurnReview};
 
 use patchwork_ui_markdown::markdown::markdown;
-use patchwork_ui_theme::{fs_sm, fs_xs, radius, Theme};
+use patchwork_ui_theme::{IconName, fs_sm, fs_xs, radius, Theme};
 use patchwork_ui_components::{BtnKind, btn, button, spinner, tooltip};
 use patchwork_ui_theme::icon;
 use crate::workspace::Workspace;
@@ -16,9 +16,9 @@ use crate::workspace::Workspace;
 fn status_icon(status: ReviewStatus, t: &Theme) -> AnyElement {
     let (name, color) = match status {
         ReviewStatus::Running => return spinner(14., t.text_muted).into_any_element(),
-        ReviewStatus::Approved => ("check-circle", t.success),
-        ReviewStatus::Concerns => ("warning", t.warning),
-        ReviewStatus::Failed => ("x-circle", t.danger),
+        ReviewStatus::Approved => (IconName::CheckCircle, t.success),
+        ReviewStatus::Concerns => (IconName::Warning, t.warning),
+        ReviewStatus::Failed => (IconName::XCircle, t.danger),
     };
     icon(name, 14.)
         .flex_none()
@@ -69,9 +69,16 @@ pub fn review_card(
         )
         .when(has_text, |b| {
             b.child(
-                icon(if open { "caret-down" } else { "caret-right" }, 12.)
-                    .flex_none()
-                    .text_color(t.text_subtle),
+                icon(
+                    if open {
+                        IconName::CaretDown
+                    } else {
+                        IconName::CaretRight
+                    },
+                    12.,
+                )
+                .flex_none()
+                .text_color(t.text_subtle),
             )
         })
         .on_click(cx.listener({

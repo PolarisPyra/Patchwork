@@ -10,7 +10,7 @@ use patchwork_backend::source_control::{self as ws, BlameRange, FileRevision};
 
 use super::body::centered;
 use super::open_file::{Canvas, CanvasTab};
-use patchwork_ui_theme::{Theme, font_ui, fs_sm, radius};
+use patchwork_ui_theme::{IconName, Theme, font_ui, fs_sm, radius};
 use patchwork_ui_markdown::format_date;
 use patchwork_ui_theme::icon;
 use patchwork_ui_components::{icon_button, spinner, tooltip};
@@ -201,7 +201,7 @@ impl Canvas {
                 .border_color(t.border)
                 .bg(t.bg_panel)
                 .text_size(px(fs_sm()))
-                .child(icon("git-commit", 14.).text_color(t.text_muted))
+                .child(icon(IconName::GitCommit, 14.).text_color(t.text_muted))
                 .child(
                     div()
                         .flex_none()
@@ -216,9 +216,15 @@ impl Canvas {
                         .child(revision.subject.clone()),
                 )
                 .child(
-                    icon_button("close-revision", "Show uncommitted changes", "x", 14., cx)
-                        .tooltip(tooltip("Show uncommitted changes"))
-                        .on_click(cx.listener(|this, _, _, cx| this.clear_revision(cx))),
+                    icon_button(
+                        "close-revision",
+                        "Show uncommitted changes",
+                        IconName::X,
+                        14.,
+                        cx,
+                    )
+                    .tooltip(tooltip("Show uncommitted changes"))
+                    .on_click(cx.listener(|this, _, _, cx| this.clear_revision(cx))),
                 )
                 .into_any_element(),
         )

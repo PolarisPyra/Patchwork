@@ -14,6 +14,7 @@ use gpui::{
 use super::field::{Changed, Copy, Cut, Paste, SelectAll, TextArea};
 use patchwork_ui_components::menu::{Dismissed, Menu, MenuItem};
 use patchwork_ui_markdown::selection::{Owner, claim, from_primary};
+use patchwork_ui_theme::IconName;
 
 /// How often a drag held past the field's edge scrolls it on.
 const SCROLL_EVERY: Duration = Duration::from_millis(30);
@@ -255,13 +256,13 @@ impl TextArea {
         };
         let mut items = Vec::new();
         if can_copy {
-            items.push(item("Cut", Box::new(Cut), &self.focus).icon("scissors"));
-            items.push(item("Copy", Box::new(Copy), &self.focus).icon("copy"));
+            items.push(item("Cut", Box::new(Cut), &self.focus).icon(IconName::Scissors));
+            items.push(item("Copy", Box::new(Copy), &self.focus).icon(IconName::Copy));
         }
-        items.push(item("Paste", Box::new(Paste), &self.focus).icon("clipboard-text"));
+        items.push(item("Paste", Box::new(Paste), &self.focus).icon(IconName::ClipboardText));
         items.push(
             item("Select all", Box::new(SelectAll), &self.focus)
-                .icon("selection-all")
+                .icon(IconName::SelectionAll)
                 .separated(),
         );
         let menu = Menu::open("Edit", items, window, cx);

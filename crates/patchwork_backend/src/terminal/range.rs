@@ -327,7 +327,7 @@ pub fn sweep() {
         let Ok(pid) = pid.parse::<i32>() else {
             continue;
         };
-        if Some(name.as_str()) == instance() || alive(pid, started) || claimed(&entry.path()) {
+        if Some(name.as_str()) == instance() || alive(pid, started) {
             continue;
         }
         let mut kept = false;
@@ -373,28 +373,6 @@ pub fn sweep() {
 /// Whether the Patchwork with `pid`, started at `started` as a folder name puts it, runs.
 fn alive(pid: i32, started: &str) -> bool {
     running::find(pid).is_some_and(|p| encode(&p.started) == started)
-}
-
-/// Whether the terminals in `folder` were handed to a run that restarts, or taken by one that
-/// still runs.
-#[cfg(unix)]
-fn claimed(folder: &Path) -> bool {
-    match super::handover::owner(folder) {
-        Ok(None) => true,
-        Ok(Some(owner)) => {
-            Some(owner.as_str()) == instance()
-                || owner
-                    .split_once('-')
-                    .and_then(|(pid, started)| Some(alive(pid.parse().ok()?, started)))
-                    .unwrap_or(false)
-        }
-        Err(()) => false,
-    }
-}
-
-#[cfg(not(unix))]
-fn claimed(_folder: &Path) -> bool {
-    false
 }
 
 /// What a shell recorded before Patchwork was killed still runs: the shell, if it does, what it

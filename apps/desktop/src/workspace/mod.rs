@@ -9,7 +9,6 @@
 
 mod shortcuts;
 mod bars;
-mod build_errors;
 mod dialogs;
 pub(crate) mod dock;
 mod hosts;

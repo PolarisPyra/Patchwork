@@ -17,7 +17,7 @@ use patchwork_backend::chats::{Message, Role as MessageRole, Chat};
 use patchwork_ui_markdown::markdown::{FindIn, find_in};
 use patchwork_ui_editor::{Changed, Submitted, SubmittedBack, TextArea};
 use crate::chat::transcript::turn_contents::{Step, steps_of};
-use patchwork_ui_theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_sm, fs_xs, radius, radius_sm, Theme};
 use patchwork_ui_components::button;
 use patchwork_ui_theme::icon;
 use crate::chat::ChatView;
@@ -278,7 +278,7 @@ impl Workspace {
 fn small_button(
     id: &'static str,
     label: &'static str,
-    name: &'static str,
+    name: IconName,
     enabled: bool,
     t: &Theme,
 ) -> Stateful<Div> {
@@ -321,7 +321,7 @@ pub fn find_field(
     .justify_center()
     .text_color(t.text_muted)
     .hover(move |s| s.text_color(fg))
-    .child(icon("magnifying-glass", 14.))
+    .child(icon(IconName::MagnifyingGlass, 14.))
     .on_click(cx.listener(|w, _, window, cx| w.open_find(window, cx)));
     let frame = div()
         .id("find")
@@ -387,7 +387,8 @@ pub fn find_field(
                         .child(status),
                 )
                 .child({
-                    let b = small_button("find-previous", "Previous match", "caret-up", any, t);
+                    let b =
+                        small_button("find-previous", "Previous match", IconName::CaretUp, any, t);
                     if any {
                         b.on_click(cx.listener(|w, _, _, cx| w.step_find(-1, cx)))
                     } else {
@@ -395,7 +396,7 @@ pub fn find_field(
                     }
                 })
                 .child({
-                    let b = small_button("find-next", "Next match", "caret-down", any, t);
+                    let b = small_button("find-next", "Next match", IconName::CaretDown, any, t);
                     if any {
                         b.on_click(cx.listener(|w, _, _, cx| w.step_find(1, cx)))
                     } else {
@@ -403,7 +404,7 @@ pub fn find_field(
                     }
                 })
                 .child(
-                    small_button("find-close", "Close find", "x", true, t)
+                    small_button("find-close", "Close find", IconName::X, true, t)
                         .on_click(cx.listener(|w, _, window, cx| w.close_find(window, cx))),
                 ),
         )

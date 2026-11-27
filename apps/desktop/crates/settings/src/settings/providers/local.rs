@@ -10,7 +10,7 @@ use gpui::{Global, prelude::*, AnyElement, Div, Focusable, SharedString, Window,
 use patchwork_backend::provider::api::{
     self, ApiModel, ApiProvider, DiscoveredServer, ProviderHealth, KeyChange, ProviderView, servers,
 };
-use patchwork_ui_theme::{font_mono, radius_sm, theme};
+use patchwork_ui_theme::{IconName, font_mono, radius_sm, theme};
 use patchwork_ui_components::{BtnKind, btn, spinner};
 use patchwork_ui_theme::{icon, provider_logo};
 
@@ -237,7 +237,7 @@ impl SettingsDialog {
                     .child(if busy {
                         spinner(13., t.text_muted).into_any_element()
                     } else {
-                        icon("magnifying-glass", 13.).into_any_element()
+                        icon(IconName::MagnifyingGlass, 13.).into_any_element()
                     })
                     .child("Find server")
                     .when(!busy, |b| {
@@ -399,7 +399,7 @@ impl SettingsDialog {
                 .child(if checking {
                     spinner(13., t.text_muted).into_any_element()
                 } else {
-                    icon("arrows-clockwise", 15.).into_any_element()
+                    icon(IconName::ArrowsClockwise, 15.).into_any_element()
                 })
                 .on_click(cx.listener(move |d, _, _, cx| {
                     d.providers.local.health.remove(&recheck);

@@ -15,7 +15,7 @@ use patchwork_ui_components::avatar::{Mood, avatar};
 use patchwork_ui_theme::fs_sm;
 use patchwork_ui_components::{button, icon_button};
 use patchwork_ui_theme::icon;
-use patchwork_ui_theme::{radius_sm, theme};
+use patchwork_ui_theme::{IconName, radius_sm, theme};
 use crate::workspace::{Workspace, is_busy};
 use crate::sidebar::sections::{empty_row, section_label};
 use super::chat_row::{chat_app_presence, phone_mark, presence_word, chat_row};
@@ -34,7 +34,7 @@ pub(super) fn agents_section(
     cx: &mut Context<Workspace>,
 ) -> Vec<AnyElement> {
     let t = *theme(cx);
-    let new_agent = icon_button("new-agent", "New agent", "plus", 18., cx)
+    let new_agent = icon_button("new-agent", "New agent", IconName::Plus, 18., cx)
         .on_click(cx.listener(|this, _, _, cx| this.new_agent(cx)))
         .into_any_element();
     let mut out = vec![section_label("Agents", first, Some(new_agent), &t).into_any_element()];
@@ -205,7 +205,7 @@ pub(super) fn agents_section(
                                     .opacity(0.)
                                     .group_hover(group, |s| s.opacity(1.))
                                     .focus(|s| s.opacity(1.))
-                                    .child(icon("archive", 15.))
+                                    .child(icon(IconName::Archive, 15.))
                                     .on_click(cx.listener(
                                         move |this, _, _, cx| {
                                             cx.stop_propagation();

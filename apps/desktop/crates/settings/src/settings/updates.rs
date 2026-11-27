@@ -16,7 +16,7 @@ use patchwork_backend::updates::{RELEASES_URL, ReleaseNotes, UpdateState, Update
 use patchwork_ui_markdown::markdown::markdown;
 use crate::settings::controls::{Section, minutes_stepper, token_row};
 use crate::settings::{SettingsDialog, SettingsEvent};
-use patchwork_ui_theme::{font_mono, fs_sm, fs_xs, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, fs_xs, theme};
 use patchwork_ui_components::{BtnKind, btn, button};
 use patchwork_ui_theme::icon;
 
@@ -138,7 +138,11 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 .px(px(16.))
                 .text_color(t.text)
                 .child(div().text_color(t.text_muted).child(icon(
-                    if is_open { "caret-down" } else { "caret-right" },
+                    if is_open {
+                        IconName::CaretDown
+                    } else {
+                        IconName::CaretRight
+                    },
                     12.,
                 )))
                 .child(

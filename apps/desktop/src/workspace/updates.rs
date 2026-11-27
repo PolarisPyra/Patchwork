@@ -12,7 +12,7 @@ use patchwork_backend::Core;
 use patchwork_backend::updates::{RELEASES_URL, RestartResult, UpdateState};
 use patchwork_daemon::restart::restart_path;
 
-use patchwork_ui_theme::{radius, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, radius, radius_sm, Theme};
 use patchwork_ui_components::{BtnKind, btn, button, popup_shadow};
 use patchwork_ui_theme::icon;
 use super::window::Workspace;
@@ -161,7 +161,7 @@ impl Workspace {
                         div()
                             .flex_none()
                             .text_color(t.accent)
-                            .child(icon("arrow-circle-up", 18.)),
+                            .child(icon(IconName::ArrowCircleUp, 18.)),
                     )
                     .child(
                         div()
@@ -188,7 +188,7 @@ impl Workspace {
                             .rounded(px(radius_sm()))
                             .text_color(t.text_muted)
                             .hover(move |s| s.bg(hover).text_color(fg))
-                            .child(icon("x", 14.))
+                            .child(icon(IconName::X, 14.))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 if let Err(e) = this.core.dismiss_update(&version) {
                                     log::warn!(error:% = e; "could not save the closed update card: {{error}}");

@@ -10,7 +10,7 @@ use gpui::{
 };
 
 use patchwork_ui_editor::{Arrow, Changed, Submitted, TextArea};
-use patchwork_ui_theme::{font_mono, fs_lg, fs_md, fs_xs, radius, radius_lg, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_lg, fs_md, fs_xs, radius, radius_lg, theme};
 use patchwork_ui_theme::icon;
 use patchwork_ui_components::{overflows, palette_shadow, scrollbar};
 
@@ -379,7 +379,14 @@ impl Render for Palette {
                             .border_b_1()
                             .border_color(t.border)
                             .text_color(t.text_subtle)
-                            .child(icon(if naming { "star" } else { "magnifying-glass" }, 18.))
+                            .child(icon(
+                                if naming {
+                                    IconName::Star
+                                } else {
+                                    IconName::MagnifyingGlass
+                                },
+                                18.,
+                            ))
                             .child(
                                 div()
                                     .flex_1()
@@ -447,42 +454,5 @@ impl Render for Palette {
                             .when(naming, |bar| bar.child("↵ save").child("esc back")),
                     ),
             )
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Action, Item, filter_rows};
-
-    fn sample_items() -> Vec<Item> {
-        vec![
-            Item {
-                group: "Actions".into(),
-                label: "New chat".into(),
-                hint: None,
-                action: Action::NewChat,
-            },
-            Item {
-                group: "Panes".into(),
-                label: "Layout: Grid of four".into(),
-                hint: None,
-                action: Action::Preset(4),
-            },
-            Item {
-                group: "Panes".into(),
-                label: "Save layout…".into(),
-                hint: None,
-                action: Action::SaveLayout(String::new()),
-            },
-        ]
-    }
-
-    #[test]
-    fn save_layout_only_matches_its_own_label() {
-        let items = sample_items();
-        assert_eq!(filter_rows(&items, ""), vec![0, 1, 2]);
-        assert_eq!(filter_rows(&items, "save"), vec![2]);
-        assert_eq!(filter_rows(&items, "layout"), vec![1, 2]);
-        assert!(filter_rows(&items, "unrelated").is_empty());
     }
 }

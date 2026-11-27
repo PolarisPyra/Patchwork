@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Builds the Android client and opens it on a device. `cargo run android` runs it through
+# scripts/cargo-runner.sh; it also runs on its own.
+#
+# Usage: cargo run [--release] android [--abi x86_64|arm64-v8a]... [--no-run]
+#        scripts/cargo-android [--release] [--abi x86_64|arm64-v8a]... [--no-run]
+#
+# With no device connected it starts an emulator first: $PATCHWORK_AVD, or the first AVD. It builds
+# the connected device's ABI unless --abi is given. --no-run only writes target/android/Patchwork.apk,
+# for both ABIs unless --abi is given.
+#
+# It needs a JDK (keytool, jar), the Android SDK at $ANDROID_HOME (default ~/Android/Sdk) with an
+# NDK, build-tools, a platform and the emulator installed, and the Rust targets in rustup:
+#
+#   rustup target add x86_64-linux-android aarch64-linux-android
+#
+# The APK is signed with the debug keystore at ~/.android/debug.keystore, made on first use.
+set -euo pipefail
+cd "$(dirname "$(readlink -f "$0")")/.."
+
+sdk=${ANDROID_HOME:-$HOME/Android/Sdk}
+package=dev.patchwork.ade.android
+min_api=30
+profile=debug
+abis=()
+run=true
+while (($#)); do
+  case $1 in
+    --release) profile=release ;;
+    --abi) abis+=("$2"); shift ;;
+    --no-run) run=false ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+latest() { find "$1" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort -V | tail -1; }
+ndk=${ANDROID_NDK_HOME:-$sdk/ndk/$(latest "$sdk/ndk")}
+build_tools=$sdk/build-tools/$(latest "$sdk/build-tools")
+platform=$sdk/platforms/$(latest "$sdk/platforms")
+toolchain=$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin
+export ANDROID_NDK_HOME=$ndk
+out=target/android
+mkdir -p "$out"
+
+if $run; then
+  # The emulator registers with the adb server at startup, so start that first.
+  adb start-server
+  if ! adb get-state >/dev/null 2>&1; then
+    avd=${PATCHWORK_AVD:-$("$sdk/emulator/emulator" -list-avds | head -1)}
+    [[ -n $avd ]] || { echo "no device connected and no emulator (AVD) to start" >&2; exit 1; }
+    echo "starting emulator $avd"
+    # SwiftShader's Vulkan crashes the emulator on wgpu's shaders, so use the host GPU.
+    nohup "$sdk/emulator/emulator" -avd "$avd" -gpu host >"$out/emulator.log" 2>&1 &
+    timeout 180 adb wait-for-device
+    timeout 180 bash -c \
+      'until [[ $(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r") == 1 ]]; do sleep 2; done'
+  fi
+  ((${#abis[@]})) || abis=("$(adb shell getprop ro.product.cpu.abi | tr -d '\r')")
+fi
+((${#abis[@]})) || abis=(x86_64 arm64-v8a)
+
+rm -rf "$out/apk"
+mkdir -p "$out/apk/lib"
+cargo_flags=()
+[[ $profile == release ]] && cargo_flags+=(--release)
+for abi in "${abis[@]}"; do
+  case $abi in
+    x86_64) triple=x86_64-linux-android ;;
+    arm64-v8a) triple=aarch64-linux-android ;;
+    *) echo "unsupported ABI: $abi" >&2; exit 2 ;;
+  esac
+  env_triple=${triple//-/_}
+  clang=$toolchain/$triple$min_api-clang
+  env "CC_$env_triple=$clang" "CXX_$env_triple=$clang++" "AR_$env_triple=$toolchain/llvm-ar" \
+    "CARGO_TARGET_${env_triple^^}_LINKER=$clang" \
+    cargo build -p patchwork-android --target "$triple" "${cargo_flags[@]}"
+  mkdir -p "$out/apk/lib/$abi"
+  cp "target/$triple/$profile/libpatchwork_android.so" "$out/apk/lib/$abi/"
+done
+
+keystore=$HOME/.android/debug.keystore
+if [[ ! -f $keystore ]]; then
+  mkdir -p "$(dirname "$keystore")"
+  keytool -genkeypair -keystore "$keystore" -storepass android -keypass android \
+    -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+    -dname "CN=Android Debug,O=Android,C=US"
+fi
+
+"$build_tools/aapt2" link -o "$out/unaligned.apk" -I "$platform/android.jar" \
+  --manifest apps/android/AndroidManifest.xml
+# Native libraries are stored uncompressed so the loader can map them straight from the APK.
+jar --update --no-compress --no-manifest --file "$out/unaligned.apk" -C "$out/apk" lib
+"$build_tools/zipalign" -f -P 16 4 "$out/unaligned.apk" "$out/aligned.apk"
+# apksigner's Java warns about native access on new JDKs; that noise is not the build's.
+"$build_tools/apksigner" sign --ks "$keystore" --ks-pass pass:android \
+  --out "$out/Patchwork.apk" "$out/aligned.apk" 2> >(grep -v '^WARNING: ' >&2)
+rm -f "$out/unaligned.apk" "$out/aligned.apk"
+echo "built $out/Patchwork.apk"
+
+if $run; then
+  adb install -r "$out/Patchwork.apk"
+  adb shell am start -n "$package/android.app.NativeActivity"
+fi

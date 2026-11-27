@@ -40,7 +40,7 @@ SVG or a chart library from cdnjs.cloudflare.com.
 - whiteboard: a board of notes, shapes, arrows and labels, as one SVG with a viewBox. It is shown \
 on a board the person pans and zooms.
 - html: any other web page or interactive tool. svg: a picture. markdown: plain text with \
-formatting. mermaid: a Mermaid diagram's source. code: source code shown as text.
+formatting. code: source code shown as text.
 - react: one component file whose default export takes no props; it may use Tailwind classes \
 and import react and npm packages such as recharts, lucide-react, d3 or three.
 

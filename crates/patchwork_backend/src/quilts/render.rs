@@ -3,9 +3,9 @@
 //! The typed quilts (docs, slides, sheets, designs, whiteboards) get their pages from
 //! `typed`.
 //! A page and an SVG are drawn as they are, Markdown is turned into HTML here, and code is shown
-//! as text. A Mermaid diagram and a React component are drawn by scripts the page loads from
-//! public package hosts, so those two need the network. A React component is compiled in the
-//! page, and its imports load from esm.sh, sharing one React.
+//! as text. A React component is drawn by scripts the page loads from public package hosts, so it
+//! needs the network. A React component is compiled in the page, and its imports load from esm.sh,
+//! sharing one React.
 
 // Rust guideline compliant 2026-10-09
 
@@ -16,7 +16,7 @@ use pulldown_cmark::{Options, Parser, html};
 use super::typed;
 use super::types::QuiltKind;
 
-/// The styles of the pages Patchwork wraps around content: Markdown, code, SVG and diagrams.
+/// The styles of the pages Patchwork wraps around content: Markdown, code and SVG.
 const STYLE: &str = "\
 body{margin:0;font:15px/1.6 system-ui,sans-serif;color:#1f2328;background:#fff}\
 main{max-width:860px;margin:0 auto;padding:32px 24px}\
@@ -25,9 +25,6 @@ pre{background:#f6f8fa;padding:12px 16px;border-radius:6px;overflow:auto}\
 code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}\
 table{border-collapse:collapse}td,th{border:1px solid #d0d7de;padding:6px 10px}\
 img,svg{max-width:100%;height:auto}";
-
-/// Mermaid, as an ES module, at a version fixed so a diagram draws the same every time.
-const MERMAID: &str = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
 
 /// Babel, which compiles a component's JSX and TypeScript in the page.
 const BABEL: &str = "https://cdn.jsdelivr.net/npm/@babel/standalone@7.26.4/babel.min.js";
@@ -85,18 +82,6 @@ pub fn page(kind: QuiltKind, content: &str, title: &str) -> String {
             "",
             &format!("<pre><code>{}</code></pre>", escape(content)),
             "",
-        ),
-        QuiltKind::Mermaid => wrapped(
-            &title,
-            "center",
-            &format!(
-                "<pre class=\"mermaid\" style=\"background:none\">{}</pre>",
-                escape(content)
-            ),
-            &format!(
-                "<script type=\"module\">import mermaid from '{MERMAID}';\
-                 mermaid.initialize({{startOnLoad:true}});</script>"
-            ),
         ),
         QuiltKind::React => react(&title, content),
         QuiltKind::Html | QuiltKind::Data => based(content),

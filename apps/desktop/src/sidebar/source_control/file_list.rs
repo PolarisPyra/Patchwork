@@ -13,7 +13,7 @@ use patchwork_backend::source_control::{DiffSide, FileChange};
 
 use super::file_groups::{group_button, group_header, row_action};
 use super::git_status::ChangesView;
-use patchwork_ui_theme::{fs_md, fs_sm, radius_sm, theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_sm, radius_sm, theme};
 use patchwork_ui_markdown::base_name;
 use patchwork_ui_components::{button, spinner, tooltip};
 use patchwork_ui_theme::icon;
@@ -168,7 +168,14 @@ impl ChangesView {
                         .hover(move |s| s.bg(hover).text_color(fg))
                         .tooltip(tooltip(format!("Changes since this branch left {base}")))
                         .child(base.clone())
-                        .child(icon(if open { "caret-down" } else { "caret-right" }, 12.))
+                        .child(icon(
+                            if open {
+                                IconName::CaretDown
+                            } else {
+                                IconName::CaretRight
+                            },
+                            12.,
+                        ))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.compare_open = !this.compare_open;
                             cx.notify();
@@ -180,7 +187,7 @@ impl ChangesView {
                 let lead = if self.resolving {
                     spinner(12., t.text_subtle).into_any_element()
                 } else {
-                    icon("sparkle", 14.).into_any_element()
+                    icon(IconName::Sparkle, 14.).into_any_element()
                 };
                 vec![
                     group_button("resolve", "Resolve with agent", lead, &t)
@@ -196,7 +203,7 @@ impl ChangesView {
                 group_button(
                     "back-to-project",
                     "Project",
-                    icon("arrow-left", 14.).into_any_element(),
+                    icon(IconName::ArrowLeft, 14.).into_any_element(),
                     &t,
                 )
                 .on_click(cx.listener(|this, _, _, cx| {
@@ -217,7 +224,7 @@ impl ChangesView {
                     row_action(
                         "unstage-all",
                         "Unstage all changes",
-                        "minus",
+                        IconName::Minus,
                         SharedString::from("group:Staged Changes"),
                         &t,
                     )
@@ -232,7 +239,7 @@ impl ChangesView {
                     row_action(
                         "discard-all",
                         "Discard all changes",
-                        "trash",
+                        IconName::Trash,
                         name.clone(),
                         &t,
                     )
@@ -245,7 +252,7 @@ impl ChangesView {
                         );
                     }))
                     .into_any_element(),
-                    row_action("stage-all", "Stage all changes", "plus", name, &t)
+                    row_action("stage-all", "Stage all changes", IconName::Plus, name, &t)
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.stage(stage.clone(), window, cx);
                         }))

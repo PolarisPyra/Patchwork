@@ -8,7 +8,7 @@ use patchwork_backend::provider::mcp::ToolInfo;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, Section, alert, empty, list_box, search_box};
 use crate::settings::extensions::filter_select;
-use patchwork_ui_theme::{fs_sm, radius, theme};
+use patchwork_ui_theme::{IconName, fs_sm, radius, theme};
 use patchwork_ui_components::{BtnKind, btn};
 use patchwork_ui_theme::icon;
 use super::form::Draft;
@@ -136,7 +136,7 @@ pub fn render(
             btn("mcp-add", "Add server", BtnKind::Plain, false, &t)
                 .px(px(10.))
                 .gap(px(6.))
-                .child(icon("plus", 13.))
+                .child(icon(IconName::Plus, 13.))
                 .child("Add server")
                 .on_click(
                     cx.listener(|d, _, window, cx| d.open_mcp_form(Draft::default(), window, cx)),

@@ -18,7 +18,7 @@ use gpui::{
     div, prelude::*, px,
 };
 use patchwork_backend::chats::{ApprovalStatus, Chat};
-use patchwork_ui_theme::{Theme, fs_sm, radius, theme};
+use patchwork_ui_theme::{IconName, Theme, fs_sm, radius, theme};
 use patchwork_ui_components::{button, icon_button, spinner, tooltip};
 use patchwork_ui_markdown::display_title;
 use patchwork_ui_theme::icon;
@@ -260,7 +260,7 @@ pub(crate) fn tab_strip(
             icon_button(
                 SharedString::from(format!("chat-tab-add-{pane}")),
                 "Add a tab",
-                "plus",
+                IconName::Plus,
                 14.,
                 cx,
             )
@@ -293,7 +293,7 @@ pub(crate) fn tab_strip(
 
 /// The button at the right of the top-right pane's tabs that lays the panes out as a preset.
 fn layouts_button(cx: &mut Context<Workspace>) -> impl IntoElement + use<> {
-    icon_button("chat-layouts", "Layouts", "square-grid-four", 14., cx)
+    icon_button("chat-layouts", "Layouts", IconName::SquareGridFour, 14., cx)
         .flex_none()
         .tooltip(tooltip("Layouts"))
         .on_mouse_down(
@@ -318,9 +318,9 @@ fn broadcast_pill(t: &Theme, cx: &mut Context<Workspace>) -> impl IntoElement + 
         .text_size(px(fs_sm()))
         .text_color(t.accent_text)
         .hover(move |s| s.bg(hover))
-        .child(icon("paper-plane-right", 12.))
+        .child(icon(IconName::PaperPlaneRight, 12.))
         .child("To every pane")
-        .child(icon("x", 10.))
+        .child(icon(IconName::X, 10.))
         .tooltip(tooltip("Each message goes to every pane. Click to stop"))
         .on_click(cx.listener(|w, _, _, cx| w.toggle_broadcast(cx)))
 }
@@ -330,7 +330,7 @@ fn restore_button(cx: &mut Context<Workspace>) -> impl IntoElement + use<> {
     icon_button(
         "chat-restore-panes",
         "Show all panes",
-        "arrows-in-simple",
+        IconName::ArrowsInSimple,
         14.,
         cx,
     )
@@ -378,7 +378,7 @@ fn tab(
             .id("tab-waiting")
             .role(Role::Status)
             .aria_label("Waiting for you")
-            .child(icon("shield-warning", 13.).text_color(t.warning))
+            .child(icon(IconName::ShieldWarning, 13.).text_color(t.warning))
             .into_any_element()
     } else if is_busy(chat) {
         div()
@@ -438,7 +438,7 @@ fn tab(
         icon_button(
             SharedString::from(format!("chat-tab-close-{}", chat.id)),
             format!("Close tab {title}"),
-            "x",
+            IconName::X,
             12.,
             cx,
         )

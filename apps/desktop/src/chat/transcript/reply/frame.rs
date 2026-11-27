@@ -7,7 +7,7 @@ use super::pieces::is_open;
 use super::pieces::action_button;
 use gpui::{AnyElement, ClipboardItem, Div, FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_backend::chats::{Message, Part, Role as MessageRole, Chat};
-use patchwork_ui_theme::{fs_md, fs_sm, fs_xs, radius, Theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_sm, fs_xs, radius, Theme};
 use patchwork_ui_components::button;
 use patchwork_ui_markdown::{format_clock, full_elapsed};
 use patchwork_ui_theme::icon;
@@ -67,7 +67,7 @@ pub(super) fn foot(
                         .gap(px(6.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(t.warning)
-                        .child(icon("shield-warning", 15.))
+                        .child(icon(IconName::ShieldWarning, 15.))
                         .child(match &refusal.category {
                             Some(category) => {
                                 format!("Blocked by a safety classifier · {category}")
@@ -113,7 +113,7 @@ pub(super) fn foot(
                 "Fork into the same worktree"
             };
             let (chat_id, message_id) = (chat_id.clone(), message_id.clone());
-            action_button(format!("fork-other-{}", m.id), label, "git-fork", t).on_click(
+            action_button(format!("fork-other-{}", m.id), label, IconName::GitFork, t).on_click(
                 cx.listener(move |w, _, _, cx| {
                     w.fork(&chat_id, &message_id, Some(new), cx);
                 }),
@@ -126,7 +126,7 @@ pub(super) fn foot(
                 .items_center()
                 .when(streaming, gpui::Styled::invisible)
                 .child(
-                    action_button(format!("copy-{}", m.id), "Copy", "copy", t).on_click(
+                    action_button(format!("copy-{}", m.id), "Copy", IconName::Copy, t).on_click(
                         cx.listener(move |w, _, _, cx| {
                             if let Some(m) = w.message(&copy_id) {
                                 cx.write_to_clipboard(ClipboardItem::new_string(m.text.clone()));
@@ -135,16 +135,21 @@ pub(super) fn foot(
                     ),
                 )
                 .children(retry.map(|retry_id| {
-                    action_button(format!("retry-{}", m.id), "Retry", "arrow-clockwise", t)
-                        .on_click(cx.listener(move |w, _, _, cx| {
-                            if let Some(p) = w.message(&retry_id) {
-                                let (text, attachments) = (p.text.clone(), p.attachments.clone());
-                                w.send(text, attachments, None, None, cx);
-                            }
-                        }))
+                    action_button(
+                        format!("retry-{}", m.id),
+                        "Retry",
+                        IconName::ArrowClockwise,
+                        t,
+                    )
+                    .on_click(cx.listener(move |w, _, _, cx| {
+                        if let Some(p) = w.message(&retry_id) {
+                            let (text, attachments) = (p.text.clone(), p.attachments.clone());
+                            w.send(text, attachments, None, None, cx);
+                        }
+                    }))
                 }))
                 .child(
-                    action_button(format!("fork-{}", m.id), "Fork", "git-fork", t).on_click(
+                    action_button(format!("fork-{}", m.id), "Fork", IconName::GitFork, t).on_click(
                         cx.listener(move |w, _, _, cx| w.fork(&chat_id, &message_id, None, cx)),
                     ),
                 )
@@ -237,7 +242,14 @@ pub(super) fn head(w: &Workspace, m: &Message, t: &Theme, cx: &mut Context<Works
                     .map(|a| div().text_color(t.text_subtle).child(a)),
             )
             .when(layout.actions > 0, |b| {
-                b.child(icon(if open { "caret-down" } else { "caret-right" }, 13.))
+                b.child(icon(
+                    if open {
+                        IconName::CaretDown
+                    } else {
+                        IconName::CaretRight
+                    },
+                    13.,
+                ))
             })
             .on_click(cx.listener(move |w, _, _, cx| {
                 if !w.transcript.open_folds.remove(&id) {

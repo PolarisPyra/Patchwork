@@ -18,7 +18,7 @@ use patchwork_backend::{Core, Error};
 use crate::canvas::CanvasTab;
 use super::goal_bar::strip_action;
 use patchwork_ui_components::menu::{Dismissed, Menu, MenuItem};
-use patchwork_ui_theme::{Theme, fs_sm, fs_xs, radius_sm};
+use patchwork_ui_theme::{IconName, Theme, fs_sm, fs_xs, radius_sm};
 use patchwork_ui_components::{button, icon_button, tooltip};
 use patchwork_ui_theme::icon;
 use crate::workspace::{Workspace, is_working};
@@ -347,7 +347,7 @@ impl Workspace {
             MenuItem::new("Copy path", move |_, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(root.clone()));
             })
-            .icon("copy")
+            .icon(IconName::Copy)
         }];
         if !is_remote(&root) {
             let folder = root.clone();
@@ -355,13 +355,13 @@ impl Workspace {
                 MenuItem::new("Open terminal here", move |window, cx| {
                     let _ = this.update(cx, |w, cx| w.new_terminal_in(root.clone(), window, cx));
                 })
-                .icon("terminal"),
+                .icon(IconName::Terminal),
             );
             items.push(
                 MenuItem::new("Open in file manager", move |_, cx| {
                     cx.open_with_system(std::path::Path::new(&folder));
                 })
-                .icon("folder-open"),
+                .icon(IconName::FolderOpen),
             );
         }
         let menu = Menu::open("Worktree", items, window, cx);
@@ -461,7 +461,7 @@ fn no_worktree(error: &str, t: &Theme) -> Stateful<gpui::Div> {
         .gap(px(6.))
         .text_color(t.danger)
         .tooltip(tooltip(text.clone()))
-        .child(icon("warning", 13.).flex_none())
+        .child(icon(IconName::Warning, 13.).flex_none())
         .child(div().min_w_0().truncate().child(text))
 }
 
@@ -531,7 +531,11 @@ pub fn worktree_strip(
         .text_color(muted)
         .hover(move |s| s.text_color(fg))
         .tooltip(tooltip(format!("Working in a worktree on {branch}")))
-        .child(icon("folders", 13.).flex_none().text_color(t.accent_text))
+        .child(
+            icon(IconName::Folders, 13.)
+                .flex_none()
+                .text_color(t.accent_text),
+        )
         .child(
             div()
                 .id("worktree-state")
@@ -551,7 +555,17 @@ pub fn worktree_strip(
                 .child(branch.clone()),
         )
         .when(can_open, |b| {
-            b.child(icon(if open { "caret-down" } else { "caret-right" }, 12.).flex_none())
+            b.child(
+                icon(
+                    if open {
+                        IconName::CaretDown
+                    } else {
+                        IconName::CaretRight
+                    },
+                    12.,
+                )
+                .flex_none(),
+            )
         })
         .on_click(cx.listener(|w, _, _, cx| {
             if let Some(strip) = w.worktree.as_mut() {
@@ -559,11 +573,17 @@ pub fn worktree_strip(
             }
             cx.notify();
         }));
-    let more = icon_button("worktree-menu", "Worktree actions", "dots-three", 14., cx)
-        .flex_none()
-        .aria_expanded(menu.is_some())
-        .tooltip(tooltip("Worktree actions"))
-        .on_click(cx.listener(Workspace::toggle_worktree_menu));
+    let more = icon_button(
+        "worktree-menu",
+        "Worktree actions",
+        IconName::DotsThree,
+        14.,
+        cx,
+    )
+    .flex_none()
+    .aria_expanded(menu.is_some())
+    .tooltip(tooltip("Worktree actions"))
+    .on_click(cx.listener(Workspace::toggle_worktree_menu));
     let message = message.map(|(text, failed)| {
         let shown: SharedString = text.into();
         div()
@@ -649,7 +669,11 @@ pub fn worktree_strip(
                     .py(px(3.))
                     .gap(px(8.))
                     .hover(move |s| s.bg(hover))
-                    .child(icon("git-diff", 12.).flex_none().text_color(t.text_subtle))
+                    .child(
+                        icon(IconName::GitDiff, 12.)
+                            .flex_none()
+                            .text_color(t.text_subtle),
+                    )
                     .child(div().min_w_0().flex_1().truncate().child(name))
                     .child(
                         div()

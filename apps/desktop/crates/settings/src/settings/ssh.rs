@@ -11,7 +11,7 @@ use patchwork_platform::ssh::config::{self as ssh, Host, Test};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, Section, alert, labeled};
-use patchwork_ui_theme::{fs_sm, fs_xs, radius_sm, theme};
+use patchwork_ui_theme::{IconName, fs_sm, fs_xs, radius_sm, theme};
 use patchwork_ui_components::{BtnKind, btn, spinner};
 use patchwork_ui_theme::icon;
 
@@ -124,7 +124,7 @@ fn add_device(
     let Some(draft) = d.ssh.adding.as_ref() else {
         return btn("ssh-add-device", "Add a host", BtnKind::Plain, false, &t)
             .gap(px(6.))
-            .child(icon("plus", 14.))
+            .child(icon(IconName::Plus, 14.))
             .child("Add a host")
             .on_click(cx.listener(|d, _, window, cx| d.open_add_device(window, cx)))
             .into_any_element();
@@ -253,7 +253,7 @@ pub fn render(
                 div()
                     .flex_none()
                     .text_color(t.text_muted)
-                    .child(icon("hard-drives", 20.)),
+                    .child(icon(IconName::HardDrives, 20.)),
             )
             .child(
                 div()

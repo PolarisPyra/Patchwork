@@ -14,7 +14,7 @@ use gpui::{
 };
 use patchwork_backend::chats::{Role as MessageRole, StepStatus, Chat, ToolCall};
 
-use patchwork_ui_theme::{font_mono, fs_sm, fs_xs, radius, radius_lg, Theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, fs_xs, radius, radius_lg, Theme};
 use patchwork_ui_components::{button, popup, popup_shadow, spinner};
 use patchwork_ui_markdown::{compact_elapsed, full_elapsed};
 use patchwork_ui_theme::icon;
@@ -123,12 +123,16 @@ fn details_card(tool: &ToolCall, tools: &[&ToolCall], elapsed: Option<u64>, t: &
     let (status_icon, color) = match tool.status {
         StepStatus::Running => (Some(spinner(12., t.accent).into_any_element()), t.accent),
         StepStatus::Done => (
-            Some(icon("check", 12.).text_color(t.success).into_any_element()),
+            Some(
+                icon(IconName::Check, 12.)
+                    .text_color(t.success)
+                    .into_any_element(),
+            ),
             t.success,
         ),
         StepStatus::Error => (
             Some(
-                icon("x-circle", 12.)
+                icon(IconName::XCircle, 12.)
                     .text_color(t.danger)
                     .into_any_element(),
             ),
@@ -187,7 +191,7 @@ fn details_card(tool: &ToolCall, tools: &[&ToolCall], elapsed: Option<u64>, t: &
                 .font_family(font_mono())
                 .text_size(px(fs_xs()))
                 .text_color(t.text_muted)
-                .child(icon("terminal", 12.).flex_none())
+                .child(icon(IconName::Terminal, 12.).flex_none())
                 .child(
                     div()
                         .truncate()
@@ -382,7 +386,7 @@ pub fn lineage_card(
     let (fg, subtle, hover) = (t.text, t.text_subtle, t.bg_hover);
     let menu_open = lineage.menu_open;
     let menu = menu_open.then(|| {
-        let item = |id: &'static str, label: &'static str, name: &'static str, enabled: bool| {
+        let item = |id: &'static str, label: &'static str, name: IconName, enabled: bool| {
             button(id, label)
                 .role(Role::MenuItem)
                 .w_full()
@@ -415,7 +419,7 @@ pub fn lineage_card(
                 item(
                     "lineage-disconnect",
                     "Disconnect agent session",
-                    "plugs",
+                    IconName::Plugs,
                     working,
                 )
                 .when(working, |b| {
@@ -426,7 +430,7 @@ pub fn lineage_card(
                 }),
             )
             .child(
-                item("lineage-close", "Close lineage", "x", true).on_click(cx.listener(
+                item("lineage-close", "Close lineage", IconName::X, true).on_click(cx.listener(
                     move |w, _, _, cx| {
                         w.lineage.menu_open = false;
                         w.lineage.closed_at.insert(chat_id.clone(), newest.clone());
@@ -483,7 +487,7 @@ pub fn lineage_card(
                                 .rounded(px(radius()))
                                 .text_color(subtle)
                                 .hover(move |s| s.bg(hover).text_color(fg))
-                                .child(icon("dots-three", 14.))
+                                .child(icon(IconName::DotsThree, 14.))
                                 .on_click(cx.listener(|w, _, _, cx| {
                                     w.lineage.menu_open = !w.lineage.menu_open;
                                     cx.notify();
@@ -511,9 +515,9 @@ pub fn lineage_card(
                             .child(
                                 icon(
                                     if previous_open {
-                                        "caret-down"
+                                        IconName::CaretDown
                                     } else {
-                                        "caret-right"
+                                        IconName::CaretRight
                                     },
                                     10.,
                                 )

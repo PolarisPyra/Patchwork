@@ -13,7 +13,7 @@ use patchwork_ui_markdown::effort_label;
 use super::model_picker::ordered;
 use super::draft::{Composer, LaunchProject};
 use patchwork_ui_theme::icon;
-use patchwork_ui_theme::{Theme, theme};
+use patchwork_ui_theme::{IconName, Theme, theme};
 
 impl Composer {
     /// The agent and model a request's new chat gets: the ones picked on the Orchestrator page,
@@ -189,7 +189,7 @@ impl Composer {
         current: Option<&str>,
         t: &Theme,
     ) -> Vec<Row> {
-        let row = |id: Option<String>, name: &str, glyph: &'static str| {
+        let row = |id: Option<String>, name: &str, glyph: IconName| {
             let checked = current == id.as_deref();
             let body = div()
                 .min_w_0()
@@ -204,12 +204,12 @@ impl Composer {
         let mut rows: Vec<Row> = settings
             .projects
             .iter()
-            .map(|p| row(Some(p.id.clone()), &p.name, "folder"))
+            .map(|p| row(Some(p.id.clone()), &p.name, IconName::Folder))
             .collect();
         if let Some(first) = rows.first_mut() {
             first.heading = Some("Projects");
         }
-        let mut none = row(None, "No project", "chat-circle");
+        let mut none = row(None, "No project", IconName::ChatCircle);
         none.ruled = !rows.is_empty();
         rows.push(none);
         rows

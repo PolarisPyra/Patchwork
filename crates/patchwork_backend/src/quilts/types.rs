@@ -14,8 +14,6 @@ pub enum QuiltKind {
     Svg,
     /// A document in Markdown.
     Markdown,
-    /// A Mermaid diagram.
-    Mermaid,
     /// A React component, whose default export is drawn.
     React,
     /// Source code, shown as it is.
@@ -37,7 +35,7 @@ pub enum QuiltKind {
 
 impl QuiltKind {
     /// Every kind, in the order the tool lists them.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 11] = [
         Self::Doc,
         Self::Slides,
         Self::Sheet,
@@ -47,7 +45,6 @@ impl QuiltKind {
         Self::Html,
         Self::Svg,
         Self::Markdown,
-        Self::Mermaid,
         Self::React,
         Self::Code,
     ];
@@ -63,8 +60,7 @@ impl QuiltKind {
     ];
 
     /// The tile in `MADE_NEW` a quilt of this kind is counted under: web pages, components
-    /// and SVG pictures are designs, Markdown is a doc, and a diagram goes on the whiteboard.
-    /// Code has no tile.
+    /// and SVG pictures are designs, and Markdown is a doc. Code has no tile.
     #[must_use]
     pub fn tile(self) -> Option<Self> {
         match self {
@@ -73,7 +69,7 @@ impl QuiltKind {
             Self::Sheet => Some(Self::Sheet),
             Self::Design | Self::Html | Self::React | Self::Svg => Some(Self::Design),
             Self::Data => Some(Self::Data),
-            Self::Whiteboard | Self::Mermaid => Some(Self::Whiteboard),
+            Self::Whiteboard => Some(Self::Whiteboard),
             Self::Code => None,
         }
     }
@@ -85,7 +81,6 @@ impl QuiltKind {
             Self::Html => "Web page",
             Self::Svg => "SVG",
             Self::Markdown => "Markdown",
-            Self::Mermaid => "Diagram",
             Self::React => "React",
             Self::Code => "Code",
             Self::Doc => "Doc",
@@ -104,7 +99,6 @@ impl QuiltKind {
             Self::Html => "a web page",
             Self::Svg => "an SVG picture",
             Self::Markdown => "a Markdown document",
-            Self::Mermaid => "a diagram",
             Self::React => "a React component",
             Self::Code => "some code",
             Self::Doc => "a doc",
@@ -123,7 +117,6 @@ impl QuiltKind {
             Self::Html => "html",
             Self::Svg => "svg",
             Self::Markdown => "markdown",
-            Self::Mermaid => "mermaid",
             Self::React => "react",
             Self::Code => "code",
             Self::Doc => "doc",
@@ -142,7 +135,6 @@ impl QuiltKind {
             Self::Html => "text/html",
             Self::Svg => "image/svg+xml",
             Self::Markdown => "text/markdown",
-            Self::Mermaid => "application/vnd.ant.mermaid",
             Self::React => "application/vnd.ant.react",
             Self::Code => "application/vnd.ant.code",
             Self::Doc => "application/vnd.ant.artifact.doc",
@@ -171,7 +163,6 @@ impl QuiltKind {
             Self::Svg | Self::Whiteboard => "svg".into(),
             Self::Markdown | Self::Doc => "md".into(),
             Self::Sheet => "csv".into(),
-            Self::Mermaid => "mmd".into(),
             Self::React => "jsx".into(),
             Self::Code => language
                 .filter(|l| !l.is_empty() && l.chars().all(|c| c.is_ascii_alphanumeric()))

@@ -8,7 +8,7 @@ use patchwork_backend::settings::{CursorStyle, DetectLocale, RightClickBehavior,
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, segmented, switch_row, token_row};
-use patchwork_ui_theme::{fs_md, theme};
+use patchwork_ui_theme::{IconName, fs_md, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button, tooltip};
 
 /// Width of the settings' text fields (`TextField`'s default).
@@ -125,7 +125,7 @@ fn env_editor(
                     icon_button(
                         SharedString::from(format!("term-env-delete-{i}")),
                         format!("Delete {name}"),
-                        "x",
+                        IconName::X,
                         14.,
                         cx,
                     )

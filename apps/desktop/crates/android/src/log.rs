@@ -15,7 +15,7 @@ use patchwork_backend::android::{LogLevel, LogLine, Logcat};
 
 use super::devices::AndroidPanel;
 use patchwork_ui_components::menu::MenuItem;
-use patchwork_ui_theme::{font_mono, fs_sm, fs_xs, Theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, fs_xs, Theme};
 use patchwork_ui_components::{dropdown_chip, icon_button, tooltip};
 
 /// How often the log is read again: often enough to look live, seldom enough to stay cheap
@@ -230,7 +230,7 @@ impl AndroidPanel {
                 .on_click(cx.listener(Self::open_level_menu)),
             )
             .child(
-                icon_button("android-log-copy", "Copy the log", "copy", 14., cx)
+                icon_button("android-log-copy", "Copy the log", IconName::Copy, 14., cx)
                     .tooltip(tooltip("Copy"))
                     .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(log) = &this.log {
@@ -241,17 +241,23 @@ impl AndroidPanel {
                     })),
             )
             .child(
-                icon_button("android-log-clear", "Clear the log", "prohibit", 14., cx)
-                    .tooltip(tooltip("Clear"))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(log) = &this.log {
-                            let logcat = Arc::clone(&log.logcat);
-                            cx.background_spawn(async move { logcat.clear() }).detach();
-                        }
-                    })),
+                icon_button(
+                    "android-log-clear",
+                    "Clear the log",
+                    IconName::Prohibit,
+                    14.,
+                    cx,
+                )
+                .tooltip(tooltip("Clear"))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    if let Some(log) = &this.log {
+                        let logcat = Arc::clone(&log.logcat);
+                        cx.background_spawn(async move { logcat.clear() }).detach();
+                    }
+                })),
             )
             .child(
-                icon_button("android-log-close", "Close the log", "x", 14., cx)
+                icon_button("android-log-close", "Close the log", IconName::X, 14., cx)
                     .tooltip(tooltip("Close"))
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_log(cx))),
             );

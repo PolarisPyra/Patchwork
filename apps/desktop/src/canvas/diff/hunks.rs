@@ -17,7 +17,7 @@ use gpui::{
 };
 use patchwork_backend::source_control::HunkAction;
 use crate::canvas::Canvas;
-use patchwork_ui_theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, fs_xs, radius, radius_sm, Theme, theme};
 use patchwork_ui_components::{BtnKind, btn, button, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -467,7 +467,7 @@ impl Canvas {
         }
         let group = SharedString::from(format!("note-{}", note.id));
         let (hover, fg) = (t.bg_hover, t.text);
-        let small = |id: String, label: String, name: &'static str| {
+        let small = |id: String, label: String, name: IconName| {
             button(SharedString::from(id), label)
                 .size(px(20.))
                 .flex_none()
@@ -502,7 +502,11 @@ impl Canvas {
             .font_family(patchwork_ui_theme::font_ui())
             .text_size(px(fs_sm()))
             .line_height(relative(1.5))
-            .child(icon("chat-text", 14.).mt(px(2.)).text_color(t.accent_text))
+            .child(
+                icon(IconName::ChatText, 14.)
+                    .mt(px(2.))
+                    .text_color(t.accent_text),
+            )
             .child(
                 div()
                     .flex_1()
@@ -514,7 +518,7 @@ impl Canvas {
                 small(
                     format!("edit-note-{id}"),
                     format!("Edit note on {}", note.place),
-                    "pencil-simple",
+                    IconName::PencilSimple,
                 )
                 .tooltip(tooltip("Edit"))
                 .on_click(cx.listener(move |this, _, window, cx| {
@@ -530,7 +534,7 @@ impl Canvas {
                 small(
                     format!("delete-note-{id}"),
                     format!("Delete note on {}", note.place),
-                    "trash",
+                    IconName::Trash,
                 )
                 .tooltip(tooltip("Delete"))
                 .on_click(cx.listener(move |_, _, _, cx| {

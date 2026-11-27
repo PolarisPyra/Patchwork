@@ -1,0 +1,25 @@
+# Vendored from https://github.com/zed-industries/zed @ d2a4fb6ded7c470be25d1541281da3882495b65b
+# Regenerate via: uv run --no-project python3 scripts/vendor-gpui.py
+
+[package]
+name = "gpui_shared_string"
+version = "0.1.0"
+publish = false
+edition = "2024"
+license = "Apache-2.0"
+
+[lints.rust]
+unexpected_cfgs = "allow"
+
+[lints.clippy]
+all = { level = "allow", priority = -1 }
+
+[lib]
+path = "gpui_shared_string.rs"
+test = false
+doctest = false
+
+[dependencies]
+schemars = { version = "1.0", default-features = false, features = ["std", "indexmap2"] }
+serde = { version = "1.0", features = ["rc"] }
+smol_str = { version = "0.3.6", default-features = false, features = ["serde"] }

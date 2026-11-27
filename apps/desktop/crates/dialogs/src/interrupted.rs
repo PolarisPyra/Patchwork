@@ -5,7 +5,7 @@
 
 use gpui::{EventEmitter, FontWeight, Role, Window, div, prelude::*, px};
 
-use patchwork_ui_theme::{radius, radius_sm, theme};
+use patchwork_ui_theme::{IconName, radius, radius_sm, theme};
 use patchwork_ui_components::{BtnKind, btn, button, dialog_shadow};
 use patchwork_ui_theme::icon;
 
@@ -88,7 +88,7 @@ impl Render for InterruptedCard {
                     .rounded(px(radius_sm()))
                     .text_color(t.text_muted)
                     .hover(move |s| s.bg(hover).text_color(fg))
-                    .child(icon("x", 14.))
+                    .child(icon(IconName::X, 14.))
                     .on_click(cx.listener(|this, _, _, cx| this.set(0, cx))),
             )
             .into_any_element()

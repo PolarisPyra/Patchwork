@@ -7,7 +7,7 @@ use patchwork_backend::provider::api::Header;
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
-use patchwork_ui_theme::{font_mono, fs_sm, radius_sm, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, radius_sm, theme};
 use patchwork_ui_components::{BtnKind, btn, button, icon_button, spinner};
 use patchwork_ui_theme::icon;
 use super::layout::{label_text};
@@ -152,7 +152,7 @@ impl SettingsDialog {
                         .rounded(px(radius_sm()))
                         .text_color(muted)
                         .hover(move |s| s.bg(hover).text_color(fg))
-                        .child(icon("x", 11.))
+                        .child(icon(IconName::X, 11.))
                         .on_click(cx.listener(move |d, _, _, cx| {
                             if let Some(f) = d.form_mut() {
                                 f.draft.models.retain(|m| m.id != model_id);
@@ -200,7 +200,7 @@ impl SettingsDialog {
                                     if on {
                                         b.border_color(t.accent)
                                             .bg(t.accent)
-                                            .child(icon("check", 11.))
+                                            .child(icon(IconName::Check, 11.))
                                     } else {
                                         b.border_color(t.border_strong)
                                     }
@@ -237,7 +237,7 @@ impl SettingsDialog {
                         .px(px(8.))
                         .py(px(4.))
                         .text_color(t.text_subtle)
-                        .child(icon("magnifying-glass", 14.))
+                        .child(icon(IconName::MagnifyingGlass, 14.))
                         .child(s)
                 }))
                 .child(
@@ -281,7 +281,7 @@ impl SettingsDialog {
                         .child(if loading {
                             spinner(13., t.text_muted).into_any_element()
                         } else {
-                            icon("arrows-clockwise", 13.).into_any_element()
+                            icon(IconName::ArrowsClockwise, 13.).into_any_element()
                         })
                         .child(if fetched {
                             "Refresh list"
@@ -378,7 +378,7 @@ impl SettingsDialog {
                         icon_button(
                             SharedString::from(format!("remove-header-{i}")),
                             format!("Remove header {label}"),
-                            "x",
+                            IconName::X,
                             14.,
                             cx,
                         )
@@ -396,7 +396,7 @@ impl SettingsDialog {
         div().flex().flex_col().gap(px(6.)).children(rows).child(
             div().flex().child(
                 btn("add-header", "Add header", BtnKind::Plain, false, &t)
-                    .child(icon("plus", 13.))
+                    .child(icon(IconName::Plus, 13.))
                     .child("Add header")
                     .on_click(cx.listener(|d, _, _, cx| {
                         if let Some(f) = d.form_mut() {

@@ -18,16 +18,3 @@ pub fn is_older(version: &str, than: &str) -> bool {
         _ => false,
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn compares_cli_versions() {
-        assert!(is_older("v1.4.9", "1.5.0"));
-        assert!(!is_older("1.5.0", "1.5.0"));
-        assert!(!is_older("1.5.1-beta.1", "1.5.0"));
-        assert!(!is_older("unknown", "1.5.0"));
-    }
-}

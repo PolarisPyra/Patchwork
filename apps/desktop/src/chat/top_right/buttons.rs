@@ -4,7 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{Div, Window, div, prelude::*, px};
-use patchwork_ui_theme::{Theme, fs_sm, radius};
+use patchwork_ui_theme::{IconName, Theme, fs_sm, radius};
 use patchwork_ui_components::{button, tooltip};
 use patchwork_ui_theme::icon;
 use crate::workspace::Workspace;
@@ -52,7 +52,7 @@ pub(in crate::chat) fn header(
                 .text_size(px(fs_sm()))
                 .shadow(shadow())
                 .hover(move |s| s.bg(hover))
-                .child(icon("code", 14.))
+                .child(icon(IconName::Code, 14.))
                 .child("Open in editor")
                 .on_click(cx.listener(move |_, _, _, cx| {
                     let root = root.clone();
@@ -81,7 +81,7 @@ pub(in crate::chat) fn header(
                 .text_size(px(fs_sm()))
                 .shadow(shadow())
                 .hover(move |s| s.bg(hover))
-                .child(icon("code", 14.))
+                .child(icon(IconName::Code, 14.))
                 .child("Open in editor")
                 .on_click(cx.listener(move |w, _, _, cx| {
                     let (core, id, project) =
@@ -109,7 +109,7 @@ pub(in crate::chat) fn header(
             .shadow(shadow())
             .hover(move |s| s.bg(hover))
             .tooltip(tooltip("Agent details"))
-            .child(icon("gear-six", 14.))
+            .child(icon(IconName::GearSix, 14.))
             .on_click(cx.listener(|w, _, _, cx| w.toggle_agent_details(cx)))
     });
     let android = w.mobile.is_some().then(|| {
@@ -128,7 +128,7 @@ pub(in crate::chat) fn header(
             .shadow(shadow())
             .hover(move |s| s.bg(hover).text_color(fg))
             .tooltip(tooltip("Android devices"))
-            .child(icon("device-mobile", 14.))
+            .child(icon(IconName::DeviceMobile, 14.))
             .on_click(cx.listener(|w, _, window, cx| w.toggle_android(window, cx)))
     });
     let terminal = w.can_continue_in_cli().then(|| {
@@ -145,7 +145,7 @@ pub(in crate::chat) fn header(
             .shadow(shadow())
             .hover(move |s| s.bg(hover).text_color(fg))
             .tooltip(tooltip("Continue in terminal"))
-            .child(icon("terminal", 14.))
+            .child(icon(IconName::Terminal, 14.))
             .on_click(cx.listener(|w, _, _, cx| w.continue_in_cli(cx)))
     });
     let bar = div()

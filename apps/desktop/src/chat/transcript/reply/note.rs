@@ -7,72 +7,79 @@ use gpui::{Div, Role, SharedString, div, prelude::*, px};
 use patchwork_backend::chats::{Message, StepStatus, ToolCall};
 
 use crate::chat::transcript::turn_contents::{PATCHWORK_TOOL, is_running};
-use patchwork_ui_theme::{Theme, fs_xs};
+use patchwork_ui_theme::{IconName, Theme, fs_xs};
 use patchwork_ui_theme::icon;
 use patchwork_ui_components::spinner;
 
 /// The icon and the words a Patchwork tool's pill shows.
-fn note_of(tool: &ToolCall) -> (&'static str, String) {
+fn note_of(tool: &ToolCall) -> (IconName, String) {
     let id = tool.name.strip_prefix(PATCHWORK_TOOL).unwrap_or(&tool.name);
     let (glyph, label) = match id {
-        "list_tasks" => ("eye", "Read tasks"),
-        "list_chats" => ("list-bullets", "Listed chats"),
-        "read_chat" => ("eye", "Read a chat"),
-        "start_chat" => ("chat-circle", "Started a chat"),
-        "send_to_chat" => ("paper-plane-right", "Sent to a chat"),
-        "wait_for_chat" | "notify_when_done" => ("bell", "Waited for a chat"),
-        "stop_chat" => ("stop", "Stopped a chat"),
-        "answer_chat" => ("chat-text", "Answered a chat"),
-        "set_chat_options" => ("gear-six", "Changed chat options"),
-        "rename_chat" => ("pencil-simple", "Renamed a chat"),
-        "archive_chat" => ("archive", "Archived a chat"),
-        "delete_chat" => ("trash", "Deleted a chat"),
-        "open_chat" => ("chat-circle", "Opened a chat"),
-        "open_project" => ("folder-open", "Opened a project"),
-        "open_file" => ("file-text", "Opened a file"),
-        "open_settings" => ("gear-six", "Opened settings"),
-        "export_chat" => ("export", "Exported a chat"),
-        "scan_imports" | "import_chats" => ("file-text", "Imported chats"),
-        "send_project_file" => ("file-text", "Sent a file"),
-        "send_picture" => ("image", "Sent a picture"),
-        "send_screenshot" => ("image", "Sent a screenshot"),
-        "send_chat_changes" => ("file-text", "Sent changes"),
-        "list_projects" => ("list-bullets", "Listed projects"),
-        "list_project_files" => ("magnifying-glass", "Browsed project files"),
-        "add_project" => ("folder-plus", "Added a project"),
-        "rename_project" => ("pencil-simple", "Renamed a project"),
-        "remove_project" => ("trash", "Removed a project"),
-        "get_settings" => ("gear-six", "Read settings"),
-        "set_setting" => ("gear-six", "Changed a setting"),
-        "list_themes" | "read_theme" | "preview_theme" => ("palette", "Looked at themes"),
-        "save_theme" | "apply_theme" | "delete_theme" => ("palette", "Changed a theme"),
-        "list_scheduled_tasks" => ("calendar-blank", "Listed scheduled tasks"),
-        "run_scheduled_task" => ("play", "Ran a scheduled task"),
+        "list_tasks" => (IconName::Eye, "Read tasks"),
+        "list_chats" => (IconName::ListBullets, "Listed chats"),
+        "read_chat" => (IconName::Eye, "Read a chat"),
+        "start_chat" => (IconName::ChatCircle, "Started a chat"),
+        "send_to_chat" => (IconName::PaperPlaneRight, "Sent to a chat"),
+        "wait_for_chat" | "notify_when_done" => (IconName::Bell, "Waited for a chat"),
+        "stop_chat" => (IconName::Stop, "Stopped a chat"),
+        "answer_chat" => (IconName::ChatText, "Answered a chat"),
+        "set_chat_options" => (IconName::GearSix, "Changed chat options"),
+        "rename_chat" => (IconName::PencilSimple, "Renamed a chat"),
+        "archive_chat" => (IconName::Archive, "Archived a chat"),
+        "delete_chat" => (IconName::Trash, "Deleted a chat"),
+        "open_chat" => (IconName::ChatCircle, "Opened a chat"),
+        "open_project" => (IconName::FolderOpen, "Opened a project"),
+        "open_file" => (IconName::FileText, "Opened a file"),
+        "open_settings" => (IconName::GearSix, "Opened settings"),
+        "export_chat" => (IconName::Export, "Exported a chat"),
+        "scan_imports" | "import_chats" => (IconName::FileText, "Imported chats"),
+        "send_project_file" => (IconName::FileText, "Sent a file"),
+        "send_picture" => (IconName::Image, "Sent a picture"),
+        "send_screenshot" => (IconName::Image, "Sent a screenshot"),
+        "send_chat_changes" => (IconName::FileText, "Sent changes"),
+        "list_projects" => (IconName::ListBullets, "Listed projects"),
+        "list_project_files" => (IconName::MagnifyingGlass, "Browsed project files"),
+        "add_project" => (IconName::FolderPlus, "Added a project"),
+        "rename_project" => (IconName::PencilSimple, "Renamed a project"),
+        "remove_project" => (IconName::Trash, "Removed a project"),
+        "get_settings" => (IconName::GearSix, "Read settings"),
+        "set_setting" => (IconName::GearSix, "Changed a setting"),
+        "list_themes" | "read_theme" | "preview_theme" => (IconName::Palette, "Looked at themes"),
+        "save_theme" | "apply_theme" | "delete_theme" => (IconName::Palette, "Changed a theme"),
+        "list_scheduled_tasks" => (IconName::CalendarBlank, "Listed scheduled tasks"),
+        "run_scheduled_task" => (IconName::Play, "Ran a scheduled task"),
         "set_scheduled_task_enabled" | "delete_scheduled_task" => {
-            ("calendar-blank", "Changed a scheduled task")
+            (IconName::CalendarBlank, "Changed a scheduled task")
         }
-        "gateway_status" => ("device-mobile", "Checked chat apps"),
+        "gateway_status" => (IconName::DeviceMobile, "Checked chat apps"),
         "set_chat_app_enabled" | "make_pairing_code" | "restart_gateway" | "remove_pairing" => {
-            ("device-mobile", "Changed chat apps")
+            (IconName::DeviceMobile, "Changed chat apps")
         }
-        "list_providers" | "list_models" => ("list-bullets", "Listed models"),
-        "install_agent" => ("arrow-circle-up", "Installed an agent"),
-        "list_mcp_servers" | "list_agents" | "list_hooks" => ("plug", "Listed integrations"),
+        "list_providers" | "list_models" => (IconName::ListBullets, "Listed models"),
+        "install_agent" => (IconName::ArrowCircleUp, "Installed an agent"),
+        "list_mcp_servers" | "list_agents" | "list_hooks" => {
+            (IconName::Plug, "Listed integrations")
+        }
         "restart_mcp_server"
         | "set_mcp_server_enabled"
         | "remove_mcp_server"
-        | "set_hook_enabled" => ("plugs-connected", "Changed an integration"),
-        "list_skills" => ("books", "Listed skills"),
-        "set_skill_enabled" => ("books", "Changed a skill"),
-        "set_chat_notices" | "unmute_all_chats" => ("bell", "Changed notifications"),
-        "usage_limits" => ("gauge", "Checked usage"),
-        "resume_chat_at_reset" => ("arrow-clockwise", "Set a chat to resume"),
-        "list_capabilities" => ("list-checks", "Listed what it can do"),
-        "diagnostics" => ("stethoscope", "Ran diagnostics"),
-        "check_for_updates" => ("arrow-circle-up", "Checked for updates"),
-        "install_update" => ("arrow-circle-up", "Installed an update"),
-        "request_secret" => ("key", "Asked for a secret"),
-        other => return ("wrench", format!("Used {}", other.replace('_', " "))),
+        | "set_hook_enabled" => (IconName::PlugsConnected, "Changed an integration"),
+        "list_skills" => (IconName::Books, "Listed skills"),
+        "set_skill_enabled" => (IconName::Books, "Changed a skill"),
+        "set_chat_notices" | "unmute_all_chats" => (IconName::Bell, "Changed notifications"),
+        "usage_limits" => (IconName::Gauge, "Checked usage"),
+        "resume_chat_at_reset" => (IconName::ArrowClockwise, "Set a chat to resume"),
+        "list_capabilities" => (IconName::ListChecks, "Listed what it can do"),
+        "diagnostics" => (IconName::Stethoscope, "Ran diagnostics"),
+        "check_for_updates" => (IconName::ArrowCircleUp, "Checked for updates"),
+        "install_update" => (IconName::ArrowCircleUp, "Installed an update"),
+        "request_secret" => (IconName::Key, "Asked for a secret"),
+        other => {
+            return (
+                IconName::Wrench,
+                format!("Used {}", other.replace('_', " ")),
+            );
+        }
     };
     (glyph, label.to_string())
 }
@@ -86,7 +93,9 @@ pub(super) fn note_pill(m: &Message, i: usize, tool: &ToolCall, t: &Theme) -> Di
     let mark = if running {
         spinner(11., color).into_any_element()
     } else if failed {
-        icon("x-circle", 12.).text_color(color).into_any_element()
+        icon(IconName::XCircle, 12.)
+            .text_color(color)
+            .into_any_element()
     } else {
         icon(glyph, 12.).text_color(color).into_any_element()
     };

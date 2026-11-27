@@ -9,7 +9,7 @@ use super::header_menu::{Ask, item};
 use super::git_status::ChangesView;
 use patchwork_ui_components::menu::MenuItem;
 use patchwork_ui_components::spinner;
-use patchwork_ui_theme::{Theme, fs_sm};
+use patchwork_ui_theme::{IconName, Theme, fs_sm};
 
 /// How far a commit's details sit in from the graph's edge.
 const DETAIL_INSET: f32 = 28.;
@@ -40,7 +40,7 @@ impl ChangesView {
                 let from = Some(branch_at.clone());
                 this.ask(Ask::NewBranch { from }, window, cx);
             })
-            .icon("git-branch"),
+            .icon(IconName::GitBranch),
             item(&view, "New Tag Here…", move |this, window, cx| {
                 let at = Some(tag_at.clone());
                 this.ask(Ask::Tag { at }, window, cx);
@@ -83,7 +83,7 @@ impl ChangesView {
             MenuItem::new("Copy Hash", move |_, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(copy_hash.clone()));
             })
-            .icon("copy")
+            .icon(IconName::Copy)
             .separated(),
             MenuItem::new("Copy Message", move |_, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(copy_subject.clone()));

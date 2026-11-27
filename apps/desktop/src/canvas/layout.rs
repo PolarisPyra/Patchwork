@@ -8,7 +8,17 @@ use patchwork_ui_theme::{fs_sm, theme};
 use super::open_file::{Canvas, CanvasTab};
 
 impl Render for Canvas {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.render_canvas(window, cx)
+    }
+}
+
+impl Canvas {
+    fn render_canvas(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let t = *theme(cx);
         let message = self.live_message(cx);
         // The agent may have edited the file while it was streaming.

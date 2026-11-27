@@ -1,0 +1,20 @@
+[package]
+name = "patchwork-ui-tokens"
+description = "Build-time packed, compressed SVG icon pool and compile-time typed IconName registry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+miniz_oxide = { workspace = true, features = ["with-alloc"] }
+
+[build-dependencies]
+miniz_oxide = { workspace = true, features = ["with-alloc"] }
+
+[lints]
+workspace = true

@@ -1,8 +1,0 @@
-{"message":{"approvals":[],"attachments":[],"background":[],"createdAt":0,"cutOff":false,"error":null,"files":[],"finishedAt":null,"id":"<id-2>","parts":[],"plan":[],"queued":false,"refusal":null,"role":"assistant","status":"streaming","steer":false,"text":"","tools":[],"turn":null,"usage":null},"type":"messageStarted"}
-{"messageId":"<id-2>","text":"Listing files.","type":"thinking"}
-{"messageId":"<id-2>","tool":{"endedAt":null,"id":"call-1","name":"Shell","parent":null,"startedAt":0,"status":"running","subagent":null,"summary":"ls"},"type":"toolStarted"}
-{"isError":false,"messageId":"<id-2>","output":"a.txt","toolId":"call-1","type":"toolFinished"}
-{"messageId":"<id-2>","steps":[{"status":"done","text":"List files"},{"status":"running","text":"Answer"}],"type":"planUpdated"}
-{"messageId":"<id-2>","text":"There is one file.","type":"textDelta"}
-{"messageId":"<id-2>","type":"usage","usage":{"cacheRead":10,"cacheWrite":0,"context":120,"costMicros":19,"input":90,"output":20}}
-{"error":null,"messageId":"<id-2>","status":"complete","type":"turnCompleted"}

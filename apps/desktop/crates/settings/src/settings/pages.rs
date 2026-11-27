@@ -3,15 +3,17 @@
 
 // Rust guideline compliant 2026-10-09
 
+use patchwork_ui_theme::IconName;
+
 /// One page: its id, the group it is listed under, its name, its icons, the line under its
 /// title, and the settings on it the search can find.
 pub(super) struct Page {
     pub(super) id: &'static str,
     pub(super) group: &'static str,
     pub(super) label: &'static str,
-    pub(super) icon: &'static str,
+    pub(super) icon: IconName,
     /// The filled icon shown while the page is open; the plain one when there is no filled one.
-    pub(super) icon_on: &'static str,
+    pub(super) icon_on: IconName,
     /// The names of the rows and sections on the page. Each is a row's or heading's title as the
     /// page draws it, so a search result can scroll to it and light it.
     pub(super) words: &'static [&'static str],
@@ -23,8 +25,8 @@ pub(super) const PAGES: &[Page] = &[
         id: "general",
         group: "App",
         label: "General",
-        icon: "gear-six",
-        icon_on: "gear-six-fill",
+        icon: IconName::GearSix,
+        icon_on: IconName::GearSixFill,
         words: &[
             "New chats",
             "Default agent",
@@ -69,8 +71,8 @@ pub(super) const PAGES: &[Page] = &[
         id: "appearance",
         group: "App",
         label: "Appearance",
-        icon: "palette",
-        icon_on: "palette-fill",
+        icon: IconName::Palette,
+        icon_on: IconName::PaletteFill,
         words: &[
             "Mode",
             "Accent",
@@ -94,16 +96,16 @@ pub(super) const PAGES: &[Page] = &[
         id: "shortcuts",
         group: "App",
         label: "Shortcuts",
-        icon: "keyboard",
-        icon_on: "keyboard-fill",
+        icon: IconName::Keyboard,
+        icon_on: IconName::KeyboardFill,
         words: &["Keyboard shortcuts", "Reset all"],
     },
     Page {
         id: "notifications",
         group: "App",
         label: "Notifications",
-        icon: "bell",
-        icon_on: "bell",
+        icon: IconName::Bell,
+        icon_on: IconName::Bell,
         words: &[
             "Asks something",
             "Finished",
@@ -120,8 +122,8 @@ pub(super) const PAGES: &[Page] = &[
         id: "providers",
         group: "Agents",
         label: "Providers",
-        icon: "sparkle",
-        icon_on: "sparkle-fill",
+        icon: IconName::Sparkle,
+        icon_on: IconName::SparkleFill,
         words: &[
             "Agent CLIs",
             "API providers",
@@ -134,8 +136,8 @@ pub(super) const PAGES: &[Page] = &[
         id: "permissions",
         group: "Agents",
         label: "Permissions",
-        icon: "shield-check",
-        icon_on: "shield-check-fill",
+        icon: IconName::ShieldCheck,
+        icon_on: IconName::ShieldCheckFill,
         words: &[
             "Rules",
             "Let agents use Android devices",
@@ -148,40 +150,40 @@ pub(super) const PAGES: &[Page] = &[
         id: "agents",
         group: "Agents",
         label: "Agents",
-        icon: "robot",
-        icon_on: "robot-fill",
+        icon: IconName::Robot,
+        icon_on: IconName::RobotFill,
         words: &["Custom agents", "New agent"],
     },
     Page {
         id: "skills",
         group: "Agents",
         label: "Skills",
-        icon: "magic-wand",
-        icon_on: "magic-wand-fill",
+        icon: IconName::MagicWand,
+        icon_on: IconName::MagicWandFill,
         words: &["Skills", "SKILL.md"],
     },
     Page {
         id: "hooks",
         group: "Agents",
         label: "Hooks",
-        icon: "wrench",
-        icon_on: "wrench-fill",
+        icon: IconName::Wrench,
+        icon_on: IconName::WrenchFill,
         words: &["Hooks"],
     },
     Page {
         id: "mcp",
         group: "Agents",
         label: "MCP",
-        icon: "plugs-connected",
-        icon_on: "plugs-connected-fill",
+        icon: IconName::PlugsConnected,
+        icon_on: IconName::PlugsConnectedFill,
         words: &["MCP servers"],
     },
     Page {
         id: "projects",
         group: "Workspace",
         label: "Projects",
-        icon: "folder-simple",
-        icon_on: "folder-simple-fill",
+        icon: IconName::FolderSimple,
+        icon_on: IconName::FolderSimpleFill,
         words: &[
             "Imports",
             "Run checks after every task",
@@ -200,24 +202,24 @@ pub(super) const PAGES: &[Page] = &[
         id: "scheduled",
         group: "Workspace",
         label: "Scheduled",
-        icon: "clock",
-        icon_on: "clock-fill",
+        icon: IconName::Clock,
+        icon_on: IconName::ClockFill,
         words: &["Scheduled tasks", "Weekly report"],
     },
     Page {
         id: "ssh",
         group: "Workspace",
         label: "SSH hosts",
-        icon: "hard-drives",
-        icon_on: "hard-drives-fill",
+        icon: IconName::HardDrives,
+        icon_on: IconName::HardDrivesFill,
         words: &["SSH hosts"],
     },
     Page {
         id: "chat-apps",
         group: "Workspace",
         label: "Chat apps",
-        icon: "chats",
-        icon_on: "chats-fill",
+        icon: IconName::Chats,
+        icon_on: IconName::ChatsFill,
         words: &[
             "Access",
             "Telegram",
@@ -234,8 +236,8 @@ pub(super) const PAGES: &[Page] = &[
         id: "usage",
         group: "Data",
         label: "Usage",
-        icon: "chart-bar",
-        icon_on: "chart-bar-fill",
+        icon: IconName::ChartBar,
+        icon_on: IconName::ChartBarFill,
         words: &[
             "Ask before resuming a large task",
             "Generate chat and task titles",
@@ -265,8 +267,8 @@ pub(super) const PAGES: &[Page] = &[
         id: "vault",
         group: "Data",
         label: "Vault",
-        icon: "fingerprint",
-        icon_on: "fingerprint-fill",
+        icon: IconName::Fingerprint,
+        icon_on: IconName::FingerprintFill,
         words: &[
             "Protected by",
             "New password",
@@ -278,16 +280,16 @@ pub(super) const PAGES: &[Page] = &[
         id: "logs",
         group: "Data",
         label: "Logs",
-        icon: "file-text",
-        icon_on: "file-text-fill",
+        icon: IconName::FileText,
+        icon_on: IconName::FileTextFill,
         words: &["Log levels", "Open logs in chat menus", "Log folder"],
     },
     Page {
         id: "about",
         group: "Data",
         label: "About",
-        icon: "arrow-circle-up",
-        icon_on: "arrow-circle-up-fill",
+        icon: IconName::ArrowCircleUp,
+        icon_on: IconName::ArrowCircleUpFill,
         words: &[
             "Version",
             "Platform",
@@ -337,55 +339,4 @@ pub(super) fn resolve(id: &str) -> Option<(&'static Page, Option<&'static str>)>
     }
     let &(_, to, section) = OLD_IDS.iter().find(|(old, _, _)| *old == id)?;
     Some((page(to)?, section))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{OLD_IDS, PAGES, page, resolve};
-
-    #[test]
-    fn every_old_id_lands_on_a_page() {
-        for (old, to, _) in OLD_IDS {
-            assert!(page(to).is_some(), "{old} lands on {to}, which is no page");
-        }
-        for old in [
-            "chat",
-            "logs",
-            "notifications",
-            "updates",
-            "themes",
-            "code-theme",
-            "orchestrator-background",
-            "chat-background",
-            "interface",
-            "shortcuts",
-            "providers",
-            "tokens",
-            "extensions",
-            "permissions",
-            "security",
-            "projects",
-            "scheduled",
-            "terminal",
-            "ssh",
-            "gateway",
-            "costs",
-            "mcp",
-            "worktrees",
-            "quilts-background",
-        ] {
-            assert!(resolve(old).is_some(), "{old} lands nowhere");
-        }
-    }
-
-    #[test]
-    fn page_ids_are_unique() {
-        for (at, p) in PAGES.iter().enumerate() {
-            assert!(
-                PAGES[at + 1..].iter().all(|q| q.id != p.id),
-                "{} twice",
-                p.id
-            );
-        }
-    }
 }

@@ -12,7 +12,6 @@
 mod agents;
 mod canvas;
 mod chat;
-mod handoff;
 mod logs;
 mod orchestrator;
 mod screen;
@@ -217,14 +216,8 @@ fn main() {
             })
             .detach();
 
-            // A restart by a reloader puts the window back where it was.
-            let mut saved = handoff::take();
-            #[cfg(unix)]
-            core.terminals
-                .take_over(std::mem::take(&mut saved.terminals));
-            let bounds = saved.window.unwrap_or_else(|| {
-                WindowBounds::Windowed(Bounds::centered(None, size(px(1600.), px(960.)), cx))
-            });
+            let bounds =
+                WindowBounds::Windowed(Bounds::centered(None, size(px(1600.), px(960.)), cx));
             let applied = core.applied_theme();
             let opened = cx.open_window(
                 WindowOptions {
@@ -304,12 +297,6 @@ fn main() {
             });
             // What the core sends arrives on the core's threads and is applied here, in order.
             forward(window, received, cx, Workspace::on_core);
-            let _ = window.update(cx, |workspace, window, cx| {
-                handoff::restore(saved, workspace, window, cx);
-            });
-            if let Some(commands) = handoff::listen() {
-                forward(window, commands, cx, handoff::apply);
-            }
             cx.activate(true);
         });
 }

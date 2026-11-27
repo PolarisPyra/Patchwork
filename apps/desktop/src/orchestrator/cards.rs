@@ -12,7 +12,7 @@ use patchwork_backend::chats::{Standing, Chat};
 
 use super::layout::{glass, ink, warm};
 use super::requests::{Orchestrator, Outcome, Request};
-use patchwork_ui_theme::{fs_sm, fs_xs, radius_lg};
+use patchwork_ui_theme::{IconName, fs_sm, fs_xs, radius_lg};
 use patchwork_ui_components::{button, spinner};
 use patchwork_ui_markdown::display_title;
 use patchwork_ui_theme::icon;
@@ -54,7 +54,7 @@ fn word(standing: Standing) -> &'static str {
 
 /// How a chat stands, as a mark at the start of its row.
 fn mark(standing: Standing) -> AnyElement {
-    let glyph = |name: &str, color: Hsla| {
+    let glyph = |name: IconName, color: Hsla| {
         div()
             .flex_none()
             .text_color(color)
@@ -63,9 +63,9 @@ fn mark(standing: Standing) -> AnyElement {
     };
     match standing {
         Standing::Working => spinner(14., ink(0.8)).into_any_element(),
-        Standing::Waiting => glyph("circle-fill", warm()),
-        Standing::Done => glyph("check", ink(0.5)),
-        Standing::Failed => glyph("warning", ink(0.5)),
+        Standing::Waiting => glyph(IconName::CircleFill, warm()),
+        Standing::Done => glyph(IconName::Check, ink(0.5)),
+        Standing::Failed => glyph(IconName::Warning, ink(0.5)),
     }
 }
 

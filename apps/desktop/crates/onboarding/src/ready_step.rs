@@ -124,7 +124,7 @@ fn runs_on(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) -> impl I
             .p(px(16.))
             .text_color(t.text)
     };
-    let tile = |name: &str| {
+    let tile = |name: patchwork_ui_theme::IconName| {
         div()
             .size(px(40.))
             .flex_none()
@@ -158,9 +158,9 @@ fn runs_on(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) -> impl I
             let row = option(i, name, checked)
                 .cursor_pointer()
                 .child(tile(if machine.is_some() {
-                    "hard-drives"
+                    patchwork_ui_theme::IconName::HardDrives
                 } else {
-                    "laptop"
+                    patchwork_ui_theme::IconName::Laptop
                 }))
                 .child(label(name))
                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -179,7 +179,7 @@ fn runs_on(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) -> impl I
     let none = hosts.is_empty().then(|| {
         option(1, "No remote devices available", false)
             .border_color(t.border)
-            .child(tile("hard-drives").opacity(0.6))
+            .child(tile(patchwork_ui_theme::IconName::HardDrives).opacity(0.6))
             .child(label("No remote devices available").text_color(t.text_muted))
     });
     div()

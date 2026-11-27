@@ -5,7 +5,7 @@
 use gpui::{FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_backend::chats::Message;
 use patchwork_ui_markdown::highlight::file_label;
-use patchwork_ui_theme::{fs_lg, fs_sm, radius, Theme};
+use patchwork_ui_theme::{IconName, fs_lg, fs_sm, radius, Theme};
 use patchwork_ui_components::{BtnKind, badge, btn, icon_button, tooltip};
 use patchwork_ui_markdown::{base_name, dir_name};
 use patchwork_ui_theme::icon;
@@ -54,7 +54,7 @@ impl Canvas {
                     .rounded(px(8.))
                     .bg(t.bg_accent_soft)
                     .text_color(t.accent_text)
-                    .child(icon("code", 18.)),
+                    .child(icon(IconName::Code, 18.)),
             )
             .child(
                 div()
@@ -92,7 +92,7 @@ impl Canvas {
                                 false,
                                 t,
                             )
-                            .child(icon("chat-text", 14.))
+                            .child(icon(IconName::ChatText, 14.))
                             .child(format!("Send review ({review})"))
                             .on_click(cx.listener(|this, _, _, cx| this.send_review(cx))),
                         )
@@ -102,7 +102,7 @@ impl Canvas {
                         |d| {
                             d.child(
                                 btn("open-in-editor", "Open in editor", BtnKind::Plain, false, t)
-                                    .child(icon("arrow-square-out", 14.))
+                                    .child(icon(IconName::ArrowSquareOut, 14.))
                                     .child("Open in editor")
                                     .on_click(
                                         cx.listener(|this, _, _, cx| this.open_in_editor(cx)),
@@ -111,7 +111,14 @@ impl Canvas {
                             .child({
                                 let label = if self.copied { "Copied" } else { "Copy" };
                                 btn("copy-file", label, BtnKind::Plain, !has_content, t)
-                                    .child(icon(if self.copied { "check" } else { "copy" }, 14.))
+                                    .child(icon(
+                                        if self.copied {
+                                            IconName::Check
+                                        } else {
+                                            IconName::Copy
+                                        },
+                                        14.,
+                                    ))
                                     .child(label)
                                     .when(has_content, |b| {
                                         b.on_click(cx.listener(|this, _, _, cx| this.copy(cx)))
@@ -120,7 +127,7 @@ impl Canvas {
                         },
                     )
                     .child(
-                        icon_button("close-canvas", "Close canvas", "x", 16., cx)
+                        icon_button("close-canvas", "Close canvas", IconName::X, 16., cx)
                             .tooltip(tooltip("Close"))
                             .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
                     ),
@@ -233,7 +240,7 @@ impl Canvas {
                         btn("toggle-blame", "Blame", BtnKind::Plain, false, t)
                             .aria_toggled(on.into())
                             .when(on, |b| b.bg(selected).text_color(fg))
-                            .child(icon("git-commit", 14.))
+                            .child(icon(IconName::GitCommit, 14.))
                             .child("Blame")
                             .on_click(cx.listener(|this, _, _, cx| this.toggle_blame(cx))),
                     )
@@ -246,14 +253,18 @@ impl Canvas {
                         .flex_none()
                         .gap(px(4.))
                         .child(
-                            icon_button("previous-change", "Previous change", "caret-up", 16., cx)
-                                .tooltip(tooltip("Previous change"))
-                                .on_click(
-                                    cx.listener(|this, _, _, cx| this.jump_to_change(-1, cx)),
-                                ),
+                            icon_button(
+                                "previous-change",
+                                "Previous change",
+                                IconName::CaretUp,
+                                16.,
+                                cx,
+                            )
+                            .tooltip(tooltip("Previous change"))
+                            .on_click(cx.listener(|this, _, _, cx| this.jump_to_change(-1, cx))),
                         )
                         .child(
-                            icon_button("next-change", "Next change", "caret-down", 16., cx)
+                            icon_button("next-change", "Next change", IconName::CaretDown, 16., cx)
                                 .tooltip(tooltip("Next change"))
                                 .on_click(cx.listener(|this, _, _, cx| this.jump_to_change(1, cx))),
                         ),

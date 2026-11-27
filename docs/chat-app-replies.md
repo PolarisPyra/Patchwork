@@ -16,11 +16,11 @@ Five words are kept apart throughout:
 
 ## Reading another chat's progress
 
-`read_chat` is one of Patchwork's chat tools (`crates/core/src/threads/chat_tools.rs`), beside
+`read_chat` is one of Patchwork's chat tools (`crates/patchwork_backend/src/chats/tools.rs`), beside
 `list_chats`, `start_chat`, `send_to_chat` and `wait_for_chat`. It lets the agent answer "what's
 going on in X" or "progress on Y" with a short report on another chat.
 
-`Runner::read_chat` in `crates/core/src/orchestration/tasks/chats.rs` finds the chat:
+`Runner::read_chat` in `crates/patchwork_backend/src/orchestration/tasks/chats.rs` finds the chat:
 
 - With `chat_id`, it reads that chat.
 - With `name`, it splits the words, drops filler words (`IGNORED`: "what's", "going", "progress",
@@ -76,7 +76,7 @@ session Patchwork did not run is never `running`.
 
 ## The chat-app note and the personality
 
-`Core::chat_app_voice` in `crates/core/src/gateway/inbound.rs` adds two blocks to the end of the
+`Core::chat_app_voice` in `crates/patchwork_backend/src/gateway/inbound.rs` adds two blocks to the end of the
 message Patchwork sends the agent:
 
 ```
@@ -96,7 +96,7 @@ numbers, and keep formatting light. It also says that
 tone.
 
 Every message to a thread a chat app talks to also ends with `<patchwork-now>`
-(`Core::chat_app_context` in `crates/core/src/gateway/handoff.rs`), whether it starts a turn,
+(`Core::chat_app_context` in `crates/patchwork_backend/src/gateway/handoff.rs`), whether it starts a turn,
 steers a running one or wakes an idle agent. It repeats the length rule and lists up to 8 other
 chats that are replying, waiting or were active in the last day, each with its title, project,
 state, last activity and `chat_id`. It also names the chat the agent last worked with, for 30
@@ -119,7 +119,7 @@ They are added when all of these hold:
 - the message starts the agent's session, or the agent compacted its context on its own while
   replying to the message before.
 
-The session check is in `crates/core/src/orchestration/turn/start/launch.rs`, which calls
+The session check is in `crates/patchwork_backend/src/orchestration/turn/start/launch.rs`, which calls
 `chat_app_voice` with whether the thread has a session yet. Patchwork's own compaction starts a
 new session, so it is covered there. When the agent compacts by itself (Claude, Codex, OpenCode,
 or Patchwork's own agent), the reply is saved with a `Part::Compaction`. The `compacted` helper
@@ -140,7 +140,7 @@ personalities/
 └── Terse.md
 ```
 
-`crates/core/src/gateway/personalities.rs` lists the folder and reads the chosen file. The first
+`crates/patchwork_backend/src/gateway/personalities.rs` lists the folder and reads the chosen file. The first
 time the folder is needed and does not exist, it is created with the four examples above
 (`EXAMPLES`). It is never filled again, so a deleted example stays deleted.
 
@@ -158,7 +158,7 @@ compaction. A chosen file that is missing or empty falls back to Patchwork's own
 The chat a chat app talks to is a dispatcher. Its agent has no shell, files or web: it is started
 with the dispatcher prompt (`chat_tools::DISPATCHER`), every built-in tool off, and Patchwork's own
 tool server as the only one. The tools that server lists to a dispatcher are the capabilities in
-`crates/core/src/orchestration/capabilities/`, and nothing else. Work that needs the computer goes
+`crates/patchwork_backend/src/orchestration/capabilities/`, and nothing else. Work that needs the computer goes
 to a chat the dispatcher starts in a project with `start_chat`.
 
 A capability is one row of the table (`table.rs` for the app, `chat_table.rs` for chats,

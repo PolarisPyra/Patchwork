@@ -11,7 +11,7 @@ use std::sync::Arc;
 use gpui::{Div, FontWeight, Role, div, prelude::*, px};
 use patchwork_backend::import::hands_off;
 use patchwork_ui_theme::icon;
-use patchwork_ui_theme::{Theme, fs_sm, fs_xs, radius_sm};
+use patchwork_ui_theme::{IconName, Theme, fs_sm, fs_xs, radius_sm};
 
 use super::goal_bar::strip_action;
 use crate::workspace::Workspace;
@@ -107,7 +107,11 @@ pub fn in_terminal(w: &Workspace, t: &Theme, cx: &mut Context<Workspace>) -> Opt
                     .gap(px(8.))
                     .bg(t.bg_app)
                     .px(px(10.))
-                    .child(icon("terminal", 13.).flex_none().text_color(t.text_subtle))
+                    .child(
+                        icon(IconName::Terminal, 13.)
+                            .flex_none()
+                            .text_color(t.text_subtle),
+                    )
                     .child(
                         div()
                             .flex_none()

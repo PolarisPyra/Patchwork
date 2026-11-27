@@ -17,6 +17,7 @@ use patchwork_themes::SavedScene;
 
 use patchwork_ui_backdrop::{PRESETS, PreviewFlight};
 use patchwork_ui_components::menu::{Menu, MenuItem};
+use patchwork_ui_theme::IconName;
 
 /// How long a deleted picture can be brought back from the picker.
 const UNDO: Duration = Duration::from_secs(6);
@@ -344,7 +345,7 @@ impl BackgroundPicker {
         let delete = MenuItem::new("Delete", move |_, cx| {
             let _ = picker.update(cx, |p, cx| p.remove_picture(&file, removed.clone(), cx));
         })
-        .icon("trash")
+        .icon(IconName::Trash)
         .danger();
         let menu = Menu::open_for(
             name,

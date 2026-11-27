@@ -8,7 +8,7 @@ use patchwork_backend::scheduled::{Schedule, Trigger, Weekday};
 
 use crate::settings::controls::{FieldKind, chip, form_footer, select_box, switch};
 use crate::settings::SettingsDialog;
-use patchwork_ui_theme::{fs_sm, fs_xs, theme};
+use patchwork_ui_theme::{IconName, fs_sm, fs_xs, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button, tooltip};
 use patchwork_ui_theme::icon;
 use patchwork_ui_theme::font_mono;
@@ -153,7 +153,7 @@ pub(super) fn editor(
                                     icon_button(
                                         "sched-webhook-copy",
                                         "Copy webhook address",
-                                        "copy",
+                                        IconName::Copy,
                                         14.,
                                         cx,
                                     )
@@ -344,7 +344,7 @@ pub(super) fn editor(
                     .absolute()
                     .left(px(8.))
                     .text_color(t.text_muted)
-                    .child(icon("magnifying-glass", 13.)),
+                    .child(icon(IconName::MagnifyingGlass, 13.)),
             )
     });
     let place = draft
@@ -502,7 +502,7 @@ pub(super) fn editor(
                     .gap(px(6.))
                     .text_size(px(fs_xs()))
                     .text_color(t.text_subtle)
-                    .child(icon("folder-simple", 12.))
+                    .child(icon(IconName::FolderSimple, 12.))
                     .child(path)
             }))
             .child(

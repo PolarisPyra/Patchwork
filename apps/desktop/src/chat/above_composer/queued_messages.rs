@@ -12,7 +12,7 @@ use gpui::{App, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, 
 use patchwork_backend::chats::{Attachment, Message};
 
 use super::goal_bar::strip_action;
-use patchwork_ui_theme::{fs_sm, fs_xs, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_sm, fs_xs, radius_sm, Theme};
 use patchwork_ui_components::{button, scrollbar, tooltip};
 use patchwork_ui_theme::icon;
 use crate::workspace::{Workspace, is_working};
@@ -262,7 +262,7 @@ impl Workspace {
     }
 }
 
-fn icon_action(id: String, label: &'static str, name: &'static str, t: &Theme) -> Stateful<Div> {
+fn icon_action(id: String, label: &'static str, name: IconName, t: &Theme) -> Stateful<Div> {
     let (fg, hover) = (t.text, t.bg_hover);
     button(SharedString::from(id), label)
         .flex_none()
@@ -299,7 +299,7 @@ fn queued_row(
     let edit = icon_action(
         format!("queue-edit-{}", m.id),
         "Edit queued message",
-        "pencil-simple",
+        IconName::PencilSimple,
         t,
     )
     .tooltip(tooltip(edit_tip));
@@ -322,7 +322,7 @@ fn queued_row(
     .border_1()
     .text_size(px(fs_xs()))
     .text_color(t.accent_text)
-    .child(icon("arrow-right", 13.))
+    .child(icon(IconName::ArrowRight, 13.))
     .child("Steer");
     let steer = if first && w.steer_pressed {
         steer.border_color(t.border).bg(hover)
@@ -345,7 +345,7 @@ fn queued_row(
     let remove = icon_action(
         format!("queue-remove-{}", m.id),
         "Remove queued message",
-        "x",
+        IconName::X,
         t,
     )
     .tooltip(tooltip("Remove queued message"))
@@ -420,7 +420,7 @@ pub fn queued_strip(
         .text_color(muted)
         .hover(move |s| s.text_color(fg))
         .child(
-            icon("list-bullets", 13.)
+            icon(IconName::ListBullets, 13.)
                 .flex_none()
                 .text_color(t.text_subtle),
         )
@@ -431,9 +431,16 @@ pub fn queued_strip(
                 .child(title),
         )
         .child(
-            icon(if open { "caret-down" } else { "caret-right" }, 12.)
-                .ml_auto()
-                .flex_none(),
+            icon(
+                if open {
+                    IconName::CaretDown
+                } else {
+                    IconName::CaretRight
+                },
+                12.,
+            )
+            .ml_auto()
+            .flex_none(),
         )
         .on_click(cx.listener(|w, _, _, cx| {
             w.queue_open = !w.queue_open;

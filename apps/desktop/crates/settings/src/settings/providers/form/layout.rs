@@ -7,7 +7,7 @@ use patchwork_backend::provider::api::KeyStore;
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, form_footer, remove_button, vault_notice};
-use patchwork_ui_theme::{fs_sm, radius_sm, Theme, theme};
+use patchwork_ui_theme::{IconName, fs_sm, radius_sm, Theme, theme};
 use patchwork_ui_components::{BtnKind, btn, button, icon_button};
 use patchwork_ui_theme::{icon, provider_logo};
 
@@ -161,7 +161,7 @@ pub fn render(
                 }))
                 .child(match &logo {
                     Some(logo) => provider_logo("custom", Some(logo), 20.),
-                    None => icon("image", 16.).into_any_element(),
+                    None => icon(IconName::Image, 16.).into_any_element(),
                 })
                 .on_click(cx.listener(|d, _, _, cx| d.choose_logo(cx))),
             )
@@ -183,7 +183,7 @@ pub fn render(
                         .focus(|s| s.opacity(1.))
                         .hover(move |s| s.text_color(fg))
                         .tooltip(patchwork_ui_components::tooltip("Remove logo"))
-                        .child(icon("x", 9.))
+                        .child(icon(IconName::X, 9.))
                         .on_click(cx.listener(|d, _, _, cx| {
                             if let Some(f) = d.form_mut() {
                                 f.draft.logo = None;
@@ -296,7 +296,11 @@ pub fn render(
                                 icon_button(
                                     "show-key",
                                     "Show key",
-                                    if show_key { "eye-slash" } else { "eye" },
+                                    if show_key {
+                                        IconName::EyeSlash
+                                    } else {
+                                        IconName::Eye
+                                    },
                                     15.,
                                     cx,
                                 )
@@ -312,18 +316,26 @@ pub fn render(
                                 has_key && draft.key_store.is_some() && !typed_key,
                                 |r| {
                                     r.child(
-                                        icon_button("clear-key", "Remove saved key", "x", 15., cx)
-                                            .aria_toggled(clear_key.into())
-                                            .when(clear_key, |b| b.bg(hover).text_color(t.danger))
-                                            .tooltip(patchwork_ui_components::tooltip(
-                                                "Remove saved key",
-                                            ))
-                                            .on_click(cx.listener(|d, _, _, cx| {
+                                        icon_button(
+                                            "clear-key",
+                                            "Remove saved key",
+                                            IconName::X,
+                                            15.,
+                                            cx,
+                                        )
+                                        .aria_toggled(clear_key.into())
+                                        .when(clear_key, |b| b.bg(hover).text_color(t.danger))
+                                        .tooltip(patchwork_ui_components::tooltip(
+                                            "Remove saved key",
+                                        ))
+                                        .on_click(
+                                            cx.listener(|d, _, _, cx| {
                                                 if let Some(f) = d.form_mut() {
                                                     f.clear_key = !f.clear_key;
                                                 }
                                                 cx.notify();
-                                            })),
+                                            }),
+                                        ),
                                     )
                                 },
                             )
@@ -340,9 +352,9 @@ pub fn render(
                 .hover(move |s| s.text_color(fg))
                 .child(icon(
                     if advanced {
-                        "caret-down"
+                        IconName::CaretDown
                     } else {
-                        "caret-right"
+                        IconName::CaretRight
                     },
                     12.,
                 ))

@@ -1,0 +1,37 @@
+# Vendored from https://github.com/zed-industries/zed @ d2a4fb6ded7c470be25d1541281da3882495b65b
+# Regenerate via: uv run --no-project python3 scripts/vendor-gpui.py
+
+[package]
+name = "scheduler"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+
+[lints.rust]
+unexpected_cfgs = "allow"
+
+[lints.clippy]
+all = { level = "allow", priority = -1 }
+
+[lib]
+path = "src/scheduler.rs"
+doctest = false
+test = false
+
+[features]
+test-support = []
+wasm-threads = ["dep:wasm_thread", "flume/spin"]
+
+[dependencies]
+async-task = { version = "4.7" }
+backtrace = { version = "0.3" }
+chrono = { version = "0.4", default-features = false, features = ["std", "serde", "now", "wasmbind"] }
+flume = { version = "0.12", default-features = false, features = ["async"] }
+futures = { version = "0.3.34" }
+parking_lot = { version = "0.12.1" }
+rand = { version = "0.9", default-features = false, features = ["std", "std_rng", "os_rng"] }
+web-time = { version = "1.1.0" }
+
+[target."cfg(target_family = \"wasm\")".dependencies]
+wasm_thread = { git = "https://github.com/zed-industries/wasm_thread", rev = "0cf96c7708dfb97ccf3da50347e25edcf75d6937", version = "0.3", features = ["es_modules"], optional = true }

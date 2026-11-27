@@ -9,8 +9,6 @@ mod dispatch;
 mod exit;
 mod idle;
 mod read;
-#[cfg(test)]
-pub(in crate::orchestration) mod replays;
 mod unprompted;
 
 pub(in crate::orchestration) use read::ingest;

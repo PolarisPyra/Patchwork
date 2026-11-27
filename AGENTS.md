@@ -27,3 +27,17 @@ Run nothing the user already has running.
 - **Clean up what you do start.** A server, a Vite process or an Electron window you started must be
   stopped before you finish, and a stale `~/.config/Patchwork Next/Singleton*` left by a killed window
   must be removed, or the user's next launch exits silently.
+
+
+# Patchwork: UI text
+
+- **No subtext.** Put no description, hint, blurb or helper line under a title, heading,
+  section or row. That covers Settings pages, sections and rows, and new UI anywhere. A title
+  stands alone. Add subtext only when the user asks for it in that request.
+
+
+# Patchwork: Tests
+
+- **Never write tests.** Add no smoke, unit, integration, regression, snapshot, or end-to-end (E2E)
+  tests, test helpers, or fixtures. The repo has none; verify changes with `scripts/check.sh` and
+  in the running app.

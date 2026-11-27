@@ -6,7 +6,7 @@ use gpui::{AnyElement, ClickEvent, ClipboardItem, Role, SharedString, Window, di
 use patchwork_backend::gateway::Platform;
 
 use crate::settings::SettingsDialog;
-use patchwork_ui_theme::{font_mono, fs_sm, radius_sm, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, radius_sm, theme};
 use patchwork_ui_components::{button, icon_button};
 
 /// One step: what to do, a command to run, and the page to do it on.
@@ -208,7 +208,7 @@ pub(super) fn setup(platform: Platform, cx: &mut gpui::Context<SettingsDialog>) 
                     icon_button(
                         SharedString::from(format!("gw-{id}-copy-{number}")),
                         format!("Copy {command}"),
-                        "copy",
+                        IconName::Copy,
                         14.,
                         cx,
                     )

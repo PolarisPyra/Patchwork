@@ -20,13 +20,14 @@ use super::sigil_menu;
 pub(super) const PLACEHOLDER: &str = "Ask anything, @ to mention, / for actions";
 
 /// What a new chat starts with, picked before its first message is sent.
-pub(super) struct Draft {
-    pub(super) agent: Option<AgentKind>,
-    pub(super) model: Option<String>,
-    pub(super) effort: Option<String>,
-    pub(super) access: AccessMode,
-    pub(super) compact: Option<u64>,
-    pub(super) role: Option<String>,
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Draft {
+    pub(crate) agent: Option<AgentKind>,
+    pub(crate) model: Option<String>,
+    pub(crate) effort: Option<String>,
+    pub(crate) access: AccessMode,
+    pub(crate) compact: Option<u64>,
+    pub(crate) role: Option<String>,
 }
 
 /// The values the chips show: the open chat's, or the draft's before it starts.
@@ -70,6 +71,7 @@ pub struct Composer {
     pub(super) roles: Roles,
     /// The project `roles` were listed for, so a refresh for the same one keeps showing them.
     pub(super) roles_project: Option<String>,
+    pub(super) agent_picker: Option<super::agent_picker::AgentPicker>,
     pub(super) picker: Option<ModelPicker>,
     /// How far along the effort slider the pointer holds its knob, 0 to 1, while it is dragged.
     pub(super) effort_drag: Option<f32>,
@@ -175,6 +177,7 @@ impl Composer {
             menu_picks: Vec::new(),
             roles: Roles::Loading,
             roles_project: None,
+            agent_picker: None,
             picker: None,
             effort_drag: None,
             queue_next: None,

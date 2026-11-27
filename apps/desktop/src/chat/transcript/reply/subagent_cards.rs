@@ -12,7 +12,7 @@ use patchwork_backend::chats::{Message, StepStatus, ToolCall};
 
 use crate::chat::top_right::subagent_list::{is_active, status_label, title_of};
 use crate::chat::transcript::turn_contents::tool_label;
-use patchwork_ui_theme::{fs_xs, radius, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_xs, radius, radius_sm, Theme};
 use patchwork_ui_components::button;
 use patchwork_ui_markdown::full_elapsed;
 use patchwork_ui_theme::icon;
@@ -176,7 +176,7 @@ fn card(
             ))
             .hover(move |s| s.bg(hover))
             .child(
-                icon("caret-right", 14.)
+                icon(IconName::CaretRight, 14.)
                     .flex_none()
                     .text_color(t.text_subtle),
             )
@@ -322,9 +322,16 @@ pub fn subagents(
             .child(full_elapsed(e))
     }))
     .child(
-        icon(if open { "caret-up" } else { "caret-down" }, 14.)
-            .flex_none()
-            .text_color(t.text_muted),
+        icon(
+            if open {
+                IconName::CaretUp
+            } else {
+                IconName::CaretDown
+            },
+            14.,
+        )
+        .flex_none()
+        .text_color(t.text_muted),
     )
     .on_click(cx.listener(move |w, _, _, cx| {
         if !w.transcript.open_agents.remove(&key) {

@@ -14,7 +14,7 @@ use patchwork_themes::{Palette, Scheme};
 use super::files::{Filed, file_tools};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::radio;
-use patchwork_ui_theme::{fs_lg, fs_sm, Theme as Colors, radius, radius_sm, theme};
+use patchwork_ui_theme::{IconName, fs_lg, fs_sm, Theme as Colors, radius, radius_sm, theme};
 use patchwork_ui_components::menu::MenuItem;
 use patchwork_ui_components::{button, icon_button, tooltip};
 use patchwork_ui_theme::icon;
@@ -153,7 +153,7 @@ pub(super) struct Tool {
     label: String,
     /// The menu row's name: "Delete".
     title: &'static str,
-    icon: &'static str,
+    icon: patchwork_ui_theme::IconName,
     act: Act,
 }
 
@@ -161,7 +161,7 @@ impl Tool {
     pub(super) fn new(
         key: String,
         (title, label): (&'static str, String),
-        icon: &'static str,
+        icon: patchwork_ui_theme::IconName,
         act: impl Fn(&mut SettingsDialog, &mut Context<SettingsDialog>) + 'static,
     ) -> Self {
         Self {
@@ -246,7 +246,7 @@ pub(super) fn card(
             .id(SharedString::from(format!("notes-{key}")))
             .flex_none()
             .text_color(t.warning)
-            .child(icon("warning", 14.))
+            .child(icon(IconName::Warning, 14.))
             .tooltip(tooltip(notes))
     });
     // The card's name says what is wrong with it, for a reader that cannot hover.
@@ -324,7 +324,7 @@ pub(super) fn add_card(id: &'static str, label: &'static str, t: &Colors) -> Sta
         .text_size(px(fs_sm()))
         .text_color(t.text_muted)
         .hover(move |s| s.bg(t.bg_hover).text_color(t.text))
-        .child(icon("plus", 16.))
+        .child(icon(IconName::Plus, 16.))
         .child(label)
 }
 
@@ -384,7 +384,7 @@ pub(super) fn scheme_cards(
             Tool::new(
                 format!("edit-{key}"),
                 ("Edit", format!("Edit {name}")),
-                "pencil-simple",
+                patchwork_ui_theme::IconName::PencilSimple,
                 {
                     let id = id.clone();
                     move |d, cx| d.edit_theme(&id, cx)
@@ -393,7 +393,7 @@ pub(super) fn scheme_cards(
             Tool::new(
                 format!("export-{key}"),
                 ("Export", format!("Export {name}")),
-                "export",
+                patchwork_ui_theme::IconName::Export,
                 {
                     let id = id.clone();
                     move |d, cx| d.export_theme(id.clone(), cx)

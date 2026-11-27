@@ -16,7 +16,7 @@ use patchwork_backend::source_control::GitCommit;
 
 use super::git_status::ChangesView;
 use patchwork_ui_components::menu::MenuItem;
-use patchwork_ui_theme::{fs_md, fs_sm, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_sm, radius_sm, Theme};
 use patchwork_ui_components::{button, mix, tooltip};
 
 /// Row height, lane width, and the radius of the bends where a lane shifts over.
@@ -309,7 +309,7 @@ fn undo_items(view: &Context<ChangesView>, commit: &GitCommit, chat: &str) -> Ve
                     v.undo_reply(chat, message, prompt, window, cx);
                 });
             })
-            .icon("arrow-u-up-left")
+            .icon(IconName::ArrowUUpLeft)
             .danger()
         })
         .collect()
@@ -443,7 +443,7 @@ pub fn section(
                         .group_hover(group.clone(), |s| s.opacity(1.))
                         .focus(|s| s.opacity(1.))
                 })
-                .child(patchwork_ui_theme::icon("arrow-u-up-left", 12.))
+                .child(patchwork_ui_theme::icon(IconName::ArrowUUpLeft, 12.))
                 .on_click(cx.listener(move |v, e: &gpui::ClickEvent, window, cx| {
                     cx.stop_propagation();
                     if v.just_dismissed(e) {
@@ -489,7 +489,7 @@ pub fn section(
                     .group_hover(group.clone(), |s| s.opacity(1.))
                     .focus(|s| s.opacity(1.))
             })
-            .child(patchwork_ui_theme::icon("dots-three", 12.))
+            .child(patchwork_ui_theme::icon(IconName::DotsThree, 12.))
             .on_click(cx.listener(move |v, e: &gpui::ClickEvent, window, cx| {
                 cx.stop_propagation();
                 if v.just_dismissed(e) {

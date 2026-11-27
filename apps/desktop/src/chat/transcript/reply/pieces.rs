@@ -7,7 +7,7 @@ use super::steps::reply_step;
 use super::frame::head;
 use gpui::{Div, SharedString, div, prelude::*, px};
 use patchwork_backend::chats::{Message, Chat};
-use patchwork_ui_theme::{fs_md, fs_xs, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_xs, radius_sm, Theme};
 use patchwork_ui_components::button;
 use patchwork_ui_theme::icon;
 use crate::workspace::Workspace;
@@ -21,7 +21,7 @@ use crate::chat::transcript::message_list::Piece;
 pub(super) fn action_button(
     id: String,
     label: &'static str,
-    name: &'static str,
+    name: IconName,
     t: &Theme,
 ) -> gpui::Stateful<Div> {
     let (hover, fg) = (t.bg_hover, t.text);
@@ -166,7 +166,7 @@ pub(super) fn goal_cleared(
                 .child(
                     div()
                         .pt(px(3.))
-                        .child(icon("check", 14.).text_color(t.text_subtle)),
+                        .child(icon(IconName::Check, 14.).text_color(t.text_subtle)),
                 )
                 .child(div().flex_1().min_w_0().child(text)),
         )

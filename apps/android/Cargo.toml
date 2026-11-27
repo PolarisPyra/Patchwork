@@ -1,0 +1,25 @@
+[package]
+name = "patchwork-android"
+description = "Patchwork's Android client: a GPUI app that connects to a running Patchwork"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish = false
+
+[lib]
+name = "patchwork_android"
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.15"
+gpui.workspace = true
+gpui_android = { path = "../../vendor/gpui_android" }
+log = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

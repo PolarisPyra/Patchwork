@@ -36,7 +36,7 @@ use crate::sidebar::tasks::row_menu::{ContextMenu, Renaming, SortUndo};
 use crate::workspace::dock::place;
 
 /// The sidebar's views, one per activity bar icon.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum View {
     Tasks,
     Changes,
@@ -232,8 +232,6 @@ pub struct Workspace {
     pub(crate) project_events: mpsc::UnboundedSender<ProjectChanged>,
     /// The last error an action hit, shown above the status bar until dismissed.
     pub error: Option<String>,
-    /// Why the last development build failed, shown over the window until the next good one.
-    pub build_errors: Option<gpui::SharedString>,
     /// The file panel right of the chat, its width once dragged, and where a drag of it started.
     pub canvas: Option<Entity<Canvas>>,
     pub(crate) canvas_width: Option<f32>,
@@ -459,7 +457,6 @@ impl Workspace {
             changes_generation: 0,
             project_events,
             error: None,
-            build_errors: None,
             canvas: None,
             canvas_width: None,
             canvas_resizing: None,

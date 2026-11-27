@@ -7,7 +7,7 @@ use gpui::{AnyElement, Hsla, Role, ScrollStrategy, SharedString, div, prelude::*
 use patchwork_backend::source_control::{Conflict, Take, resolve_conflict};
 
 use super::open_file::Canvas;
-use patchwork_ui_theme::{Theme, font_ui, fs_xs, radius_sm};
+use patchwork_ui_theme::{IconName, Theme, font_ui, fs_xs, radius_sm};
 use patchwork_ui_components::{button, icon_button, tooltip};
 
 impl Canvas {
@@ -167,7 +167,7 @@ impl Canvas {
                     icon_button(
                         "previous-conflict",
                         "Previous conflict",
-                        "caret-up",
+                        IconName::CaretUp,
                         16.,
                         cx,
                     )
@@ -175,9 +175,15 @@ impl Canvas {
                     .on_click(cx.listener(|this, _, _, cx| this.jump_to_conflict(-1, cx))),
                 )
                 .child(
-                    icon_button("next-conflict", "Next conflict", "caret-down", 16., cx)
-                        .tooltip(tooltip("Next conflict"))
-                        .on_click(cx.listener(|this, _, _, cx| this.jump_to_conflict(1, cx))),
+                    icon_button(
+                        "next-conflict",
+                        "Next conflict",
+                        IconName::CaretDown,
+                        16.,
+                        cx,
+                    )
+                    .tooltip(tooltip("Next conflict"))
+                    .on_click(cx.listener(|this, _, _, cx| this.jump_to_conflict(1, cx))),
                 )
                 .into_any_element(),
         )

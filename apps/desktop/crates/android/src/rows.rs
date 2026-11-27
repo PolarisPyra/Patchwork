@@ -10,7 +10,7 @@ use patchwork_backend::android::{self as android, Avd, Boot, Device, DeviceState
 use super::devices::{AndroidPanel, Busy, Confirm, Run, device_key};
 use super::tools::device_menu;
 use patchwork_ui_components::menu::{Menu, MenuItem};
-use patchwork_ui_theme::{fs_sm, radius, Theme, theme};
+use patchwork_ui_theme::{IconName, fs_sm, radius, Theme, theme};
 use patchwork_ui_components::{BtnKind, btn, button, icon_button, spinner, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -96,14 +96,20 @@ impl AndroidPanel {
                 .into_any_element();
         }
         let key = key.to_string();
-        icon_button(id, format!("Run the app on {name}"), "play", 14., cx)
-            .tooltip(tooltip("Run the app"))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                cx.stop_propagation();
-                this.select(key.clone(), cx);
-                this.run(cx);
-            }))
-            .into_any_element()
+        icon_button(
+            id,
+            format!("Run the app on {name}"),
+            IconName::Play,
+            14.,
+            cx,
+        )
+        .tooltip(tooltip("Run the app"))
+        .on_click(cx.listener(move |this, _, _, cx| {
+            cx.stop_propagation();
+            this.select(key.clone(), cx);
+            this.run(cx);
+        }))
+        .into_any_element()
     }
 
     /// Opens the menu of a stopped virtual device: starting it without running the app, and the
@@ -127,22 +133,22 @@ impl AndroidPanel {
             item("Start", avd.to_string(), |this, name, cx| {
                 this.start(name, Boot::Quick, false, cx);
             })
-            .icon("play"),
+            .icon(IconName::Play),
             item("Cold boot", avd.to_string(), |this, name, cx| {
                 this.start(name, Boot::Cold, false, cx);
             })
-            .icon("arrow-clockwise"),
+            .icon(IconName::ArrowClockwise),
             item("Wipe data…", avd.to_string(), |this, name, cx| {
                 this.confirm = Some((name.to_string(), Confirm::Wipe));
                 cx.notify();
             })
-            .icon("arrow-counter-clockwise")
+            .icon(IconName::ArrowCounterClockwise)
             .danger(),
             item("Delete…", avd.to_string(), |this, name, cx| {
                 this.confirm = Some((name.to_string(), Confirm::Delete));
                 cx.notify();
             })
-            .icon("trash")
+            .icon(IconName::Trash)
             .danger()
             .separated(),
         ];
@@ -171,7 +177,7 @@ impl AndroidPanel {
     ) -> AnyElement {
         let open = self.menu_open(&device_menu(&device.serial));
         let device = device.clone();
-        icon_button(id, format!("More for {name}"), "dots-three", 16., cx)
+        icon_button(id, format!("More for {name}"), IconName::DotsThree, 16., cx)
             .aria_expanded(open)
             .tooltip(tooltip("More"))
             .on_click(cx.listener(move |this, e, window, cx| {
@@ -222,7 +228,7 @@ impl AndroidPanel {
                     icon_button(
                         ("avd-stop", i),
                         format!("Stop {}", avd.display_name),
-                        "stop",
+                        IconName::Stop,
                         14.,
                         cx,
                     )
@@ -242,7 +248,7 @@ impl AndroidPanel {
                     icon_button(
                         ("avd-more", i),
                         format!("More for {}", avd.display_name),
-                        "dots-three",
+                        IconName::DotsThree,
                         16.,
                         cx,
                     )
@@ -259,7 +265,7 @@ impl AndroidPanel {
             (Some(_), _) => {}
         }
         let row = radio_row(("avd", i), label, checked, t)
-            .child(icon("device-mobile", 16.).text_color(t.text_muted))
+            .child(icon(IconName::DeviceMobile, 16.).text_color(t.text_muted))
             .child(
                 div()
                     .flex_1()
@@ -370,17 +376,23 @@ impl AndroidPanel {
         // An emulator can be asked to close; a phone is unplugged.
         let stop = (device.emulator && !stopping).then(|| {
             let (key, serial) = (key.clone(), device.serial.clone());
-            icon_button(("device-stop", i), format!("Stop {name}"), "stop", 14., cx)
-                .tooltip(tooltip("Stop"))
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.stop(&key, serial.clone(), cx);
-                }))
+            icon_button(
+                ("device-stop", i),
+                format!("Stop {name}"),
+                IconName::Stop,
+                14.,
+                cx,
+            )
+            .tooltip(tooltip("Stop"))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                this.stop(&key, serial.clone(), cx);
+            }))
         });
         let glyph = if device.emulator {
-            "device-mobile"
+            IconName::DeviceMobile
         } else {
-            "plug"
+            IconName::Plug
         };
         let row = radio_row(("device", i), label, checked, t)
             .child(icon(glyph, 16.).text_color(t.text_muted))

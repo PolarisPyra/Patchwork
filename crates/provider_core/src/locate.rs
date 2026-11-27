@@ -210,27 +210,3 @@ pub fn agent_shell_for_choice(choice: ShellChoice) -> Option<String> {
         ShellChoice::Command => command_shell(),
     }
 }
-
-#[cfg(test)]
-mod shim_tests {
-    use super::cmd_shim_target;
-
-    #[test]
-    fn reads_npm_and_pnpm_shims() {
-        let npm = "@ECHO off\r\nSET dp0=%~dp0\r\nIF EXIST \"%dp0%\\node.exe\" (\r\n  SET \"_prog=%dp0%\\node.exe\"\r\n) \
-                   ELSE (\r\n  SET \"_prog=node\"\r\n)\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & \
-                   \"%_prog%\"  \"%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js\" %*\r\n";
-        assert_eq!(
-            cmd_shim_target(npm),
-            Some("node_modules\\@openai\\codex\\bin\\codex.js")
-        );
-        let pnpm = "@SETLOCAL\r\n@IF EXIST \"%~dp0\\node.exe\" (\r\n  \"%~dp0\\node.exe\"  \
-                    \"%~dp0\\global\\5\\node_modules\\@openai\\codex\\bin\\codex.js\" %*\r\n) ELSE (\r\n  node  \
-                    \"%~dp0\\global\\5\\node_modules\\@openai\\codex\\bin\\codex.js\" %*\r\n)\r\n";
-        assert_eq!(
-            cmd_shim_target(pnpm),
-            Some("global\\5\\node_modules\\@openai\\codex\\bin\\codex.js")
-        );
-        assert_eq!(cmd_shim_target("@echo off\r\nnode codex.js %*"), None);
-    }
-}

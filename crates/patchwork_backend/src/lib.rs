@@ -303,43 +303,6 @@ impl Core {
     }
 }
 
-#[cfg(test)]
-impl Core {
-    /// A core over a database in `dir`, without the globals `open` starts.
-    pub(crate) fn for_tests(dir: &Path, sink: WindowSink) -> Arc<Self> {
-        let data_dir = dir.join("data");
-        let store = Store::open(&data_dir).expect("a test database opens");
-        let core = Arc::new_cyclic(|me| Self {
-            store,
-            usage: usage::UsageCache::default(),
-            runner: Runner::default(),
-            chats_dir: data_dir.join("chats"),
-            pasted_dir: data_dir.join("pasted"),
-            backgrounds_dir: data_dir.join("backgrounds"),
-            installers_dir: data_dir.join("installers"),
-            worktrees_dir: data_dir.join("worktrees"),
-            worktree_steps: std::sync::Mutex::default(),
-            checks_running: std::sync::Mutex::default(),
-            agents_dir: agents::agents_folder(&data_dir),
-            sink: Arc::from(sink),
-            project_watch: std::sync::Mutex::default(),
-            skills_watch: std::sync::Mutex::default(),
-            themes_watch: std::sync::Mutex::default(),
-            agents: extensions::agents::Library::open(&dir.join("config")),
-            terminals: terminal::Terminals::default(),
-            secrets: vault::requests::Waiters::default(),
-            updates: Arc::default(),
-            emulators: crate::android::Emulators::default(),
-            gateway: gateway::Hub::default(),
-            presence: notifications::Presence::default(),
-            me: std::sync::Weak::clone(me),
-        });
-        // A focused window keeps the tests from showing desktop notifications.
-        core.set_window_focused(true);
-        core
-    }
-}
-
 /// What runs for a helper role's first argument, returning the exit code. None when `arg` is
 /// not one.
 #[must_use]
@@ -357,23 +320,4 @@ pub fn helper_role(arg: &str) -> Option<fn() -> i32> {
         provider::mcp::PROXY_ARG => provider::mcp::run_proxy,
         _ => return None,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn each_role_argument_is_known() {
-        for arg in [
-            provider::opencode::bridge::BRIDGE_ARG,
-            harness::BRIDGE_ARG,
-            permissions::hook::HOOK_ARG,
-            provider::hooks::PROMPT_ARG,
-            provider::mcp::PROXY_ARG,
-        ] {
-            assert!(helper_role(arg).is_some(), "{arg} has no role");
-        }
-        assert!(helper_role("--not-a-role").is_none());
-    }
 }

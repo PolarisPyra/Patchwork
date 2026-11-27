@@ -8,7 +8,7 @@ use patchwork_backend::provider::AgentKind;
 use patchwork_backend::provider::mcp::ToolInfo;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::letter_badge;
-use patchwork_ui_theme::{font_mono, fs_sm, fs_xs, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_sm, fs_xs, radius_sm, Theme};
 use patchwork_ui_theme::icon;
 use super::servers::{Card, Client, dot};
 
@@ -206,7 +206,7 @@ pub(super) fn server_row(
         div()
             .flex_none()
             .text_color(muted)
-            .child(icon("caret-right", 13.)),
+            .child(icon(IconName::CaretRight, 13.)),
     )
     .on_click(cx.listener(move |d, _, _, cx| {
         d.mcp.open_id = Some(id.clone());

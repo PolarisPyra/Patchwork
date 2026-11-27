@@ -7,7 +7,9 @@ use gpui::{Div, FontWeight, KeyDownEvent, Role, SharedString, Stateful, Window, 
 use patchwork_backend::agents::STARTING_POINTS;
 use crate::chat::backdrop::{backdrop_for, chat_backdrop, chat_scheme, scheme_for};
 use patchwork_ui_components::avatar::{Mood, avatar};
-use patchwork_ui_theme::{InScheme, Theme, fs_lg, fs_md, fs_sm, radius, radius_lg, radius_sm, theme};
+use patchwork_ui_theme::{
+    IconName, InScheme, Theme, fs_lg, fs_md, fs_sm, radius, radius_lg, radius_sm, theme,
+};
 use patchwork_ui_components::{button, icon_button, spinner, tooltip};
 use patchwork_ui_theme::icon;
 use super::details::{radio, radio_group};
@@ -193,7 +195,7 @@ impl AgentPage {
                 .shadow(header_shadow())
                 .hover(move |s| s.bg(hover))
                 .tooltip(tooltip("Find in conversation"))
-                .child(icon("magnifying-glass", 14.))
+                .child(icon(IconName::MagnifyingGlass, 14.))
                 .on_click(cx.listener(|this, _, window, cx| this.find_in_newest(window, cx))),
         )
     }
@@ -214,7 +216,7 @@ impl AgentPage {
             .shadow(header_shadow())
             .hover(move |s| s.bg(hover))
             .tooltip(tooltip("Agent details"))
-            .child(icon("gear-six", 14.))
+            .child(icon(IconName::GearSix, 14.))
             .on_click(cx.listener(|this, _, _, cx| this.toggle_details(cx)))
     }
 
@@ -233,7 +235,7 @@ impl AgentPage {
             .text_size(px(fs_sm()))
             .shadow(header_shadow())
             .hover(move |s| s.bg(hover))
-            .child(icon("code", 14.))
+            .child(icon(IconName::Code, 14.))
             .child("Open in editor")
             .on_click(cx.listener(|this, _, _, cx| {
                 let (core, id, place) = (
@@ -344,10 +346,16 @@ impl AgentPage {
                             .child("Pick a starting point"),
                     )
                     .child(
-                        icon_button("agent-start-close", "Close starting points", "x", 16., cx)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.close_start(window, cx);
-                            })),
+                        icon_button(
+                            "agent-start-close",
+                            "Close starting points",
+                            IconName::X,
+                            16.,
+                            cx,
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.close_start(window, cx);
+                        })),
                     ),
             )
             .child(list)

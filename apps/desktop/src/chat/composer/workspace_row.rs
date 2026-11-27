@@ -4,7 +4,7 @@
 // Rust guideline compliant 2026-10-09
 
 use gpui::{AnyElement, Div, MouseButton, Window, div, prelude::*, px};
-use patchwork_ui_theme::{Theme, fs, fs_xs};
+use patchwork_ui_theme::{IconName, Theme, fs, fs_xs};
 use patchwork_ui_components::{button, tooltip};
 use patchwork_ui_theme::icon;
 
@@ -54,7 +54,7 @@ impl Composer {
             .tooltip(tooltip(tip))
             .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
             .child(div().min_w_0().flex_1().truncate().child(name))
-            .child(icon("caret-down", 14.).text_color(t.text_muted));
+            .child(icon(IconName::CaretDown, 14.).text_color(t.text_muted));
         let project = self.chip_with_menu(Menu::Project, project, picks, false, t, window, cx);
         let machine_tip = match &s.host {
             Some(host) => format!("Machine: {host}"),
@@ -68,7 +68,7 @@ impl Composer {
             .text_color(t.text_muted)
             .hover(move |s| s.bg(hover))
             .tooltip(tooltip(machine_tip))
-            .child(icon("desktop", 15.))
+            .child(icon(IconName::Desktop, 15.))
             .on_click(cx.listener(|this, _, window, cx| {
                 // Settings' Devices pane, where the machines are added and picked.
                 let _ = this

@@ -10,7 +10,7 @@ use patchwork_backend::scheduled::Task;
 
 use crate::settings::controls::{Section, alert, switch};
 use crate::settings::{SettingsDialog, SettingsEvent};
-use patchwork_ui_theme::{fs_sm, fs_xs, radius_lg, theme};
+use patchwork_ui_theme::{IconName, fs_sm, fs_xs, radius_lg, theme};
 use patchwork_ui_components::{BtnKind, btn, icon_button, tooltip};
 use patchwork_ui_theme::icon;
 use super::editor::{editor};
@@ -31,7 +31,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
     let id = task.id.clone();
     let (run_id, toggle, remove, edit) = (id.clone(), task.clone(), id.clone(), task.clone());
     let enabled = task.enabled;
-    let meta = |icon_name: &'static str, text: String| {
+    let meta = |icon_name: IconName, text: String| {
         div()
             .flex()
             .min_w_0()
@@ -65,7 +65,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                         d.bg(t.bg_hover).text_color(t.text_subtle)
                     }
                 })
-                .child(icon("clock", 16.)),
+                .child(icon(IconName::Clock, 16.)),
         )
         .child(
             div()
@@ -107,14 +107,14 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                         .text_size(px(fs_sm()))
                         .text_color(t.text_muted)
                         .child(meta(
-                            "calendar-blank",
+                            IconName::CalendarBlank,
                             patchwork_backend::scheduled::describe_task(task),
                         ))
                         .child(meta(
                             if task.project_id.is_some() {
-                                "folder-simple"
+                                IconName::FolderSimple
                             } else {
-                                "chat-circle"
+                                IconName::ChatCircle
                             },
                             place,
                         ))
@@ -166,7 +166,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                     .px(px(10.))
                     .gap(px(6.))
                     .tooltip(tooltip("Start this task now"))
-                    .child(icon("play", 13.))
+                    .child(icon(IconName::Play, 13.))
                     .child("Run")
                     .on_click(cx.listener(move |d, _, _, cx| {
                         let (core, id) = (Arc::clone(&d.core), run_id.clone());
@@ -192,7 +192,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                     )
                     .px(px(10.))
                     .gap(px(6.))
-                    .child(icon("pencil-simple", 13.))
+                    .child(icon(IconName::PencilSimple, 13.))
                     .child("Edit")
                     .on_click(cx.listener(move |d, _, _, cx| d.edit_task(edit.clone(), cx))),
                 )
@@ -216,7 +216,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                     icon_button(
                         SharedString::from(format!("sched-delete-{id}")),
                         format!("Delete {}", task.name),
-                        "trash",
+                        IconName::Trash,
                         14.,
                         cx,
                     )
@@ -259,7 +259,7 @@ pub fn render(
             btn("sched-refresh", "Refresh", BtnKind::Plain, false, &t)
                 .px(px(10.))
                 .gap(px(6.))
-                .child(icon("arrows-clockwise", 13.))
+                .child(icon(IconName::ArrowsClockwise, 13.))
                 .child("Refresh")
                 .on_click(cx.listener(|d, _, _, cx| d.list_scheduled(cx))),
         )
@@ -267,7 +267,7 @@ pub fn render(
             btn("sched-new", "New task", BtnKind::Plain, false, &t)
                 .px(px(10.))
                 .gap(px(6.))
-                .child(icon("plus", 13.))
+                .child(icon(IconName::Plus, 13.))
                 .child("New task")
                 .on_click(cx.listener(move |d, _, _, cx| d.edit_task(blank(default_agent), cx))),
         );
@@ -290,7 +290,7 @@ pub fn render(
                 .rounded_full()
                 .bg(t.bg_accent_soft)
                 .text_color(t.accent)
-                .child(icon("clock", 20.)),
+                .child(icon(IconName::Clock, 20.)),
         )
         .child(
             div()

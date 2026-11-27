@@ -10,7 +10,7 @@ use gpui::{
 };
 use patchwork_backend::projects::Project;
 use patchwork_backend::chats::Chat;
-use patchwork_ui_theme::{fs_md, theme};
+use patchwork_ui_theme::{IconName, fs_md, theme};
 use patchwork_ui_components::{button, icon_button, scrollbar};
 use patchwork_ui_theme::icon;
 use crate::chat::panes::TabDrag;
@@ -101,12 +101,12 @@ pub(crate) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                 .gap(px(4.))
                 .text_color(muted)
                 .hover(move |s| s.text_color(fg))
-                .child(icon("arrows-in-line-vertical", 15.))
+                .child(icon(IconName::ArrowsInLineVertical, 15.))
                 .child("Collapse all")
                 .on_click(cx.listener(|this, _, _, cx| this.collapse_all(cx))),
         )
         .child(
-            icon_button("open-folder", "Open folder", "folder-plus", 18., cx)
+            icon_button("open-folder", "Open folder", IconName::FolderPlus, 18., cx)
                 .on_click(cx.listener(|this, _, window, cx| this.open_folder(window, cx))),
         )
         .into_any_element();
@@ -172,7 +172,7 @@ pub(crate) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                     reveal_button(
                         &format!("undo-sort:{}", p.id),
                         format!("Undo sorting tasks in {} by provider", p.name),
-                        "arrow-counter-clockwise",
+                        IconName::ArrowCounterClockwise,
                         &t,
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -185,7 +185,7 @@ pub(crate) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                 reveal_button(
                     &format!("sort:{}", p.id),
                     format!("Sort tasks in {} into folders by provider", p.name),
-                    "magic-wand",
+                    IconName::MagicWand,
                     &t,
                 )
                 // The wand is drawn right of centre, so it needs 2px more to look evenly spaced.
@@ -199,7 +199,7 @@ pub(crate) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                 reveal_button(
                     &format!("folder:{}", p.id),
                     format!("New folder in {}", p.name),
-                    "folder-plus",
+                    IconName::FolderPlus,
                     &t,
                 )
                 .on_click(cx.listener(move |this, _, window, cx| {
@@ -211,7 +211,7 @@ pub(crate) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                 reveal_button(
                     &format!("task:{}", p.id),
                     format!("New task in {}", p.name),
-                    "plus",
+                    IconName::Plus,
                     &t,
                 )
                 .on_click(cx.listener(move |this, _, window, cx| {
@@ -299,7 +299,7 @@ pub(crate) fn tasks_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl
                         reveal_button(
                             &format!("folder-task:{}", f.id),
                             format!("New task in {}", f.name),
-                            "plus",
+                            IconName::Plus,
                             &t,
                         )
                         .opacity(0.)

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use gpui::{ScrollHandle, prelude::*, AnyElement, Div, FontWeight, Role, SharedString, div, px};
 use patchwork_backend::issues::Issue;
-use patchwork_ui_theme::{Theme, font_mono, fs_md, fs_sm, fs_xs, radius_sm, theme};
+use patchwork_ui_theme::{IconName, Theme, font_mono, fs_md, fs_sm, fs_xs, radius_sm, theme};
 use patchwork_ui_components::{icon_button, scrollbar, spinner, tooltip};
 
 use crate::workspace::Workspace;
@@ -101,7 +101,7 @@ pub fn issues_view(w: &mut Workspace, cx: &mut Context<Workspace>) -> impl IntoE
             icon_button(
                 "issues-refresh",
                 "Refresh issues",
-                "arrows-clockwise",
+                IconName::ArrowsClockwise,
                 14.,
                 cx,
             )
@@ -277,7 +277,7 @@ fn row(issue: &Issue, t: &Theme, cx: &mut Context<Workspace>) -> impl IntoElemen
                     icon_button(
                         SharedString::from(format!("issue-start-{id}")),
                         format!("Start a task on {}", issue.key),
-                        "play",
+                        IconName::Play,
                         13.,
                         cx,
                     )
@@ -292,7 +292,7 @@ fn row(issue: &Issue, t: &Theme, cx: &mut Context<Workspace>) -> impl IntoElemen
                     icon_button(
                         SharedString::from(format!("issue-open-{id}")),
                         format!("Open {} in the browser", issue.key),
-                        "arrow-square-out",
+                        IconName::ArrowSquareOut,
                         13.,
                         cx,
                     )

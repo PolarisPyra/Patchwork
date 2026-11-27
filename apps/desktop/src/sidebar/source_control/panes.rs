@@ -11,7 +11,7 @@ use patchwork_backend::source_control::{DiffSide, FileChange};
 
 use super::commit_graph;
 use patchwork_ui_components::menu::Menu;
-use patchwork_ui_theme::{fs_md, fs_sm, radius_sm, Theme, theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_sm, radius_sm, Theme, theme};
 use patchwork_ui_components::{button, list_scrollbar, scrollbar, tooltip};
 use patchwork_ui_theme::icon;
 use super::file_list::{Entry, Group};
@@ -30,7 +30,11 @@ impl ChangesView {
         t: &Theme,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        let caret = if open { "caret-down" } else { "caret-right" };
+        let caret = if open {
+            IconName::CaretDown
+        } else {
+            IconName::CaretRight
+        };
         div()
             .id(title)
             .role(Role::Region)
@@ -325,7 +329,7 @@ impl Render for ChangesView {
                                     .text_color(t.text_muted)
                                     .hover(move |s| s.bg(hover).text_color(fg))
                                     .tooltip(tooltip("Refresh"))
-                                    .child(icon("arrows-clockwise", 18.).mt(px(1.)))
+                                    .child(icon(IconName::ArrowsClockwise, 18.).mt(px(1.)))
                                     .on_click(cx.listener(|this, _, _, cx| this.refresh_all(cx))),
                             )
                             .when(has_project, |d| {
@@ -338,7 +342,7 @@ impl Render for ChangesView {
                                         .hover(move |s| s.bg(hover).text_color(fg))
                                         .aria_expanded(repo_open)
                                         .tooltip(tooltip("Repository actions"))
-                                        .child(icon("dots-three", 18.))
+                                        .child(icon(IconName::DotsThree, 18.))
                                         .on_click(cx.listener(
                                             |this, e: &gpui::ClickEvent, window, cx| {
                                                 if this.busy.is_some() || this.just_dismissed(e) {

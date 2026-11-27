@@ -6,7 +6,7 @@ use std::sync::Arc;
 use gpui::{AnyElement, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
 use patchwork_backend::source_control::{DiffSide, FileChange, RepoAction};
 
-use patchwork_ui_theme::{fs_md, fs_sm, radius_sm, Theme};
+use patchwork_ui_theme::{IconName, fs_md, fs_sm, radius_sm, Theme};
 use patchwork_ui_markdown::{base_name, dir_name};
 use patchwork_ui_components::{button, tooltip};
 use patchwork_ui_theme::icon;
@@ -44,7 +44,7 @@ fn status_of(status: &str, t: &Theme) -> (&'static str, &'static str, gpui::Hsla
 pub(super) fn row_action(
     id: impl Into<SharedString>,
     label: &str,
-    name: &str,
+    name: IconName,
     group: SharedString,
     t: &Theme,
 ) -> Stateful<Div> {
@@ -177,7 +177,7 @@ impl ChangesView {
                     row_action(
                         format!("discard:{side}:{path}"),
                         "Discard changes",
-                        "trash",
+                        IconName::Trash,
                         group.clone(),
                         t,
                     )
@@ -191,7 +191,7 @@ impl ChangesView {
                         row_action(
                             format!("ignore:{path}"),
                             "Add to .gitignore",
-                            "eye-slash",
+                            IconName::EyeSlash,
                             group.clone(),
                             t,
                         )
@@ -206,7 +206,7 @@ impl ChangesView {
                     row_action(
                         format!("unstage:{path}"),
                         "Unstage changes",
-                        "minus",
+                        IconName::Minus,
                         group.clone(),
                         t,
                     )
@@ -218,7 +218,7 @@ impl ChangesView {
                     row_action(
                         format!("stage:{path}"),
                         "Stage changes",
-                        "plus",
+                        IconName::Plus,
                         group.clone(),
                         t,
                     )

@@ -13,7 +13,7 @@ use super::rows::{Cell, chat_row, dollars, grouped, kinds, pick_row, provider_ro
 use super::report::CostMetric;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{empty, list_box, section_heading, segmented};
-use patchwork_ui_theme::{fs_sm, radius_lg, radius_sm, theme};
+use patchwork_ui_theme::{IconName, fs_sm, radius_lg, radius_sm, theme};
 use patchwork_ui_components::{button, spinner};
 use patchwork_ui_markdown::format_tokens;
 use patchwork_ui_theme::icon;
@@ -68,7 +68,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))
         .on_click(cx.listener(|d, _, _, cx| d.export_costs(cx)))
-        .child(icon("export", 14.))
+        .child(icon(IconName::Export, 14.))
         .child("Export CSV");
     let clear = d.costs.filter.as_ref().map(|f| {
         let name = match f {
@@ -92,7 +92,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             .hover(move |s| s.bg(hover))
             .on_click(cx.listener(|d, _, _, cx| d.toggle_cost_filter(None, cx)))
             .child(div().min_w_0().truncate().child(name))
-            .child(icon("x", 11.))
+            .child(icon(IconName::X, 11.))
     });
     let header = div()
         .flex()
@@ -215,14 +215,6 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             )
         })
         .collect();
-    let note = if range.unpriced > 0 {
-        format!(
-            "Estimated at API rates. {} tokens from models without a known price add no cost.",
-            format_tokens(range.unpriced)
-        )
-    } else {
-        "Estimated at API rates.".into()
-    };
     let list = |rows: Vec<AnyElement>, id: &'static str, label: &'static str| {
         list_box(rows, &t)
             .id(id)
@@ -257,11 +249,5 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .child(list(models, "costs-models", "Cost by model"))
         .child(heading("By project"))
         .child(list(projects, "costs-projects", "Cost by project"))
-        .child(
-            div()
-                .text_size(px(fs_sm()))
-                .text_color(t.text_subtle)
-                .child(note),
-        )
         .into_any_element()
 }

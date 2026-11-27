@@ -1,3 +1,4 @@
-[alias]
-# Rebuilds the app on each save and restarts it; see oxidation.toml.
-oxidation = "run --quiet --package patchwork-oxidation --"
+[target.'cfg(all())']
+# `cargo run desktop` runs the desktop app with hot reload and `cargo run android` builds and opens
+# the Android client; see scripts/cargo-runner.sh.
+runner = ["scripts/cargo-runner.sh"]

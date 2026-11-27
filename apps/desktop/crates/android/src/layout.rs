@@ -12,7 +12,7 @@ use patchwork_backend::android::{self as android, Sdk};
 
 use super::devices::AndroidPanel;
 use patchwork_ui_components::menu::Menu;
-use patchwork_ui_theme::{font_mono, fs_lg, fs_sm, fs_xs, radius, Theme, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_lg, fs_sm, fs_xs, radius, Theme, theme};
 use patchwork_ui_components::{
     BtnKind, btn, button, icon_button, input_box, scrollbar, spinner, tooltip,
 };
@@ -131,7 +131,7 @@ impl AndroidPanel {
                     .rounded(px(8.))
                     .bg(t.bg_accent_soft)
                     .text_color(t.accent_text)
-                    .child(icon("device-mobile", 18.)),
+                    .child(icon(IconName::DeviceMobile, 18.)),
             )
             .child(
                 div()
@@ -159,9 +159,15 @@ impl AndroidPanel {
                     ),
             )
             .child(
-                icon_button("close-android", "Close Android devices", "x", 16., cx)
-                    .tooltip(tooltip("Close"))
-                    .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
+                icon_button(
+                    "close-android",
+                    "Close Android devices",
+                    IconName::X,
+                    16.,
+                    cx,
+                )
+                .tooltip(tooltip("Close"))
+                .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
             )
     }
 
@@ -220,7 +226,7 @@ impl AndroidPanel {
                 .when(can_create, |row| {
                     row.child(
                         btn("android-new-device", "New device", BtnKind::Plain, false, t)
-                            .child(icon("plus", 14.))
+                            .child(icon(IconName::Plus, 14.))
                             .child("New device")
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.open_create(window, cx)),
@@ -274,7 +280,7 @@ impl AndroidPanel {
                         false,
                         t,
                     )
-                    .child(icon("plugs-connected", 14.))
+                    .child(icon(IconName::PlugsConnected, 14.))
                     .child("Pair over Wi-Fi")
                     .on_click(cx.listener(|this, _, window, cx| this.open_pair(window, cx))),
                 )
@@ -404,14 +410,14 @@ impl AndroidPanel {
                     .flex()
                     .items_start()
                     .gap(px(8.))
-                    .child(icon("warning", 14.).mt(px(2.)).text_color(t.danger))
+                    .child(icon(IconName::Warning, 14.).mt(px(2.)).text_color(t.danger))
                     .child(div().flex_1().min_w_0().child(error.to_string()))
                     .when_some(dismiss, |row, dismiss| {
                         row.child(
                             icon_button(
                                 SharedString::from(format!("android-dismiss-{id}")),
                                 "Dismiss",
-                                "x",
+                                IconName::X,
                                 12.,
                                 cx,
                             )
@@ -435,7 +441,14 @@ impl AndroidPanel {
                         .aria_expanded(open)
                         .gap(px(4.))
                         .text_color(t.text_muted)
-                        .child(icon(if open { "caret-down" } else { "caret-right" }, 12.))
+                        .child(icon(
+                            if open {
+                                IconName::CaretDown
+                            } else {
+                                IconName::CaretRight
+                            },
+                            12.,
+                        ))
                         .child("Tool output")
                         .on_click(cx.listener(move |this, _, _, cx| this.toggle_detail(&key, cx))),
                     )

@@ -8,7 +8,7 @@ use gpui::{
     div, prelude::*, px,
 };
 use patchwork_ui_components::avatar::{Mood, avatar};
-use patchwork_ui_theme::{Theme, fs_md, fs_sm, fs_xl, radius_sm, theme};
+use patchwork_ui_theme::{IconName, Theme, fs_md, fs_sm, fs_xl, radius_sm, theme};
 use patchwork_ui_components::{
     BtnKind, btn, button, checkbox, focus_ring, icon_button, input_box, spinner,
 };
@@ -116,18 +116,17 @@ impl AgentPage {
                     .px(px(8.))
                     .pt(px(8.))
                     .child(
-                        icon_button("agent-background", "Background", "image", 16., cx).on_click(
-                            cx.listener(|this, _, window, cx| {
+                        icon_button("agent-background", "Background", IconName::Image, 16., cx)
+                            .on_click(cx.listener(|this, _, window, cx| {
                                 let (workspace, id) =
                                     (this.workspace.clone(), this.agent.id.clone());
                                 let _ = workspace.update(cx, |w, cx| {
                                     w.open_agent_background_dialog(&id, window, cx);
                                 });
-                            }),
-                        ),
+                            })),
                     )
                     .child(
-                        icon_button("agent-details-close", "Close details", "x", 16., cx)
+                        icon_button("agent-details-close", "Close details", IconName::X, 16., cx)
                             .on_click(cx.listener(|this, _, _, cx| this.toggle_details(cx))),
                     ),
             )
@@ -274,7 +273,7 @@ impl AgentPage {
         };
         let new = row("agent-new-conversation".into(), "New conversation".into())
             .text_color(t.text_muted)
-            .child(icon("note-pencil", 15.))
+            .child(icon(IconName::NotePencil, 15.))
             .child("New conversation")
             .on_click(cx.listener(|this, _, window, cx| {
                 if let Some(w) = this.workspace.upgrade() {
@@ -389,7 +388,7 @@ impl AgentPage {
                         icon_button(
                             SharedString::from(format!("agent-file-remove-{}", file.name)),
                             format!("Remove {}", file.name),
-                            "trash",
+                            IconName::Trash,
                             15.,
                             cx,
                         )

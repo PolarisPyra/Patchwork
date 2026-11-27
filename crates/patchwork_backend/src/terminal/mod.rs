@@ -8,8 +8,6 @@
 // Rust guideline compliant 2026-10-09
 
 mod activity;
-#[cfg(unix)]
-mod handover;
 mod launch;
 mod pty;
 mod range;
@@ -20,9 +18,6 @@ mod types;
 pub use launch::{Launch, launch, shells};
 #[doc(inline)]
 pub use range::sweep;
-#[cfg(unix)]
-#[doc(inline)]
-pub use handover::{Handover, receive_fds, send_fds};
 #[doc(inline)]
 pub use session::{FrameSink, Terminals};
 #[doc(inline)]

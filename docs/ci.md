@@ -5,26 +5,19 @@ fails, the caches and secrets they use, and how long they take.
 
 ## The pipeline
 
-```mermaid
-flowchart LR
-  PR[Pull request] --> CI
-  Main[Push to main] --> CI
-  Main -->|changes site/| Site
-  CI["CI: check + audit"]
-  Site["Site: check, deploy to Cloudflare Pages"]
+```text
+Pull request ──► CI (check + audit)
+Push to main ──► CI (check + audit)
+             └─► Site (when site/ changes: check, deploy to Cloudflare Pages)
 
-  Tag[Push tag YY.M.N] --> notes
-  subgraph Release
-    notes --> linux & windows & macos
-    linux & windows & macos --> publish
-  end
-  publish -->|signed files + latest.json| GH[GitHub release, marked latest]
-  publish --> Discord
-  publish -->|"Release YY.M.N" commit| Main
-  GH -.->|releases/latest/download| Web[Website download links]
-  GH -.->|latest.json| App[App update check]
-  Release -->|"failed, no runner"| Retry["Retry: re-run the jobs that never started"]
-  Retry --> Release
+Push tag YY.M.N (or workflow_dispatch)
+  └─► Release: notes ──► linux & windows & macos ──► publish
+        ├─► GitHub release (marked latest: signed files + latest.json)
+        │     ├─► Website download links (releases/latest/download)
+        │     └─► App update check (latest.json)
+        ├─► Discord announcement
+        └─► "Release YY.M.N" commit on main
+  (failed, no runner) ──► Retry (re-runs jobs that never started) ──► Release
 ```
 
 | Workflow | Starts on | Jobs |
@@ -91,7 +84,9 @@ safe too, but rebuilds every app.
 ## Caches
 
 - CI restores one Rust cache (`shared-key: ci`, about 1.3 GB of compiled dependencies), saved only
-  by runs on `main`. PRs read it. The three workspace crates are compiled in every run.
+  by runs on `main`. PRs read it. The workspace crates are compiled when Rust inputs (`apps/`,
+  `crates/`, `assets/`, `scripts/`, `Cargo.toml`, `Cargo.lock`, `CHANGELOG.md`, or
+  `.github/workflows/ci.yml`) change; docs-only PRs skip the Rust build.
 - Each Release build job (`linux`, `windows`, `macos`) has its own Rust cache of 1.5 to 1.8 GB,
   also saved only by runs on `main`. A tag's run reads the newest one `main` saved. GitHub keeps
   10 GB per repository and lets a tag's run read only caches saved from `main` or from that tag.
@@ -125,15 +120,11 @@ seconds. All run on GitHub's standard runners, which are free for a public repos
 | Restoring the Rust cache | 22 | 29 |
 | Format | 3 | 3 |
 | Lint | 16 | 20 |
-| Test (168 tests, which run in 1.5 to 5 seconds; the rest is compiling) | 26 | 33 |
 | Release, from the tag to the last job | 618 | 946 |
 | Release build job: Linux / Windows / macOS | 490 / 322 / 504 | 625 / 403 / 924 |
 
 The CI cache was found in each of the 15 runs sampled. Two of the 150 runs compiled every
 dependency, and took 780 and 811 seconds.
-
-The tests are not split across jobs, because they run in under 5 seconds. A second job would
-spend about 50 seconds installing packages and restoring the cache before it compiled anything.
 
 ## Before a push
 

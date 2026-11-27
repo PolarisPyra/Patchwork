@@ -80,34 +80,3 @@ impl ToolCalls {
         *update = Value::Object(whole);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::*;
-
-    #[test]
-    fn merges_incremental_tool_call_updates_and_permission_requests() {
-        let mut calls = ToolCalls::default();
-        let mut start = json!({
-            "method": "session/update",
-            "params": {
-                "update": {
-                    "sessionUpdate": "tool_call",
-                    "toolCallId": "call-1",
-                    "title": "Read file",
-                    "rawInput": { "path": "/repo/src/lib.rs" }
-                }
-            }
-        });
-        calls.merge(&mut start);
-
-        let mut perm = json!({
-            "method": "session/request_permission",
-            "params": { "toolCall": { "toolCallId": "call-1" } }
-        });
-        calls.merge(&mut perm);
-        assert_eq!(perm["params"]["toolCall"]["title"], "Read file");
-    }
-}

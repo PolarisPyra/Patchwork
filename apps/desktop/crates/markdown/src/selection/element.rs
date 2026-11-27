@@ -16,7 +16,7 @@ use super::owner::{Owner, claim, to_primary};
 use super::marks::{CHIP_INSET_Y, CHIP_PAD_X, Drawn, Kind, Known, Mark, Place, Selection, Unit};
 use super::text::word_at;
 use patchwork_ui_components::menu::{Dismissed, Menu, MenuItem};
-use patchwork_ui_theme::{radius_sm, theme};
+use patchwork_ui_theme::{IconName, radius_sm, theme};
 
 /// A text that a drag can mark. `id` tells it from every other text on screen, and stays the
 /// same from one frame to the next.
@@ -456,13 +456,14 @@ pub(super) fn open_menu(
     if let Some(link) = link {
         let copy = link.clone();
         items.push(
-            MenuItem::new("Open link", move |_, cx| cx.open_url(&link)).icon("arrow-square-out"),
+            MenuItem::new("Open link", move |_, cx| cx.open_url(&link))
+                .icon(IconName::ArrowSquareOut),
         );
         items.push(
             MenuItem::new("Copy link", move |_, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(copy.to_string()));
             })
-            .icon("copy"),
+            .icon(IconName::Copy),
         );
     }
     if !marked.is_empty() {
@@ -470,13 +471,13 @@ pub(super) fn open_menu(
             MenuItem::new("Copy", move |_, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(plain.clone()));
             })
-            .icon("copy"),
+            .icon(IconName::Copy),
         );
         items.push(
             MenuItem::new("Copy as Markdown", move |_, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(marked.clone()));
             })
-            .icon("copy"),
+            .icon(IconName::Copy),
         );
     }
     let back = window.focused(cx);

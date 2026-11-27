@@ -10,7 +10,7 @@ use patchwork_platform::now_ms;
 use gpui::{AnyElement, FontWeight, Role, SharedString, deferred, div, prelude::*, px, relative};
 use patchwork_backend::provider::AgentKind;
 use patchwork_backend::usage::UsageWindow;
-use patchwork_ui_theme::{Theme, fs, fs_sm, radius_lg, radius_sm};
+use patchwork_ui_theme::{IconName, Theme, fs, fs_sm, radius_lg, radius_sm};
 use patchwork_ui_components::{button, popup_shadow, spinner, tooltip};
 use patchwork_ui_markdown::format_date;
 use patchwork_ui_theme::icon;
@@ -62,7 +62,7 @@ pub fn footer(w: &mut Workspace, t: &Theme, cx: &mut Context<Workspace>) -> AnyE
                 // style, and a stale "hovered" leaves the label bright after the popover closes.
                 .hover(move |s| s.bg(hover).text_color(fg))
                 .on_click(cx.listener(Workspace::toggle_usage))
-                .child(div().flex_none().child(icon("gauge", 16.)))
+                .child(div().flex_none().child(icon(IconName::Gauge, 16.)))
                 .child("Usage"),
         )
         .children(popover)
@@ -263,7 +263,7 @@ fn agent_section(
             if state.busy {
                 b.child(spinner(12., t.text_subtle))
             } else {
-                b.child(icon("arrows-clockwise", 12.))
+                b.child(icon(IconName::ArrowsClockwise, 12.))
             }
         })
         .on_click(cx.listener(move |w, _, _, cx| {

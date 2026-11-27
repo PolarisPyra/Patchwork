@@ -9,7 +9,7 @@ use gpui::{Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent, Window, d
 use patchwork_backend::source_control::{CredentialKind, CredentialRequest};
 
 use patchwork_ui_editor::{Changed, Submitted, TextArea};
-use patchwork_ui_theme::{font_mono, fs_md, radius_sm, theme};
+use patchwork_ui_theme::{IconName, font_mono, fs_md, radius_sm, theme};
 use patchwork_ui_components::dialog;
 use patchwork_ui_components::{BtnKind, btn, icon_button};
 
@@ -157,7 +157,7 @@ impl Render for CredentialDialog {
             .text_size(px(fs_md()))
             .child(dialog::title_row(
                 title,
-                icon_button("credential-close", "Cancel", "x", 16., cx)
+                icon_button("credential-close", "Cancel", IconName::X, 16., cx)
                     .on_click(cx.listener(|this, _, window, cx| this.answer(None, window, cx))),
             ))
             .child(

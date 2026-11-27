@@ -5,7 +5,7 @@
 
 use gpui::{Role, Window, div, prelude::*, px};
 use patchwork_ui_components::menu::Menu;
-use patchwork_ui_theme::{fs_sm, radius_sm, theme};
+use patchwork_ui_theme::{IconName, fs_sm, radius_sm, theme};
 use patchwork_ui_components::{icon_button, tooltip};
 use super::open_tabs::{Dock, DockEvent, DockTab};
 use super::tabs::TOOL;
@@ -19,6 +19,16 @@ const SCREEN_LEFT: f32 = 20.;
 
 impl Render for Dock {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.render_dock(window, cx)
+    }
+}
+
+impl Dock {
+    fn render_dock(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let t = *theme(cx);
         if self.focus_terminal && self.shown().next().is_some() {
             self.focus_terminal = false;
@@ -63,12 +73,18 @@ impl Render for Dock {
         };
         // Maximized, the close button gives the panel its own height back instead.
         let close = if self.maximized {
-            icon_button("panel-restore", "Restore panel size", "caret-up", 14., cx)
-                .size(px(TOOL))
-                .tooltip(tooltip("Restore panel size"))
-                .on_click(cx.listener(|this, _, _, cx| this.set_maximized(false, cx)))
+            icon_button(
+                "panel-restore",
+                "Restore panel size",
+                IconName::CaretUp,
+                14.,
+                cx,
+            )
+            .size(px(TOOL))
+            .tooltip(tooltip("Restore panel size"))
+            .on_click(cx.listener(|this, _, _, cx| this.set_maximized(false, cx)))
         } else {
-            icon_button("panel-close", "Close panel", "x", 14., cx)
+            icon_button("panel-close", "Close panel", IconName::X, 14., cx)
                 .size(px(TOOL))
                 .tooltip(tooltip("Close panel (Ctrl+`)"))
                 .on_click(cx.listener(|_, _, _, cx| cx.emit(DockEvent::Close)))

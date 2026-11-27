@@ -204,23 +204,6 @@ impl Store {
         self.lock().settings.clone()
     }
 
-    /// Changes and saves the settings with no side effects, for tests that seed them.
-    ///
-    /// The app changes them through `Core::update_settings`, which seals terminal secrets and
-    /// applies what changed.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error when the database cannot save the settings; the settings in memory stay as
-    /// they were.
-    #[cfg(test)]
-    pub(crate) fn update_settings<R>(
-        &self,
-        f: impl FnOnce(&mut Settings) -> R,
-    ) -> Result<R, Error> {
-        self.update_settings_as(f, Settings::clone)
-    }
-
     /// Changes the settings with `f` and saves what `stored` makes of them, returning what `f`
     /// returns. The settings in memory are the ones `f` left.
     ///
@@ -676,67 +659,4 @@ pub(super) fn json<T: Serialize>(value: &T) -> String {
 )]
 pub(super) fn from_json<T: DeserializeOwned + Default>(s: String) -> T {
     serde_json::from_str(&s).unwrap_or_default()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Store;
-    use crate::chats::Chat;
-    use serde_json::json;
-    use std::sync::Arc;
-
-    fn chat() -> Chat {
-        let message = |id: &str, output: Option<&str>| {
-            json!({
-                "id": id, "role": "assistant", "text": "", "createdAt": 1, "status": "complete",
-                "tools": [{
-                    "id": format!("{id}-tool"), "name": "Bash", "summary": "ls",
-                    "status": "done", "output": output,
-                }],
-            })
-        };
-        serde_json::from_value(json!({
-            "id": "c1", "projectId": null, "title": "t", "agent": "claude", "model": null,
-            "sessionId": null, "createdAt": 1, "position": 0,
-            "messages": [message("m1", Some("long output")), message("m2", None)],
-        }))
-        .expect("the test chat is valid")
-    }
-
-    fn output(chat: &Chat, message: usize) -> Option<&str> {
-        chat.messages[message].tools[0].output.as_deref()
-    }
-
-    #[test]
-    fn outputs_load_when_a_chat_is_used_and_survive_saves() {
-        let dir = std::env::temp_dir().join(format!("patchwork-store-{}", crate::system::new_id()));
-        Store::open(&dir)
-            .unwrap()
-            .insert_chats(vec![chat()])
-            .unwrap();
-
-        let store = Store::open(&dir).unwrap();
-        store.with_chats(|chats| assert_eq!(output(&chats[0], 0), None));
-        // A save of another message must not write the stripped call back over the stored one.
-        store
-            .update_message("c1", Some("m2"), |chat| {
-                Arc::make_mut(&mut chat.messages[1]).tools[0].output = Some("new".into());
-            })
-            .unwrap();
-        store
-            .update_chat("c1", |chat| chat.title = "renamed".into())
-            .unwrap();
-        let opened = store.chat("c1").unwrap();
-        assert_eq!(output(&opened, 0), Some("long output"));
-        assert_eq!(output(&opened, 1), Some("new"));
-        drop(store);
-
-        let store = Store::open(&dir).unwrap();
-        let reopened = store.chat("c1").unwrap();
-        assert_eq!(reopened.title, "renamed");
-        assert_eq!(output(&reopened, 0), Some("long output"));
-        assert_eq!(output(&reopened, 1), Some("new"));
-        drop(store);
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
 }

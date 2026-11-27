@@ -86,7 +86,7 @@ pub(super) fn file_tools(
         tools.push(Tool::new(
             format!("reset-{key}"),
             ("Reset to built-in", format!("Reset {name} to built-in")),
-            "arrow-counter-clockwise",
+            patchwork_ui_theme::IconName::ArrowCounterClockwise,
             move |d, cx| d.reset_themed(kind, id.clone(), cx),
         ));
     }
@@ -95,7 +95,7 @@ pub(super) fn file_tools(
         tools.push(Tool::new(
             format!("delete-{key}"),
             (DELETE, format!("Delete {name}")),
-            "trash",
+            patchwork_ui_theme::IconName::Trash,
             move |d, cx| d.remove_themed(kind, id.clone(), cx),
         ));
     }

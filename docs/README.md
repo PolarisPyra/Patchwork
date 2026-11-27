@@ -5,7 +5,7 @@ for people using it.
 
 | Guide | What it covers |
 | --- | --- |
-| [Development](development.md) | Requirements, running the app, building, tests, and other checks |
+| [Development](development.md) | Requirements, running the app, hot reload, building, and checks |
 | [Architecture](architecture.md) | Repo layout, the SQLite data model, and where tasks and chats run |
 | [Agent CLIs](agent-clis.md) | How each agent is detected, run, approved, steered, and imported |
 | [Scheduled tasks, hooks, computer use](artifacts-and-automation.md) | The three features around the agents, and how each one decides what to do |
@@ -23,5 +23,5 @@ Keep a guide to one topic. If a page needs to explain how a feature works and ho
 split it into two pages and link them.
 
 When a guide describes a command, file, or path, check that it still exists before you commit.
-Link to code with repo-relative paths, such as `crates/core/src/orchestration/output/ingest/read.rs`, so the links keep
+Link to code with repo-relative paths, such as `crates/patchwork_backend/src/orchestration/output/ingest/read.rs`, so the links keep
 working in the GitHub viewer.

@@ -5,7 +5,7 @@
 
 use gpui::{AnyElement, Entity, Focusable, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_ui_editor::{Arrow, Changed, Submitted, TextArea};
-use patchwork_ui_theme::{Theme, fs_md, fs_xs, input_placeholder, radius, radius_sm, theme};
+use patchwork_ui_theme::{IconName, Theme, fs_md, fs_xs, input_placeholder, radius, radius_sm, theme};
 use patchwork_ui_components::{button, icon_button, mix};
 use patchwork_ui_theme::icon;
 use super::controls::{center_when_drawn, seek};
@@ -180,19 +180,25 @@ impl SettingsDialog {
             .child(
                 div()
                     .text_color(t.text_subtle)
-                    .child(icon("magnifying-glass", 14.)),
+                    .child(icon(IconName::MagnifyingGlass, 14.)),
             )
             .child(div().flex_1().min_w_0().child(search))
             .when(typed, |d| {
                 d.child(
-                    icon_button("settings-search-clear", "Clear the search", "x", 12., cx)
-                        .on_click(cx.listener(|d, _, window, cx| {
-                            d.clear_search(cx);
-                            if let Some(search) = &d.search {
-                                let focus = search.read(cx).focus_handle(cx);
-                                window.focus(&focus, cx);
-                            }
-                        })),
+                    icon_button(
+                        "settings-search-clear",
+                        "Clear the search",
+                        IconName::X,
+                        12.,
+                        cx,
+                    )
+                    .on_click(cx.listener(|d, _, window, cx| {
+                        d.clear_search(cx);
+                        if let Some(search) = &d.search {
+                            let focus = search.read(cx).focus_handle(cx);
+                            window.focus(&focus, cx);
+                        }
+                    })),
                 )
             })
             .into_any_element()

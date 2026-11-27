@@ -5,6 +5,7 @@
 use gpui::{Entity, FocusHandle, Pixels, Point, SharedString};
 use patchwork_backend::gateway::Platform;
 use patchwork_ui_editor::TextArea;
+use patchwork_ui_theme::IconName;
 
 /// A row the menu or the name field acts on.
 #[derive(Clone, PartialEq, Eq)]
@@ -95,7 +96,7 @@ pub(super) enum Act {
 
 pub(super) struct Item {
     pub(super) label: SharedString,
-    pub(super) icon: &'static str,
+    pub(super) icon: IconName,
     pub(super) danger: bool,
     pub(super) act: Act,
 }
