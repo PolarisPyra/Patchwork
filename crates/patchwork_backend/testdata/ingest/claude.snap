@@ -1,0 +1,27 @@
+{"message":{"approvals":[],"attachments":[],"background":[],"createdAt":0,"cutOff":false,"error":null,"files":[],"finishedAt":null,"id":"<id-2>","parts":[],"plan":[],"queued":false,"refusal":null,"role":"assistant","status":"streaming","steer":false,"text":"","tools":[],"turn":null,"usage":null},"type":"messageStarted"}
+{"commands":[{"description":null,"name":"compact"},{"description":null,"name":"review"}],"type":"slashCommandsUpdated"}
+{"messageId":"<id-2>","text":"Looking at ","type":"textDelta"}
+{"messageId":"<id-2>","text":"the file.","type":"textDelta"}
+{"messageId":"<id-2>","type":"usage","usage":{"cacheRead":4,"cacheWrite":0,"context":14,"input":10,"output":5}}
+{"messageId":"<id-2>","tool":{"endedAt":null,"id":"toolu_1","name":"Read","parent":null,"startedAt":0,"status":"running","subagent":null,"summary":"a.txt"},"type":"toolStarted"}
+{"messageId":"<id-2>","type":"usage","usage":{"cacheRead":4,"cacheWrite":0,"context":12,"input":22,"output":11}}
+{"isError":false,"messageId":"<id-2>","output":"hello","toolId":"toolu_1","type":"toolFinished"}
+{"messageId":"<id-2>","tool":{"endedAt":null,"id":"toolu_2","name":"TodoWrite","parent":null,"startedAt":0,"status":"running","subagent":null,"summary":""},"type":"toolStarted"}
+{"messageId":"<id-2>","steps":[{"status":"done","text":"Read a.txt"},{"status":"running","text":"Find tests"}],"type":"planUpdated"}
+{"messageId":"<id-2>","type":"usage","usage":{"cacheRead":4,"cacheWrite":0,"context":14,"input":36,"output":18}}
+{"isError":false,"messageId":"<id-2>","output":"ok","toolId":"toolu_2","type":"toolFinished"}
+{"chat":{"accessMode":"supervised","agent":"claude","agentId":null,"archivedAt":null,"background":null,"compactWindow":null,"contextPending":false,"createdAt":0,"effort":null,"favorite":false,"folderId":null,"goal":null,"id":"<id-3>","importedFrom":null,"messages":[{"approvals":[],"attachments":[],"background":[],"createdAt":0,"cutOff":false,"error":null,"files":[],"finishedAt":0,"id":"<id-4>","parts":[],"plan":[],"queued":false,"refusal":null,"role":"user","status":"complete","steer":false,"text":"Find the tests","tools":[],"turn":null,"usage":null},{"approvals":[],"attachments":[],"background":[],"createdAt":0,"cutOff":false,"error":null,"files":[],"finishedAt":null,"id":"<id-5>","parts":[],"plan":[],"queued":false,"refusal":null,"role":"assistant","status":"streaming","steer":false,"text":"","tools":[],"turn":null,"usage":null}],"model":null,"parent":{"chatId":"<chat>","toolId":"toolu_3"},"pinned":false,"projectId":null,"role":null,"sessionId":null,"slashCommands":[],"title":"Find tests"},"type":"chatCreated"}
+{"messageId":"<id-2>","tool":{"childThreadId":"<id-3>","endedAt":null,"id":"toolu_3","name":"Task","parent":null,"startedAt":0,"status":"running","subagent":{"description":"Find tests","kind":"general-purpose","model":null,"prompt":"Find the tests"},"summary":"Find tests"},"type":"toolStarted"}
+{"messageId":"<id-2>","type":"usage","usage":{"cacheRead":4,"cacheWrite":0,"context":16,"input":52,"output":26}}
+{"messageId":"<id-5>","text":"Searching for tests.","type":"textDelta"}
+{"messageId":"<id-5>","tool":{"endedAt":null,"id":"toolu_4","name":"Glob","parent":null,"startedAt":0,"status":"running","subagent":null,"summary":"**/*_test.rs"},"type":"toolStarted"}
+{"messageId":"<id-2>","tool":{"endedAt":null,"id":"toolu_4","name":"Glob","parent":"toolu_3","startedAt":0,"status":"running","subagent":null,"summary":"**/*_test.rs"},"type":"toolStarted"}
+{"messageId":"<id-2>","type":"usage","usage":{"cacheRead":4,"cacheWrite":0,"context":16,"costMicros":65,"input":72,"output":35,"subagentCostMicros":65,"subagentTokens":29}}
+{"isError":false,"messageId":"<id-5>","output":"a_test.rs","toolId":"toolu_4","type":"toolFinished"}
+{"isError":false,"messageId":"<id-2>","output":"a_test.rs","toolId":"toolu_4","type":"toolFinished"}
+{"isError":false,"messageId":"<id-2>","output":"Found a_test.rs","toolId":"toolu_3","type":"toolFinished"}
+{"error":null,"messageId":"<id-5>","status":"complete","type":"turnCompleted"}
+{"attempt":1,"maxAttempts":3,"messageId":"<id-2>","reason":"API overloaded","type":"retrying"}
+{"messageId":"<id-2>","text":"\n\nDone.","type":"textDelta"}
+{"messageId":"<id-2>","type":"usage","usage":{"cacheRead":4,"cacheWrite":0,"context":30,"costMicros":65,"input":102,"output":38,"subagentCostMicros":65,"subagentTokens":29}}
+{"error":null,"messageId":"<id-2>","status":"complete","type":"turnCompleted"}

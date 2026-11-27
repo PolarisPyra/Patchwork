@@ -242,7 +242,7 @@ Patchwork to read, so what Patchwork knows of them is what runs in their project
 `get_settings` reads one setting by its path, such as `textSize` or `notifications.sound`, or all
 of them. `set_setting` changes one: the new value is put into a copy of the settings, the copy
 must still read as valid settings (a wrong value fails with what the setting accepts), and then it
-is saved and the window is told to redraw (`AgentEvent::SettingsChanged`). It returns what the
+is saved and the window is told to redraw (`WindowCommand::ReloadSettings`). It returns what the
 setting was and what it is now.
 
 Two settings are never shown or changed, because they hold secrets: `terminal.env` and
@@ -275,7 +275,7 @@ limit resets.
 ### The window
 
 `open_chat`, `open_project`, `open_file` and `open_settings` move Patchwork's window on the
-computer and raise it (`AgentEvent::OpenChat`, `AgentEvent::Show`). They are done by the desktop
+computer and raise it (`WindowCommand::OpenChat`, `WindowCommand::Show`). They are done by the desktop
 when the event reaches it; the capability returns once it has asked. `open_file` takes a path in
 the project or a name: one fitting file is opened, and several are listed for the dispatcher to
 ask which.
@@ -316,7 +316,7 @@ server's command arguments, environment or headers, which can hold secrets.
 ### Updates
 
 `install_update` notes the conversation that asked, returns, and has Patchwork restart once the
-dispatcher's reply has been sent (`AgentEvent::RestartToUpdate`). When the chat apps are
+dispatcher's reply has been sent (`WindowCommand::RestartToUpdate`). When the chat apps are
 connected after the restart, the conversation is told Patchwork is back and on which version
 (`tell_back_from_update` in `gateway/control.rs`).
 

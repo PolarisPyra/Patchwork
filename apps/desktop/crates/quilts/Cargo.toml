@@ -1,0 +1,27 @@
+[package]
+name = "patchwork-desktop-quilts"
+description = "Patchwork's desktop Quilts gallery and viewer page"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-backend.workspace = true
+patchwork-desktop-browser.workspace = true
+patchwork-platform.workspace = true
+patchwork-ui-components.workspace = true
+patchwork-ui-editor.workspace = true
+patchwork-ui-markdown.workspace = true
+patchwork-ui-theme.workspace = true
+
+gpui = { workspace = true, default-features = true }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+log = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

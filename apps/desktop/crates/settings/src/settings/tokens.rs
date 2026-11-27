@@ -1,0 +1,274 @@
+//! Settings → AI Tokenomics: ways to spend fewer tokens. What is shown,
+//! when to flag or compact a long context, and which model new tasks start with.
+
+// Rust guideline compliant 2026-10-09
+
+use patchwork_desktop_shared::{AGENT_KINDS, agent_label};
+use std::collections::{HashMap, HashSet};
+
+use gpui::{AnyElement, SharedString, div, prelude::*, px};
+use patchwork_backend::provider::{AgentKind, ModelOption};
+use patchwork_backend::settings::{Settings, TokenSettings};
+
+use crate::settings::SettingsDialog;
+use crate::settings::controls::{Section, choices, segmented, select_box, switch_row, token_row};
+use patchwork_ui_theme::{Theme, theme};
+use patchwork_ui_markdown::format_tokens;
+
+/// Context sizes offered by the token settings.
+const TOKEN_LEVELS: [u64; 4] = [100_000, 150_000, 200_000, 300_000];
+
+/// Context sizes to compact at; 0 is When full, the agent's own, near the model's full window.
+const COMPACT_WINDOWS: [u64; 5] = [128_000, 200_000, 256_000, 512_000, 0];
+
+/// The models each agent offers, loaded once per opening of the pane.
+#[derive(Default)]
+pub struct TokensState {
+    asked: HashSet<AgentKind>,
+    pub(in crate::settings) models: HashMap<AgentKind, Vec<ModelOption>>,
+}
+
+/// A level's label, with 0 read as "When full".
+fn level_label(level: u64) -> SharedString {
+    if level == 0 {
+        "When full".into()
+    } else {
+        format_tokens(level).into()
+    }
+}
+
+/// A context size picked from a few (`ContextLevels`).
+fn context_levels(
+    id: &str,
+    label: &str,
+    value: u64,
+    levels: &[u64],
+    t: &Theme,
+    set: impl Fn(&mut TokenSettings, u64) + 'static,
+    cx: &mut Context<SettingsDialog>,
+) -> AnyElement {
+    let options: Vec<(u64, SharedString)> = levels.iter().map(|&l| (l, level_label(l))).collect();
+    segmented(
+        id,
+        label.to_string(),
+        value,
+        &options,
+        t,
+        move |d, level, cx| d.update(|s| set(&mut s.tokens, level), cx),
+        cx,
+    )
+    .into_any_element()
+}
+
+impl SettingsDialog {
+    pub(in crate::settings) fn load_models(&mut self, kind: AgentKind, cx: &mut Context<Self>) {
+        if !self.tokens.asked.insert(kind) {
+            return;
+        }
+        self.run(
+            move || patchwork_backend::provider::list_models(kind),
+            move |d, list, _| {
+                d.tokens.models.insert(kind, list);
+            },
+            cx,
+        );
+    }
+
+    /// A model picked from one agent's models, as a bordered select (`DefaultModel`). The empty
+    /// choice is `empty`, such as the CLI's own default.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each argument is a separate piece of what it draws"
+    )]
+    fn default_model(
+        &mut self,
+        kind: AgentKind,
+        label: &str,
+        empty: &'static str,
+        value: Option<String>,
+        set: impl Fn(&mut Settings, Option<String>) + Clone + 'static,
+        t: &Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        self.load_models(kind, cx);
+        let models: Vec<(String, String)> = self
+            .tokens
+            .models
+            .get(&kind)
+            .into_iter()
+            .flatten()
+            .filter_map(|m| m.id.clone().map(|id| (id, m.label.clone())))
+            .collect();
+        let current = match &value {
+            None => empty.to_string(),
+            Some(id) => models
+                .iter()
+                .find(|(m, _)| m == id)
+                .map_or_else(|| id.clone(), |(_, name)| name.clone()),
+        };
+        let key = format!("model-{label}");
+        let open = self.menu_open(&key);
+        let options = std::iter::once((None, SharedString::new_static(empty)))
+            .chain(models.into_iter().map(|(id, name)| (Some(id), name.into())))
+            .collect();
+        select_box(key.clone(), label.to_string(), current, open, t)
+            .w(px(200.))
+            .gap(px(4.))
+            .on_click(choices(
+                key,
+                label.to_string(),
+                options,
+                value,
+                move |d, pick, cx| d.update(|s| set(s, pick), cx),
+                cx,
+            ))
+            .into_any_element()
+    }
+}
+
+pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyElement {
+    let t = *theme(cx);
+    let tokens = d.settings.tokens.clone();
+    let connected: Vec<AgentKind> = AGENT_KINDS
+        .into_iter()
+        .filter(|k| d.settings.agents.contains(k))
+        .collect();
+
+    let token_switch = |id: &'static str,
+                        title: &'static str,
+                        on: bool,
+                        flip: fn(&mut TokenSettings, bool),
+                        cx: &mut Context<SettingsDialog>| {
+        switch_row(
+            id,
+            title,
+            on,
+            move |d, on, cx| d.update(|s| flip(&mut s.tokens, on), cx),
+            cx,
+        )
+    };
+
+    let mut rows: Vec<AnyElement> = vec![
+        token_switch(
+            "show-usage",
+            "Show token counts",
+            tokens.show_usage,
+            |t, on| t.show_usage = on,
+            cx,
+        )
+        .into_any_element(),
+        token_row("Warn above", &t)
+            .child(context_levels(
+                "warn-above",
+                "Warn above",
+                tokens.warn_above,
+                &TOKEN_LEVELS,
+                &t,
+                |t, level| t.warn_above = level,
+                cx,
+            ))
+            .into_any_element(),
+        token_switch(
+            "generate-titles",
+            "Generate chat and task titles",
+            tokens.generate_titles,
+            |t, on| t.generate_titles = on,
+            cx,
+        )
+        .into_any_element(),
+    ];
+    if tokens.generate_titles {
+        let picker = d.default_model(
+            AgentKind::Api,
+            "Write titles with",
+            "The chat's model",
+            tokens.title_model.clone(),
+            |s, id| s.tokens.title_model = id,
+            &t,
+            cx,
+        );
+        rows.push(
+            token_row("Write titles with", &t)
+                .child(picker)
+                .into_any_element(),
+        );
+        rows.push(
+            token_switch(
+                "titles-local",
+                "Only local models write titles",
+                tokens.titles_local_only,
+                |t, on| t.titles_local_only = on,
+                cx,
+            )
+            .into_any_element(),
+        );
+    }
+    let titles = rows.split_off(2);
+    let mut compacting: Vec<AnyElement> = Vec::new();
+    // The listed ACP agents compact on their own, so they have no row.
+    for &kind in connected.iter().filter(|k| !k.is_listed_acp()) {
+        let title = format!("{} compacts at", agent_label(kind));
+        let value = tokens.compact_window(kind);
+        // A size saved before these levels stays shown, so the row still marks it.
+        let mut levels = COMPACT_WINDOWS.to_vec();
+        if !levels.contains(&value) {
+            levels.push(value);
+            // When full (0) stays last, as the largest.
+            levels.sort_unstable_by_key(|&l| if l == 0 { u64::MAX } else { l });
+        }
+        compacting.push(
+            token_row(title.clone(), &t)
+                .child(context_levels(
+                    &format!("compact-{kind:?}"),
+                    &title,
+                    value,
+                    &levels,
+                    &t,
+                    move |t, level| {
+                        if let Some(window) = t.compact_window_mut(kind) {
+                            *window = level;
+                        }
+                    },
+                    cx,
+                ))
+                .into_any_element(),
+        );
+    }
+    let mut models: Vec<AnyElement> = Vec::new();
+    for &kind in &connected {
+        let name = agent_label(kind);
+        let picker = d.default_model(
+            kind,
+            &format!("{name} model for new tasks"),
+            "Default",
+            tokens.default_models.get(&kind).cloned(),
+            move |s, id| match id {
+                Some(id) => {
+                    s.tokens.default_models.insert(kind, id);
+                }
+                None => {
+                    s.tokens.default_models.remove(&kind);
+                }
+            },
+            &t,
+            cx,
+        );
+        models.push(
+            token_row(format!("{name} model"), &t)
+                .child(picker)
+                .into_any_element(),
+        );
+    }
+    div()
+        .flex()
+        .flex_col()
+        .child(Section::new("Saving tokens").children(rows))
+        .child(Section::new("Titles").children(titles))
+        .when(!compacting.is_empty(), |d| {
+            d.child(Section::new("Compacting").children(compacting))
+        })
+        .when(!models.is_empty(), |d| {
+            d.child(Section::new("Models for new tasks").children(models))
+        })
+        .into_any_element()
+}

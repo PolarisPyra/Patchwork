@@ -1,0 +1,30 @@
+[package]
+name = "patchwork-vault"
+description = "Encrypted secret vault for Patchwork: XChaCha20-Poly1305, Argon2id passwords, and recovery keys"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-platform.workspace = true
+argon2 = { workspace = true, features = ["alloc", "zeroize"] }
+base64 = { workspace = true, default-features = true }
+chacha20poly1305 = { workspace = true, default-features = true }
+log = { workspace = true, default-features = true }
+rusqlite = { workspace = true, features = ["bundled", "fallible_uint"] }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_json = { workspace = true, default-features = true }
+sha2 = { workspace = true, default-features = true }
+zeroize = { workspace = true, default-features = true }
+
+[features]
+default = ["keychain"]
+keychain = ["patchwork-platform/keychain"]
+
+[lints]
+workspace = true

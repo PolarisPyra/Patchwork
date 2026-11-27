@@ -6,3 +6,10 @@ doc-valid-idents = [
 # Tests may unwrap and print; the app returns errors and writes to its log instead.
 allow-unwrap-in-tests = true
 allow-print-in-tests = true
+
+# The process environment is shared by every thread, and the agents and terminals it starts read
+# it; a child gets its variables through `Command::env` instead.
+disallowed-methods = [
+    { path = "std::env::set_var", reason = "pass variables to a child with `Command::env`" },
+    { path = "std::env::remove_var", reason = "remove a child's variable with `Command::env_remove`" },
+]

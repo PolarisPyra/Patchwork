@@ -1,0 +1,24 @@
+[package]
+name = "patchwork-provider-opencode"
+description = "OpenCode CLI discovery, database probing, diagnostics, and 2.x HTTP/SSE bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+base64 = { workspace = true, default-features = true }
+patchwork-provider-core.workspace = true
+patchwork-platform.workspace = true
+rusqlite = { workspace = true, features = ["bundled", "fallible_uint"] }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_json = { workspace = true, default-features = true }
+ureq = { workspace = true, default-features = true, features = ["json"] }
+uuid = { workspace = true, default-features = true, features = ["v4"] }
+
+[lints]
+workspace = true

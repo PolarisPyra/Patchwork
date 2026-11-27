@@ -1,0 +1,52 @@
+[package]
+name = "patchwork-platform"
+description = "Patchwork's view of the machine: programs, shells, processes, folders, and SSH hosts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+base64 = { workspace = true, default-features = true }
+# RFC 3339 timestamps, as agent CLIs record them.
+chrono = { workspace = true, features = ["alloc"] }
+libc = { workspace = true, default-features = true }
+log = { workspace = true, default-features = true }
+# The launcher icon is drawn from the app's SVG.
+resvg.workspace = true
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_json = { workspace = true, default-features = true }
+# The helper copied to a host is named after a hash of its bytes.
+sha2 = { workspace = true, default-features = true }
+thiserror = { workspace = true, default-features = true }
+# A discarded file git never had goes to the Trash, where it can be got back.
+trash = { workspace = true, features = ["coinit_apartmentthreaded", "freedesktop", "jiff"] }
+uuid = { workspace = true, default-features = true, features = ["v4"] }
+which = { workspace = true, default-features = true }
+
+# The PATH installers write to the registry, which a running app's own PATH never picks up.
+[target.'cfg(windows)'.dependencies]
+winreg = { workspace = true, default-features = true }
+# The job object a command runs in, which ends everything it started, and telling running
+# programs that the user's PATH changed.
+windows-sys = { workspace = true, default-features = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+
+# The system credential store. On Linux it is the Secret Service through oo7, which GPUI already
+# builds; elsewhere the Keychain and the Credential Manager.
+[target.'cfg(target_os = "linux")'.dependencies]
+async-io = { workspace = true, optional = true }
+oo7 = { workspace = true, optional = true, features = ["async-std", "native_crypto"] }
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+keyring = { workspace = true, optional = true }
+
+[features]
+# The helper Patchwork copies to SSH hosts is built without it: it never keeps a key.
+keychain = ["dep:async-io", "dep:oo7", "keyring/apple-native", "keyring/windows-native"]
+
+[lints]
+workspace = true

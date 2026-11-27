@@ -1,0 +1,20 @@
+[package]
+name = "patchwork-provider-core"
+description = "Shared agent provider schema, capability flags, CLI discovery, probing, and diagnostics"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+log = { workspace = true, default-features = true }
+patchwork-platform.workspace = true
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_json = { workspace = true, default-features = true }
+
+[lints]
+workspace = true
