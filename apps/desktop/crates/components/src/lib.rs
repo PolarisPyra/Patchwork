@@ -18,9 +18,9 @@ pub use actions::{
     FocusPane4, FocusPaneDown, FocusPaneLeft, FocusPaneRight, FocusPaneUp, FocusPrev, GoBack,
     GoForward, MaximizePane, MoveTabDown, MoveTabLeft, MoveTabRight, MoveTabUp, NewChat,
     NewTerminal, NextTab, OpenSettings, PrevTab, Quit, ReopenTab, ShowArchived, ShowChanges,
-    ShowIssues, ShowOrchestrator, ShowQuilts, ShowTasks, SplitPaneDown, SplitPaneRight,
-    SwapPaneDown, SwapPaneLeft, SwapPaneRight, SwapPaneUp, ToggleOutput, TogglePalette,
-    TogglePanel, ToggleTerminal,
+    ShowOrchestrator, ShowQuilts, ShowTasks, SplitPaneDown, SplitPaneRight, SwapPaneDown,
+    SwapPaneLeft, SwapPaneRight, SwapPaneUp, ToggleOutput, TogglePalette, TogglePanel,
+    ToggleTerminal,
 };
 pub use inputs::{
     BtnKind, badge, btn, button, checkbox, dropdown_chip, focus_ring, icon_button, input_box, mix,
