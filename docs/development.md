@@ -37,15 +37,18 @@ startup, press Shift+F5 to rebuild and restart the app. If dx fails to build a p
 and restarts the app by itself.
 
 `scripts/dx-serve.py` runs dx in a pseudo-terminal and gives its shortcuts function keys, in its
-terminal and in the app:
+terminal and in the app. It hides dx's own screen and prints each compiler error and warning, and
+each thing dx does, as one coloured line (time, level, message, then the file and line it points
+at), with a status line under them: building, ready, paused or a failed build, and the keys. dx
+writes its log to a file the script follows, and the compiler's diagnostics as JSON among its
+output. The app's own log is `main.log`, as always.
 
 | Key | What it does |
 | --- | --- |
 | F7 | Pause or resume hot reload (dx's `p`) |
 | F5 | Apply changes: patch every Rust file saved since the last F5 into the app |
 | Shift+F5 | Rebuild and restart the app (`r`) |
-| F8 | Verbose logging, in dx's terminal (`v`) |
-| F1 | More commands, in dx's terminal (`/`) |
+| F8 | Show dx's debug lines too, in its terminal |
 
 Saves apply by themselves; F5 is the fallback for one that was missed. While hot reload is paused
 dx ignores saves: F5 patches them in and stays paused, and resuming patches them too. dx patches
