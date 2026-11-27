@@ -40,7 +40,6 @@ use crate::workspace::dock::place;
 pub enum View {
     Tasks,
     Changes,
-    Issues,
     Archived,
 }
 
@@ -138,8 +137,6 @@ pub struct Workspace {
     pub(crate) left_tab: Option<String>,
     /// The next chat opened gets a new tab rather than the open one's.
     pub(crate) new_tab: bool,
-    /// The Issues view's lists.
-    pub(crate) issues: crate::sidebar::issues::IssueLists,
     /// The chats carried on in their agent's CLI in a terminal, not yet brought back.
     pub(crate) in_cli: std::collections::HashSet<String>,
     pub view: Option<View>,
@@ -402,7 +399,6 @@ impl Workspace {
             line_focus: HashMap::new(),
             left_tab: None,
             new_tab: false,
-            issues: crate::sidebar::issues::IssueLists::default(),
             in_cli: std::collections::HashSet::new(),
             view: Some(View::Tasks),
             page: Page::Orchestrator,

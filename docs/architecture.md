@@ -86,7 +86,7 @@ workspace lints target Patchwork's code; see [vendor/README.md](../vendor/README
   - `src/import/`, `src/usage/`, `src/costs/`, `src/scheduled/`, `src/computer/`, `src/quilts/`,
     `src/themes/`, `src/source_control/`, `src/worktree/`, `src/terminal/`, `src/browser/`,
     `src/android/`, `src/vault/`, `src/updates/`, `src/logging/`, `src/events.rs`,
-    `src/backgrounds.rs`, `src/notifications.rs`, `src/issues.rs`, `src/service.rs`
+    `src/backgrounds.rs`, `src/notifications.rs`, `src/service.rs`
 
 ## Data model
 

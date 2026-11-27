@@ -101,12 +101,6 @@ pub(super) const COMMANDS: &[Command] = &[
         "Show source control",
         Some("Opens the sidebar on the project's changes and commits"),
     ),
-    cmd(
-        "sidebar.showIssues",
-        "Sidebar",
-        "Show issues",
-        Some("Opens the sidebar on the project's GitHub issues"),
-    ),
     cmd("quilts.show", "Sidebar", "Show quilts", None),
     cmd(
         "sidebar.showArchived",
@@ -316,9 +310,8 @@ pub(super) const DEFAULT_RULES: &[(&str, &str, bool)] = &[
     ("orchestrator.show", "mod+1", false),
     ("sidebar.showTasks", "mod+2", false),
     ("sidebar.showChanges", "mod+3", false),
-    ("sidebar.showIssues", "mod+4", false),
-    ("quilts.show", "mod+5", false),
-    ("sidebar.showArchived", "mod+6", false),
+    ("quilts.show", "mod+4", false),
+    ("sidebar.showArchived", "mod+5", false),
     ("workspace.deleteChat", "delete", true),
     ("transcript.selectAll", "mod+a", true),
     ("sidebar.selectAll", "mod+a", true),
@@ -441,6 +434,8 @@ pub(super) fn load(core: &Core) -> Overrides {
     if let Some(key) = overrides.remove("artifacts.show") {
         overrides.entry("quilts.show".to_owned()).or_insert(key);
     }
+    // The Issues view is gone, and its key with it.
+    overrides.remove("sidebar.showIssues");
     overrides
 }
 
@@ -613,7 +608,6 @@ fn action_for(id: &str) -> Option<Box<dyn Action>> {
         "orchestrator.show" => Box::new(patchwork_ui_components::ShowOrchestrator),
         "sidebar.showTasks" => Box::new(patchwork_ui_components::ShowTasks),
         "sidebar.showChanges" => Box::new(patchwork_ui_components::ShowChanges),
-        "sidebar.showIssues" => Box::new(patchwork_ui_components::ShowIssues),
         "quilts.show" => Box::new(patchwork_ui_components::ShowQuilts),
         "sidebar.showArchived" => Box::new(patchwork_ui_components::ShowArchived),
         "terminal.toggle" => Box::new(patchwork_ui_components::ToggleTerminal),
