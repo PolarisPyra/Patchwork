@@ -1,0 +1,142 @@
+//! The vision and default model pickers, and the preset grid.
+
+// Rust guideline compliant 2026-10-09
+
+use patchwork_views_logos::{AGENT_KINDS, agent_label};
+use gpui::{AnyElement, Div, Stateful, div, prelude::*, px};
+use patchwork_model::provider::AgentKind;
+use patchwork_client::local::core::settings::VisionModel;
+use crate::settings::SettingsDialog;
+use crate::settings::controls::{choices, select_box, tile, tile_grid};
+use patchwork_design_theme::theme;
+use patchwork_design_icons::{IconName, icon};
+use patchwork_views_logos::provider_logo;
+use super::catalog::VISION_AGENTS;
+use super::form;
+
+impl SettingsDialog {
+    /// The model that reads a message's images for an API chat, from every connected agent that
+    /// can read them; the first choice sends the images to the chat's own model.
+    pub(super) fn vision_picker(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let t = *theme(cx);
+        let vision = self.settings.vision.clone();
+        let kinds: Vec<AgentKind> = AGENT_KINDS
+            .into_iter()
+            .filter(|k| VISION_AGENTS.contains(k) && self.settings.agents.contains(k))
+            .collect();
+        let mut options: Vec<(Option<VisionModel>, String)> =
+            vec![(None, "The chat's own model".into())];
+        for kind in kinds {
+            let mut listed: Vec<(String, String)> = self
+                .providers
+                .models
+                .get(&kind)
+                .into_iter()
+                .flatten()
+                .filter_map(|m| m.id.clone().map(|id| (id, m.label.clone())))
+                .collect();
+            // A saved model that is no longer listed still shows as picked.
+            if let Some(v) = vision.as_ref().filter(|v| v.agent == kind)
+                && !listed.iter().any(|(id, _)| *id == v.model)
+            {
+                listed.push((v.model.clone(), v.model.clone()));
+            }
+            for (model, name) in listed {
+                options.push((
+                    Some(VisionModel { agent: kind, model }),
+                    format!("{} · {name}", agent_label(kind)),
+                ));
+            }
+        }
+        let current = options
+            .iter()
+            .find(|(v, _)| {
+                v.as_ref().map(|v| (v.agent, &v.model))
+                    == vision.as_ref().map(|v| (v.agent, &v.model))
+            })
+            .map_or_else(
+                || "The chat's own model".to_string(),
+                |(_, name)| name.clone(),
+            );
+        let open = self.menu_open("vision-model");
+        let options = options
+            .into_iter()
+            .map(|(v, name)| (v, name.into()))
+            .collect();
+        select_box("vision-model", "Vision model", current, open, &t)
+            .w(px(200.))
+            .on_click(choices(
+                "vision-model",
+                "Vision model",
+                options,
+                vision,
+                |d, pick, cx| d.update(|s| s.vision = pick, cx),
+                cx,
+            ))
+            .into_any_element()
+    }
+
+    /// Which connected agent a new task starts with: the first of `agents`.
+    pub(in crate::settings) fn default_picker(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let t = *theme(cx);
+        let connected = self.settings.agents.clone();
+        let current = connected.first().map_or("", |k| agent_label(*k));
+        let open = self.menu_open("default-agent");
+        let options = AGENT_KINDS
+            .into_iter()
+            .filter(|k| connected.contains(k))
+            .map(|kind| (Some(kind), agent_label(kind).into()))
+            .collect();
+        let set = |d: &mut Self, kind: Option<AgentKind>, cx: &mut Context<Self>| {
+            let Some(kind) = kind else { return };
+            d.update(
+                |s| {
+                    s.agents.retain(|k| *k != kind);
+                    s.agents.insert(0, kind);
+                },
+                cx,
+            );
+        };
+        select_box("default-agent", "Default agent", current, open, &t)
+            .w(px(200.))
+            .on_click(choices(
+                "default-agent",
+                "Default agent",
+                options,
+                connected.first().copied(),
+                set,
+                cx,
+            ))
+            .into_any_element()
+    }
+
+    /// The presets to start a provider from, then Add a server for any other address.
+    pub(super) fn preset_grid(&mut self, cx: &mut Context<Self>) -> Stateful<Div> {
+        let t = *theme(cx);
+        let tiles: Vec<_> = form::PRESETS
+            .iter()
+            .map(|&(id, name, base_url, models)| {
+                tile(format!("preset-{id}"), format!("Add {name}"), &t)
+                    .border_color(t.border)
+                    .bg(t.bg_panel)
+                    .text_color(t.text)
+                    .child(provider_logo(id, None, 22.))
+                    .child(div().max_w_full().truncate().child(name))
+                    .on_click(cx.listener(move |d, _, window, cx| {
+                        d.open_form(form::blank(id, name, base_url, models), false, window, cx);
+                    }))
+            })
+            .collect();
+        tile_grid("Add a provider").children(tiles).child(
+            tile("preset-custom", "Add a server", &t)
+                .border_dashed()
+                .border_color(t.border_strong)
+                .text_color(t.text_muted)
+                .child(icon(IconName::Plus, 22.))
+                .child(div().max_w_full().truncate().child("Add a server"))
+                .on_click(cx.listener(|d, _, window, cx| {
+                    d.open_form(form::blank("custom", "", "", &[]), false, window, cx);
+                })),
+        )
+    }
+}

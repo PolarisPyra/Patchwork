@@ -2,25 +2,38 @@
 resolver = "3"
 members = [
   "apps/desktop",
-  "apps/desktop/crates/tokens",
-  "apps/desktop/crates/theme",
-  "apps/desktop/crates/components",
-  "apps/desktop/crates/markdown",
-  "apps/desktop/crates/editor",
-  "apps/desktop/crates/backdrop",
-  "apps/desktop/crates/shared",
-  "apps/desktop/crates/browser",
-  "apps/desktop/crates/android",
-  "apps/desktop/crates/settings",
-  "apps/desktop/crates/search",
-  "apps/desktop/crates/onboarding",
-  "apps/desktop/crates/quilts",
-  "apps/desktop/crates/dialogs",
-  "apps/desktop/crates/dylib",
+  "crates/design/icons",
+  "crates/design/theme",
+  "crates/design/tasks",
+  "crates/design/components",
+  "crates/design/text",
+  "crates/design/editor",
+  "crates/design/backgrounds",
+  "crates/views/logos",
+  "crates/views/chat",
+  "crates/views/actions",
+  "crates/features/desktop_browser",
+  "crates/features/desktop_emulator",
+  "crates/features/desktop_settings",
+  "crates/features/desktop_search",
+  "crates/features/desktop_onboarding",
+  "crates/features/desktop_quilts",
+  "crates/features/desktop_dialogs",
+  "crates/features/desktop_agents",
+  "crates/features/desktop_canvas",
+  "crates/features/desktop_orchestrator",
+  "crates/features/desktop_source_control",
+  "crates/features/desktop_usage",
+  "crates/features/mobile",
+  "crates/features/desktop_dock",
+  "crates/features/desktop_sidebar",
+  "crates/features/desktop_chat",
   "apps/remote",
   "apps/android",
+  "crates/patchwork_model",
+  "crates/patchwork_harness",
   "crates/patchwork_platform",
-  "crates/patchwork_daemon",
+  "crates/patchwork_lifecycle",
   "crates/patchwork_themes",
   "crates/patchwork_vault",
   "crates/patchwork_git",
@@ -31,7 +44,12 @@ members = [
   "crates/provider_codex",
   "crates/provider_antigravity",
   "crates/provider_opencode",
-  "crates/patchwork_backend",
+  "crates/patchwork_sidecars",
+  "crates/patchwork_core",
+  "crates/patchwork_server",
+  "crates/patchwork_gateway",
+  "crates/patchwork_protocol",
+  "crates/patchwork_client",
 ]
 # Vendored GPUI builds as path dependencies, not members, so workspace checks skip its upstream tests.
 exclude = ["vendor"]
@@ -52,17 +70,27 @@ categories = ["development-tools"]
 # Every crate the workspace uses, so all members resolve to the same version. Features are turned
 # on by the member that needs them.
 [workspace.dependencies]
-patchwork-backend = { path = "crates/patchwork_backend" }
-patchwork-daemon = { path = "crates/patchwork_daemon" }
-patchwork-desktop-android = { path = "apps/desktop/crates/android" }
-patchwork-desktop-browser = { path = "apps/desktop/crates/browser" }
-patchwork-desktop-dialogs = { path = "apps/desktop/crates/dialogs" }
-patchwork-desktop-onboarding = { path = "apps/desktop/crates/onboarding" }
-patchwork-desktop-quilts = { path = "apps/desktop/crates/quilts" }
-patchwork-desktop-search = { path = "apps/desktop/crates/search" }
-patchwork-desktop-settings = { path = "apps/desktop/crates/settings" }
-patchwork-desktop-shared = { path = "apps/desktop/crates/shared" }
-patchwork-dylib = { path = "apps/desktop/crates/dylib" }
+patchwork-core = { path = "crates/patchwork_core" }
+patchwork-server = { path = "crates/patchwork_server" }
+patchwork-gateway = { path = "crates/patchwork_gateway" }
+patchwork-harness = { path = "crates/patchwork_harness" }
+patchwork-model = { path = "crates/patchwork_model" }
+patchwork-lifecycle = { path = "crates/patchwork_lifecycle" }
+patchwork-desktop-emulator = { path = "crates/features/desktop_emulator" }
+patchwork-desktop-browser = { path = "crates/features/desktop_browser" }
+patchwork-desktop-dialogs = { path = "crates/features/desktop_dialogs" }
+patchwork-desktop-agents = { path = "crates/features/desktop_agents" }
+patchwork-desktop-canvas = { path = "crates/features/desktop_canvas" }
+patchwork-desktop-orchestrator = { path = "crates/features/desktop_orchestrator" }
+patchwork-desktop-source-control = { path = "crates/features/desktop_source_control" }
+patchwork-desktop-usage = { path = "crates/features/desktop_usage" }
+patchwork-desktop-dock = { path = "crates/features/desktop_dock" }
+patchwork-desktop-sidebar = { path = "crates/features/desktop_sidebar" }
+patchwork-desktop-chat = { path = "crates/features/desktop_chat" }
+patchwork-desktop-onboarding = { path = "crates/features/desktop_onboarding" }
+patchwork-desktop-quilts = { path = "crates/features/desktop_quilts" }
+patchwork-desktop-search = { path = "crates/features/desktop_search" }
+patchwork-desktop-settings = { path = "crates/features/desktop_settings" }
 patchwork-provider-acp = { path = "crates/provider_acp" }
 patchwork-provider-antigravity = { path = "crates/provider_antigravity" }
 patchwork-provider-api = { path = "crates/provider_api" }
@@ -72,13 +100,21 @@ patchwork-provider-core = { path = "crates/provider_core" }
 patchwork-provider-opencode = { path = "crates/provider_opencode" }
 patchwork-git = { path = "crates/patchwork_git" }
 patchwork-platform = { path = "crates/patchwork_platform" }
+patchwork-sidecars = { path = "crates/patchwork_sidecars" }
+patchwork-client = { path = "crates/patchwork_client" }
+patchwork-mobile = { path = "crates/features/mobile" }
+patchwork-protocol = { path = "crates/patchwork_protocol" }
 patchwork-themes = { path = "crates/patchwork_themes" }
-patchwork-ui-backdrop = { path = "apps/desktop/crates/backdrop" }
-patchwork-ui-components = { path = "apps/desktop/crates/components" }
-patchwork-ui-editor = { path = "apps/desktop/crates/editor" }
-patchwork-ui-markdown = { path = "apps/desktop/crates/markdown" }
-patchwork-ui-theme = { path = "apps/desktop/crates/theme" }
-patchwork-ui-tokens = { path = "apps/desktop/crates/tokens" }
+patchwork-design-icons = { path = "crates/design/icons" }
+patchwork-design-theme = { path = "crates/design/theme" }
+patchwork-design-tasks = { path = "crates/design/tasks" }
+patchwork-design-components = { path = "crates/design/components" }
+patchwork-design-text = { path = "crates/design/text" }
+patchwork-design-editor = { path = "crates/design/editor" }
+patchwork-design-backgrounds = { path = "crates/design/backgrounds" }
+patchwork-views-logos = { path = "crates/views/logos" }
+patchwork-views-chat = { path = "crates/views/chat" }
+patchwork-views-actions = { path = "crates/views/actions" }
 patchwork-vault = { path = "crates/patchwork_vault" }
 
 anyhow = { version = "1", default-features = false }
@@ -109,6 +145,7 @@ notify = { version = "8", default-features = false }
 portable-pty = { version = "0.9", default-features = false }
 prost = { version = "0.14", default-features = false }
 pulldown-cmark = { version = "0.13", default-features = false }
+qrcodegen = { version = "1.8", default-features = false }
 regex = { version = "1", default-features = false }
 resvg = { version = "0.46", default-features = false }
 rusqlite = { version = "0.41", default-features = false }

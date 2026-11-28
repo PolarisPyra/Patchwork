@@ -1,38 +1,15 @@
-//! The activity entry point and the app's root view.
+//! The activity entry point.
 
-// Rust guideline compliant 2026-10-09
+// Rust guideline compliant 2026-11-27
 
 use std::rc::Rc;
 
-use gpui::{
-    App, AppContext as _, Application, Context, IntoElement, ParentElement as _, Render,
-    Styled as _, Window, WindowOptions, div, px, rgb,
-};
+use gpui::{App, AppContext as _, Application, WindowOptions};
 use gpui_android::android_activity::AndroidApp;
+use patchwork_client::Session;
+use patchwork_themes::{Applied, Paint, Palette};
 
-/// The screen shown until the app is paired with a Patchwork.
-struct Home;
-
-impl Render for Home {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<'_, Self>) -> impl IntoElement {
-        div()
-            .size_full()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap(px(12.0))
-            .bg(rgb(0x0011_1113))
-            .text_color(rgb(0x00ed_edef))
-            .child(div().text_size(px(28.0)).child("Patchwork"))
-            .child(
-                div()
-                    .text_size(px(15.0))
-                    .text_color(rgb(0x00a1_a1aa))
-                    .child("Not connected"),
-            )
-    }
-}
+use crate::nav::Nav;
 
 /// Runs the app. `android-activity` calls this on its own thread once the activity starts.
 #[unsafe(no_mangle)]
@@ -45,9 +22,23 @@ pub extern "Rust" fn android_main(app: AndroidApp) {
     gpui_android::init(app);
     Application::with_platform(Rc::new(gpui_android::AndroidPlatform::new())).run(
         |cx: &mut App| {
-            if let Err(error) =
-                cx.open_window(WindowOptions::default(), |_window, cx| cx.new(|_| Home))
-            {
+            if let Err(error) = cx.text_system().add_fonts(patchwork_design_theme::fonts()) {
+                log::error!("failed to load the fonts: {error:#}");
+            }
+            Session::init(cx);
+            let opened = cx.open_window(WindowOptions::default(), |window, cx| {
+                // The desktop's palettes, following the phone's light or dark mode.
+                let applied = Applied {
+                    paint: Paint::System {
+                        light: Palette::Light,
+                        dark: Palette::Dark,
+                    },
+                    ..Applied::default()
+                };
+                patchwork_design_theme::apply(applied, window.appearance(), cx);
+                cx.new(Nav::new)
+            });
+            if let Err(error) = opened {
                 log::error!("failed to open the window: {error:#}");
             }
         },

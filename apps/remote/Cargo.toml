@@ -11,8 +11,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-# Without the keychain, which links libdbus; nothing on a host keeps a key.
-patchwork-backend = { path = "../../crates/patchwork_backend", default-features = false }
+patchwork-harness.workspace = true
 patchwork-platform.workspace = true
 base64 = { workspace = true, default-features = true }
 libc = { workspace = true, default-features = true }

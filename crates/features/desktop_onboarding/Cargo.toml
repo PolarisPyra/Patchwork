@@ -1,0 +1,28 @@
+[package]
+name = "patchwork-desktop-onboarding"
+description = "Patchwork's desktop first-run setup flow"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-design-components.workspace = true
+patchwork-design-editor.workspace = true
+patchwork-design-icons.workspace = true
+patchwork-design-tasks.workspace = true
+patchwork-design-theme.workspace = true
+patchwork-views-logos.workspace = true
+patchwork-client = { workspace = true, features = ["local"] }
+patchwork-model.workspace = true
+patchwork-platform.workspace = true
+
+gpui = { workspace = true, default-features = true }
+log = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

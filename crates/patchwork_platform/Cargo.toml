@@ -17,7 +17,7 @@ chrono = { workspace = true, features = ["alloc"] }
 libc = { workspace = true, default-features = true }
 log = { workspace = true, default-features = true }
 # The launcher icon is drawn from the app's SVG.
-resvg.workspace = true
+resvg = { workspace = true, optional = true }
 serde = { workspace = true, default-features = true, features = ["derive"] }
 serde_json = { workspace = true, default-features = true }
 # The helper copied to a host is named after a hash of its bytes.
@@ -45,6 +45,8 @@ oo7 = { workspace = true, optional = true, features = ["async-std", "native_cryp
 keyring = { workspace = true, optional = true }
 
 [features]
+# Writing Patchwork's icon into the desktop's launcher entry.
+launcher-icon = ["dep:resvg"]
 # The helper Patchwork copies to SSH hosts is built without it: it never keeps a key.
 keychain = ["dep:async-io", "dep:oo7", "keyring/apple-native", "keyring/windows-native"]
 

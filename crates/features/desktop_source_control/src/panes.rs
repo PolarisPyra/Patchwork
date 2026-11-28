@@ -1,0 +1,391 @@
+//! Source Control drawn: its panes, with the commit box and the changed files in them.
+
+// Rust guideline compliant 2026-10-09
+
+use patchwork_client::AppState;
+use gpui::{
+    AnyElement, Div, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, Stateful, Window,
+    div, list, prelude::*, px,
+};
+use patchwork_model::chats::AccessMode;
+use patchwork_client::local::core::source_control::{DiffSide, FileChange};
+
+use super::commit_graph;
+use patchwork_design_components::menu::Menu;
+use patchwork_design_icons::IconName;
+use patchwork_design_theme::{fs_md, fs_sm, radius_sm, Theme, theme};
+use patchwork_design_components::{button, list_scrollbar, scrollbar, tooltip};
+use patchwork_design_icons::icon;
+use super::file_list::{Entry, Group};
+use super::header_menu::REPO_MENU;
+use super::git_status::{ChangesView, PANE_MIN};
+
+impl ChangesView {
+    /// A collapsible part of the view: its header, and its body when open.
+    fn pane(
+        &self,
+        title: &'static str,
+        open: bool,
+        height: Option<f32>,
+        body: AnyElement,
+        t: &Theme,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let caret = if open {
+            IconName::CaretDown
+        } else {
+            IconName::CaretRight
+        };
+        div()
+            .id(title)
+            .role(Role::Region)
+            .aria_label(title)
+            .flex()
+            .flex_col()
+            .min_h_0()
+            .when(title == "Graph", |d| d.border_t_1().border_color(t.border))
+            .map(|d| match (open, height) {
+                (true, Some(h)) => d.h(px(h)).flex_none(),
+                (true, None) => d.flex_1(),
+                _ => d.flex_none(),
+            })
+            .child(
+                div()
+                    .h(px(22.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .pr(px(8.))
+                    .child(
+                        button(SharedString::from(format!("pane:{title}")), title)
+                            .flex_1()
+                            .min_w_0()
+                            .gap(px(4.))
+                            .px(px(4.))
+                            .text_size(px(fs_sm()))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(t.text)
+                            .aria_expanded(open)
+                            .child(icon(caret, 12.))
+                            .child(title)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if title == "Graph" {
+                                    this.graph_open = !this.graph_open;
+                                } else {
+                                    this.changes_open = !this.changes_open;
+                                }
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .when(open, |d| d.child(body))
+    }
+}
+
+impl Render for ChangesView {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = *theme(cx);
+        let changes = self.host.changes(cx).to_vec();
+        let has_project = self.host.has_project(cx);
+        let full_access = self
+            .host
+            .open_chat(cx)
+            .is_some_and(|th| th.access_mode == AccessMode::FullAccess);
+        let replies = self.host.reply_files(cx);
+        let live: Vec<_> = AppState::get(cx)
+            .chats
+            .iter()
+            .filter(|th| th.archived_at.is_none() && th.parent.is_none())
+            .cloned()
+            .collect();
+        let archived: Vec<_> = AppState::get(cx)
+            .chats
+            .iter()
+            .filter(|th| th.archived_at.is_some() && th.parent.is_none())
+            .cloned()
+            .collect();
+        let has_changes = !changes.is_empty();
+
+        let conflicted: Vec<&FileChange> = changes
+            .iter()
+            .filter(|c| c.status == "conflicted")
+            .collect();
+        let pinned: Vec<&FileChange> = changes
+            .iter()
+            .filter(|c| replies.contains(&c.path) && c.status != "conflicted")
+            .collect();
+        let rest: Vec<&FileChange> = changes
+            .iter()
+            .filter(|c| !replies.contains(&c.path) && c.status != "conflicted")
+            .collect();
+        // A file in both groups opens the side of its diff its row is for.
+        let staged: Vec<(FileChange, DiffSide)> = rest
+            .iter()
+            .filter(|c| c.staged)
+            .map(|c| {
+                let side = match c.worktree {
+                    Some(_) => DiffSide::Staged,
+                    None => DiffSide::All,
+                };
+                let change = FileChange {
+                    worktree: None,
+                    ..(*c).clone()
+                };
+                (change, side)
+            })
+            .collect();
+        // A staged file changed again since is in both groups, here with the change not staged.
+        let unstaged: Vec<(FileChange, DiffSide)> = rest
+            .iter()
+            .filter_map(|c| match &c.worktree {
+                _ if !c.staged => Some(((*c).clone(), DiffSide::All)),
+                Some(worktree) => {
+                    let change = FileChange {
+                        status: worktree.clone(),
+                        staged: false,
+                        worktree: None,
+                        ..(*c).clone()
+                    };
+                    Some((change, DiffSide::Unstaged))
+                }
+                None => None,
+            })
+            .collect();
+
+        let mut entries = Vec::new();
+        if has_project {
+            entries.push(Entry::Top);
+        }
+        if !conflicted.is_empty() {
+            entries.push(Entry::Header {
+                title: "Merge Changes",
+                count: conflicted.len(),
+                group: Group::Merge,
+            });
+            entries.extend(
+                conflicted
+                    .iter()
+                    .map(|c| Entry::Change((*c).clone(), DiffSide::All)),
+            );
+        }
+        if !replies.is_empty() {
+            entries.push(Entry::Header {
+                title: "From this reply",
+                count: replies.len(),
+                group: Group::Reply,
+            });
+            entries.extend(
+                pinned
+                    .iter()
+                    .map(|c| Entry::Change((*c).clone(), DiffSide::All)),
+            );
+            entries.extend(
+                replies
+                    .iter()
+                    .filter(|p| !changes.iter().any(|c| &c.path == *p))
+                    .map(|p| Entry::ReplyFile(p.clone())),
+            );
+        }
+        if !staged.is_empty() {
+            entries.push(Entry::Header {
+                title: "Staged Changes",
+                count: staged.len(),
+                group: Group::Staged(staged.iter().map(|(c, _)| c.path.clone()).collect()),
+            });
+            entries.extend(staged.into_iter().map(|(c, side)| Entry::Change(c, side)));
+        }
+        if !unstaged.is_empty() {
+            entries.push(Entry::Header {
+                title: "Changes",
+                count: unstaged.len(),
+                group: Group::Unstaged(unstaged.iter().map(|(c, _)| c.path.clone()).collect()),
+            });
+            entries.extend(unstaged.into_iter().map(|(c, side)| Entry::Change(c, side)));
+        }
+        // Until the branch has commits, its changes are the ones above.
+        if let Some(compare) = self
+            .compare
+            .as_ref()
+            .filter(|c| c.commits > 0 && !c.files.is_empty())
+        {
+            entries.push(Entry::Header {
+                title: "Branch Changes",
+                count: compare.files.len(),
+                group: Group::Branch(compare.base.clone()),
+            });
+            if self.compare_open {
+                entries.extend(
+                    compare
+                        .files
+                        .iter()
+                        .map(|c| Entry::BranchChange(c.clone(), compare.since.clone())),
+                );
+            }
+        }
+        entries.push(Entry::End);
+        self.full_access = full_access;
+        self.has_changes = has_changes;
+        self.set_entries(entries);
+
+        let changes_body = div()
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .child(
+                list(
+                    self.list.clone(),
+                    cx.processor(|this, ix: usize, window, cx| this.entry(ix, window, cx)),
+                )
+                .size_full(),
+            )
+            .children(list_scrollbar(&self.list, 4., 0., t.border_strong))
+            .into_any_element();
+        let graph_body = div()
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .child(
+                div()
+                    .id("graph-scroll")
+                    .track_scroll(&self.graph_scroll)
+                    .overflow_y_scroll()
+                    .size_full()
+                    .pb(px(4.))
+                    .when(has_project, |d| {
+                        d.child(commit_graph::section(self, &live, &archived, &t, cx))
+                    }),
+            )
+            .children(scrollbar(&self.graph_scroll, 4., 0., t.border_strong))
+            .into_any_element();
+
+        let (fg, hover) = (t.text, t.bg_hover);
+        let graph_height = self.changes_open.then_some(self.graph_height);
+        let divider = (self.changes_open && self.graph_open).then(|| {
+            let height = self.graph_height;
+            div()
+                .id("graph-resize")
+                .role(Role::Splitter)
+                .aria_orientation(gpui::Orientation::Horizontal)
+                .aria_label("Resize graph")
+                .aria_numeric_value(f64::from(height))
+                .aria_min_numeric_value(f64::from(PANE_MIN))
+                .tab_index(0)
+                .relative()
+                .h(px(4.))
+                .mb(px(-4.))
+                .flex_none()
+                .cursor_row_resize()
+                .focus(|s| s.bg(t.accent))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, e: &MouseDownEvent, _, cx| {
+                        this.resizing = Some((f32::from(e.position.y), this.graph_height));
+                        cx.stop_propagation();
+                    }),
+                )
+                .on_key_down(cx.listener(|this, e: &gpui::KeyDownEvent, window, cx| {
+                    let step = match e.keystroke.key.as_str() {
+                        "up" => 16.,
+                        "down" => -16.,
+                        _ => return,
+                    };
+                    let total = f32::from(window.viewport_size().height);
+                    this.set_graph_height(this.graph_height + step, total);
+                    cx.notify();
+                }))
+        });
+
+        let menu = self.menu.as_ref().map(|(m, at, _)| Menu::view(m, *at));
+        let repo_open = self.menu_for(REPO_MENU);
+        div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .mt(px(6.))
+                    .h(px(32.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .px(px(12.))
+                    .text_size(px(fs_md()))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("Source Control")
+                    .child(
+                        div()
+                            .flex()
+                            .flex_none()
+                            .child(
+                                button("refresh-changes", "Refresh")
+                                    .size(px(28.))
+                                    .justify_center()
+                                    .rounded(px(radius_sm()))
+                                    .text_color(t.text_muted)
+                                    .hover(move |s| s.bg(hover).text_color(fg))
+                                    .tooltip(tooltip("Refresh"))
+                                    .child(icon(IconName::ArrowsClockwise, 18.).mt(px(1.)))
+                                    .on_click(cx.listener(|this, _, _, cx| this.refresh_all(cx))),
+                            )
+                            .when(has_project, |d| {
+                                d.child(
+                                    button("repository-actions", "Repository actions")
+                                        .size(px(28.))
+                                        .justify_center()
+                                        .rounded(px(radius_sm()))
+                                        .text_color(t.text_muted)
+                                        .hover(move |s| s.bg(hover).text_color(fg))
+                                        .aria_expanded(repo_open)
+                                        .tooltip(tooltip("Repository actions"))
+                                        .child(icon(IconName::DotsThree, 18.))
+                                        .on_click(cx.listener(
+                                            |this, e: &gpui::ClickEvent, window, cx| {
+                                                if this.busy.is_some() || this.just_dismissed(e) {
+                                                    return;
+                                                }
+                                                let at =
+                                                    e.position() + gpui::point(px(-160.), px(14.));
+                                                this.open_repo_menu(at, window, cx);
+                                            },
+                                        )),
+                                )
+                            }),
+                    ),
+            )
+            .child(
+                div()
+                    .id("panes")
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h_0()
+                    .on_mouse_move(cx.listener(
+                        move |this, e: &gpui::MouseMoveEvent, window, cx| {
+                            if let Some((start, height)) = this.resizing {
+                                let total = f32::from(window.viewport_size().height);
+                                this.set_graph_height(
+                                    height + start - f32::from(e.position.y),
+                                    total,
+                                );
+                                cx.notify();
+                            }
+                        },
+                    ))
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            if this.resizing.take().is_some() {
+                                cx.notify();
+                            }
+                        }),
+                    )
+                    .child(self.pane("Changes", self.changes_open, None, changes_body, &t, cx))
+                    .children(divider)
+                    .child(self.pane("Graph", self.graph_open, graph_height, graph_body, &t, cx)),
+            )
+            .children(menu)
+            .into_any_element()
+    }
+}

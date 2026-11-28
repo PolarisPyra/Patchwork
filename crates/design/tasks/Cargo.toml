@@ -1,0 +1,17 @@
+[package]
+name = "patchwork-design-tasks"
+description = "Work a GPUI view hands off and takes back: a background thread, a timer, a file picker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+gpui = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

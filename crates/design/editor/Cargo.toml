@@ -1,0 +1,25 @@
+[package]
+name = "patchwork-design-editor"
+description = "Patchwork's multi-line GPUI text area and composer editor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-design-components.workspace = true
+patchwork-design-icons.workspace = true
+patchwork-design-text.workspace = true
+patchwork-design-theme.workspace = true
+
+gpui = { workspace = true, default-features = true }
+log = { workspace = true, default-features = true }
+pulldown-cmark.workspace = true
+unicode-segmentation = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

@@ -11,24 +11,37 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-patchwork-backend.workspace = true
-patchwork-daemon.workspace = true
-patchwork-desktop-android.workspace = true
+patchwork-design-components.workspace = true
+patchwork-design-editor.workspace = true
+patchwork-design-icons.workspace = true
+patchwork-design-tasks.workspace = true
+patchwork-design-text.workspace = true
+patchwork-design-theme.workspace = true
+patchwork-views-actions.workspace = true
+patchwork-views-chat.workspace = true
+patchwork-views-logos.workspace = true
+patchwork-core.workspace = true
+patchwork-server.workspace = true
+patchwork-gateway.workspace = true
+patchwork-lifecycle.workspace = true
+patchwork-desktop-emulator.workspace = true
 patchwork-desktop-browser.workspace = true
 patchwork-desktop-dialogs.workspace = true
+patchwork-desktop-agents.workspace = true
+patchwork-desktop-canvas.workspace = true
+patchwork-desktop-orchestrator.workspace = true
+patchwork-desktop-source-control.workspace = true
+patchwork-desktop-usage.workspace = true
+patchwork-desktop-dock.workspace = true
+patchwork-desktop-sidebar.workspace = true
+patchwork-desktop-chat.workspace = true
 patchwork-desktop-onboarding.workspace = true
 patchwork-desktop-quilts.workspace = true
 patchwork-desktop-search.workspace = true
 patchwork-desktop-settings.workspace = true
-patchwork-desktop-shared.workspace = true
-patchwork-dylib = { workspace = true, optional = true }
 patchwork-platform.workspace = true
+patchwork-client = { workspace = true, features = ["local"] }
 patchwork-themes.workspace = true
-patchwork-ui-backdrop.workspace = true
-patchwork-ui-components.workspace = true
-patchwork-ui-editor.workspace = true
-patchwork-ui-markdown.workspace = true
-patchwork-ui-theme.workspace = true
 
 chrono = { workspace = true, features = ["clock"] }
 dirs.workspace = true
@@ -45,9 +58,6 @@ serde_json = { workspace = true, default-features = true }
 vt100 = { workspace = true, default-features = true }
 
 [features]
-# Links the dependencies from one shared library, so a debug rebuild relinks only Patchwork.
-# For development only: the binary then needs the library and Rust's own beside it.
-dynamic = ["dep:patchwork-dylib"]
 # Patches changed code into the running app in place: GPUI connects to `dx serve --hot-patch`
 # (`cargo run desktop`) and every view renders through a patchable function.
 hot-reload = ["gpui/hot-reload"]

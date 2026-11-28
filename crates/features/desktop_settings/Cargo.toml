@@ -1,0 +1,40 @@
+[package]
+name = "patchwork-desktop-settings"
+description = "Patchwork's desktop Settings dialog and background picker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-design-backgrounds.workspace = true
+patchwork-design-components.workspace = true
+patchwork-design-editor.workspace = true
+patchwork-design-icons.workspace = true
+patchwork-design-tasks.workspace = true
+patchwork-design-text.workspace = true
+patchwork-design-theme.workspace = true
+patchwork-views-actions.workspace = true
+patchwork-views-chat.workspace = true
+patchwork-views-logos.workspace = true
+patchwork-client = { workspace = true, features = ["local"] }
+patchwork-model.workspace = true
+patchwork-platform = { workspace = true, features = ["launcher-icon"] }
+patchwork-themes.workspace = true
+
+base64 = { workspace = true, default-features = true }
+chrono = { workspace = true, features = ["clock"] }
+dirs.workspace = true
+futures = { workspace = true, default-features = true }
+gpui = { workspace = true, default-features = true }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+log = { workspace = true, default-features = true }
+serde_json = { workspace = true, default-features = true }
+zeroize = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

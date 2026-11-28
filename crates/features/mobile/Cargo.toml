@@ -1,0 +1,24 @@
+[package]
+name = "patchwork-mobile"
+description = "Patchwork's phone screens: pairing, the chat list, one chat, and the approvals waiting"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish = false
+
+[dependencies]
+patchwork-design-components.workspace = true
+patchwork-design-text.workspace = true
+patchwork-design-theme.workspace = true
+patchwork-views-chat.workspace = true
+gpui.workspace = true
+patchwork-client.workspace = true
+patchwork-protocol.workspace = true
+
+[lints]
+workspace = true

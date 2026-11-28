@@ -1,0 +1,31 @@
+[package]
+name = "patchwork-harness"
+description = "Patchwork's own agent and the helpers its binary runs as: hooks and relays, on this machine or an SSH host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-model.workspace = true
+patchwork-platform.workspace = true
+patchwork-provider-claude.workspace = true
+patchwork-provider-core.workspace = true
+patchwork-provider-opencode.workspace = true
+base64 = { workspace = true, default-features = true }
+chrono = { workspace = true, features = ["clock"] }
+globset = { workspace = true, default-features = true }
+ignore = { workspace = true, default-features = true }
+log = { workspace = true, default-features = true }
+regex = { workspace = true, default-features = true }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_json = { workspace = true, default-features = true, features = ["preserve_order"] }
+ureq = { workspace = true, default-features = true, features = ["json"] }
+uuid = { workspace = true, default-features = true, features = ["v4"] }
+
+[lints]
+workspace = true

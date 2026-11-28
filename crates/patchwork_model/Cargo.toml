@@ -1,0 +1,18 @@
+[package]
+name = "patchwork-model"
+description = "Patchwork's plain domain types: chats, messages, agents, providers, platforms and settings values"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+serde = { workspace = true, default-features = true, features = ["derive", "rc"] }
+serde_json = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

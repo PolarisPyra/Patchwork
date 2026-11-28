@@ -1,0 +1,17 @@
+[package]
+name = "patchwork-views-actions"
+description = "Patchwork's desktop actions, which keys are bound to and menus send, and the window title"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+gpui = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

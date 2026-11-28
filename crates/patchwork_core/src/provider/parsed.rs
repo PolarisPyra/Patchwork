@@ -1,0 +1,294 @@
+//! What an agent CLI's output is read into, and the helpers each CLI's parser builds it with.
+
+// Rust guideline compliant 2026-10-09
+
+use serde_json::Value;
+use crate::events::ChatEvent;
+use crate::system::now_ms;
+use crate::chats::{
+    StepStatus, ToolCall, tool_output, SubAgent, Question, TokenUsage, BackgroundTask, TaskStatus,
+    EditLines,
+};
+use crate::usage::UsageWindow;
+use super::ProviderSlashCommand;
+
+/// One change to a task the agent started, as the agent reports it. Its `task_id` is the agent's
+/// own id for the task, which is how later changes name it.
+#[derive(Debug)]
+pub enum TaskEvent {
+    /// A task began. `top_level` is false for one a subagent started, which is listed under that
+    /// subagent's chat instead. `backgrounded` is set when it was started to run in the background.
+    Started {
+        task: BackgroundTask,
+        task_id: String,
+        top_level: bool,
+        backgrounded: bool,
+    },
+    /// The task's status or description changed, or it was moved to the background once started.
+    /// A status that has ended is reported as `Ended` instead.
+    Updated {
+        task_id: String,
+        status: Option<TaskStatus>,
+        description: Option<String>,
+        backgrounded: bool,
+    },
+    /// The one-line progress the task reported.
+    Progress { task_id: String, summary: String },
+    /// The task ended. The agent may report this twice, once as its status and once as its
+    /// notification with the output, in either order, so each part is merged in.
+    Ended {
+        task_id: String,
+        status: TaskStatus,
+        summary: Option<String>,
+        output: Option<String>,
+    },
+    /// Every task the agent still has running, by its id. This is the agent's level signal, sent
+    /// whenever the set changes rather than once per task: a task missing from it has ended, even
+    /// if the report of its end never arrived. Claude sends it; the others report only edges.
+    Level { live: Vec<String> },
+}
+
+/// What one JSONL line means for the turn.
+#[derive(Debug)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "each event is built once and moved straight into the turn, so boxing the large variant would only add an allocation per event"
+)]
+pub enum Parsed {
+    Event(ChatEvent),
+    SessionId(String),
+    SlashCommands(Vec<ProviderSlashCommand>),
+    /// A task the agent reports on: started, moved to the background, progressing, ended, or the
+    /// set of those still running.
+    Task(TaskEvent),
+    /// Subscription usage the agent reported along the way.
+    Usage(Vec<UsageWindow>),
+    /// Tokens one model request used. `top_level` is false for a subagent's request.
+    RequestUsage {
+        request_id: String,
+        usage: TokenUsage,
+        top_level: bool,
+        /// The model the request ran on, when the agent names it.
+        model: Option<String>,
+    },
+    /// The output tokens the agent's whole turn made, for an agent whose per-request counts are
+    /// only estimates until it ends.
+    TurnOutput(u64),
+    /// The agent's id for the turn now running, which a steering message must name.
+    TurnStarted(String),
+    /// The agent is summarizing the conversation to free up context.
+    Compacting,
+    /// The agent finished compacting and goes on from this summary of the conversation.
+    Compacted(Option<String>),
+    /// The agent is retrying a model request that failed or stalled.
+    Retrying {
+        reason: String,
+        /// Which try this is, when the agent says.
+        attempt: Option<u32>,
+        /// How many tries it makes, when the agent says.
+        max_attempts: Option<u32>,
+    },
+    /// The turn failed with this message.
+    Error(String),
+    /// The agent has no conversation under the session id the turn resumed.
+    SessionLost,
+    /// The agent replays the session it loads until it answers, or has answered (`false`).
+    Replaying(bool),
+    /// Write this line to the agent's stdin.
+    Send(String),
+    /// Write this line to the agent's stdin once it has listed its slash commands.
+    SendAfterCommands(String),
+    /// Write these, each a `Send` or `SendAfterCommands`, one at a time: the first now, and
+    /// each next one on `SendNext`.
+    SendInOrder(Vec<Parsed>),
+    /// The agent answered a line sent in order, so the next one goes.
+    SendNext,
+    /// The agent's settings as it now reports them (Antigravity's `configOptions`).
+    AgentConfig(Value),
+    /// The mode Antigravity switched its session to on its own (`current_mode_update`).
+    AgentMode(String),
+    /// The API agent calls a tool of an MCP server, which Patchwork keeps running; the result
+    /// goes back to its stdin as `api::mcp_reply`.
+    McpCall {
+        id: Value,
+        server: String,
+        tool: String,
+        arguments: Value,
+    },
+    /// The agent waits for the user; `reply` is what `approval_reply` needs to answer it. A
+    /// `reply` holding [`antigravity::BY_MESSAGE`](super::antigravity::BY_MESSAGE) is a question
+    /// the agent ended its reply on, answered by the user's next message instead.
+    Approval {
+        title: String,
+        detail: String,
+        reply: Value,
+        /// Set when the agent asks the user questions instead of asking permission.
+        questions: Vec<Question>,
+        /// What it asks to do, when a permission rule can answer it.
+        target: Option<crate::permissions::Target>,
+    },
+    /// The agent waits for an answer to a call the access mode runs without asking, which only
+    /// the permission rules may stop; answered like an approval.
+    Check {
+        title: String,
+        detail: String,
+        reply: Value,
+        target: crate::permissions::Target,
+    },
+    /// The agent answered the control request with this id.
+    ControlResponse(String),
+    /// The agent took a steering message (Codex acknowledges each one).
+    Steered,
+    /// The agent refused a steering message, so it waits for the turn to end.
+    SteerRejected(String),
+    /// The turn is over; stdin is closed so the agent exits.
+    Finished,
+}
+
+pub use patchwork_provider_core::{clip, one_line};
+pub(super) use patchwork_provider_core::{relative, summarize};
+
+/// A plan step's status, however the agent spells it: `in_progress` (Claude, OpenCode),
+/// `inProgress` (Codex), `running` and `done` (Patchwork's own agent).
+#[must_use]
+pub fn step_status(status: Option<&str>) -> StepStatus {
+    match status {
+        Some("in_progress" | "inProgress" | "running") => StepStatus::Running,
+        Some("completed" | "done") => StepStatus::Done,
+        _ => StepStatus::Pending,
+    }
+}
+
+/// A tool call the agent has begun, as the provider's events describe it.
+pub(super) struct ToolStart<'a> {
+    pub(super) id: &'a str,
+    pub(super) name: &'a str,
+    pub(super) summary: String,
+    pub(super) subagent: Option<SubAgent>,
+    pub(super) parent: Option<&'a str>,
+}
+
+impl<'a> ToolStart<'a> {
+    /// A top-level call that starts no sub agent.
+    pub(super) fn new(id: &'a str, name: &'a str, summary: String) -> Self {
+        Self {
+            id,
+            name,
+            summary,
+            subagent: None,
+            parent: None,
+        }
+    }
+}
+
+pub(super) fn tool_started(message_id: &str, start: ToolStart<'_>) -> Parsed {
+    Parsed::Event(ChatEvent::ToolStarted {
+        message_id: message_id.into(),
+        tool: ToolCall {
+            id: start.id.into(),
+            name: start.name.into(),
+            summary: start.summary,
+            status: StepStatus::Running,
+            subagent: start.subagent,
+            parent: start.parent.map(String::from),
+            started_at: Some(now_ms()),
+            ended_at: None,
+            output: None,
+            child_chat_id: None,
+            lines: None,
+            title: None,
+            kind: None,
+        },
+    })
+}
+
+pub(super) fn tool_finished(
+    message_id: &str,
+    tool_id: &str,
+    is_error: bool,
+    output: &str,
+) -> Parsed {
+    Parsed::Event(ChatEvent::ToolFinished {
+        message_id: message_id.into(),
+        tool_id: tool_id.into(),
+        is_error,
+        output: tool_output(output),
+    })
+}
+
+pub(super) fn thinking(message_id: &str, text: &str) -> Parsed {
+    Parsed::Event(ChatEvent::Thinking {
+        message_id: message_id.into(),
+        text: text.into(),
+        started_at: None,
+        ended_at: None,
+    })
+}
+
+pub(super) fn file_touched(message_id: &str, path: String) -> Parsed {
+    Parsed::Event(ChatEvent::FileTouched {
+        message_id: message_id.into(),
+        path,
+    })
+}
+
+pub(super) fn text_delta(message_id: &str, text: &str) -> Parsed {
+    Parsed::Event(ChatEvent::TextDelta {
+        message_id: message_id.into(),
+        text: text.into(),
+    })
+}
+
+/// The lines a Claude `Edit` or `MultiEdit` call adds and removes, from the text it replaces: the
+/// lines the old and new text share at their start and end are context, and the rest changed.
+/// `replace_all` changes an unknown number of places, so it is not counted. A `Write` does not
+/// carry the text it replaces, so all of its text counts as added, which holds only when it
+/// creates the file; the row shows it only then.
+pub(super) fn edit_lines(name: &str, input: &Value) -> Option<EditLines> {
+    let one = |edit: &Value| {
+        if edit["replace_all"] == true {
+            return None;
+        }
+        let old = edit["old_string"].as_str()?;
+        let new = edit["new_string"].as_str()?;
+        Some(changed_lines(old, new))
+    };
+    match name {
+        "Edit" => one(input),
+        "Write" => input["content"].as_str().map(|text| EditLines {
+            added: u32::try_from(text.lines().count()).unwrap_or(u32::MAX),
+            removed: 0,
+        }),
+        "MultiEdit" => input["edits"].as_array()?.iter().try_fold(
+            EditLines {
+                added: 0,
+                removed: 0,
+            },
+            |sum, edit| {
+                let lines = one(edit)?;
+                Some(EditLines {
+                    added: sum.added + lines.added,
+                    removed: sum.removed + lines.removed,
+                })
+            },
+        ),
+        _ => None,
+    }
+}
+
+pub(super) fn changed_lines(old: &str, new: &str) -> EditLines {
+    let old: Vec<&str> = old.lines().collect();
+    let new: Vec<&str> = new.lines().collect();
+    let head = old.iter().zip(&new).take_while(|(a, b)| a == b).count();
+    let tail = old[head..]
+        .iter()
+        .rev()
+        .zip(new[head..].iter().rev())
+        .take_while(|(a, b)| a == b)
+        .count();
+    let count = |n: usize| u32::try_from(n - head - tail).unwrap_or(u32::MAX);
+    EditLines {
+        added: count(new.len()),
+        removed: count(old.len()),
+    }
+}

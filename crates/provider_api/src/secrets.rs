@@ -9,7 +9,7 @@ use std::sync::{Mutex, OnceLock};
 use patchwork_platform::{Error, Locked, keychain};
 use patchwork_vault as vault;
 
-use super::catalog::{ApiProvider, KeyStore};
+use patchwork_model::provider::api::{ApiProvider, KeyStore};
 
 /// The credential store's service name for every key Patchwork saves.
 const SERVICE: &str = "dev.patchwork.ade";

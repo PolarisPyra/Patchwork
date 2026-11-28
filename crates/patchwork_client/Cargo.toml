@@ -1,0 +1,37 @@
+[package]
+name = "patchwork-client"
+description = "What Patchwork's screens read and the operations they call, on the desktop and the phone"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-core = { workspace = true, optional = true }
+patchwork-server = { workspace = true, optional = true }
+patchwork-gateway = { workspace = true, optional = true }
+patchwork-model.workspace = true
+patchwork-protocol.workspace = true
+
+gpui.workspace = true
+futures = { workspace = true, default-features = true }
+log = { workspace = true, default-features = true }
+serde_json = { workspace = true, default-features = true }
+thiserror = { workspace = true, default-features = true }
+# The socket a remote Patchwork answers on, plain or over TLS.
+tungstenite = { workspace = true, features = ["handshake", "rustls-tls-webpki-roots"] }
+# Claiming a pairing code, which is the one call made before there is a token for the socket.
+ureq = { workspace = true, default-features = true }
+url = { workspace = true, default-features = true }
+
+[features]
+# The store the desktop reads, over a `Core` in the same process. The phone builds without it and
+# never links the backend.
+local = ["dep:patchwork-core", "dep:patchwork-server", "dep:patchwork-gateway"]
+
+[lints]
+workspace = true

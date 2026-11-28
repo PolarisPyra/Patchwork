@@ -15,9 +15,15 @@ publish = false
 name = "patchwork_android"
 crate-type = ["cdylib", "rlib"]
 
+[dependencies]
+patchwork-design-theme.workspace = true
+gpui.workspace = true
+patchwork-client.workspace = true
+patchwork-mobile.workspace = true
+patchwork-themes.workspace = true
+
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.15"
-gpui.workspace = true
 gpui_android = { path = "../../vendor/gpui_android" }
 log = { workspace = true, default-features = true }
 

@@ -8,7 +8,7 @@ use std::time::Duration;
 use patchwork_platform::Error;
 use serde_json::{Value, json};
 
-use super::catalog::ApiProvider;
+use patchwork_model::provider::api::ApiProvider;
 use super::secrets::{key, with_headers};
 use super::store::{move_to, provider};
 

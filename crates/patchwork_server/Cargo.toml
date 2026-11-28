@@ -1,0 +1,30 @@
+[package]
+name = "patchwork-server"
+description = "Patchwork's server: the sockets phones, browsers and other computers follow and drive chats over"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-core = { workspace = true, default-features = false }
+patchwork-platform.workspace = true
+# The wire types the server answers phones and browsers in.
+patchwork-protocol.workspace = true
+base64 = { workspace = true, default-features = true }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_json = { workspace = true, default-features = true }
+sha2 = { workspace = true, default-features = true }
+log = { workspace = true, default-features = true }
+tungstenite = { workspace = true, features = ["handshake"] }
+# Pairing tokens and codes, and the QR code a phone scans to pair.
+chacha20poly1305 = { workspace = true, default-features = true }
+qrcodegen.workspace = true
+url = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

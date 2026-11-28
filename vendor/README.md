@@ -82,7 +82,8 @@ Patchwork also reports GPUI's hot reload status to the app. These edits are mark
 
    ```sh
    cargo build
-   scripts/check.sh
+   cargo fmt --all -- --check
+   cargo clippy --workspace --all-targets -- -D warnings
    cargo run android --no-run
    ```
 
