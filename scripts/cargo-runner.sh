@@ -38,5 +38,10 @@ fi
 # pauses hot reload. dx-serve.py gives dx's shortcuts function keys and lets the app's toolbar
 # send them.
 cd "$root"
+# `cargo run` describes the app's package in the environment, and dx's cargo passes it on to build
+# scripts: ring's then sees CARGO_MANIFEST_DIR and OUT_DIR change from a plain `dx serve`, and
+# rebuilds itself with rustls, ureq and every crate over them.
+unset CARGO_MANIFEST_DIR CARGO_MANIFEST_PATH CARGO_CRATE_NAME CARGO_BIN_NAME OUT_DIR
+unset "${!CARGO_PKG_@}"
 exec uv run --no-project python3 scripts/dx-serve.py \
     --desktop --hot-patch --package patchwork --features hot-reload "$@"
