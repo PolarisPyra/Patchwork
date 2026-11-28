@@ -84,6 +84,9 @@ SUMMARY = re.compile(
     r"^(aborting due to|\d+ warnings? emitted|For more information|"
     r"Some errors have detailed explanations|could not compile)"
 )
+# What rustc warns each time dx replays a crate for a patch: dx reruns it with the jobserver
+# variable cargo set for the first build, whose file descriptors are long closed.
+JOBSERVER = "failed to connect to jobserver"
 
 RESET, BOLD, DIM = "\x1b[0m", "\x1b[1m", "\x1b[2m"
 RED, GREEN, YELLOW, CYAN = "\x1b[31m", "\x1b[32m", "\x1b[33m", "\x1b[36m"
@@ -256,6 +259,8 @@ class Build:
         self.crates = 0
         self.errors = 0
         self.warnings = 0
+        # A failure waiting on the compiler errors logged under it.
+        self.failure: str | None = None
         # The diagnostics shown for this build; dx prints each one twice.
         self.seen: set[tuple[str, str, str]] = set()
 
@@ -286,6 +291,8 @@ class Build:
         if not (level.startswith("error") or level == "warning"):
             return
         message = one_line(str(item.get("message", "")))
+        if message.startswith(JOBSERVER):
+            return
         spans = item.get("spans") or []
         span = next((s for s in spans if s.get("is_primary")), spans[0] if spans else None)
         if span is None and SUMMARY.match(message):
@@ -320,6 +327,8 @@ class Build:
                 self.begin()
             return
         if level == "DEBUG":
+            if text.startswith("Patch rebuild"):
+                self.begin()
             if self.screen.verbose:
                 self.screen.entry("debug", text)
             return
@@ -333,11 +342,10 @@ class Build:
             took = seconds(int(patched[2]) / 1000)
             self.screen.entry("ok", f"Patched {patched[1]} in {took}{self.tally()}")
         elif text.startswith(("Build failed", "Failed to hot-patch")):
+            # The compiler's errors for a patch come on the lines under this record, so the line
+            # waits for them; see `settle`.
             self.state = "failed"
-            counts = self.tally().removeprefix(", ")
-            if text.startswith("Build failed") and counts:
-                text = f"Build failed: {counts}"
-            self.screen.entry("error", text)
+            self.failure = text
         elif text.startswith("Build completed"):
             self.state = "ready"
             first = "launching app" in text
@@ -350,6 +358,16 @@ class Build:
             if text.startswith(("Full rebuild", "Starting full rebuild")):
                 self.begin()
             self.screen.entry({"INFO": "info", "WARN": "warning", "ERROR": "error"}[level], text)
+
+    def settle(self) -> None:
+        """Prints the failure the last record held back, once its errors are in."""
+        if self.failure is None:
+            return
+        text, self.failure = self.failure, None
+        counts = self.tally().removeprefix(", ")
+        if text.startswith("Build failed") and counts:
+            text = f"Build failed: {counts}"
+        self.screen.entry("error", text)
 
     def took(self) -> float:
         return time.monotonic() - self.started
@@ -608,11 +626,16 @@ class Serve:
             *lines, self.log_pending = (self.log_pending + chunk).split(b"\n")
             for line in lines:
                 if match := RECORD.match(line.decode(errors="replace")):
+                    self.build.settle()
                     before = (self.build.state, self.build.patches)
                     self.build.record(match[1], match[3])
                     if (self.build.state, self.build.patches) != before:
                         patched = self.build.patches != before[1]
                         self.tell_all(b"patched\n" if patched else b"")
+                elif start := JSON_START.search(line):
+                    # A failed patch logs the compiler's output under its record, not on screen.
+                    self.build.compiler(line[start.start() :].rstrip(b"\r"))
+        self.build.settle()
 
 
 def main() -> int:
