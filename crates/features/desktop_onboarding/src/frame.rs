@@ -14,7 +14,7 @@ use super::{
 };
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_lg, fs_sm, fs_xl, fs_xxl, radius_lg, radius_sm, Theme, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, spinner, tooltip};
+use patchwork_design_components::{BtnKind, btn, icon_button, spinner};
 use patchwork_design_icons::icon;
 
 /// The logo's colours as a fill, from `a` to `b`.
@@ -188,12 +188,12 @@ impl Render for Onboarding {
                             16.,
                             cx,
                         )
-                        .aria_toggled((!light).into())
-                        .tooltip(tooltip(if light {
+                        .toggled(!light)
+                        .tooltip(if light {
                             "Light theme (switch to dark)"
                         } else {
                             "Dark theme (switch to light)"
-                        }))
+                        })
                         .on_click(cx.listener(|_, _, _, cx| cx.emit(OnboardingEvent::ToggleTheme))),
                     )
                     .child(
@@ -357,6 +357,6 @@ impl Render for Onboarding {
 }
 
 /// `.btn-lg`: a taller, wider button.
-fn large(b: gpui::Stateful<gpui::Div>) -> gpui::Stateful<gpui::Div> {
+fn large(b: patchwork_design_components::Button) -> patchwork_design_components::Button {
     b.h(px(36.)).px(px(20.))
 }

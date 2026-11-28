@@ -221,7 +221,7 @@ fn strokes(row: &GraphRow) -> Vec<Stroke> {
     out_strokes
 }
 
-fn circle_path(c: Point<Pixels>, r: f32, stroke: Option<f32>) -> Option<gpui::Path<Pixels>> {
+fn circle_path(c: Point<Pixels>, r: f32, stroke: Option<f32>) -> Option<gpui::Path> {
     let r = px(r);
     let mut path = match stroke {
         Some(width) => PathBuilder::stroke(px(width)),

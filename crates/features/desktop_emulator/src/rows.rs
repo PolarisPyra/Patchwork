@@ -12,7 +12,7 @@ use super::tools::device_menu;
 use patchwork_design_components::{menu::Menu, menu::MenuItem};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, radius, Theme, theme};
-use patchwork_design_components::{BtnKind, btn, button, icon_button, spinner, tooltip};
+use patchwork_design_components::{BtnKind, btn, button, icon_button, spinner};
 use patchwork_design_icons::icon;
 
 /// A row that is one of several choices: a dot, filled when it is the one picked, then what its
@@ -104,7 +104,7 @@ impl AndroidPanel {
             14.,
             cx,
         )
-        .tooltip(tooltip("Run the app"))
+        .tooltip("Run the app")
         .on_click(cx.listener(move |this, _, _, cx| {
             cx.stop_propagation();
             this.select(key.clone(), cx);
@@ -180,7 +180,7 @@ impl AndroidPanel {
         let device = device.clone();
         icon_button(id, format!("More for {name}"), IconName::DotsThree, 16., cx)
             .aria_expanded(open)
-            .tooltip(tooltip("More"))
+            .tooltip("More")
             .on_click(cx.listener(move |this, e, window, cx| {
                 cx.stop_propagation();
                 this.open_device_menu(&device, e, window, cx);
@@ -233,7 +233,7 @@ impl AndroidPanel {
                         14.,
                         cx,
                     )
-                    .tooltip(tooltip("Stop"))
+                    .tooltip("Stop")
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.stop(&name, serial.clone(), cx);
@@ -254,7 +254,7 @@ impl AndroidPanel {
                         cx,
                     )
                     .aria_expanded(open)
-                    .tooltip(tooltip("More"))
+                    .tooltip("More")
                     .on_click(cx.listener(move |this, e, window, cx| {
                         cx.stop_propagation();
                         this.open_avd_menu(&more, e, window, cx);
@@ -384,7 +384,7 @@ impl AndroidPanel {
                 14.,
                 cx,
             )
-            .tooltip(tooltip("Stop"))
+            .tooltip("Stop")
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
                 this.stop(&key, serial.clone(), cx);

@@ -7,7 +7,7 @@ use gpui::{Role, Window, div, prelude::*, px};
 use patchwork_design_components::menu::Menu;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, radius_sm, theme};
-use patchwork_design_components::{icon_button, tooltip};
+use patchwork_design_components::icon_button;
 use super::open_tabs::{Dock, DockEvent, DockTab};
 use super::tabs::TOOL;
 
@@ -82,12 +82,12 @@ impl Dock {
                 cx,
             )
             .size(px(TOOL))
-            .tooltip(tooltip("Restore panel size"))
+            .tooltip("Restore panel size")
             .on_click(cx.listener(|this, _, _, cx| this.set_maximized(false, cx)))
         } else {
             icon_button("panel-close", "Close panel", IconName::X, 14., cx)
                 .size(px(TOOL))
-                .tooltip(tooltip("Close panel (Ctrl+`)"))
+                .tooltip("Close panel (Ctrl+`)")
                 .on_click(cx.listener(|_, _, _, cx| cx.emit(DockEvent::Close)))
         };
         div()

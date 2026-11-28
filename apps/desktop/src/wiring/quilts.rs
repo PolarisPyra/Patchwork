@@ -23,7 +23,7 @@ use crate::window::Workspace;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_md, radius_lg};
 use patchwork_design_text::display_title;
-use patchwork_design_components::{icon_button, popup_shadow, tooltip};
+use patchwork_design_components::{icon_button, popup_shadow};
 
 /// The card's widest and tallest; a smaller window gets a smaller card.
 const SIZE: (f32, f32) = (440., 640.);
@@ -279,7 +279,7 @@ impl Workspace {
                     )
                     .child(
                         icon_button("quilt-chat-close", "Close chat", IconName::X, 14., cx)
-                            .tooltip(tooltip("Close chat"))
+                            .tooltip("Close chat")
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.close_quilt_chat(window, cx);
                             })),

@@ -60,7 +60,9 @@ impl AssetSource for Assets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
         let path = path.split_once('?').map_or(path, |(path, _)| path);
         if path.starts_with("icons/") {
-            return Ok(patchwork_design_icons::load_icon_svg(path));
+            // gpui-component's own icons, such as the spinner's, where Patchwork has none.
+            return Ok(patchwork_design_icons::load_icon_svg(path)
+                .or_else(|| gpui::assets::Assets.load(path).ok().flatten()));
         }
         if let Some(name) = path.strip_prefix("app-icons/") {
             return Ok(Logos::get(&format!("logos/{name}")).map(|file| file.data));

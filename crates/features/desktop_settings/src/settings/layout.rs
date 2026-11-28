@@ -221,7 +221,7 @@ impl Render for SettingsDialog {
                                                 16.,
                                                 cx,
                                             )
-                                            .tooltip(patchwork_design_components::tooltip("Close"))
+                                            .tooltip("Close")
                                             .on_click(
                                                 cx.listener(|_, _, _, cx| {
                                                     cx.emit(SettingsEvent::Closed);

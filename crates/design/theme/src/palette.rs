@@ -511,6 +511,7 @@ pub fn apply(mut applied: Applied, appearance: WindowAppearance, cx: &mut App) {
     });
     TEXT_SCALE.store(applied.text_size.scale().to_bits(), Ordering::Relaxed);
     cx.set_reduce_motion(applied.reduce_motion);
+    crate::component_theme::mirror(&theme, cx);
     cx.set_global(theme);
     cx.set_global(Schemed(Box::new(schemed)));
     cx.set_global(Look(Arc::new(applied)));

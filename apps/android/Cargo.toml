@@ -24,7 +24,7 @@ patchwork-themes.workspace = true
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.15"
-gpui_android = { path = "../../vendor/gpui_android" }
+patchwork-android-platform.workspace = true
 log = { workspace = true, default-features = true }
 
 [lints]

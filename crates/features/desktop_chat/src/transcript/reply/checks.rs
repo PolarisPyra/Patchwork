@@ -230,7 +230,7 @@ pub fn checks_card<W: ChatWindow>(
             rerunning,
             t,
         )
-        .tooltip(tooltip(tip))
+        .tooltip(tip)
         .when(rerunning, |b| b.child(spinner(13., t.text_muted)))
         .child(label);
         if rerunning {

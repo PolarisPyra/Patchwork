@@ -37,7 +37,12 @@ fn default_badge(t: &Theme) -> Div {
 }
 
 /// `.badge`, green when `ok`, red when `bad`.
-pub(super) fn status_badge(text: impl Into<SharedString>, ok: bool, bad: bool, t: &Theme) -> Div {
+pub(super) fn status_badge(
+    text: impl Into<SharedString>,
+    ok: bool,
+    bad: bool,
+    t: &Theme,
+) -> patchwork_design_components::Tag {
     let b = badge(text, t);
     if ok {
         b.bg(t.success.opacity(0.15)).text_color(t.success)
@@ -176,7 +181,7 @@ impl SettingsDialog {
                                 false,
                                 &t,
                             )
-                            .tooltip(patchwork_design_components::tooltip(command.clone()))
+                            .tooltip(command.clone())
                             .child("Copy Update")
                             .on_click(cx.listener(
                                 move |_, _, _, cx| {
@@ -231,7 +236,7 @@ impl SettingsDialog {
                             false,
                             &t,
                         )
-                        .tooltip(patchwork_design_components::tooltip(path.clone()))
+                        .tooltip(path.clone())
                         .min_w(px(fs(ACTION_W)))
                         .child("Auto-detect")
                         .on_click(cx.listener(move |d, _, _, cx| d.set_agent_path(kind, None, cx))),

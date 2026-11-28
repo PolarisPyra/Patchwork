@@ -224,7 +224,7 @@ impl Canvas {
                         14.,
                         cx,
                     )
-                    .tooltip(tooltip("Show uncommitted changes"))
+                    .tooltip("Show uncommitted changes")
                     .on_click(cx.listener(|this, _, _, cx| this.clear_revision(cx))),
                 )
                 .into_any_element(),

@@ -448,7 +448,7 @@ impl Render for DeviceScreen {
                 ]
                 .map(|(id, label, glyph, key)| {
                     icon_button(id, label, glyph, 16., cx)
-                        .tooltip(tooltip(label))
+                        .tooltip(label)
                         .on_click(cx.listener(move |this, _, _, _| this.key(key)))
                 }),
             );

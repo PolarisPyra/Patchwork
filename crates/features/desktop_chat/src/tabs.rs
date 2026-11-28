@@ -278,7 +278,7 @@ pub fn tab_strip<W: ChatWindow>(
                 cx,
             )
             .flex_none()
-            .tooltip(tooltip("Add a tab"))
+            .tooltip("Add a tab")
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |w, e: &MouseDownEvent, window, cx| {
@@ -308,7 +308,7 @@ pub fn tab_strip<W: ChatWindow>(
 fn layouts_button<W: ChatWindow>(cx: &mut Context<W>) -> impl IntoElement + use<W> {
     icon_button("chat-layouts", "Layouts", IconName::SquareGridFour, 14., cx)
         .flex_none()
-        .tooltip(tooltip("Layouts"))
+        .tooltip("Layouts")
         .on_mouse_down(
             MouseButton::Left,
             cx.listener(|w, e: &MouseDownEvent, window, cx| {
@@ -348,7 +348,7 @@ fn restore_button<W: ChatWindow>(cx: &mut Context<W>) -> impl IntoElement + use<
         cx,
     )
     .flex_none()
-    .tooltip(tooltip("Show all panes"))
+    .tooltip("Show all panes")
     .on_click(cx.listener(|w, _, _, cx| w.toggle_maximized(cx)))
 }
 
@@ -457,7 +457,7 @@ fn tab<W: ChatWindow>(
         )
         .flex_none()
         .size(px(20.))
-        .tooltip(tooltip("Close tab"))
+        .tooltip("Close tab")
         .when(!on, |b| {
             b.opacity(0.)
                 .group_hover("chat-tab", |s| s.opacity(1.))

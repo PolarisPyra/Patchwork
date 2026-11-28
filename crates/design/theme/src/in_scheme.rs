@@ -35,14 +35,6 @@ impl std::fmt::Debug for InSchemeElement {
     }
 }
 
-impl IntoElement for InSchemeElement {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
-        self
-    }
-}
-
 impl Element for InSchemeElement {
     type RequestLayoutState = ();
     type PrepaintState = ();

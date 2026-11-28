@@ -7,9 +7,9 @@ use std::rc::Rc;
 
 use gpui::{
     App, Bounds, ClipboardItem, CursorStyle, DispatchPhase, Element, ElementId, GlobalElementId,
-    Hitbox, HitboxBehavior, Hsla, InspectorElementId, IntoElement, LayoutId, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString, StyledText,
-    TextLayout, Window, fill, point, px,
+    Hitbox, HitboxBehavior, Hsla, InspectorElementId, LayoutId, MouseButton, MouseDownEvent,
+    MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString, StyledText, TextLayout, Window,
+    fill, point, px,
 };
 
 use super::owner::{Owner, claim, to_primary};
@@ -118,14 +118,6 @@ impl Selectable {
     #[must_use]
     pub fn links(mut self, links: Vec<(Range<usize>, SharedString)>) -> Self {
         self.links = links;
-        self
-    }
-}
-
-impl IntoElement for Selectable {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
         self
     }
 }

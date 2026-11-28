@@ -325,7 +325,7 @@ impl AndroidPanel {
                     14.,
                     cx,
                 )
-                .tooltip(tooltip("Reload"))
+                .tooltip("Reload")
                 .on_click(cx.listener(|this, _, _, cx| this.reload(false, cx)))
                 .into_any_element(),
             );
@@ -338,14 +338,14 @@ impl AndroidPanel {
                         14.,
                         cx,
                     )
-                    .tooltip(tooltip("Restart"))
+                    .tooltip("Restart")
                     .on_click(cx.listener(|this, _, _, cx| this.reload(true, cx)))
                     .into_any_element(),
                 );
             }
             controls.push(
                 icon_button("android-stop-run", "Stop the run", IconName::Stop, 14., cx)
-                    .tooltip(tooltip("Stop the run"))
+                    .tooltip("Stop the run")
                     .on_click(cx.listener(|this, _, _, cx| this.stop_run(cx)))
                     .into_any_element(),
             );
@@ -353,9 +353,9 @@ impl AndroidPanel {
         let log_open = self.log.is_some();
         controls.push(
             icon_button("android-log", "App log", IconName::ListBullets, 14., cx)
-                .aria_toggled(log_open.into())
+                .toggled(log_open)
                 .when(log_open, |button| button.bg(t.bg_selected_muted))
-                .tooltip(tooltip("Log"))
+                .tooltip("Log")
                 .on_click(cx.listener(|this, _, _, cx| this.toggle_log(cx)))
                 .into_any_element(),
         );

@@ -6,7 +6,7 @@ use gpui::{
     Anchor, App, BoxShadow, Div, ElementId, Role, SharedString, Stateful, Window, anchored,
     deferred, div, point, prelude::*, px,
 };
-use patchwork_design_theme::{fs_md, radius, radius_sm, Theme, theme};
+use patchwork_design_theme::{fs_md, radius, radius_sm, Theme};
 
 /// `Dropdown`'s menu: a raised box with a strong border and the popup shadow.
 #[must_use]
@@ -108,32 +108,8 @@ pub fn menu_item(
         .hover(move |s| s.bg(hover))
 }
 
-/// A tooltip: a small box with `text` beside the pointer.
+/// A tooltip: gpui-component's, with `text` beside the pointer.
 pub fn tooltip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> gpui::AnyView {
     let text = text.into();
-    move |_, cx| {
-        let text = text.clone();
-        cx.new(|_| Tooltip(text)).into()
-    }
-}
-
-pub(crate) struct Tooltip(pub(crate) SharedString);
-
-impl Render for Tooltip {
-    fn render(&mut self, _: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
-        let t = theme(cx);
-        div()
-            .max_w(px(360.))
-            .rounded(px(radius_sm()))
-            .border_1()
-            .border_color(t.border_strong)
-            .bg(t.bg_elevated)
-            .px(px(6.))
-            .py(px(2.))
-            .text_size(px(patchwork_design_theme::fs_sm()))
-            .line_height(px(16.))
-            .text_color(t.text)
-            .shadow(popup_shadow(t))
-            .children(self.0.split('\n').map(|line| div().child(line.to_string())))
-    }
+    move |window, cx| gpui::component::tooltip::Tooltip::new(text.clone()).build(window, cx)
 }

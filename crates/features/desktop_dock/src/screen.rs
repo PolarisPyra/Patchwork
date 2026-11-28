@@ -156,7 +156,7 @@ impl Dock {
                     )
                     .child(
                         btn("screen-live", "Live", BtnKind::Plain, false, &t)
-                            .aria_toggled(live.into())
+                            .toggled(live)
                             .when(live, |b| b.bg(t.bg_selected_muted).text_color(fg))
                             .child("Live")
                             .on_click(cx.listener(|this, _, _, cx| {

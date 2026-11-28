@@ -440,7 +440,6 @@ impl AgentPage {
                     SharedString::from(format!("agent-project-{}", project.id)),
                     project.name.clone(),
                     on,
-                    &t,
                 )
                 .text_size(px(fs_md()))
                 .on_click(cx.listener(move |this, _, _, cx| this.toggle_project(&click, cx))),
@@ -452,13 +451,13 @@ impl AgentPage {
             .child(heading("Projects", &t))
             .child(projects)
             .child(heading("Tools", &t))
-            .child(self.tools(&t, cx))
+            .child(self.tools(cx))
             .into_any_element()
     }
 
     /// What the agent's runs may use: a box per kind of call and per MCP server, checked when
     /// allowed.
-    fn tools(&self, t: &Theme, cx: &mut Context<Self>) -> Stateful<Div> {
+    fn tools(&self, cx: &mut Context<Self>) -> Stateful<Div> {
         let mut list = div()
             .id("agent-tools")
             .role(Role::Group)
@@ -473,14 +472,9 @@ impl AgentPage {
         ] {
             let on = !self.agent.blocked.kinds.contains(&kind);
             list = list.child(
-                checkbox(
-                    SharedString::from(format!("agent-tool-{label}")),
-                    label,
-                    on,
-                    t,
-                )
-                .text_size(px(fs_md()))
-                .on_click(cx.listener(move |this, _, _, cx| this.toggle_kind(kind, cx))),
+                checkbox(SharedString::from(format!("agent-tool-{label}")), label, on)
+                    .text_size(px(fs_md()))
+                    .on_click(cx.listener(move |this, _, _, cx| this.toggle_kind(kind, cx))),
             );
         }
         // A blocked server that is gone stays listed, so it can be let through again.
@@ -498,7 +492,6 @@ impl AgentPage {
                     SharedString::from(format!("agent-mcp-{name}")),
                     format!("MCP: {name}"),
                     on,
-                    t,
                 )
                 .text_size(px(fs_md()))
                 .on_click(cx.listener(move |this, _, _, cx| this.toggle_server(&click, cx))),

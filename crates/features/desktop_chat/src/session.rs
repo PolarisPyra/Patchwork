@@ -243,7 +243,8 @@ pub trait SessionExt: ChatWindow {
     fn on_event(&mut self, envelope: ChatEventEnvelope, cx: &mut Context<Self>) {
         match &envelope.event {
             ChatEvent::ApprovalResolved { approval_id, .. } => {
-                cx.dismiss_system_notification(&format!("{}|{approval_id}", envelope.chat_id));
+                cx.dismiss_system_notification(&format!("{}|{approval_id}", envelope.chat_id))
+                    .detach();
             }
             // A finished reply adds to what Costs counts, and Source Control shows where its
             // files ended, whether or not the file watcher saw every change.

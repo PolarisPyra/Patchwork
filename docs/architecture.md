@@ -3,9 +3,9 @@
 ## Repo layout
 
 The repo is a Cargo workspace. `apps/` holds only the runnable targets, which are thin shells.
-Every library crate is under `crates/`, ordered by layer (see [layers.md](layers.md)). A vendored
-GPUI stack is under `vendor/`, kept out of the workspace members so workspace lints target
-Patchwork's code (see [vendor/README.md](../vendor/README.md)).
+Every library crate is under `crates/`, ordered by layer (see [layers.md](layers.md)). GPUI comes
+from crates.io through Longbridge's `gpui-kit`, which bundles GPUI, gpui-base and gpui-component;
+`use gpui::...` resolves to it.
 
 ### Applications (`apps/`)
 
@@ -27,8 +27,8 @@ Patchwork's code (see [vendor/README.md](../vendor/README.md)).
     restart, and the hot reload bar
   - `src/row_menu/`, `src/machines.rs` — the sidebar rows' context menu and the machines view
 - `apps/android` (`patchwork-android`) — the Android client, a GPUI app that connects to a running
-  Patchwork. It runs on `vendor/gpui_android`, GPUI's Android backend, and is built into an APK by
-  `cargo run android` (`scripts/cargo-android`). It reads `patchwork_client::Session`, draws with
+  Patchwork. It runs on `crates/patchwork_android_platform`, GPUI's Android backend, and is built
+  into an APK by `cargo run android` (`scripts/cargo-android`). It reads `patchwork_client::Session`, draws with
   the design and view crates, and never links the engine.
   - `src/app.rs` — loads the shared fonts and theme and opens the window
   - `src/nav.rs` — the root view, which switches between the `mobile` crate's screens on their
@@ -83,8 +83,9 @@ on `patchwork-model` or an engine crate.
   embedded assets the window loads
 - `tasks` (`patchwork-design-tasks`) — view task helpers: work off the UI thread, timers, and the
   file picker
-- `components` (`patchwork-design-components`) — buttons, inputs, menus, dialogs, popovers,
-  tooltips, avatars, scrollbars, and motion
+- `components` (`patchwork-design-components`) — Patchwork's styling over gpui-component's
+  buttons, checkboxes, tags, tooltips and spinner, plus its own inputs, menus, dialogs, popovers,
+  avatars and scrollbars
 - `text` (`patchwork-design-text`) — Markdown layout, syntax highlighting, selectable text, and
   formatting
 - `editor` (`patchwork-design-editor`) — multi-line text area and composer editor
@@ -118,6 +119,8 @@ Pieces drawn from Patchwork's data. They may read `patchwork-model`, never the c
   draws. With the `local` feature, `AppState` (settings, chats, projects, agents, quilts, chat
   apps) and `GitModel` are kept current from an in-process `Core` for the desktop, and
   `local::core` re-exports the core, the server and the gateway for the features.
+- `crates/patchwork_android_platform` (`patchwork-android-platform`) — GPUI's platform on Android:
+  the activity's looper, input, fonts, and a Vulkan surface through wgpu.
 - `crates/patchwork_themes` (`patchwork-themes`) — theme, scene, and code theme files as data.
 - `crates/patchwork_vault` (`patchwork-vault`) — encrypted secret vault (XChaCha20-Poly1305,
   Argon2id passwords, and recovery keys).

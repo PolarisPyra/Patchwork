@@ -12,7 +12,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, choices, segmented, select_box};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, radius_sm, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, tooltip};
+use patchwork_design_components::{BtnKind, btn, icon_button};
 
 pub(super) fn rule_row(
     d: &mut SettingsDialog,
@@ -71,7 +71,7 @@ pub(super) fn rule_row(
     )
     .aria_expanded(open)
     .text_color(t.text_muted)
-    .tooltip(tooltip("Move to…"))
+    .tooltip("Move to…")
     .on_click(choices(
         menu_key,
         "Move rule",

@@ -11,7 +11,7 @@ use gpui::{
 use patchwork_design_components::dialog;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_md, fs_sm, fs_xs, radius, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, spinner, tooltip};
+use patchwork_design_components::{BtnKind, btn, icon_button, spinner};
 use patchwork_design_icons::icon;
 
 impl Focusable for AddProject {
@@ -159,7 +159,7 @@ impl Render for AddProject {
                                     16.,
                                     cx,
                                 )
-                                .tooltip(tooltip("Machines"))
+                                .tooltip("Machines")
                                 .on_click(
                                     cx.listener(|this, _, _, cx| this.show_machines(false, cx)),
                                 ),
@@ -173,7 +173,7 @@ impl Render for AddProject {
                                 16.,
                                 cx,
                             )
-                            .tooltip(tooltip("Parent folder"))
+                            .tooltip("Parent folder")
                             .map(|b| match parent {
                                 Some(parent) => b.on_click(cx.listener(move |this, _, _, cx| {
                                     this.browse(Some(parent.clone()), cx);

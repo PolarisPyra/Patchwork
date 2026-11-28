@@ -12,6 +12,8 @@ pub(crate) mod motion;
 pub(crate) mod popover;
 pub(crate) mod scrollbar;
 
+pub use gpui::component::button::Button;
+pub use gpui::component::tag::Tag;
 pub use inputs::{
     BtnKind, badge, btn, button, checkbox, dropdown_chip, focus_ring, icon_button, input_box, mix,
 };

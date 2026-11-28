@@ -12,7 +12,7 @@ use patchwork_client::local::core::chats::{BackgroundTask, TaskStatus};
 
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, radius, Theme};
-use patchwork_design_components::{button, icon_button, spinner, tooltip};
+use patchwork_design_components::{button, icon_button, spinner};
 
 /// What each kind of task the agents report is called here. Any other kind is shown as it comes.
 fn kind_label(kind: &str) -> &str {
@@ -132,7 +132,7 @@ fn cut_off_row<W: ChatWindow>(
                 cx,
             )
             .flex_none()
-            .tooltip(tooltip("Dismiss"))
+            .tooltip("Dismiss")
             .on_click(cx.listener(move |w, _, _, cx| w.dismiss_cut_off(tool_id.clone(), cx))),
         )
 }

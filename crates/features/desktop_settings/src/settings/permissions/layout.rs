@@ -18,7 +18,7 @@ use patchwork_client::local::core::permissions::{
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, choices, segmented, select_box, switch, token_row};
 use patchwork_design_theme::theme;
-use patchwork_design_components::{BtnKind, btn, tooltip};
+use patchwork_design_components::{BtnKind, btn};
 use patchwork_design_icons::{IconName, icon};
 
 pub fn render(
@@ -104,7 +104,7 @@ pub fn render(
                             );
                         }))
                     } else {
-                        b.tooltip(tooltip("The starting rules are all in place"))
+                        b.tooltip("The starting rules are all in place")
                     }
                 }),
             )

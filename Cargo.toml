@@ -30,6 +30,7 @@ members = [
   "crates/features/desktop_chat",
   "apps/remote",
   "apps/android",
+  "crates/patchwork_android_platform",
   "crates/patchwork_model",
   "crates/patchwork_harness",
   "crates/patchwork_platform",
@@ -51,8 +52,6 @@ members = [
   "crates/patchwork_protocol",
   "crates/patchwork_client",
 ]
-# Vendored GPUI builds as path dependencies, not members, so workspace checks skip its upstream tests.
-exclude = ["vendor"]
 # A bare `cargo run` or `cargo build` is for the app.
 default-members = ["apps/desktop"]
 
@@ -116,6 +115,7 @@ patchwork-views-logos = { path = "crates/views/logos" }
 patchwork-views-chat = { path = "crates/views/chat" }
 patchwork-views-actions = { path = "crates/views/actions" }
 patchwork-vault = { path = "crates/patchwork_vault" }
+patchwork-android-platform = { path = "crates/patchwork_android_platform" }
 
 anyhow = { version = "1", default-features = false }
 async-io = { version = "2", default-features = false }
@@ -129,8 +129,11 @@ enigo = { version = "0.6", default-features = false }
 futures = { version = "0.3", default-features = false }
 globset = { version = "0.4", default-features = false }
 http = { version = "1", default-features = false }
-gpui = { path = "vendor/gpui", default-features = false }
-gpui_platform = { path = "vendor/gpui_platform", default-features = false }
+# GPUI through Longbridge's gpui-kit: GPUI itself (`gpui-pre`) plus its base and component layers.
+# `use gpui::...` resolves to gpui-kit, which re-exports GPUI.
+gpui = { package = "gpui-kit", version = "0.11", default-features = false }
+# Only for GPUI features gpui-kit does not forward (hot reload). Must match gpui-kit's exact pin.
+gpui-hot-reload = { package = "gpui-pre", version = "=0.3.14", default-features = false }
 ignore = { version = "0.4", default-features = false }
 image = { version = "0.25", default-features = false }
 keyring = { version = "3", default-features = false }
@@ -139,8 +142,8 @@ log = { version = "0.4", default-features = false, features = ["kv"] }
 mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", default-features = false }
 minisign-verify = { version = "0.3", default-features = false }
-# The Secret Service client GPUI builds on Linux, at the same revision so it is built once.
-oo7 = { git = "https://github.com/zed-industries/oo7", rev = "731c1215edb6905876c6137ab300428c7b8d7c13", default-features = false }
+# The Secret Service client GPUI builds on Linux, at the same release so it is built once.
+oo7 = { version = "0.6", default-features = false }
 notify = { version = "8", default-features = false }
 portable-pty = { version = "0.9", default-features = false }
 prost = { version = "0.14", default-features = false }

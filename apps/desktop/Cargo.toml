@@ -47,7 +47,7 @@ chrono = { workspace = true, features = ["clock"] }
 dirs.workspace = true
 futures = { workspace = true, default-features = true }
 gpui = { workspace = true, default-features = true }
-gpui_platform = { workspace = true, default-features = true, features = ["font-kit", "wayland", "x11"] }
+gpui-hot-reload = { workspace = true, optional = true }
 image = { workspace = true, features = ["png", "jpeg", "webp"] }
 log = { workspace = true, default-features = true }
 # The global allocator: it is faster than the system one on the allocation-heavy paths of
@@ -60,7 +60,7 @@ vt100 = { workspace = true, default-features = true }
 [features]
 # Patches changed code into the running app in place: GPUI connects to `dx serve --hot-patch`
 # (`cargo run desktop`) and every view renders through a patchable function.
-hot-reload = ["gpui/hot-reload"]
+hot-reload = ["gpui-hot-reload/hot-reload"]
 
 [build-dependencies]
 # Embeds the Windows icon in the exe.

@@ -69,7 +69,7 @@ impl Dock {
         let tool = |id: &'static str, label: &'static str, name: IconName, cx: &App| {
             icon_button(id, label, name, 14., cx)
                 .size(px(TOOL))
-                .tooltip(tooltip(label))
+                .tooltip(label)
         };
         match self.tab {
             DockTab::Terminal => {
@@ -103,7 +103,7 @@ impl Dock {
                 let mut new = div().flex().items_center().child(
                     icon_button("terminal-new", "New terminal", IconName::Plus, 15., cx)
                         .size(px(TOOL))
-                        .tooltip(tooltip("New terminal (Ctrl+Shift+`)"))
+                        .tooltip("New terminal (Ctrl+Shift+`)")
                         .on_click(cx.listener(|this, _, _, cx| this.start(true, None, cx))),
                 );
                 // An SSH host starts the user's login shell there; the shells listed are this
@@ -144,7 +144,7 @@ impl Dock {
                         cx,
                     )
                     .size(px(TOOL))
-                    .tooltip(tooltip("More"))
+                    .tooltip("More")
                     .aria_expanded(self.menu_open(&MenuFor::More))
                     .on_click(cx.listener(Dock::more_menu))
                     .into_any_element(),
