@@ -19,7 +19,7 @@ use crate::host::SourceControlEvent;
 use patchwork_design_components::menu::MenuItem;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_md, fs_sm, radius_sm, Theme};
-use patchwork_design_components::{button, mix, tooltip};
+use patchwork_design_components::{button, mix};
 
 /// Row height, lane width, and the radius of the bends where a lane shifts over.
 const ROW: f32 = 22.;
@@ -381,14 +381,6 @@ pub fn section(
         let undoable = is_live && !commit.replies.is_empty();
         let menu_open = view.menu_for(&commit.hash);
         let group = SharedString::from(format!("commit:{}", commit.hash));
-        let title = format!(
-            "{}\n{}, {}\n{}{}",
-            commit.subject,
-            commit.author,
-            patchwork_design_text::format_date(commit.time),
-            commit.hash.chars().take(8).collect::<String>(),
-            if commit.pushed { "" } else { "\nNot pushed" }
-        );
         let mark = chat.map(|th| {
             let logo = agent_logo(th.agent, th.model.as_deref(), 12.);
             if is_live {
@@ -404,7 +396,6 @@ pub fn section(
                 .justify_center()
                 .rounded(px(radius_sm()))
                 .hover(move |s| s.bg(hover))
-                .tooltip(tooltip(label))
                 .child(logo)
                 .on_click(move |_, _, cx| {
                     cx.stop_propagation();
@@ -418,7 +409,6 @@ pub fn section(
                     .id(SharedString::from(format!("from:{}", commit.hash)))
                     .role(Role::Image)
                     .aria_label(label.clone())
-                    .tooltip(tooltip(label))
                     .flex()
                     .flex_none()
                     .child(logo)
@@ -436,7 +426,6 @@ pub fn section(
                 .rounded(px(radius_sm()))
                 .text_color(t.text_muted)
                 .hover(move |s| s.bg(hover))
-                .tooltip(tooltip("Undo a reply"))
                 .aria_expanded(menu_open)
                 .when(!menu_open, |b| {
                     b.opacity(0.)
@@ -482,7 +471,6 @@ pub fn section(
             .rounded(px(radius_sm()))
             .text_color(t.text_muted)
             .hover(move |s| s.bg(hover))
-            .tooltip(tooltip("Commit actions"))
             .aria_expanded(more_open)
             .when(!more_open, |b| {
                 b.opacity(0.)
@@ -527,7 +515,6 @@ pub fn section(
                 .pr(px(8.))
                 .pl(px(4.))
                 .hover(move |s| s.bg(hover))
-                .tooltip(tooltip(title))
                 .child(row_graph(row, t.bg_panel))
                 .children(mark)
                 .child(

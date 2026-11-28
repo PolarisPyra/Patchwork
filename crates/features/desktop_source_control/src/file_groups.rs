@@ -8,7 +8,7 @@ use patchwork_client::local::core::source_control::{DiffSide, FileChange, RepoAc
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_md, fs_sm, radius_sm, Theme};
 use patchwork_design_text::{base_name, dir_name};
-use patchwork_design_components::{button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 use crate::host::SourceControlEvent;
 use super::git_status::ChangesView;
@@ -41,7 +41,6 @@ pub(super) fn row_action(
         .rounded(px(radius_sm()))
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover).text_color(fg))
-        .tooltip(tooltip(label.to_string()))
         .opacity(0.)
         .group_hover(group, |s| s.opacity(1.))
         .focus(|s| s.opacity(1.))
@@ -234,7 +233,6 @@ impl ChangesView {
                 .items_baseline()
                 .gap(px(6.))
                 .text_size(px(fs_md()))
-                .tooltip(tooltip(format!("{path} • {label}")))
                 .child(
                     div()
                         .flex_none()

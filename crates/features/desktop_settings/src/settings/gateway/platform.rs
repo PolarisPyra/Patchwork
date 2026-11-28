@@ -2,6 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use patchwork_views_logos::platform_logo;
 use gpui::{AnyElement, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_client::local::core::gateway::{Platform, Status};
@@ -12,7 +15,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, detail_header, switch, token_row, vault_notice};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, theme};
-use patchwork_design_components::{BtnKind, btn};
+
 use patchwork_design_icons::icon;
 
 /// The width of a token or address field.
@@ -182,35 +185,28 @@ fn credential_actions(
         .pt(px(12.))
         .children(done)
         .child(
-            btn(
-                SharedString::from(format!("gw-{id}-{key}-clear")),
-                format!("Clear {name}"),
-                BtnKind::Plain,
-                false,
-                &t,
-            )
-            .child("Clear")
-            .on_click(cx.listener(move |d, _, _, cx| {
-                if let Some(area) = d.field_area(&cleared) {
-                    area.update(cx, |a, cx| a.set_text("", cx));
-                }
-                d.gateway.just_saved.remove(&(platform, key));
-                if saved {
-                    d.save_credential(platform, key, String::new(), cx);
-                }
-                cx.notify();
-            })),
+            Button::new(SharedString::from(format!("gw-{id}-{key}-clear")))
+                .small()
+                .accessibility_label(format!("Clear {name}"))
+                .child("Clear")
+                .on_click(cx.listener(move |d, _, _, cx| {
+                    if let Some(area) = d.field_area(&cleared) {
+                        area.update(cx, |a, cx| a.set_text("", cx));
+                    }
+                    d.gateway.just_saved.remove(&(platform, key));
+                    if saved {
+                        d.save_credential(platform, key, String::new(), cx);
+                    }
+                    cx.notify();
+                })),
         )
         .child(
-            btn(
-                SharedString::from(format!("gw-{id}-{key}-save")),
-                format!("Save {name}"),
-                BtnKind::Primary,
-                false,
-                &t,
-            )
-            .child("Save")
-            .on_click(cx.listener(move |d, _, _, cx| d.commit_field(&field, cx))),
+            Button::new(SharedString::from(format!("gw-{id}-{key}-save")))
+                .primary()
+                .small()
+                .accessibility_label(format!("Save {name}"))
+                .child("Save")
+                .on_click(cx.listener(move |d, _, _, cx| d.commit_field(&field, cx))),
         )
 }
 

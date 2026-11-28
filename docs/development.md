@@ -74,7 +74,8 @@ Options after `desktop` go to `dx serve`. It needs `uv` and the dx CLI at the ve
   gpui-kit's.
 - **Icons** live as SVGs under `assets/icons/`. `crates/design/icons` (`patchwork-design-icons`)
   packs and compresses them at build time into `icons.pack` and generates the typed `IconName` enum;
-  in debug builds, icons are read from disk, so an edited icon shows on the next launch.
+  in debug builds, icons are read from disk, so an edited icon shows on the next launch. `IconName`
+  implements gpui-component's `IconNamed`, so a kit button takes one as `.icon(IconName::X)`.
 
 ## Build the AppImage
 

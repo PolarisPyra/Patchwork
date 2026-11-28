@@ -8,11 +8,13 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::io::Write as _;
 use std::time::Duration;
 
 use gpui::{AnyElement, App, Global, Role, Task, div, prelude::*, px};
-use patchwork_design_components::{button, spinner, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::{IconName, icon};
 use patchwork_design_theme::{Theme, fs_xs, radius};
 
@@ -200,7 +202,10 @@ pub(crate) fn bar(t: &Theme, cx: &App) -> Option<AnyElement> {
         .items_center()
         .justify_center()
         .child(if busy {
-            spinner(10., t.text_muted).into_any_element()
+            Spinner::new()
+                .with_size(gpui::px(10.))
+                .color(t.text_muted)
+                .into_any_element()
         } else {
             div().size(px(6.)).rounded_full().bg(dot).into_any_element()
         });
@@ -279,6 +284,5 @@ fn ghost(
         .rounded(px(radius() - 2.))
         .text_color(if lit { t.warning } else { t.text_subtle })
         .hover(move |s| s.bg(hover).text_color(fg))
-        .tooltip(tooltip(label))
         .child(icon(name, 14.))
 }

@@ -3,6 +3,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Selectable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use patchwork_views_logos::{AGENT_KINDS, agent_label};
 use gpui::{AnyElement, ClickEvent, Role, SharedString, div, prelude::*, px};
 use patchwork_client::local::core::chats::AgentPick;
@@ -12,7 +17,6 @@ use crate::settings::controls::{choice, token_row};
 use patchwork_design_components::menu::MenuItem;
 use patchwork_design_theme::Theme;
 use patchwork_design_text::effort_label;
-use patchwork_design_components::{dropdown_chip, spinner};
 
 /// What a chip picks.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -185,8 +189,8 @@ pub(super) fn generator_row(
             .items_center()
             .h(px(28.))
             .px(px(6.))
-            .child(spinner(14., t.text_muted));
-        let chips = agent.then(|| chip(d, Part::Agent, agent_label(pick.agent).to_string(), t, cx));
+            .child(Spinner::new().with_size(gpui::px(14.)).color(t.text_muted));
+        let chips = agent.then(|| chip(d, Part::Agent, agent_label(pick.agent).to_string(), cx));
         return row.children(chips).child(loading).into_any_element();
     };
     let model = pick.model.as_deref().map_or_else(
@@ -218,7 +222,7 @@ pub(super) fn generator_row(
     let chips: Vec<_> = chips
         .into_iter()
         .filter(|(.., shown)| *shown)
-        .map(|(part, current, _)| chip(d, part, current, t, cx))
+        .map(|(part, current, _)| chip(d, part, current, cx))
         .collect();
     row.children(chips).into_any_element()
 }
@@ -228,7 +232,6 @@ fn chip(
     d: &SettingsDialog,
     part: Part,
     current: String,
-    t: &Theme,
     cx: &mut Context<SettingsDialog>,
 ) -> AnyElement {
     let name = match part {
@@ -239,7 +242,13 @@ fn chip(
     let key = SharedString::from(format!("generator-{}", name.to_lowercase()));
     let title = format!("{name} that generates themes and backgrounds");
     let open = d.menu_open(&key);
-    dropdown_chip(key.clone(), format!("{title}: {current}"), current, open, t)
+    Button::new(key.clone())
+        .ghost()
+        .small()
+        .accessibility_label(format!("{title}: {current}"))
+        .label(current)
+        .dropdown_caret(true)
+        .selected(open)
         .on_click(cx.listener(move |d, e: &ClickEvent, window, cx| {
             let items = d.generator_items(part, cx);
             d.toggle_menu(key.clone(), title.clone(), items, e.position(), window, cx);

@@ -4,6 +4,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::sync::Arc;
 
 use gpui::{AnyElement, Div, Hsla, Role, SharedString, Stateful, div, hsla, prelude::*, px};
@@ -14,7 +16,7 @@ use super::layout::{glass, ink, warm};
 use super::requests::{Orchestrator, Outcome, Request};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, fs_xs, radius_lg};
-use patchwork_design_components::{button, spinner};
+use patchwork_design_components::button;
 use patchwork_design_text::display_title;
 use patchwork_design_icons::icon;
 
@@ -63,7 +65,10 @@ fn mark(standing: Standing) -> AnyElement {
             .into_any_element()
     };
     match standing {
-        Standing::Working => spinner(14., ink(0.8)).into_any_element(),
+        Standing::Working => Spinner::new()
+            .with_size(gpui::px(14.))
+            .color(ink(0.8))
+            .into_any_element(),
         Standing::Waiting => glyph(IconName::CircleFill, warm()),
         Standing::Done => glyph(IconName::Check, ink(0.5)),
         Standing::Failed => glyph(IconName::Warning, ink(0.5)),
@@ -154,7 +159,12 @@ impl Orchestrator {
                     .role(Role::Status)
                     .aria_label(format!("Routing: {text}"))
                     .child(line(
-                        Some(spinner(14., ink(0.8)).into_any_element()),
+                        Some(
+                            Spinner::new()
+                                .with_size(gpui::px(14.))
+                                .color(ink(0.8))
+                                .into_any_element(),
+                        ),
                         text,
                         None,
                     ))

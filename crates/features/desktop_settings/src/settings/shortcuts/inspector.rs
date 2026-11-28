@@ -4,10 +4,12 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use gpui::{AnyElement, FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_lg, fs_sm, fs_xs, radius_sm};
-use patchwork_design_components::{BtnKind, btn, tooltip};
 use patchwork_design_icons::icon;
 
 use super::bindings::{Command, FIXED_KEYS, command, default_keys, keys_for};
@@ -100,7 +102,6 @@ fn command_card(
                         .id(("binding-keys", at))
                         .flex_1()
                         .cursor_pointer()
-                        .tooltip(tooltip("See what else runs on this key"))
                         .on_click(cx.listener(move |d, _, _, cx| {
                             if let Some(Some(chord)) = d.shortcuts.overrides.as_ref().map(|o| {
                                 keys_for(o, id).get(at).and_then(|k| Chord::from_stored(k))
@@ -124,7 +125,6 @@ fn command_card(
                             format!("Change this key for {}", c.title),
                             IconName::PencilSimple,
                         )
-                        .tooltip(tooltip("Change"))
                         .on_click(cx.listener(move |d, _, window, cx| {
                             d.record(id, Some(at), window, cx);
                         })),
@@ -136,7 +136,6 @@ fn command_card(
                             format!("Remove this key from {}", c.title),
                             IconName::X,
                         )
-                        .tooltip(tooltip("Remove"))
                         .on_click(cx.listener(move |d, _, _, cx| {
                             let mut keys = keys_for(
                                 d.shortcuts
@@ -187,23 +186,19 @@ fn command_card(
             )
             .when(!other.fixed, |r| {
                 r.child(
-                    btn(
-                        ("unbind-there", at),
-                        "Unbind there",
-                        BtnKind::Plain,
-                        false,
-                        t,
-                    )
-                    .flex_none()
-                    .child("Unbind there")
-                    .on_click(cx.listener(move |d, _, _, cx| {
-                        let overrides = d.shortcuts.overrides.clone().unwrap_or_default();
-                        let keys: Vec<String> = keys_for(&overrides, other_id)
-                            .into_iter()
-                            .filter(|k| *k != key)
-                            .collect();
-                        d.set_keys(other_id, &keys, cx);
-                    })),
+                    Button::new(("unbind-there", at))
+                        .small()
+                        .accessibility_label("Unbind there")
+                        .flex_none()
+                        .child("Unbind there")
+                        .on_click(cx.listener(move |d, _, _, cx| {
+                            let overrides = d.shortcuts.overrides.clone().unwrap_or_default();
+                            let keys: Vec<String> = keys_for(&overrides, other_id)
+                                .into_iter()
+                                .filter(|k| *k != key)
+                                .collect();
+                            d.set_keys(other_id, &keys, cx);
+                        })),
                 )
             })
     });
@@ -266,7 +261,10 @@ fn command_card(
                     .flex_wrap()
                     .gap(px(6.))
                     .child(
-                        btn("add-key", "Add a key", BtnKind::Plain, recording, t)
+                        Button::new("add-key")
+                            .small()
+                            .disabled(recording)
+                            .accessibility_label("Add a key")
                             .child(icon(IconName::Plus, 12.))
                             .child("Add a key")
                             .when(!recording, |b| {
@@ -276,20 +274,19 @@ fn command_card(
                             }),
                     )
                     .when(recording, |r| {
-                        r.child(
-                            btn("cancel-key", "Cancel", BtnKind::Plain, false, t)
-                                .child("Cancel")
-                                .on_click(cx.listener(move |d, _, _, cx| {
-                                    d.show_spot(Spot::Command(id), cx);
-                                })),
-                        )
+                        r.child(Button::new("cancel-key").small().label("Cancel").on_click(
+                            cx.listener(move |d, _, _, cx| {
+                                d.show_spot(Spot::Command(id), cx);
+                            }),
+                        ))
                     })
                     .when(changed && !recording, |r| {
                         r.child(
-                            btn("reset-key", "Reset to default", BtnKind::Plain, false, t)
+                            Button::new("reset-key")
+                                .small()
+                                .accessibility_label("Reset to default")
                                 .child(icon(IconName::ArrowCounterClockwise, 12.))
                                 .child("Reset")
-                                .tooltip(default_label(id))
                                 .on_click(cx.listener(move |d, _, _, cx| {
                                     d.shortcuts.shown_binding = 0;
                                     d.set_keys(id, &default_keys(id), cx);
@@ -302,19 +299,6 @@ fn command_card(
             r.child(label("SHARED KEYS", t)).children(clashes)
         })
         .into_any_element()
-}
-
-/// What Reset gives back, for its tooltip.
-fn default_label(id: &str) -> String {
-    let keys: Vec<String> = default_keys(id)
-        .iter()
-        .map(|k| Chord::from_stored(k).map_or_else(|| k.clone(), |c| c.parts().join("+")))
-        .collect();
-    if keys.is_empty() {
-        "Back to no key".to_owned()
-    } else {
-        format!("Back to {}", keys.join(", "))
-    }
 }
 
 /// A key the editor or the mouse owns.

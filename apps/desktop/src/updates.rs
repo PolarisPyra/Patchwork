@@ -3,6 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use patchwork_views_logos::agent_label;
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,7 +17,7 @@ use patchwork_lifecycle::restart::restart_path;
 
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{radius, radius_sm, Theme};
-use patchwork_design_components::{BtnKind, btn, button, popup_shadow};
+use patchwork_design_components::{button, popup_shadow};
 use patchwork_design_icons::icon;
 use crate::window::Workspace;
 
@@ -171,8 +174,7 @@ impl Workspace {
                             .child(label),
                     )
                     .child(
-                        btn("update-card-action", action, BtnKind::Primary, false, t)
-                            .child(action)
+                        Button::new("update-card-action").primary().small().label(action)
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 if ready {
                                     restart_to_update(&this.core, window, cx);

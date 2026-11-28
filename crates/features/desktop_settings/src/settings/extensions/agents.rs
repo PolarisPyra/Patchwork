@@ -3,6 +3,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use futures::StreamExt;
 use futures::channel::mpsc;
 use gpui::{AnyElement, FontWeight, SharedString, Window, div, prelude::*, px};
@@ -11,7 +15,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, Section, letter_badge, token_row};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_xs, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button};
+
 use patchwork_design_icons::icon;
 
 use patchwork_views_chat::{sigils::SigilKind, sigils::default_sigil};
@@ -159,7 +163,9 @@ pub fn render(
         .child(filter)
         .child(search)
         .child(
-            btn("agent-new", "New agent", BtnKind::Plain, false, &t)
+            Button::new("agent-new")
+                .small()
+                .accessibility_label("New agent")
                 .px(px(10.))
                 .child(icon(IconName::Plus, 13.))
                 .child("New agent")
@@ -199,24 +205,23 @@ pub fn render(
                 .child(letter_badge(if name.is_empty() { "?" } else { name }, 24.))
                 .child(field.flex_1())
                 .child(
-                    btn(
-                        "agent-create",
-                        "Create",
-                        BtnKind::Plain,
-                        name.is_empty(),
-                        &t,
-                    )
-                    .child("Create")
-                    .when(!name.is_empty(), |b| {
-                        b.on_click(cx.listener(|d, _, _, cx| d.create_agent(cx)))
-                    }),
+                    Button::new("agent-create")
+                        .small()
+                        .disabled(name.is_empty())
+                        .label("Create")
+                        .when(!name.is_empty(), |b| {
+                            b.on_click(cx.listener(|d, _, _, cx| d.create_agent(cx)))
+                        }),
                 )
                 .child(
-                    icon_button("agent-cancel", "Cancel", IconName::X, 14., cx).on_click(
-                        cx.listener(|d, _, _, cx| {
+                    Button::new("agent-cancel")
+                        .ghost()
+                        .small()
+                        .icon(IconName::X)
+                        .accessibility_label("Cancel")
+                        .on_click(cx.listener(|d, _, _, cx| {
                             d.cancel_draft(cx);
-                        }),
-                    ),
+                        })),
                 )
                 .into_any_element(),
         );
@@ -267,15 +272,11 @@ pub fn render(
                         .child(model)
                 }))
                 .child(
-                    btn(
-                        SharedString::from(format!("agent-edit-{}", agent.path)),
-                        format!("Edit {}", agent.name),
-                        BtnKind::Plain,
-                        false,
-                        &t,
-                    )
-                    .child("Edit")
-                    .on_click(cx.listener(move |d, _, _, cx| d.edit_file(&path, cx))),
+                    Button::new(SharedString::from(format!("agent-edit-{}", agent.path)))
+                        .small()
+                        .accessibility_label(format!("Edit {}", agent.name))
+                        .child("Edit")
+                        .on_click(cx.listener(move |d, _, _, cx| d.edit_file(&path, cx))),
                 )
                 .into_any_element(),
         );

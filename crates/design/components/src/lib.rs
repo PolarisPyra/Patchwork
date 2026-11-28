@@ -1,5 +1,5 @@
-//! Patchwork's GPUI primitives: buttons, inputs, menus, dialogs, popovers, badges, avatars,
-//! scrollbars, the spinner and the animation clock.
+//! Patchwork's own GPUI primitives, where gpui-component has none: the focusable base, inputs,
+//! menus, dialogs, popovers, avatars, scrollbars and the animation clock.
 
 // Rust guideline compliant 2026-11-27
 
@@ -12,14 +12,9 @@ pub(crate) mod motion;
 pub(crate) mod popover;
 pub(crate) mod scrollbar;
 
-pub use gpui::component::button::Button;
-pub use gpui::component::tag::Tag;
-pub use inputs::{
-    BtnKind, badge, btn, button, checkbox, dropdown_chip, focus_ring, icon_button, input_box, mix,
-};
-pub use motion::{motion_clock, next_step, overflows, redraw_after, spinner};
+pub use inputs::{button, focus_ring, input_box, mix};
+pub use motion::{motion_clock, next_step, overflows, redraw_after};
 pub use popover::{
     above, dialog_shadow, menu_item, palette_shadow, popup, popup_shadow, suggestion_shadow,
-    tooltip,
 };
 pub use scrollbar::{list_scrollbar, scrollbar};

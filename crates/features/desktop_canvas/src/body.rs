@@ -2,6 +2,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::path::PathBuf;
 use gpui::{
     AnyElement, FontWeight, ListHorizontalSizingBehavior, ObjectFit, Role, StyledText, div, img,
@@ -10,7 +15,6 @@ use gpui::{
 use patchwork_model::chats::{Message, StepStatus};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_md, fs_sm, Theme, theme};
-use patchwork_design_components::{BtnKind, btn, spinner, tooltip};
 use patchwork_design_text::base_name;
 use patchwork_design_icons::icon;
 use super::open_file::{Canvas, CanvasTab};
@@ -25,22 +29,18 @@ impl Canvas {
             .as_ref()
             .map(|m| PathBuf::from(&m.absolute))
             .map(|file| {
-                btn(
-                    "open-pdf",
-                    format!("Open {name} in the default app"),
-                    BtnKind::Plain,
-                    false,
-                    t,
-                )
-                .child("Open in default app")
-                .on_click(move |_, _, cx| cx.open_with_system(&file))
+                Button::new("open-pdf")
+                    .small()
+                    .accessibility_label(format!("Open {name} in the default app"))
+                    .child("Open in default app")
+                    .on_click(move |_, _, cx| cx.open_with_system(&file))
             });
         match &self.pdf {
             None => centered(div())
                 .id("pdf-loading")
                 .role(Role::Status)
                 .aria_label(format!("Drawing {name}"))
-                .child(spinner(18., t.text_subtle))
+                .child(Spinner::new().with_size(gpui::px(18.)).color(t.text_subtle))
                 .into_any_element(),
             Some(Err(e)) => centered(div())
                 .flex_col()
@@ -127,7 +127,9 @@ impl Canvas {
                     .child(icon(IconName::Play, 32.))
                     .child(base_name(&path).to_string())
                     .child(
-                        btn("play-video", "Play", BtnKind::Plain, false, &t)
+                        Button::new("play-video")
+                            .small()
+                            .accessibility_label("Play")
                             .child(icon(IconName::Play, 14.))
                             .child("Play")
                             .on_click(move |_, _, cx| cx.open_with_system(&file)),
@@ -146,12 +148,11 @@ impl Canvas {
         match result {
             None => centered(div())
                 .text_color(t.text_subtle)
-                .child(spinner(18., t.text_subtle))
+                .child(Spinner::new().with_size(gpui::px(18.)).color(t.text_subtle))
                 .into_any_element(),
-            Some(Err(e)) => centered(div())
+            Some(Err(_)) => centered(div())
                 .id("canvas-error")
                 .text_color(t.text_muted)
-                .tooltip(tooltip(e.clone()))
                 .child(if active == CanvasTab::Code {
                     "This file can't be displayed. It may have been deleted or is binary."
                 } else {
@@ -303,8 +304,10 @@ impl Canvas {
                         .flex_none()
                         .gap(px(8.))
                         .child(
-                            btn("reject-file", "Reject", BtnKind::Plain, busy, t)
-                                .child("Reject")
+                            Button::new("reject-file")
+                                .small()
+                                .disabled(busy)
+                                .label("Reject")
                                 .when(!busy, |b| {
                                     b.on_click(
                                         cx.listener(|this, _, window, cx| this.reject(window, cx)),
@@ -312,7 +315,11 @@ impl Canvas {
                                 }),
                         )
                         .child(
-                            btn("stage-file", accept, BtnKind::Success, busy || unsettled, t)
+                            Button::new("stage-file")
+                                .success()
+                                .small()
+                                .disabled(busy || unsettled)
+                                .accessibility_label(accept)
                                 .child(icon(
                                     if conflicted {
                                         IconName::Check
@@ -363,7 +370,10 @@ pub(super) fn plan_view(message: Option<&Message>, t: &Theme) -> gpui::Div {
                         StepStatus::Done => icon(IconName::Check, 14.)
                             .text_color(t.accent_text)
                             .into_any_element(),
-                        StepStatus::Running => spinner(14., t.accent_text).into_any_element(),
+                        StepStatus::Running => Spinner::new()
+                            .with_size(gpui::px(14.))
+                            .color(t.accent_text)
+                            .into_any_element(),
                         StepStatus::Error => icon(IconName::X, 14.)
                             .text_color(t.danger)
                             .into_any_element(),
@@ -402,7 +412,6 @@ pub(super) fn plan_view(message: Option<&Message>, t: &Theme) -> gpui::Div {
                             .font_family(font_mono())
                             .text_size(px(fs_sm()))
                             .truncate()
-                            .tooltip(tooltip(file.clone()))
                             .child(file.clone())
                     })),
             )

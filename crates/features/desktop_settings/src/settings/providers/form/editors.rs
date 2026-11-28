@@ -2,6 +2,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use gpui::{Div, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_model::provider::api::Header;
 
@@ -9,7 +14,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_sm, radius_sm, theme};
-use patchwork_design_components::{BtnKind, btn, button, icon_button, spinner};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 use super::layout::{label_text};
 use super::fields::{Form};
@@ -272,26 +277,26 @@ impl SettingsDialog {
                     .justify_between()
                     .child(label_text("Models", &t))
                     .child(
-                        btn(
-                            "fetch-models",
-                            "Fetch models",
-                            BtnKind::Plain,
-                            loading || base_empty,
-                            &t,
-                        )
-                        .child(if loading {
-                            spinner(13., t.text_muted).into_any_element()
-                        } else {
-                            icon(IconName::ArrowsClockwise, 13.).into_any_element()
-                        })
-                        .child(if fetched {
-                            "Refresh list"
-                        } else {
-                            "Fetch models"
-                        })
-                        .when(!loading && !base_empty, |b| {
-                            b.on_click(cx.listener(|d, _, _, cx| d.fetch_models(cx)))
-                        }),
+                        Button::new("fetch-models")
+                            .small()
+                            .disabled(loading || base_empty)
+                            .accessibility_label("Fetch models")
+                            .child(if loading {
+                                Spinner::new()
+                                    .with_size(gpui::px(13.))
+                                    .color(t.text_muted)
+                                    .into_any_element()
+                            } else {
+                                icon(IconName::ArrowsClockwise, 13.).into_any_element()
+                            })
+                            .child(if fetched {
+                                "Refresh list"
+                            } else {
+                                "Fetch models"
+                            })
+                            .when(!loading && !base_empty, |b| {
+                                b.on_click(cx.listener(|d, _, _, cx| d.fetch_models(cx)))
+                            }),
                     ),
             )
             .child(
@@ -320,7 +325,6 @@ impl SettingsDialog {
     }
 
     pub(super) fn headers_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
-        let t = *theme(cx);
         let headers: Vec<Header> = self
             .providers
             .form
@@ -376,27 +380,27 @@ impl SettingsDialog {
                     .child(name)
                     .child(value)
                     .child(
-                        icon_button(
-                            SharedString::from(format!("remove-header-{i}")),
-                            format!("Remove header {label}"),
-                            IconName::X,
-                            14.,
-                            cx,
-                        )
-                        .on_click(cx.listener(move |d, _, _, cx| {
-                            if let Some(f) = d.form_mut()
-                                && i < f.draft.headers.len()
-                            {
-                                f.draft.headers.remove(i);
-                            }
-                            cx.notify();
-                        })),
+                        Button::new(SharedString::from(format!("remove-header-{i}")))
+                            .ghost()
+                            .small()
+                            .icon(IconName::X)
+                            .accessibility_label(format!("Remove header {label}"))
+                            .on_click(cx.listener(move |d, _, _, cx| {
+                                if let Some(f) = d.form_mut()
+                                    && i < f.draft.headers.len()
+                                {
+                                    f.draft.headers.remove(i);
+                                }
+                                cx.notify();
+                            })),
                     ),
             );
         }
         div().flex().flex_col().gap(px(6.)).children(rows).child(
             div().flex().child(
-                btn("add-header", "Add header", BtnKind::Plain, false, &t)
+                Button::new("add-header")
+                    .small()
+                    .accessibility_label("Add header")
                     .child(icon(IconName::Plus, 13.))
                     .child("Add header")
                     .on_click(cx.listener(|d, _, _, cx| {

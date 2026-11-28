@@ -2,13 +2,15 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use gpui::{ClickEvent, Div, Focusable, Role, SharedString, Stateful, Window, div, prelude::*, px};
 use patchwork_client::local::core::source_control::{CommitOptions, PullRequest, RepoAction};
 
 use patchwork_design_components::menu::MenuItem;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_md, fs_sm, radius_sm, Theme};
-use patchwork_design_components::{button, spinner, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 use super::file_groups::group_button;
 use super::git_status::{ChangesView, GitAction, git_actions, operation_title};
@@ -100,7 +102,6 @@ impl ChangesView {
                             .justify_center()
                             .rounded(px(radius_sm()))
                             .text_color(t.text_muted)
-                            .tooltip(tooltip("Write commit message"))
                             .when(write_enabled, |b| {
                                 b.hover(move |s| s.bg(hover).text_color(fg))
                             })
@@ -134,7 +135,10 @@ impl ChangesView {
                         .when(primary_enabled, |b| b.hover(move |s| s.bg(accent_hover)))
                         .when(!primary_enabled, |b| b.opacity(0.5).cursor_default())
                         .child(if busy {
-                            spinner(12., t.text_on_accent).into_any_element()
+                            Spinner::new()
+                                .with_size(gpui::px(12.))
+                                .color(t.text_on_accent)
+                                .into_any_element()
                         } else {
                             icon(lead_icon, 14.).into_any_element()
                         })
@@ -162,7 +166,6 @@ impl ChangesView {
                             .bg(t.accent)
                             .text_color(t.text_on_accent)
                             .aria_expanded(menu_open)
-                            .tooltip(tooltip("More actions"))
                             .when(menu_enabled, |b| b.hover(move |s| s.bg(accent_hover)))
                             .when(!menu_enabled, |b| b.opacity(0.5).cursor_default())
                             .child(icon(IconName::CaretDown, 12.))
@@ -328,7 +331,6 @@ impl ChangesView {
                             .gap(px(4.))
                             .text_color(t.text)
                             .hover(gpui::Styled::underline)
-                            .tooltip(tooltip(url.clone()))
                             .child(icon(IconName::GitPullRequest, 14.))
                             .child(format!("#{number}"))
                             .on_click(move |_, _, cx| cx.open_url(&url)),
@@ -357,7 +359,10 @@ impl ChangesView {
                                 "send-feedback",
                                 "Send to agent",
                                 if busy {
-                                    spinner(12., t.text_subtle).into_any_element()
+                                    Spinner::new()
+                                        .with_size(gpui::px(12.))
+                                        .color(t.text_subtle)
+                                        .into_any_element()
                                 } else {
                                     icon(IconName::PaperPlaneRight, 14.).into_any_element()
                                 },

@@ -7,6 +7,9 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use crate::prelude::*;
 use patchwork_client::AppState;
 use patchwork_platform::now_ms;
@@ -17,7 +20,7 @@ use patchwork_client::local::core::Core;
 use patchwork_client::local::core::chats::{Message, Chat};
 
 use patchwork_design_theme::{fs_sm, Theme};
-use patchwork_design_components::{BtnKind, btn};
+
 use patchwork_design_text::resets_in;
 use crate::window::{is_working};
 
@@ -82,19 +85,18 @@ pub fn resume_row<W: ChatWindow>(
             .items_center()
             .gap(px(8.))
             .child(
-                btn(
-                    "resume-turn",
-                    "Resume this reply where it stopped",
-                    BtnKind::Primary,
-                    false,
-                    t,
-                )
-                .child("Resume")
-                .on_click(cx.listener(|w, _, _, cx| w.resume_turn(cx))),
+                Button::new("resume-turn")
+                    .primary()
+                    .small()
+                    .accessibility_label("Resume this reply where it stopped")
+                    .child("Resume")
+                    .on_click(cx.listener(|w, _, _, cx| w.resume_turn(cx))),
             )
             .children(reset.map(|at| {
                 let label = format!("Resume when the limit resets, {}", resets_in(at, now));
-                btn("resume-at-reset", label.clone(), BtnKind::Plain, false, t)
+                Button::new("resume-at-reset")
+                    .small()
+                    .accessibility_label(label.clone())
                     .child(label)
                     .on_click(cx.listener(|w, _, _, cx| w.wait_for_limit(true, cx)))
             }))
@@ -107,15 +109,11 @@ pub fn resume_row<W: ChatWindow>(
                     .child(format!("Resumes {}", resets_in(at, now)))
             }))
             .children(waiting.map(|_| {
-                btn(
-                    "resume-at-reset-cancel",
-                    "Do not resume when the limit resets",
-                    BtnKind::Plain,
-                    false,
-                    t,
-                )
-                .child("Cancel")
-                .on_click(cx.listener(|w, _, _, cx| w.wait_for_limit(false, cx)))
+                Button::new("resume-at-reset-cancel")
+                    .small()
+                    .accessibility_label("Do not resume when the limit resets")
+                    .child("Cancel")
+                    .on_click(cx.listener(|w, _, _, cx| w.wait_for_limit(false, cx)))
             })),
     )
 }

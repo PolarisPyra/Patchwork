@@ -15,7 +15,6 @@ use patchwork_model::chats::AccessMode;
 use crate::settings::controls::choice;
 use crate::settings::SettingsDialog;
 use patchwork_design_theme::{fs_xs, Theme};
-use patchwork_design_components::tooltip;
 
 pub(super) const DAYS: [Weekday; 7] = [
     Weekday::Mon,
@@ -139,26 +138,12 @@ pub(super) fn run_history(task: &Task, t: &Theme) -> AnyElement {
     let Some(newest) = runs.first() else {
         return div().child("Has not run yet").into_any_element();
     };
-    let title = runs
-        .iter()
-        .map(|r| {
-            let verb = outcome(r, t).0.to_lowercase();
-            [Some(when_label(Some(r.at))), Some(verb), r.detail.clone()]
-                .into_iter()
-                .flatten()
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join(" · ")
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
     div()
         .id(SharedString::from(format!("sched-runs-{}", task.id)))
         .flex()
         .min_w_0()
         .items_center()
         .gap(px(6.))
-        .tooltip(tooltip(title))
         .child(
             div()
                 .flex()

@@ -2,6 +2,8 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use crate::prelude::*;
 use std::time::Duration;
 
@@ -10,7 +12,7 @@ use patchwork_client::local::core::chats::{PlanStep, Role as MessageRole, StepSt
 
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, radius, Theme};
-use patchwork_design_components::{button, mix, spinner};
+use patchwork_design_components::{button, mix};
 use patchwork_design_icons::icon;
 use crate::window::{is_working};
 
@@ -109,7 +111,9 @@ fn step_icon(status: StepStatus, t: &Theme) -> gpui::AnyElement {
         StepStatus::Done => slot
             .child(icon(IconName::Check, 14.).text_color(t.accent_text))
             .into_any_element(),
-        StepStatus::Running => slot.child(spinner(14., t.accent_text)).into_any_element(),
+        StepStatus::Running => slot
+            .child(Spinner::new().with_size(gpui::px(14.)).color(t.accent_text))
+            .into_any_element(),
         StepStatus::Error => slot
             .child(icon(IconName::XCircle, 14.).text_color(t.danger))
             .into_any_element(),

@@ -2,7 +2,10 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{FocusHandle, Pixels, Point, SharedString};
+use std::rc::Rc;
+
+use gpui::{Action, Entity, Pixels, Point, SharedString, Subscription};
+use patchwork_design_components::menu::Menu;
 use patchwork_core::gateway::Platform;
 use patchwork_desktop_sidebar::Row;
 use patchwork_design_icons::IconName;
@@ -26,12 +29,12 @@ pub enum Target {
     Pane(patchwork_desktop_chat::panes::PaneId),
 }
 
-/// The open menu: where it was opened, for which row, and the row the keyboard is on.
+/// The open menu: where it was opened, for which row, and the menu itself.
 pub struct ContextMenu {
     pub(super) at: Point<Pixels>,
     pub(super) target: Target,
-    pub(super) focus: FocusHandle,
-    pub(super) highlight: Option<usize>,
+    pub(super) menu: Entity<Menu>,
+    pub(super) _closed: Subscription,
 }
 
 #[derive(Clone)]
@@ -91,6 +94,62 @@ pub(super) struct Item {
     pub(super) icon: IconName,
     pub(super) danger: bool,
     pub(super) act: Act,
+    /// A line above it, setting it apart from the items before.
+    pub(super) separated: bool,
+    /// The action whose keys show beside it.
+    pub(super) keys: Option<Rc<dyn Action>>,
+    /// The items of the menu it opens beside it, in place of acting.
+    pub(super) submenu: Option<Vec<Item>>,
+}
+
+impl Item {
+    pub(super) fn new(label: impl Into<SharedString>, icon: IconName, act: Act) -> Self {
+        Self {
+            label: label.into(),
+            icon,
+            danger: false,
+            act,
+            separated: false,
+            keys: None,
+            submenu: None,
+        }
+    }
+
+    /// An item that opens a menu of `items` beside it.
+    pub(super) fn submenu(
+        label: impl Into<SharedString>,
+        icon: IconName,
+        items: Vec<Item>,
+    ) -> Self {
+        Self {
+            submenu: Some(items),
+            ..Self::new(label, icon, Act::Rename)
+        }
+    }
+
+    #[must_use]
+    pub(super) fn danger(mut self) -> Self {
+        self.danger = true;
+        self
+    }
+
+    #[must_use]
+    pub(super) fn keys(mut self, action: impl Action) -> Self {
+        self.keys = Some(Rc::new(action));
+        self
+    }
+}
+
+/// The items of each group in turn, with a line between one group and the next.
+pub(super) fn grouped(groups: impl IntoIterator<Item = Vec<Item>>) -> Vec<Item> {
+    let mut items = Vec::new();
+    for mut group in groups.into_iter().filter(|g| !g.is_empty()) {
+        if !items.is_empty() {
+            group[0].separated = true;
+        }
+        items.append(&mut group);
+    }
+    items
 }
 
 impl From<Row> for Target {

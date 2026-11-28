@@ -12,6 +12,10 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use crate::prelude::*;
 use patchwork_client::AppState;
 use std::sync::Arc;
@@ -23,7 +27,7 @@ use gpui::{
 use patchwork_client::local::core::chats::{ApprovalStatus, Chat};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_sm, radius};
-use patchwork_design_components::{button, icon_button, spinner, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_text::display_title;
 use patchwork_design_icons::icon;
 
@@ -270,22 +274,19 @@ pub fn tab_strip<W: ChatWindow>(
             }),
         )
         .child(
-            icon_button(
-                SharedString::from(format!("chat-tab-add-{pane}")),
-                "Add a tab",
-                IconName::Plus,
-                14.,
-                cx,
-            )
-            .flex_none()
-            .tooltip("Add a tab")
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(move |w, e: &MouseDownEvent, window, cx| {
-                    let target = Target::Tabs(project.clone());
-                    w.open_context_menu(target, e.position, window, cx);
-                }),
-            ),
+            Button::new(SharedString::from(format!("chat-tab-add-{pane}")))
+                .ghost()
+                .small()
+                .icon(IconName::Plus)
+                .accessibility_label("Add a tab")
+                .flex_none()
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |w, e: &MouseDownEvent, window, cx| {
+                        let target = Target::Tabs(project.clone());
+                        w.open_context_menu(target, e.position, window, cx);
+                    }),
+                ),
         )
         .children(tabs.into_iter().enumerate().map(|(i, chat)| {
             let on = open.as_deref() == Some(chat.id.as_str());
@@ -306,9 +307,12 @@ pub fn tab_strip<W: ChatWindow>(
 
 /// The button at the right of the top-right pane's tabs that lays the panes out as a preset.
 fn layouts_button<W: ChatWindow>(cx: &mut Context<W>) -> impl IntoElement + use<W> {
-    icon_button("chat-layouts", "Layouts", IconName::SquareGridFour, 14., cx)
+    Button::new("chat-layouts")
+        .ghost()
+        .small()
+        .icon(IconName::SquareGridFour)
+        .accessibility_label("Layouts")
         .flex_none()
-        .tooltip("Layouts")
         .on_mouse_down(
             MouseButton::Left,
             cx.listener(|w, e: &MouseDownEvent, window, cx| {
@@ -334,22 +338,18 @@ fn broadcast_pill<W: ChatWindow>(t: &Theme, cx: &mut Context<W>) -> impl IntoEle
         .child(icon(IconName::PaperPlaneRight, 12.))
         .child("To every pane")
         .child(icon(IconName::X, 10.))
-        .tooltip(tooltip("Each message goes to every pane. Click to stop"))
         .on_click(cx.listener(|w, _, _, cx| w.toggle_broadcast(cx)))
 }
 
 /// The button beside the layout button while one pane shows alone, that shows every pane again.
 fn restore_button<W: ChatWindow>(cx: &mut Context<W>) -> impl IntoElement + use<W> {
-    icon_button(
-        "chat-restore-panes",
-        "Show all panes",
-        IconName::ArrowsInSimple,
-        14.,
-        cx,
-    )
-    .flex_none()
-    .tooltip("Show all panes")
-    .on_click(cx.listener(|w, _, _, cx| w.toggle_maximized(cx)))
+    Button::new("chat-restore-panes")
+        .ghost()
+        .small()
+        .icon(IconName::ArrowsInSimple)
+        .accessibility_label("Show all panes")
+        .flex_none()
+        .on_click(cx.listener(|w, _, _, cx| w.toggle_maximized(cx)))
 }
 
 /// One tab: the agent's logo, a spinner while it replies, or a shield while it waits for an
@@ -398,7 +398,7 @@ fn tab<W: ChatWindow>(
             .id("tab-busy")
             .role(Role::Status)
             .aria_label("Working")
-            .child(spinner(12., muted))
+            .child(Spinner::new().with_size(gpui::px(12.)).color(muted))
             .into_any_element()
     } else {
         agent_logo(chat.agent, chat.model.as_deref(), 12.).into_any_element()
@@ -448,25 +448,22 @@ fn tab<W: ChatWindow>(
     )
     .child(div().flex_1().min_w_0().truncate().child(title.clone()))
     .child(
-        icon_button(
-            SharedString::from(format!("chat-tab-close-{}", chat.id)),
-            format!("Close tab {title}"),
-            IconName::X,
-            12.,
-            cx,
-        )
-        .flex_none()
-        .size(px(20.))
-        .tooltip("Close tab")
-        .when(!on, |b| {
-            b.opacity(0.)
-                .group_hover("chat-tab", |s| s.opacity(1.))
-                .focus(|s| s.opacity(1.))
-        })
-        .on_click(cx.listener(move |w, _, _, cx| {
-            cx.stop_propagation();
-            w.close_tab(&close_id, cx);
-        })),
+        Button::new(SharedString::from(format!("chat-tab-close-{}", chat.id)))
+            .ghost()
+            .small()
+            .icon(IconName::X)
+            .accessibility_label(format!("Close tab {title}"))
+            .flex_none()
+            .size(px(20.))
+            .when(!on, |b| {
+                b.opacity(0.)
+                    .group_hover("chat-tab", |s| s.opacity(1.))
+                    .focus(|s| s.opacity(1.))
+            })
+            .on_click(cx.listener(move |w, _, _, cx| {
+                cx.stop_propagation();
+                w.close_tab(&close_id, cx);
+            })),
     )
     .on_mouse_down(
         MouseButton::Right,

@@ -2,6 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use super::rows::add_rule_row;
 use super::rows::rule_row;
 use super::rules::EFFECTS;
@@ -18,7 +21,7 @@ use patchwork_client::local::core::permissions::{
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, choices, segmented, select_box, switch, token_row};
 use patchwork_design_theme::theme;
-use patchwork_design_components::{BtnKind, btn};
+
 use patchwork_design_icons::{IconName, icon};
 
 pub fn render(
@@ -82,31 +85,28 @@ pub fn render(
         .child(scope_chip)
         .when(everywhere, |row| {
             row.child(
-                btn(
-                    "perm-restore",
-                    "Restore defaults",
-                    BtnKind::Plain,
-                    !restorable,
-                    &t,
-                )
-                .px(px(10.))
-                .gap(px(6.))
-                .child(icon(IconName::ArrowCounterClockwise, 14.))
-                .child("Restore defaults")
-                .map(|b| {
-                    if restorable {
-                        b.on_click(cx.listener(move |d, _, _, cx| {
-                            let defaults = defaults.clone();
-                            d.change_scope(
-                                &PermissionScope::Everywhere,
-                                |s| s.rules = with_default_rules(&s.rules, &defaults),
-                                cx,
-                            );
-                        }))
-                    } else {
-                        b.tooltip("The starting rules are all in place")
-                    }
-                }),
+                Button::new("perm-restore")
+                    .small()
+                    .disabled(!restorable)
+                    .accessibility_label("Restore defaults")
+                    .px(px(10.))
+                    .gap(px(6.))
+                    .child(icon(IconName::ArrowCounterClockwise, 14.))
+                    .child("Restore defaults")
+                    .map(|b| {
+                        if restorable {
+                            b.on_click(cx.listener(move |d, _, _, cx| {
+                                let defaults = defaults.clone();
+                                d.change_scope(
+                                    &PermissionScope::Everywhere,
+                                    |s| s.rules = with_default_rules(&s.rules, &defaults),
+                                    cx,
+                                );
+                            }))
+                        } else {
+                            b
+                        }
+                    }),
             )
         });
 

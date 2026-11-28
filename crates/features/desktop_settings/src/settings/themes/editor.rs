@@ -6,6 +6,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Sizable as _;
 use std::sync::Arc;
 
 use gpui::{AnyElement, Hsla, Rgba, Role, SharedString, Window, div, hsla, prelude::*, px, rgb};
@@ -15,7 +17,6 @@ use super::slider::{Range, slider};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{alert, token_row, radio};
 use patchwork_design_theme::{fs_sm, Theme as Colors, radius, radius_sm, theme};
-use patchwork_design_components::{BtnKind, btn};
 
 /// A color of a color scheme that the editor changes.
 struct Token {
@@ -300,20 +301,15 @@ pub(super) fn editor(
         cx,
     );
     let mixed = (!entry.anchor && named.is_some()).then(|| {
-        btn(
-            "edit-mixed",
-            "Use the mixed color",
-            BtnKind::Plain,
-            false,
-            &t,
-        )
-        .child("Use the mixed color")
-        .on_click(cx.listener(|d, _, _, cx| {
-            d.set_token(None, cx);
-            if let Some(editing) = &mut d.themes.editing {
-                editing.read_slides();
-            }
-        }))
+        Button::new("edit-mixed")
+            .small()
+            .label("Use the mixed color")
+            .on_click(cx.listener(|d, _, _, cx| {
+                d.set_token(None, cx);
+                if let Some(editing) = &mut d.themes.editing {
+                    editing.read_slides();
+                }
+            }))
     });
     let color = token_row(entry.name, &t)
         .child(
@@ -363,7 +359,9 @@ pub(super) fn editor(
             token_row(name, &t).child(slide)
         })
         .collect();
-    let done = btn("edit-done", "Done editing", BtnKind::Plain, false, &t)
+    let done = Button::new("edit-done")
+        .small()
+        .accessibility_label("Done editing")
         .child("Done")
         .on_click(cx.listener(|d, _, _, cx| {
             d.themes.editing = None;

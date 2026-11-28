@@ -3,6 +3,8 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use crate::prelude::*;
 use patchwork_views_logos::agent_logo;
 use patchwork_platform::now_ms;
@@ -17,7 +19,7 @@ use patchwork_client::local::core::chats::{Role as MessageRole, StepStatus, Chat
 
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_sm, fs_xs, radius, radius_lg, Theme};
-use patchwork_design_components::{button, popup, popup_shadow, spinner};
+use patchwork_design_components::{button, popup, popup_shadow};
 use patchwork_design_text::{compact_elapsed, full_elapsed};
 use patchwork_design_icons::icon;
 use crate::window::{is_working};
@@ -129,7 +131,15 @@ fn details_card(tool: &ToolCall, tools: &[&ToolCall], elapsed: Option<u64>, t: &
         .map(|s| s.kind.clone())
         .unwrap_or_default();
     let (status_icon, color) = match tool.status {
-        StepStatus::Running => (Some(spinner(12., t.accent).into_any_element()), t.accent),
+        StepStatus::Running => (
+            Some(
+                Spinner::new()
+                    .with_size(gpui::px(12.))
+                    .color(t.accent)
+                    .into_any_element(),
+            ),
+            t.accent,
+        ),
         StepStatus::Done => (
             Some(
                 icon(IconName::Check, 12.)

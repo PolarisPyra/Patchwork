@@ -2,6 +2,13 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::checkbox::Checkbox;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
+use gpui::component::tag::Tag;
 use gpui::{AnyElement, FontWeight, Role, ScrollHandle, SharedString, Window, div, prelude::*, px};
 use patchwork_client::local::core::android::SystemImage;
 
@@ -9,7 +16,7 @@ use super::picks::{Create, Install, Step};
 use crate::rows::radio_row;
 use crate::devices::AndroidPanel;
 use patchwork_design_theme::{font_mono, fs_sm, fs_xs, radius, Theme};
-use patchwork_design_components::{BtnKind, badge, btn, checkbox, input_box, spinner};
+use patchwork_design_components::input_box;
 
 impl AndroidPanel {
     /// The flow drawn in place of the device list.
@@ -107,16 +114,20 @@ impl AndroidPanel {
             .child(
                 buttons()
                     .child(
-                        btn("create-cancel", "Cancel", BtnKind::Plain, false, t)
-                            .child("Cancel")
+                        Button::new("create-cancel")
+                            .small()
+                            .label("Cancel")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.create = None;
                                 cx.notify();
                             })),
                     )
                     .child(
-                        btn("create-next", "Next", BtnKind::Primary, !ready, t)
-                            .child("Next")
+                        Button::new("create-next")
+                            .primary()
+                            .small()
+                            .disabled(!ready)
+                            .label("Next")
                             .when(ready, |b| {
                                 b.on_click(cx.listener(|this, _, _, cx| {
                                     if let Some(create) = &mut this.create {
@@ -176,14 +187,11 @@ impl AndroidPanel {
                         .text_color(t.text_muted)
                         .child(format!("{} · {}", image.variant(), image.abi)),
                 )
-                .child(badge(
-                    if image.installed {
-                        "Installed"
-                    } else {
-                        "Download"
-                    },
-                    t,
-                ))
+                .child(Tag::secondary().small().child(if image.installed {
+                    "Installed"
+                } else {
+                    "Download"
+                }))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     if let Some(create) = &mut this.create {
                         create.image = Some(image.clone());
@@ -215,7 +223,9 @@ impl AndroidPanel {
                     .map(|e| self.alert("images-error", e, None, t, cx)),
             )
             .child(
-                checkbox("android-every-abi", "Other architectures", create.every_abi)
+                Checkbox::new("android-every-abi")
+                    .label("Other architectures")
+                    .checked(create.every_abi)
                     .text_size(px(fs_sm()))
                     .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(create) = &mut this.create {
@@ -228,8 +238,9 @@ impl AndroidPanel {
             .child(
                 buttons()
                     .child(
-                        btn("create-back", "Back", BtnKind::Plain, false, t)
-                            .child("Back")
+                        Button::new("create-back")
+                            .small()
+                            .label("Back")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 if let Some(create) = &mut this.create {
                                     create.step = Step::Profile;
@@ -238,8 +249,11 @@ impl AndroidPanel {
                             })),
                     )
                     .child(
-                        btn("create-submit", action, BtnKind::Primary, !ready, t)
-                            .child(action)
+                        Button::new("create-submit")
+                            .primary()
+                            .small()
+                            .disabled(!ready)
+                            .label(action)
                             .when(ready, |b| {
                                 b.on_click(cx.listener(|this, _, _, cx| this.submit_create(cx)))
                             }),
@@ -279,22 +293,22 @@ impl AndroidPanel {
                 .child(
                     buttons()
                         .child(
-                            btn("license-decline", "Decline", BtnKind::Plain, false, t)
-                                .child("Decline")
+                            Button::new("license-decline")
+                                .small()
+                                .label("Decline")
                                 .on_click(
                                     cx.listener(|this, _, _, cx| this.answer_license(false, cx)),
                                 ),
                         )
                         .child(
-                            btn(
-                                "license-accept",
-                                "Accept the licence",
-                                BtnKind::Primary,
-                                false,
-                                t,
-                            )
-                            .child("Accept")
-                            .on_click(cx.listener(|this, _, _, cx| this.answer_license(true, cx))),
+                            Button::new("license-accept")
+                                .primary()
+                                .small()
+                                .accessibility_label("Accept the licence")
+                                .child("Accept")
+                                .on_click(
+                                    cx.listener(|this, _, _, cx| this.answer_license(true, cx)),
+                                ),
                         ),
                 )
                 .into_any_element();
@@ -315,7 +329,7 @@ impl AndroidPanel {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .child(spinner(14., t.text_muted))
+                    .child(Spinner::new().with_size(gpui::px(14.)).color(t.text_muted))
                     .child(
                         div()
                             .flex_1()
@@ -364,7 +378,7 @@ fn working(what: &'static str, t: &Theme) -> AnyElement {
         .gap(px(8.))
         .text_size(px(fs_sm()))
         .text_color(t.text_muted)
-        .child(spinner(14., t.text_muted))
+        .child(Spinner::new().with_size(gpui::px(14.)).color(t.text_muted))
         .child(what)
         .into_any_element()
 }

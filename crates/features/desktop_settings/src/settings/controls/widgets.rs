@@ -2,6 +2,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use std::rc::Rc;
 use gpui::{AnyElement, Div, FontWeight, Hsla, Role, SharedString, Stateful, div, hsla, prelude::*, px};
 use patchwork_design_components::menu::MenuItem;
@@ -9,7 +13,7 @@ use crate::settings::SettingsDialog;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_md, fs_sm, fs_xs, radius, radius_sm, theme, Theme};
 use super::found::anchored;
-use patchwork_design_components::{BtnKind, btn, button};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 use patchwork_model::chats::AccessMode;
 
@@ -137,15 +141,12 @@ pub fn detail_header(
         .items_center()
         .gap(px(12.))
         .child(
-            patchwork_design_components::icon_button(
-                format!("{id}-back"),
-                "Back",
-                IconName::CaretLeft,
-                16.,
-                cx,
-            )
-            .tooltip("Back")
-            .on_click(cx.listener(move |d, _, _, cx| back(d, cx))),
+            Button::new(format!("{id}-back"))
+                .ghost()
+                .small()
+                .icon(IconName::CaretLeft)
+                .accessibility_label("Back")
+                .on_click(cx.listener(move |d, _, _, cx| back(d, cx))),
         )
         .child(logo)
         .child(
@@ -207,9 +208,12 @@ pub fn remove_button(
     t: &Theme,
     click: impl Fn(&mut SettingsDialog, bool, &mut Context<SettingsDialog>) + 'static,
     cx: &mut Context<SettingsDialog>,
-) -> patchwork_design_components::Button {
+) -> Button {
     let label = if confirm { sure } else { "Remove" };
-    btn(id, label, BtnKind::Plain, busy, t)
+    Button::new(id)
+        .small()
+        .disabled(busy)
+        .accessibility_label(label)
         .when(confirm, |b| b.text_color(t.danger))
         .child(label)
         .when(!busy, |b| {

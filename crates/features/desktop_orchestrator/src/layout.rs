@@ -1,5 +1,5 @@
-//! The orchestrator page drawn: a dark pill to write a request in, over the backdrop, with the
-//! place the request would go at its end, and under it a card for each request sent.
+//! The orchestrator page drawn: the chat box over the backdrop, the question an agent is waiting
+//! on above it, and under it a card for each request sent.
 
 // Rust guideline compliant 2026-10-09
 
@@ -10,29 +10,27 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{
-    AnyElement, Bounds, Entity, ExternalPaths, Hsla, KeyDownEvent, ObjectFit, Pixels, Role,
-    SharedString, Subscription, WeakEntity, Window, div, hsla, img, point, prelude::*, px,
-    relative, size,
+    AnyElement, App, Bounds, Entity, Hsla, ObjectFit, Pixels, Role, SharedString, Subscription,
+    WeakEntity, Window, div, hsla, img, point, prelude::*, px, size,
 };
 use patchwork_client::local::core::orchestration::Target;
-use patchwork_themes::{Applied, Scene, Scheme, Shown};
 use patchwork_model::chats::AskKind;
+use patchwork_themes::{Applied, Scene, Scheme, Shown};
 
 use super::requests::Orchestrator;
 use patchwork_design_backgrounds::{Fallback, butterfly_field, preset_fill, scene_field};
-use patchwork_design_icons::IconName;
-use patchwork_design_theme::{applied, font_ui, fs_lg, fs_sm, glass_over, ink_over, radius_lg, theme};
-use patchwork_views_chat::{pill::PILL_PAD, pill::SEND, pill::pill, pill::send_button};
 use patchwork_design_components::button;
-use patchwork_design_text::display_title;
+use patchwork_design_icons::IconName;
 use patchwork_design_icons::icon;
+use patchwork_design_text::display_title;
+use patchwork_design_theme::{Theme, applied, font_ui, fs_sm, glass_over, ink_over, radius_lg, theme};
 
-/// The pill: its size, the room kept at its sides, and how far down the page its top is.
-pub(super) const PILL_W: f32 = 640.;
-const PILL_H: f32 = SEND + PILL_PAD * 2.;
+/// The chat box: as wide as it grows, about as tall as it is empty, the room kept at its sides,
+/// and the room under it, as a chat keeps them.
+const BOX_W: f32 = 760.;
+const BOX_H: f32 = 128.;
 const GUTTER: f32 = 24.;
-const PILL_TOP: f32 = 0.4;
-
+const BOX_BOTTOM: f32 = 16.;
 /// Whether the page is over a light backdrop, so its text is dark. The page's render sets it
 /// before anything on the page is drawn, and the one window draws on one chat.
 static LIGHT: AtomicBool = AtomicBool::new(false);
@@ -68,16 +66,16 @@ fn shown_scene(look: &Arc<Applied>) -> Option<&Scene> {
     }
 }
 
-/// Where the pill is on a page with these bounds, which is where the layout below puts it. The
-/// backdrop draws what is behind it as glows.
-fn pill_bounds(page: Bounds<Pixels>) -> Bounds<Pixels> {
-    let width = (page.size.width - px(GUTTER * 2.)).clamp(px(0.), px(PILL_W));
+/// Where the chat box is on a page with these bounds, which is where the layout below puts it.
+/// The backdrop draws what is behind it as glows.
+fn box_bounds(page: Bounds<Pixels>) -> Bounds<Pixels> {
+    let width = (page.size.width - px(GUTTER * 2.)).clamp(px(0.), px(BOX_W));
     Bounds::new(
         point(
             page.center().x - width / 2.,
-            page.top() + page.size.height * PILL_TOP,
+            page.bottom() - px(BOX_BOTTOM + BOX_H),
         ),
-        size(width, px(PILL_H)),
+        size(width, px(BOX_H)),
     )
 }
 
@@ -136,20 +134,12 @@ impl Place {
     }
 }
 
-/// A small label inside the pill.
+/// A small label on the page.
 fn chip(label: impl Into<SharedString>) -> gpui::Div {
     chip_frame().child(div().min_w_0().truncate().child(label.into()))
 }
 
-/// The chip for the place a request goes.
-fn route_chip(place: &Place) -> gpui::Div {
-    chip_frame()
-        .max_w(px(260.))
-        .child(div().flex_none().opacity(0.5).child("→"))
-        .child(place.shown())
-}
-
-/// The shape the pill's chips share.
+/// The shape the page's chips share.
 fn chip_frame() -> gpui::Div {
     div()
         .h(px(26.))
@@ -178,7 +168,7 @@ impl Orchestrator {
             Shown::None => div().size_full().bg(t.bg_app).into_any_element(),
             Shown::Butterfly => {
                 let flight = Rc::clone(&self.flight);
-                butterfly_field(pill_bounds, still, flight, None).into_any_element()
+                butterfly_field(box_bounds, still, flight, None).into_any_element()
             }
             Shown::Image { path } => {
                 // The picture before this one stays under it until this one is loaded, so
@@ -212,15 +202,14 @@ impl Orchestrator {
                     surface: t.bg_app,
                     faint: t.text_muted,
                 };
-                scene_field(look, shown_scene, fallback, pill_bounds, still, None)
-                    .into_any_element()
+                scene_field(look, shown_scene, fallback, box_bounds, still, None).into_any_element()
             }
         }
     }
 
-    /// A place a request can go, as its chip and the `@` list show it: a folder and the
-    /// project's name first for a chat in a project, and a chat bubble for one in none.
-    pub(super) fn place(&self, target: &Target, cx: &Context<Self>) -> Place {
+    /// A place a request can go, as its pinned chip shows it: a folder and the project's name
+    /// first for a chat in a project, and a chat bubble for one in none.
+    pub(super) fn place(&self, target: &Target, cx: &App) -> Place {
         let project = |id: &String| {
             let found = AppState::get(cx)
                 .settings
@@ -251,99 +240,158 @@ impl Orchestrator {
         }
     }
 
-    /// What comes before the field: the chat whose question is shown, or how many are waiting.
-    fn before_field(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let count = self.waiting.len();
-        if let Some((index, waiting)) = self.asked() {
-            let place = if count > 1 {
-                format!("{} of {count}", index + 1)
-            } else {
-                String::new()
-            };
-            let label = format!("{} {place}", waiting.question());
-            let named = chip(waiting.chat.clone())
-                .id("orchestrator-asking")
-                .role(Role::Status)
-                .aria_label(label.trim().to_string())
-                .text_color(warm())
-                .children((count > 1).then(|| div().flex_none().text_color(ink(0.6)).child(place)));
-            return Some(named.into_any_element());
-        }
-        (count > 0).then(|| {
-            button("orchestrator-waiting", format!("{count} waiting. Answer"))
-                .child(chip(format!("{count} waiting")).text_color(warm()))
-                .rounded_full()
-                .on_click(cx.listener(|this, _, window, cx| this.tab(window, cx)))
-                .into_any_element()
-        })
-    }
-
-    /// What comes after the field: where the request would go.
-    fn after_field(&self, cx: &Context<Self>) -> Option<AnyElement> {
-        if self.answering.is_some() || self.field.read(cx).content.trim().is_empty() {
-            return None;
-        }
-        let status = |label: String| {
-            div()
-                .id("orchestrator-route")
-                .role(Role::Status)
-                .aria_label(label)
-                .flex_none()
-                .flex()
-                .items_center()
-                .gap(px(4.))
-        };
+    /// The place `@` pinned, in the chat box's row, with a button that unpins it.
+    pub(super) fn pinned_chip(&self, t: &Theme, cx: &mut Context<Self>) -> Option<AnyElement> {
         let place = self.place(self.pinned.as_ref()?, cx);
-        let pin = div().flex_none().child(icon(IconName::PushPin, 12.));
-        let shown = route_chip(&place).child(pin);
-        Some(
-            status(format!("Goes to {}, pinned", place.spoken))
-                .child(shown)
-                .into_any_element(),
-        )
+        let (hover, fg) = (t.bg_hover, t.text);
+        let unpin = button("orchestrator-unpin", "Unpin")
+            .size(px(16.))
+            .flex_none()
+            .justify_center()
+            .rounded_full()
+            .hover(move |s| s.bg(hover).text_color(fg))
+            .child(icon(IconName::X, 10.))
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.pinned = None;
+                cx.notify();
+            }));
+        let chip = div()
+            .id("orchestrator-route")
+            .role(Role::Status)
+            .aria_label(format!("Goes to {}, pinned", place.spoken))
+            .min_w_0()
+            .flex()
+            .items_center()
+            .gap(px(4.))
+            .text_color(t.text_muted)
+            .child(div().flex_none().child("→"))
+            .child(place.shown())
+            .child(unpin);
+        Some(chip.into_any_element())
     }
 
-    /// The `@` list: the projects and chats a request can be pinned to.
-    fn picker_list(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let highlighted = self.picker.as_ref()?.highlighted;
-        let rows = self
-            .entries(cx)
-            .into_iter()
-            .enumerate()
-            .map(|(index, entry)| {
-                let on = index == highlighted;
+    /// The question an agent is waiting on, above the chat box: its chat and what it asks, how
+    /// to answer it, and the next one while several wait. Put aside, it is a count to bring
+    /// them back.
+    fn question_strip(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let count = self.waiting.len();
+        if self.declined {
+            return (count > 0).then(|| {
                 div()
-                    .id(("orchestrator-pick", index))
-                    .role(Role::ListBoxOption)
-                    .aria_label(entry.place.spoken.clone())
-                    .aria_selected(on)
-                    .h(px(30.))
                     .flex()
-                    .items_center()
-                    .px(px(8.))
-                    .rounded(px(6.))
-                    .when(on, |row| row.bg(ink(0.10)))
-                    .hover(|s| s.bg(ink(0.07)))
-                    .child(entry.place.shown())
-                    .on_click(cx.listener(move |this, _, window, cx| this.pin(index, window, cx)))
+                    .child(
+                        button("orchestrator-waiting", format!("{count} waiting. Answer"))
+                            .child(chip(format!("{count} waiting")).text_color(warm()))
+                            .rounded_full()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.declined = false;
+                                cx.notify();
+                            })),
+                    )
+                    .into_any_element()
             });
-        let list = div()
-            .id("orchestrator-picker")
-            .role(Role::ListBox)
-            .aria_label("Projects and chats")
+        }
+        let (index, waiting) = self.asked()?;
+        let action = |id: &'static str, label: &'static str, strong: bool| {
+            button(id, label)
+                .h(px(28.))
+                .flex_none()
+                .px(px(12.))
+                .rounded_full()
+                .text_size(px(fs_sm()))
+                .map(|b| {
+                    if strong {
+                        b.bg(ink(0.9))
+                            .text_color(glass(1.))
+                            .hover(|s| s.bg(ink(1.)))
+                    } else {
+                        b.bg(ink(0.08)).hover(|s| s.bg(ink(0.14)))
+                    }
+                })
+                .child(label)
+        };
+        let actions: Vec<AnyElement> = match &waiting.ask.kind {
+            AskKind::Permission => vec![
+                action("orchestrator-deny", "Deny", false)
+                    .on_click(cx.listener(|this, _, _, cx| this.respond(false, None, cx)))
+                    .into_any_element(),
+                action("orchestrator-allow", "Allow", true)
+                    .on_click(cx.listener(|this, _, _, cx| this.respond(true, None, cx)))
+                    .into_any_element(),
+            ],
+            AskKind::InChat => vec![
+                action("orchestrator-open-asking", "Open chat", true)
+                    .on_click(cx.listener(|this, _, _, cx| this.open_asking(cx)))
+                    .into_any_element(),
+            ],
+            // The chat box answers it.
+            AskKind::Question(_) => Vec::new(),
+        };
+        let quiet = |id: &'static str, label: &'static str, glyph: IconName| {
+            button(id, label)
+                .size(px(28.))
+                .flex_none()
+                .justify_center()
+                .rounded_full()
+                .text_color(ink(0.6))
+                .hover(|s| s.bg(ink(0.08)).text_color(ink(0.9)))
+                .child(icon(glyph, 14.))
+        };
+        let several = count > 1;
+        let strip = div()
+            .id("orchestrator-asking")
+            .role(Role::Status)
+            .aria_label(waiting.question())
             .occlude()
             .w_full()
-            .max_w(px(PILL_W - 44.))
+            .min_h(px(44.))
             .flex()
-            .flex_col()
-            .p(px(4.))
+            .items_center()
+            .gap(px(8.))
+            .pl(px(14.))
+            .pr(px(8.))
+            .py(px(8.))
             .rounded(px(radius_lg()))
             .border_1()
             .border_color(ink(0.10))
-            .bg(glass(0.96))
+            .bg(glass(0.72))
             .text_size(px(fs_sm()))
-            .children(rows);
-        Some(list.into_any_element())
+            .text_color(ink(0.9))
+            .child(
+                icon(IconName::CircleFill, 8.)
+                    .flex_none()
+                    .text_color(warm()),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(waiting.question()),
+            )
+            .when(several, |strip| {
+                strip
+                    .child(
+                        div()
+                            .flex_none()
+                            .text_color(ink(0.6))
+                            .child(format!("{} of {count}", index + 1)),
+                    )
+                    .child(
+                        quiet("orchestrator-next", "Next question", IconName::CaretRight)
+                            .on_click(cx.listener(|this, _, _, cx| this.next_question(cx))),
+                    )
+            })
+            .children(actions)
+            .child(
+                quiet("orchestrator-aside", "Put the questions aside", IconName::X).on_click(
+                    cx.listener(|this, _, _, cx| {
+                        this.declined = true;
+                        cx.notify();
+                    }),
+                ),
+            );
+        Some(strip.into_any_element())
     }
 }
 
@@ -356,7 +404,7 @@ impl Render for Orchestrator {
 impl Orchestrator {
     fn render_orchestrator(
         &mut self,
-        window: &mut Window,
+        _: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let dark = applied(cx)
@@ -364,20 +412,6 @@ impl Orchestrator {
             .scheme
             .map_or_else(|| theme(cx).is_dark(), |scheme| scheme == Scheme::Dark);
         LIGHT.store(!dark, Ordering::Relaxed);
-        // The field keeps its own colors, so they follow the backdrop here.
-        self.field.update(cx, |field, _| {
-            field.text_color = Some(ink(1.));
-            field.placeholder_color = Some(ink(0.45));
-        });
-        let empty = self.field.read(cx).content.trim().is_empty();
-        let asked = self.asked().map(|(_, waiting)| waiting.ask.kind.clone());
-        // What Enter does, which is what the button does.
-        let (action, glyph, ready) = match &asked {
-            Some(AskKind::Permission) => ("Allow", IconName::CheckBold, true),
-            Some(AskKind::Question(_)) => ("Answer", IconName::ArrowUpBold, !empty),
-            Some(AskKind::InChat) => ("Open the chat", IconName::ArrowRightBold, true),
-            None => ("Send", IconName::ArrowUpBold, !empty),
-        };
         let state = AppState::get(cx);
         let (chats, projects) = (Arc::clone(&state.chats), state.settings.projects.clone());
         let cards: Vec<AnyElement> = self
@@ -385,62 +419,22 @@ impl Orchestrator {
             .iter()
             .map(|request| self.card(request, &chats, &projects, cx))
             .collect();
-        let shadow = hsla(0., 0., 0., if dark { 0.22 } else { 0.08 });
-        let before = self.before_field(cx);
-        let tight = before.is_none();
-        let pill = pill("orchestrator-pill", ink(0.10), glass(0.62), shadow)
-            .w_full()
-            .max_w(px(PILL_W))
-            .h(px(PILL_H))
-            .flex_none()
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .px(px(PILL_PAD))
-            .text_size(px(fs_lg()))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                if event.keystroke.key == "escape" && this.escape(window, cx) {
-                    cx.stop_propagation();
-                }
-            }))
-            // Files, folders or pictures held over the pill light it up; dropped, they go with
-            // the request.
-            .drag_over::<ExternalPaths>(|style, _, _, _| {
-                style.border_color(ink(0.45)).bg(glass(0.8))
-            })
-            .on_drop(cx.listener(|this, files: &ExternalPaths, window, cx| {
-                this.attach(files.paths(), cx);
-                this.focus(window, cx);
-                cx.stop_propagation();
-            }))
-            .child(self.attach_button(cx))
-            .children(before)
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    // Closer to the plus button than the row's gap, as in the chat box.
-                    .when(tight, |d| d.ml(px(-4.)))
-                    .child(self.field.clone()),
-            )
-            .children(self.after_field(cx))
-            .child(
-                send_button("orchestrator-send", action, ready, ink(1.), glass(1.))
-                    .rounded_full()
-                    .child(icon(glyph, 16.))
-                    .on_click(cx.listener(|this, _, window, cx| this.enter(window, cx))),
-            )
-            .children(self.attach_menu_view());
-        // What is attached sits above the pill, laid over the page so the pill does not move.
-        let attachments = self.attachment_row(shadow, cx);
-        let model = self.model_chip(window, cx);
+        // The question sits on the line above the chat box.
+        let strip = self.question_strip(cx).map(|strip| {
+            div()
+                .w_full()
+                .max_w(px(BOX_W))
+                .mx_auto()
+                .pb(px(8.))
+                .child(strip)
+        });
         let requests = div()
             .id("orchestrator-requests")
             .role(Role::List)
             .aria_label("Requests")
             .w_full()
-            .max_w(px(PILL_W))
-            .mt(px(12.))
+            .max_w(px(BOX_W))
+            .py(px(12.))
             .flex()
             .flex_col()
             .gap(px(4.))
@@ -463,22 +457,6 @@ impl Orchestrator {
                 )
             })
             .children(cards);
-        let column = || {
-            div()
-                .absolute()
-                .inset_0()
-                .flex()
-                .flex_col()
-                .items_center()
-                .px(px(GUTTER))
-                .child(div().flex_none().h(relative(PILL_TOP)))
-        };
-        // The list opens under the pill and over the cards, so it is laid out after them.
-        let picker = self.picker_list(cx).map(|list| {
-            column()
-                .child(div().flex_none().h(px(PILL_H + 6.)))
-                .child(list)
-        });
         div()
             .id("orchestrator")
             .role(Role::Main)
@@ -489,25 +467,43 @@ impl Orchestrator {
             .font_family(font_ui())
             .text_color(ink(0.9))
             .child(
-                column()
+                div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .flex_col()
                     .child(
                         div()
-                            .relative()
+                            .id("orchestrator-scroll")
+                            .flex_1()
+                            .min_h_0()
                             .w_full()
-                            .max_w(px(PILL_W))
-                            .flex_none()
-                            .children(attachments)
-                            .child(pill),
+                            .overflow_y_scroll()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .px(px(GUTTER))
+                            // The newest requests sit just over the chat box, as a chat's do.
+                            .child(div().flex_1())
+                            .child(requests),
                     )
-                    .child(model)
-                    .child(requests),
+                    .child(
+                        div()
+                            .w_full()
+                            .flex_none()
+                            .px(px(GUTTER))
+                            .pb(px(BOX_BOTTOM))
+                            // The chat box keeps the theme's text color, not the backdrop's.
+                            .text_color(theme(cx).text)
+                            .children(strip)
+                            .child(self.composer.clone()),
+                    ),
             )
-            .children(picker)
     }
 }
 
 /// The page's backdrop as a view of its own, which the workspace draws under the page: a
-/// backdrop that moves redraws only itself, and the pill and cards over it keep their frame.
+/// backdrop that moves redraws only itself, and the chat box and cards over it keep their frame.
 pub struct OrchestratorBackdrop {
     page: WeakEntity<Orchestrator>,
     _changes: Subscription,

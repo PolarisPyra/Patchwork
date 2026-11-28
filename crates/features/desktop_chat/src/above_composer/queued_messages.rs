@@ -18,7 +18,7 @@ use patchwork_client::local::core::chats::{Attachment, Message};
 use super::goal_bar::strip_action;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, fs_xs, radius_sm, Theme};
-use patchwork_design_components::{button, scrollbar, tooltip};
+use patchwork_design_components::{button, scrollbar};
 use patchwork_design_icons::icon;
 use crate::window::{is_working};
 
@@ -300,18 +300,12 @@ fn queued_row<W: ChatWindow>(
         m.text.clone()
     };
     let editing = w.queued_edit.as_ref().map(|e| e.id.as_str());
-    let edit_tip = if editing == Some(m.id.as_str()) {
-        "Editing this queued message"
-    } else {
-        "Edit queued message"
-    };
     let edit = icon_action(
         format!("queue-edit-{}", m.id),
         "Edit queued message",
         IconName::PencilSimple,
         t,
-    )
-    .tooltip(tooltip(edit_tip));
+    );
     let edit = if editing.is_none() {
         let id = m.id.clone();
         edit.on_click(cx.listener(move |w, _, _, cx| w.edit_queued(&id, cx)))
@@ -322,7 +316,6 @@ fn queued_row<W: ChatWindow>(
         SharedString::from(format!("queue-steer-{}", m.id)),
         "Steer queued message",
     )
-    .tooltip(tooltip("Send this queued message as a steer"))
     .flex_none()
     .h(px(24.))
     .gap(px(4.))
@@ -357,7 +350,6 @@ fn queued_row<W: ChatWindow>(
         IconName::X,
         t,
     )
-    .tooltip(tooltip("Remove queued message"))
     .on_click(cx.listener(move |w, _, _, cx| w.remove_queued(&id, cx)));
     div()
         .id(SharedString::from(format!("queued-{}", m.id)))
@@ -381,7 +373,6 @@ fn queued_row<W: ChatWindow>(
                 .child(
                     div()
                         .id(SharedString::from(format!("queued-text-{}", m.id)))
-                        .tooltip(tooltip(text.clone()))
                         .flex_1()
                         .min_w_0()
                         .truncate()

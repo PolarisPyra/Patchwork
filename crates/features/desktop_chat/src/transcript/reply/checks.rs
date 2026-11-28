@@ -6,6 +6,10 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use crate::prelude::*;
 use patchwork_client::AppState;
 use std::collections::{HashMap, HashSet};
@@ -16,7 +20,7 @@ use patchwork_client::local::core::chats::{CheckStatus, Message, TurnChecks};
 
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme};
-use patchwork_design_components::{BtnKind, btn, button, spinner, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_text::full_elapsed;
 use patchwork_design_icons::icon;
 
@@ -83,7 +87,12 @@ impl<W: ChatWindow> ChecksExt for W {}
 
 fn status_icon(status: CheckStatus, t: &Theme) -> AnyElement {
     let (name, color) = match status {
-        CheckStatus::Running => return spinner(14., t.text_muted).into_any_element(),
+        CheckStatus::Running => {
+            return Spinner::new()
+                .with_size(gpui::px(14.))
+                .color(t.text_muted)
+                .into_any_element();
+        }
         CheckStatus::Passed => (IconName::CheckCircle, t.success),
         CheckStatus::Failed => (IconName::XCircle, t.danger),
         CheckStatus::TimedOut => (IconName::Clock, t.warning),
@@ -169,7 +178,6 @@ pub fn checks_card<W: ChatWindow>(
     .aria_expanded(open)
     .min_w_0()
     .gap_x(px(8.))
-    .tooltip(tooltip(if open { "Hide details" } else { "Show details" }))
     .child(status_icon(checks.status, t))
     .child(
         div()
@@ -186,7 +194,6 @@ pub fn checks_card<W: ChatWindow>(
             .font_family(font_mono())
             .text_size(px(fs_xs()))
             .text_color(t.text_muted)
-            .tooltip(tooltip(command.clone()))
             .child(command)
     }))
     .child(
@@ -219,20 +226,14 @@ pub fn checks_card<W: ChatWindow>(
         } else {
             "Run again"
         };
-        let tip = match &checks.command {
-            Some(command) => format!("Run {command} in the project"),
-            None => "Run the project's checks".into(),
-        };
-        let b = btn(
-            SharedString::from(format!("checks-rerun-{id}")),
-            label,
-            BtnKind::Plain,
-            rerunning,
-            t,
-        )
-        .tooltip(tip)
-        .when(rerunning, |b| b.child(spinner(13., t.text_muted)))
-        .child(label);
+        let b = Button::new(SharedString::from(format!("checks-rerun-{id}")))
+            .small()
+            .disabled(rerunning)
+            .accessibility_label(label)
+            .when(rerunning, |b| {
+                b.child(Spinner::new().with_size(gpui::px(13.)).color(t.text_muted))
+            })
+            .child(label);
         if rerunning {
             b
         } else {

@@ -4,6 +4,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::sync::Arc;
 
 use gpui::{
@@ -15,7 +19,7 @@ use patchwork_client::local::core::android::{ScreenFrame, ScreenInput, ScreenSen
 use patchwork_client::local::core::{Error, Core};
 
 use patchwork_design_theme::{fs_sm, theme};
-use patchwork_design_components::{button, icon_button, spinner, tooltip};
+use patchwork_design_components::button;
 
 /// The frame around the screen, as wide on every side.
 const BEZEL: f32 = 10.;
@@ -212,7 +216,6 @@ impl DeviceScreen {
             .rounded(px(2.))
             .bg(rgb(KEY))
             .hover(|s| s.bg(rgb(KEY_HOVER)))
-            .tooltip(tooltip(label))
             .on_click(cx.listener(move |this, _, _, _| this.key(key)))
             .into_any_element()
     }
@@ -232,7 +235,7 @@ impl DeviceScreen {
                 .id("screen-waiting")
                 .role(Role::Status)
                 .aria_label("Connecting to the screen")
-                .child(spinner(16., t.text_muted))
+                .child(Spinner::new().with_size(gpui::px(16.)).color(t.text_muted))
                 .into_any_element(),
         }
     }
@@ -447,8 +450,11 @@ impl Render for DeviceScreen {
                     ),
                 ]
                 .map(|(id, label, glyph, key)| {
-                    icon_button(id, label, glyph, 16., cx)
-                        .tooltip(label)
+                    Button::new(id)
+                        .ghost()
+                        .small()
+                        .icon(glyph)
+                        .accessibility_label(label)
                         .on_click(cx.listener(move |this, _, _, _| this.key(key)))
                 }),
             );

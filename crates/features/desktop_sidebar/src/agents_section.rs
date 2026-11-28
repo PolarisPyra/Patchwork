@@ -3,6 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{
     AnyElement, FontWeight, MouseButton, MouseDownEvent, Role, SharedString, div, prelude::*, px,
 };
@@ -11,7 +14,7 @@ use patchwork_model::chats::{ApprovalStatus, Chat};
 use patchwork_client::AppState;
 use patchwork_platform::now_ms;
 use patchwork_design_components::{avatar::Mood, avatar::avatar};
-use patchwork_design_components::{button, icon_button};
+use patchwork_design_components::button;
 use patchwork_views_logos::{agent_label, agent_logo};
 use patchwork_design_icons::{IconName, icon};
 use patchwork_design_theme::{fs_sm, radius_sm, theme};
@@ -35,7 +38,11 @@ pub(crate) fn agents_section(
 ) -> Vec<AnyElement> {
     let t = *theme(cx);
     let agent_shown = w.host.agent_shown(cx);
-    let new_agent = icon_button("new-agent", "New agent", IconName::Plus, 18., cx)
+    let new_agent = Button::new("new-agent")
+        .ghost()
+        .small()
+        .icon(IconName::Plus)
+        .accessibility_label("New agent")
         .on_click(cx.listener(|this, _, _, cx| this.new_agent(cx)))
         .into_any_element();
     let mut out = vec![section_label("Agents", first, Some(new_agent), &t).into_any_element()];

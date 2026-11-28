@@ -2,6 +2,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use patchwork_views_logos::{AGENT_KINDS, agent_label};
 use gpui::{ClickEvent, ClipboardItem, Div, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_client::local::core::scheduled::{Schedule, Trigger, Weekday};
@@ -10,7 +14,7 @@ use crate::settings::controls::{FieldKind, chip, form_footer, select_box, switch
 use crate::settings::SettingsDialog;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, fs_xs, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button};
+
 use patchwork_design_icons::icon;
 use patchwork_design_theme::font_mono;
 use crate::settings::controls::ACCESS_MODES as MODES;
@@ -151,21 +155,16 @@ pub(super) fn editor(
                                         .child(url),
                                 )
                                 .child(
-                                    icon_button(
-                                        "sched-webhook-copy",
-                                        "Copy webhook address",
-                                        IconName::Copy,
-                                        14.,
-                                        cx,
-                                    )
-                                    .tooltip("Copy address")
-                                    .on_click(
-                                        move |_: &ClickEvent, _: &mut Window, cx| {
+                                    Button::new("sched-webhook-copy")
+                                        .ghost()
+                                        .small()
+                                        .icon(IconName::Copy)
+                                        .accessibility_label("Copy webhook address")
+                                        .on_click(move |_: &ClickEvent, _: &mut Window, cx| {
                                             cx.write_to_clipboard(ClipboardItem::new_string(
                                                 copied.clone(),
                                             ));
-                                        },
-                                    ),
+                                        }),
                                 ),
                         )
                         .into_any_element()
@@ -531,18 +530,22 @@ pub(super) fn editor(
                             .items_center()
                             .gap(px(6.))
                             .child(
-                                btn("sched-cancel", "Cancel", BtnKind::Plain, false, &t)
-                                    .child("Cancel")
+                                Button::new("sched-cancel")
+                                    .small()
+                                    .label("Cancel")
                                     .on_click(cx.listener(|d, _, _, cx| d.close_task(cx))),
                             )
                             .child(
-                                btn("sched-save", "Save task", BtnKind::Primary, !ready, &t)
-                                    .child("Save task")
+                                Button::new("sched-save")
+                                    .primary()
+                                    .small()
+                                    .disabled(!ready)
+                                    .label("Save task")
                                     .map(|b| {
                                         if ready {
                                             b.on_click(cx.listener(|d, _, _, cx| d.save_task(cx)))
                                         } else {
-                                            b.tooltip("Add a name and a prompt")
+                                            b
                                         }
                                     }),
                             ),

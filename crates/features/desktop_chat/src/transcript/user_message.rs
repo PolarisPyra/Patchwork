@@ -21,7 +21,7 @@ use patchwork_client::local::core::chats::{Attachment, AttachmentKind, Message};
 use patchwork_design_text::{markdown::FindIn, markdown::markdown_found};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_xs, radius, radius_sm, Theme};
-use patchwork_design_components::{button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_text::format_clock;
 use patchwork_design_icons::icon;
 use patchwork_views_chat::image_markdown::without_image_markdown;
@@ -70,7 +70,6 @@ fn attachment_tile(id: String, a: &Attachment, size: Option<(u32, u32)>, t: &The
     };
     div()
         .id(SharedString::from(id))
-        .tooltip(tooltip(a.path.clone()))
         .child(
             image
                 .rounded(px(radius()))
@@ -295,9 +294,6 @@ pub fn user_message<W: ChatWindow>(
             .opacity(0.)
             .group_hover(group.clone(), |s| s.opacity(1.))
             .focus(|s| s.opacity(1.))
-            .tooltip(tooltip(
-                "Put the project's files back as they were before this message",
-            ))
             .child(icon(IconName::ArrowUUpLeft, 13.))
             .child("Restore")
             .on_click(

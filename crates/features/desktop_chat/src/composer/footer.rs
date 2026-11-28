@@ -7,7 +7,7 @@ use patchwork_views_logos::agent_logo;
 use gpui::{AnyElement, Div, MouseButton, Role, Stateful, Window, div, prelude::*, px};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs};
-use patchwork_design_components::{button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 use super::chips::{chip, fill_ring, trigger};
@@ -27,7 +27,7 @@ pub(super) struct FooterState {
     pub model_label: String,
     /// The effort's name beside the model, when the model takes one.
     pub effort: Option<String>,
-    /// How full the context is, the tokens in it and the tooltip saying so, when its limit is
+    /// How full the context is, the tokens in it and the label saying so, when its limit is
     /// known.
     pub context: Option<(f32, u64, String)>,
     pub compact: String,
@@ -60,7 +60,6 @@ impl Composer {
                 .rounded_full()
                 .text_color(t.text_muted)
                 .hover(move |s| s.bg(hover).text_color(fg))
-                .tooltip(tooltip("Add context and formatting"))
                 .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
                 .child(icon(IconName::Plus, 16.));
             self.chip_with_menu(Menu::Attach, plus, picks, s.can_compact, t, window, cx)
@@ -112,7 +111,6 @@ impl Composer {
         let access = self.chip_with_menu(
             Menu::Access,
             trigger("access", format!("Access: {access}"), t)
-                .tooltip(tooltip("What the agent may do without asking"))
                 .child(icon(access_icon, 14.))
                 .child(div().min_w_0().max_w(px(128.)).truncate().child(access))
                 .child(icon(IconName::CaretDown, 14.).text_color(t.text_muted)),
@@ -137,7 +135,6 @@ impl Composer {
                 .bg(bg)
                 .text_color(t.text)
                 .hover(move |s| s.bg(hover))
-                .tooltip(tooltip(if s.working { "Stop (Esc)" } else { label }))
                 .child(icon(IconName::StopFill, 12.))
                 .on_click(cx.listener(|_, _, _, cx| {
                     cx.emit(crate::host::ChatEvent::Stop);
@@ -194,7 +191,6 @@ impl Composer {
                     .h(px(DISC))
                     .px(px(8.))
                     .text_color(t.text_muted)
-                    .tooltip(tooltip(detail.clone()))
                     .child(fill_ring(*used, t))
                     .child(patchwork_design_text::format_tokens(*tokens))
             }
@@ -229,14 +225,14 @@ impl Composer {
         if s.working && s.empty && !s.editing {
             return None;
         }
-        let (label, tip) = if s.editing {
-            ("Update queued message", "Update queued message")
+        let label = if s.editing {
+            "Update queued message"
         } else if !s.working {
-            ("Send message", "Send message (Enter)")
+            "Send message"
         } else if s.queue_next {
-            ("Queue message", "Queue for after the turn (Enter)")
+            "Queue message"
         } else {
-            ("Steer message", "Steer the running turn (Enter)")
+            "Steer message"
         };
         let blocked = s.folder_missing || (s.empty && !s.editing);
         let split = s.working && !s.editing;
@@ -253,11 +249,6 @@ impl Composer {
                     b.rounded_full()
                 }
             })
-            .tooltip(tooltip(if blocked {
-                "Write something first"
-            } else {
-                tip
-            }))
             .map(|b| {
                 if blocked {
                     b.bg(t.bg_selected_muted)
@@ -282,7 +273,6 @@ impl Composer {
         let mode = (split && !s.empty).then(|| {
             let hover = fill.opacity(0.9);
             let caret = button("send-mode", "Choose queue or steer")
-                .tooltip(tooltip("Choose queue or steer"))
                 .h(px(DISC))
                 .w(px(22.))
                 .flex_none()

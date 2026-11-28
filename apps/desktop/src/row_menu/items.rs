@@ -9,6 +9,12 @@ use super::target::ContextMenu;
 use super::target::Act;
 use super::target::Item;
 use super::target::Target;
+use super::target::grouped;
+use patchwork_design_components::menu::{Dismissed, Menu, MenuItem};
+use patchwork_views_actions::{
+    DeleteChat, MaximizePane, SplitPaneDown, SplitPaneRight, SwapPaneDown, SwapPaneLeft,
+    SwapPaneRight, SwapPaneUp,
+};
 use std::sync::Arc;
 use gpui::{Pixels, Point, SharedString, Window, prelude::*};
 use patchwork_core::chats::Chat;
@@ -27,163 +33,71 @@ impl Workspace {
     }
 
     pub(super) fn items(&self, target: &Target, cx: &gpui::App) -> Vec<Item> {
-        let item = |label: &'static str, icon, act| Item {
-            label: label.into(),
-            icon,
-            danger: false,
-            act,
-        };
-        let delete = Item {
-            danger: true,
-            ..item("Delete permanently", IconName::Trash, Act::Remove)
-        };
+        let item = Item::new;
+        let delete = || item("Delete permanently", IconName::Trash, Act::Remove).danger();
+        let restore = || item("Restore", IconName::ArrowCounterClockwise, Act::Restore);
+        let state = AppState::get(cx);
         match target {
-            Target::Archived(_) => return vec![delete],
-            Target::Many(targets) => return self.many_items(targets, cx),
-            Target::Tabs(project) => return self.tab_items(project.as_deref(), cx),
+            Target::Archived(_) => vec![delete()],
+            Target::Many(targets) => self.many_items(targets, cx),
+            Target::Tabs(project) => self.tab_items(project.as_deref(), cx),
             Target::Layouts => {
-                let named = self.named_layouts.iter().map(|(name, _)| Item {
-                    label: name.clone().into(),
-                    ..item("", IconName::Star, Act::Layout(name.clone()))
-                });
-                return Preset::ALL
+                let presets = Preset::ALL
                     .into_iter()
                     .map(|p| item(p.label(), p.icon(), Act::Preset(p)))
-                    .chain(named)
                     .collect();
+                let named = self
+                    .named_layouts
+                    .iter()
+                    .map(|(name, _)| {
+                        Item::new(name.clone(), IconName::Star, Act::Layout(name.clone()))
+                    })
+                    .collect();
+                grouped([presets, named])
             }
-            Target::Pane(pane) => return self.pane_items(*pane, cx),
+            Target::Pane(pane) => self.pane_items(*pane, cx),
             Target::Chat(id)
                 if self
                     .chat_by_id(id, cx)
                     .is_some_and(|t| t.archived_at.is_some()) =>
             {
-                return vec![
-                    item("Restore", IconName::ArrowCounterClockwise, Act::Restore),
-                    delete,
-                ];
+                grouped([vec![restore()], vec![delete()]])
             }
             Target::Agent(id)
-                if AppState::get(cx)
+                if state
                     .agents
                     .iter()
                     .any(|b| &b.id == id && b.archived_at.is_some()) =>
             {
-                return vec![
-                    item("Restore", IconName::ArrowCounterClockwise, Act::Restore),
-                    delete,
-                ];
+                grouped([vec![restore()], vec![delete()]])
             }
-            _ => {}
-        }
-        let mut items = vec![item("Rename", IconName::PencilSimple, Act::Rename)];
-        match target {
-            Target::Archived(_)
-            | Target::Many(_)
-            | Target::Tabs(_)
-            | Target::Layouts
-            | Target::Pane(_) => {}
-            Target::Agent(_) => {
-                items.push(item("Details", IconName::Robot, Act::Details));
-                items.push(item("Background…", IconName::Image, Act::Background));
-                items.push(Item {
-                    danger: true,
-                    ..item("Delete", IconName::Trash, Act::Remove)
-                });
-            }
-            Target::Chat(id) => {
-                if self.has_tab(id) {
-                    items.insert(0, item("Close tab", IconName::X, Act::CloseTab));
-                    let (others, right) = self.tabs_beside(id);
-                    let mut at = 1;
-                    if others {
-                        items.insert(
-                            at,
-                            item("Close other tabs", IconName::XCircle, Act::CloseOthers),
-                        );
-                        at += 1;
-                    }
-                    if right {
-                        items.insert(
-                            at,
-                            item(
-                                "Close tabs to the right",
-                                IconName::XCircle,
-                                Act::CloseRight,
-                            ),
-                        );
-                    }
-                } else {
-                    items.insert(
-                        0,
-                        item("Open in new tab", IconName::Plus, Act::OpenInNewTab),
-                    );
-                }
-                if self.can_split(id, cx) {
-                    items.insert(
-                        1,
-                        item(
-                            "Split right",
-                            IconName::SquareSplitHorizontal,
-                            Act::Split(Zone::Right),
-                        ),
-                    );
-                    items.insert(
-                        2,
-                        item(
-                            "Split down",
-                            IconName::SquareSplitVertical,
-                            Act::Split(Zone::Bottom),
-                        ),
-                    );
-                }
-                if let Some(chat) = self.chat_by_id(id, cx) {
-                    items.push(if chat.favorite {
-                        item(
-                            "Remove from favorites",
-                            IconName::Star,
-                            Act::Favorite(false),
-                        )
-                    } else {
-                        item("Add to favorites", IconName::Star, Act::Favorite(true))
-                    });
-                    if chat.project_id.is_some() {
-                        items.push(if chat.pinned {
-                            item("Unpin", IconName::PushPinSlash, Act::Pin(false))
-                        } else {
-                            item("Pin", IconName::PushPin, Act::Pin(true))
-                        });
-                    }
-                }
-                if AppState::get(cx).settings.granular_chats {
-                    items.push(item("Granular settings…", IconName::Gauge, Act::Granular));
-                }
-                items.extend(self.chat_app_items(id, cx));
-                items.push(item("Export to…", IconName::Export, Act::Export));
-                if AppState::get(cx).settings.logging.chat_menu {
-                    items.push(item("Open logs", IconName::FileText, Act::OpenLogs));
-                }
-                items.push(item("Archive", IconName::Archive, Act::Remove));
-            }
+            Target::Chat(id) => self.chat_items(id, cx),
+            Target::Agent(_) => grouped([
+                vec![
+                    item("Rename", IconName::PencilSimple, Act::Rename),
+                    item("Details", IconName::Robot, Act::Details),
+                    item("Background…", IconName::Image, Act::Background),
+                ],
+                vec![item("Delete", IconName::Trash, Act::Remove).danger()],
+            ]),
             Target::Project(id) => {
                 // A project on an SSH host has no folder here to show.
-                let remote = AppState::get(cx)
+                let remote = state
                     .settings
                     .projects
                     .iter()
                     .any(|p| &p.id == id && patchwork_platform::ssh::is_remote(&p.path));
-                items.push(item(
-                    "New task in a worktree",
-                    IconName::Folders,
-                    Act::WorktreeTask,
-                ));
-                if !remote && !AppState::get(cx).settings.worktrees.disabled {
-                    let in_place = AppState::get(cx)
-                        .settings
-                        .edit_in_place
-                        .iter()
-                        .any(|p| p == id);
-                    items.push(if in_place {
+                let mut tasks = vec![
+                    item("Rename", IconName::PencilSimple, Act::Rename),
+                    item(
+                        "New task in a worktree",
+                        IconName::Folders,
+                        Act::WorktreeTask,
+                    ),
+                ];
+                if !remote && !state.settings.worktrees.disabled {
+                    let in_place = state.settings.edit_in_place.iter().any(|p| p == id);
+                    tasks.push(if in_place {
                         item(
                             "Give tasks their own worktree",
                             IconName::Folders,
@@ -197,24 +111,100 @@ impl Workspace {
                         )
                     });
                 }
-                if AppState::get(cx).settings.granular_chats {
-                    items.push(item("Granular settings…", IconName::Gauge, Act::Granular));
+                let mut settings = Vec::new();
+                if state.settings.granular_chats {
+                    settings.push(item("Granular settings…", IconName::Gauge, Act::Granular));
                 }
-                items.push(item("Change folder…", IconName::Folder, Act::ChangeFolder));
+                settings.push(item("Change folder…", IconName::Folder, Act::ChangeFolder));
                 if !remote {
-                    items.push(item("Open folder", IconName::FolderOpen, Act::OpenFolder));
+                    settings.push(item("Open folder", IconName::FolderOpen, Act::OpenFolder));
                 }
-                items.push(Item {
-                    danger: true,
-                    ..item("Remove", IconName::Trash, Act::Remove)
+                grouped([
+                    tasks,
+                    settings,
+                    vec![item("Remove", IconName::Trash, Act::Remove).danger()],
+                ])
+            }
+            Target::Folder(_) => grouped([
+                vec![item("Rename", IconName::PencilSimple, Act::Rename)],
+                vec![item("Remove", IconName::Trash, Act::Remove).danger()],
+            ]),
+        }
+    }
+
+    /// A chat's menu: its tabs and panes, how it is listed, what else it does, and archiving it.
+    fn chat_items(&self, id: &str, cx: &gpui::App) -> Vec<Item> {
+        let item = Item::new;
+        let state = AppState::get(cx);
+        let mut tabs = Vec::new();
+        if self.has_tab(id) {
+            tabs.push(item("Close tab", IconName::X, Act::CloseTab));
+            let (others, right) = self.tabs_beside(id);
+            if others {
+                tabs.push(item(
+                    "Close other tabs",
+                    IconName::XCircle,
+                    Act::CloseOthers,
+                ));
+            }
+            if right {
+                tabs.push(item(
+                    "Close tabs to the right",
+                    IconName::XCircle,
+                    Act::CloseRight,
+                ));
+            }
+        } else {
+            tabs.push(item("Open in new tab", IconName::Plus, Act::OpenInNewTab));
+        }
+        if self.can_split(id, cx) {
+            tabs.push(Item::submenu(
+                "Split",
+                IconName::SquareSplitHorizontal,
+                vec![
+                    item(
+                        "Split right",
+                        IconName::SquareSplitHorizontal,
+                        Act::Split(Zone::Right),
+                    ),
+                    item(
+                        "Split down",
+                        IconName::SquareSplitVertical,
+                        Act::Split(Zone::Bottom),
+                    ),
+                ],
+            ));
+        }
+        let mut listed = vec![item("Rename", IconName::PencilSimple, Act::Rename)];
+        if let Some(chat) = self.chat_by_id(id, cx) {
+            listed.push(if chat.favorite {
+                item(
+                    "Remove from favorites",
+                    IconName::Star,
+                    Act::Favorite(false),
+                )
+            } else {
+                item("Add to favorites", IconName::Star, Act::Favorite(true))
+            });
+            if chat.project_id.is_some() {
+                listed.push(if chat.pinned {
+                    item("Unpin", IconName::PushPinSlash, Act::Pin(false))
+                } else {
+                    item("Pin", IconName::PushPin, Act::Pin(true))
                 });
             }
-            Target::Folder(_) => items.push(Item {
-                danger: true,
-                ..item("Remove", IconName::Trash, Act::Remove)
-            }),
         }
-        items
+        let mut more = Vec::new();
+        if state.settings.granular_chats {
+            more.push(item("Granular settings…", IconName::Gauge, Act::Granular));
+        }
+        more.extend(self.chat_app_items(id, cx));
+        more.push(item("Export to…", IconName::Export, Act::Export));
+        if state.settings.logging.chat_menu {
+            more.push(item("Open logs", IconName::FileText, Act::OpenLogs));
+        }
+        let archive = item("Archive", IconName::Archive, Act::Remove).keys(DeleteChat);
+        grouped([tabs, listed, more, vec![archive]])
     }
 
     /// The items that stop a chat app's conversation talking to the chat `id`.
@@ -227,11 +217,12 @@ impl Workspace {
             .iter()
             // A conversation whose agent only works with this chat talks to another.
             .filter(|b| b.chat_id == id)
-            .map(|b| Item {
-                label: format!("Stop continuing on {}", b.platform.label()).into(),
-                icon: IconName::X,
-                danger: false,
-                act: Act::StopOn(b.platform, b.conversation.clone()),
+            .map(|b| {
+                Item::new(
+                    format!("Stop continuing on {}", b.platform.label()),
+                    IconName::X,
+                    Act::StopOn(b.platform, b.conversation.clone()),
+                )
             })
             .collect()
     }
@@ -247,29 +238,25 @@ impl Workspace {
             })
             .collect();
         let archiving = chats.len() == targets.len();
-        let item = |label: &str, icon, act| Item {
-            label: SharedString::from(label.to_string()),
-            icon,
-            danger: false,
-            act,
-        };
-        let mut items = Vec::new();
+        let item = |label: &str, icon, act| Item::new(label.to_string(), icon, act);
+        let mut open = Vec::new();
         let project = self.tabs_project(cx);
         if archiving
             && (2..=4).contains(&chats.len())
             && chats.iter().all(|c| c.project_id == project)
         {
-            items.push(item(
+            open.push(item(
                 "Open side by side",
                 IconName::SquareSplitHorizontal,
                 Act::SideBySide,
             ));
         }
+        let mut listed = Vec::new();
         if archiving {
             // Some not yet a favorite, or not yet pinned: the item adds them all; otherwise it
             // takes them all off.
             let favorite = chats.iter().any(|t| !t.favorite);
-            items.push(if favorite {
+            listed.push(if favorite {
                 item("Add to favorites", IconName::Star, Act::Favorite(true))
             } else {
                 item(
@@ -279,7 +266,7 @@ impl Workspace {
                 )
             });
             if chats.iter().all(|t| t.project_id.is_some()) {
-                items.push(if chats.iter().any(|t| !t.pinned) {
+                listed.push(if chats.iter().any(|t| !t.pinned) {
                     item("Pin", IconName::PushPin, Act::Pin(true))
                 } else {
                     item("Unpin", IconName::PushPinSlash, Act::Pin(false))
@@ -287,59 +274,70 @@ impl Workspace {
             }
         }
         let n = targets.len();
-        items.push(if archiving {
+        let remove = if archiving {
             item(
                 &format!("Archive {n} items"),
                 IconName::Archive,
                 Act::Remove,
             )
         } else {
-            Item {
-                danger: true,
-                ..item(&format!("Remove {n} items"), IconName::Trash, Act::Remove)
-            }
-        });
-        items
+            item(&format!("Remove {n} items"), IconName::Trash, Act::Remove).danger()
+        };
+        grouped([open, listed, vec![remove]])
     }
 
     /// A tab strip's menu: split the pane, show it alone, close it.
     fn pane_items(&self, pane: PaneId, cx: &gpui::App) -> Vec<Item> {
-        let item = |label: &'static str, icon, act| Item {
-            label: label.into(),
-            icon,
-            danger: false,
-            act,
-        };
+        let item = Item::new;
         let layout = self.layouts.get(&self.tabs_project(cx));
         let several = layout.is_some_and(|l| l.panes.len() > 1);
         let maximized = layout.is_some_and(|l| l.maximized.is_some());
-        let mut items = vec![
-            item(
-                "Split right",
-                IconName::SquareSplitHorizontal,
-                Act::SplitPane(Zone::Right),
+        // The keys act on the focused pane, so only its menu shows them.
+        let focused = layout.is_none_or(|l| l.focused == pane);
+        let keyed = |item: Item, action: Box<dyn gpui::Action>| {
+            if focused {
+                Item {
+                    keys: Some(std::rc::Rc::from(action)),
+                    ..item
+                }
+            } else {
+                item
+            }
+        };
+        let split = vec![
+            keyed(
+                item(
+                    "Split right",
+                    IconName::SquareSplitHorizontal,
+                    Act::SplitPane(Zone::Right),
+                ),
+                Box::new(SplitPaneRight),
             ),
-            item(
-                "Split down",
-                IconName::SquareSplitVertical,
-                Act::SplitPane(Zone::Bottom),
+            keyed(
+                item(
+                    "Split down",
+                    IconName::SquareSplitVertical,
+                    Act::SplitPane(Zone::Bottom),
+                ),
+                Box::new(SplitPaneDown),
             ),
         ];
+        let mut view = Vec::new();
         if maximized {
-            items.push(item(
-                "Show all panes",
-                IconName::ArrowsInSimple,
-                Act::Maximize,
+            view.push(keyed(
+                item("Show all panes", IconName::ArrowsInSimple, Act::Maximize),
+                Box::new(MaximizePane),
             ));
         } else if several && layout.is_some_and(|l| l.focused == pane) {
-            items.push(item(
-                "Maximize pane",
-                IconName::ArrowsOutSimple,
-                Act::Maximize,
+            view.push(keyed(
+                item("Maximize pane", IconName::ArrowsOutSimple, Act::Maximize),
+                Box::new(MaximizePane),
             ));
         }
+        let mut swap = Vec::new();
+        let mut close = Vec::new();
         if several {
-            items.push(if self.broadcasting {
+            view.push(if self.broadcasting {
                 item(
                     "Stop sending to every pane",
                     IconName::PaperPlaneRight,
@@ -353,49 +351,84 @@ impl Workspace {
                 )
             });
             if let Some(layout) = layout {
-                for (label, dir) in [
-                    ("Swap with pane left", Dir::Left),
-                    ("Swap with pane right", Dir::Right),
-                    ("Swap with pane above", Dir::Up),
-                    ("Swap with pane below", Dir::Down),
-                ] {
-                    if let Some(other) = layout.neighbour(pane, dir) {
-                        items.push(item(label, IconName::ArrowsLeftRight, Act::SwapPane(other)));
-                    }
+                let sides: [(&str, Dir, Box<dyn gpui::Action>); 4] = [
+                    ("Pane left", Dir::Left, Box::new(SwapPaneLeft)),
+                    ("Pane right", Dir::Right, Box::new(SwapPaneRight)),
+                    ("Pane above", Dir::Up, Box::new(SwapPaneUp)),
+                    ("Pane below", Dir::Down, Box::new(SwapPaneDown)),
+                ];
+                let sides: Vec<Item> = sides
+                    .into_iter()
+                    .filter_map(|(label, dir, action)| {
+                        let other = layout.neighbour(pane, dir)?;
+                        let swap = item(label, IconName::ArrowsLeftRight, Act::SwapPane(other));
+                        Some(keyed(swap, action))
+                    })
+                    .collect();
+                if !sides.is_empty() {
+                    swap.push(Item::submenu("Swap with", IconName::ArrowsLeftRight, sides));
                 }
             }
-            items.push(item("Close pane", IconName::X, Act::ClosePane));
+            close.push(item("Close pane", IconName::X, Act::ClosePane));
         }
-        items
+        grouped([split, view, swap, close])
     }
 
     /// The tab add button's menu: a new task, then each of the project's tasks with no tab.
     fn tab_items(&self, project: Option<&str>, cx: &gpui::App) -> Vec<Item> {
-        let new = Item {
-            label: if project.is_some() {
+        let new = Item::new(
+            if project.is_some() {
                 "New task"
             } else {
                 "New chat"
-            }
-            .into(),
-            icon: IconName::Plus,
-            danger: false,
-            act: Act::NewTaskTab,
-        };
-        let tasks = self.untabbed_tasks(project, cx).into_iter().map(|c| {
-            let title = patchwork_design_text::display_title(&c.title);
-            Item {
-                label: if title.trim().is_empty() {
+            },
+            IconName::Plus,
+            Act::NewTaskTab,
+        );
+        let tasks = self
+            .untabbed_tasks(project, cx)
+            .into_iter()
+            .map(|c| {
+                let title = patchwork_design_text::display_title(&c.title);
+                let label: SharedString = if title.trim().is_empty() {
                     "New chat".into()
                 } else {
                     title.into()
-                },
-                icon: IconName::ChatCircle,
-                danger: false,
-                act: Act::OpenTab(c.id.clone()),
-            }
-        });
-        std::iter::once(new).chain(tasks).collect()
+                };
+                Item::new(label, IconName::ChatCircle, Act::OpenTab(c.id.clone()))
+            })
+            .collect();
+        grouped([vec![new], tasks])
+    }
+
+    /// The menu rows for `items`, each acting on `target` in this window.
+    fn menu_items(
+        items: Vec<Item>,
+        target: &Target,
+        workspace: &gpui::WeakEntity<Self>,
+    ) -> Vec<MenuItem> {
+        items
+            .into_iter()
+            .map(|item| {
+                let row = if let Some(items) = item.submenu {
+                    MenuItem::submenu(item.label, Self::menu_items(items, target, workspace))
+                } else {
+                    let (workspace, target, act) = (workspace.clone(), target.clone(), item.act);
+                    MenuItem::new(item.label, move |window, cx| {
+                        let _ = workspace.update(cx, |this, cx| {
+                            this.act(target.clone(), act.clone(), window, cx);
+                        });
+                    })
+                };
+                MenuItem {
+                    icon: Some(item.icon),
+                    danger: item.danger,
+                    separated: item.separated,
+                    keys: item.keys,
+                    ..row
+                }
+            })
+            .collect()
     }
 
     /// Opens the menu for `target` where the pointer pressed.
@@ -406,16 +439,19 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let focus = cx.focus_handle();
-        window.focus(&focus, cx);
+        let items = Self::menu_items(self.items(&target, cx), &target, &cx.weak_entity());
+        let menu = Menu::open("Actions", items, window, cx);
         // The press otherwise goes on to focus the window under the row, and the menu, without
         // the focus, hears none of its keys.
         window.prevent_default();
+        let closed = cx.subscribe_in(&menu, window, |this, _, _: &Dismissed, window, cx| {
+            this.close_context_menu(window, cx);
+        });
         self.context_menu = Some(ContextMenu {
             at,
             target,
-            focus,
-            highlight: None,
+            menu,
+            _closed: closed,
         });
         cx.notify();
     }

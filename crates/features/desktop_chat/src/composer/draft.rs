@@ -14,7 +14,7 @@ use patchwork_client::local::core::chats::{AccessMode, Attachment, NewChat};
 use patchwork_design_editor::{Arrow, Changed, Edge, Submitted, Tabbed, TextArea};
 use crate::host::{ChatEvent, ChatHost};
 use super::menus::{Menu, Pick, Roles};
-use super::model_picker::{ModelPicker, ordered};
+use super::model_picker::ordered;
 use super::model_notice;
 use super::sigil_menu;
 
@@ -51,15 +51,6 @@ pub struct Picks {
     pub role: Option<String>,
 }
 
-/// The project the chats a request starts from the Orchestrator page go in.
-#[derive(Debug)]
-pub enum LaunchProject {
-    /// The project open in the sidebar, until one is picked.
-    Open,
-    /// The project picked on the page, or None for none.
-    Picked(Option<String>),
-}
-
 /// The box a message is written in, with the agent, model and options it sends with.
 pub struct Composer {
     pub(super) host: Rc<dyn ChatHost>,
@@ -83,10 +74,9 @@ pub struct Composer {
     pub(super) roles: Roles,
     /// The project `roles` were listed for, so a refresh for the same one keeps showing them.
     pub(super) roles_project: Option<String>,
-    pub(super) agent_picker: Option<super::agent_picker::AgentPicker>,
-    pub(super) picker: Option<ModelPicker>,
-    /// How far along the effort slider the pointer holds its knob, 0 to 1, while it is dragged.
-    pub(super) effort_drag: Option<f32>,
+    /// The model, agent or permissions menu while open, and the shape of the rows it was built
+    /// with, so it is built again when they change, as when the models or agents are listed.
+    pub(super) context_menu: Option<(Entity<patchwork_design_components::menu::Menu>, String)>,
     /// Whether the next send while a turn runs queues rather than steers, when picked from the
     /// send menu. Each send, and each turn starting or ending, puts it back to the default.
     pub(super) queue_next: Option<bool>,
@@ -97,12 +87,6 @@ pub struct Composer {
     pub(super) sigil: sigil_menu::SigilMenu,
     /// The favourite models, as `agent:model` keys, read once in the background and saved there.
     pub(super) favorites: Vec<String>,
-    /// The agent and model picked on the Orchestrator page for the chats a request starts.
-    pub(super) launch: Option<(AgentKind, Option<String>)>,
-    /// The project for the chats a request starts from the Orchestrator page.
-    pub(super) launch_project: LaunchProject,
-    /// The open model picker is the Orchestrator page's, not the chat's.
-    pub(super) launching: bool,
     /// Where Up has stepped to among the messages sent in this chat.
     pub(super) recalled: Option<super::recall::Recall>,
 }
@@ -142,8 +126,10 @@ impl Composer {
             cx.notify();
         })
         .detach();
-        cx.subscribe(&editor, |this, _, e: &Arrow, cx| this.sigil_arrow(e.0, cx))
-            .detach();
+        cx.subscribe_in(&editor, window, |this, _, e: &Arrow, window, cx| {
+            this.sigil_arrow(e.0, window, cx);
+        })
+        .detach();
         cx.subscribe_in(&editor, window, |this, _, e: &Edge, window, cx| {
             this.recall(e.0, window, cx);
         })
@@ -193,9 +179,7 @@ impl Composer {
             menu_picks: Vec::new(),
             roles: Roles::Loading,
             roles_project: None,
-            agent_picker: None,
-            picker: None,
-            effort_drag: None,
+            context_menu: None,
             queue_next: None,
             was_working: false,
             health: model_notice::ModelHealth::default(),
@@ -203,9 +187,6 @@ impl Composer {
             sigil: sigil_menu::SigilMenu::default(),
             recalled: None,
             favorites: Vec::new(),
-            launch: None,
-            launch_project: LaunchProject::Open,
-            launching: false,
         }
     }
 

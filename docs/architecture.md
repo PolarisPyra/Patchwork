@@ -83,9 +83,9 @@ on `patchwork-model` or an engine crate.
   embedded assets the window loads
 - `tasks` (`patchwork-design-tasks`) — view task helpers: work off the UI thread, timers, and the
   file picker
-- `components` (`patchwork-design-components`) — Patchwork's styling over gpui-component's
-  buttons, checkboxes, tags, tooltips and spinner, plus its own inputs, menus, dialogs, popovers,
-  avatars and scrollbars
+- `components` (`patchwork-design-components`) — what gpui-component lacks: the focusable base,
+  inputs, menus, dialogs, popovers, avatars and scrollbars. Views call gpui-component's `Button`,
+  `Checkbox`, `Tag` and `Spinner` directly
 - `text` (`patchwork-design-text`) — Markdown layout, syntax highlighting, selectable text, and
   formatting
 - `editor` (`patchwork-design-editor`) — multi-line text area and composer editor

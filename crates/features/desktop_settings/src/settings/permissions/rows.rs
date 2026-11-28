@@ -2,6 +2,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use super::rules::ADD_FIELD;
 use super::rules::PERMISSION_KINDS;
 use super::rules::EFFECTS;
@@ -12,7 +16,6 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, choices, segmented, select_box};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, radius_sm, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button};
 
 pub(super) fn rule_row(
     d: &mut SettingsDialog,
@@ -62,44 +65,39 @@ pub(super) fn rule_row(
     let menu_key = SharedString::from(format!("perm-move-{id}"));
     let open = d.menu_open(&menu_key);
     let targets = targets.to_vec();
-    let move_button = icon_button(
-        menu_key.clone(),
-        format!("Move {}", rule.pattern),
-        IconName::DotsThree,
-        14.,
-        cx,
-    )
-    .aria_expanded(open)
-    .text_color(t.text_muted)
-    .tooltip("Move to…")
-    .on_click(choices(
-        menu_key,
-        "Move rule",
-        targets
-            .iter()
-            .map(|(to, name)| (Some(to.clone()), format!("Move to {name}").into()))
-            .collect(),
-        None,
-        {
-            let (scope, id) = (scope.clone(), id.clone());
-            move |d, to, cx| {
-                if let Some(to) = to {
-                    d.move_rule(&scope, &to, &id, cx);
+    let move_button = Button::new(menu_key.clone())
+        .ghost()
+        .small()
+        .icon(IconName::DotsThree)
+        .accessibility_label(format!("Move {}", rule.pattern))
+        .aria_expanded(open)
+        .text_color(t.text_muted)
+        .on_click(choices(
+            menu_key,
+            "Move rule",
+            targets
+                .iter()
+                .map(|(to, name)| (Some(to.clone()), format!("Move to {name}").into()))
+                .collect(),
+            None,
+            {
+                let (scope, id) = (scope.clone(), id.clone());
+                move |d, to, cx| {
+                    if let Some(to) = to {
+                        d.move_rule(&scope, &to, &id, cx);
+                    }
                 }
-            }
-        },
-        cx,
-    ));
-    let delete = icon_button(
-        SharedString::from(format!("perm-delete-{id}")),
-        format!("Delete {}", rule.pattern),
-        IconName::X,
-        14.,
-        cx,
-    )
-    .on_click(cx.listener(move |d, _, _, cx| {
-        d.change_scope(&scope, |s| s.rules.retain(|r| r.id != id), cx);
-    }));
+            },
+            cx,
+        ));
+    let delete = Button::new(SharedString::from(format!("perm-delete-{id}")))
+        .ghost()
+        .small()
+        .icon(IconName::X)
+        .accessibility_label(format!("Delete {}", rule.pattern))
+        .on_click(cx.listener(move |d, _, _, cx| {
+            d.change_scope(&scope, |s| s.rules.retain(|r| r.id != id), cx);
+        }));
     div()
         .flex()
         .items_center()
@@ -174,8 +172,10 @@ pub(super) fn add_rule_row(
         .child(select)
         .child(field.flex_1().font_family(font_mono()))
         .child(
-            btn("perm-add-rule", "Add rule", BtnKind::Plain, empty, &t)
-                .child("Add rule")
+            Button::new("perm-add-rule")
+                .small()
+                .disabled(empty)
+                .label("Add rule")
                 .when(!empty, |b| {
                     b.on_click(cx.listener(|d, _, _, cx| d.add_rule(cx)))
                 }),

@@ -2,6 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use std::rc::Rc;
 
 use gpui::{
@@ -17,7 +20,7 @@ use crate::settings::controls::radio;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_lg, fs_sm, Theme as Colors, radius, radius_sm, theme};
 use patchwork_design_components::menu::MenuItem;
-use patchwork_design_components::{button, icon_button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 /// The color schemes that are not files, in the order their cards come: the id each has in
@@ -177,7 +180,11 @@ impl Tool {
     fn button(&self, cx: &mut Context<SettingsDialog>) -> AnyElement {
         let act = Rc::clone(&self.act);
         let key = SharedString::from(self.key.clone());
-        icon_button(key, self.label.clone(), self.icon, 14., cx)
+        Button::new(key)
+            .ghost()
+            .small()
+            .icon(self.icon)
+            .accessibility_label(self.label.clone())
             .size(px(22.))
             .flex_none()
             .on_click(cx.listener(move |d, _, _, cx| {
@@ -242,13 +249,11 @@ pub(super) fn card(
         })
     });
     let warning = (!notes.is_empty()).then(|| {
-        let notes = notes.join(". ");
         div()
             .id(SharedString::from(format!("notes-{key}")))
             .flex_none()
             .text_color(t.warning)
             .child(icon(IconName::Warning, 14.))
-            .tooltip(tooltip(notes))
     });
     // The card's name says what is wrong with it, for a reader that cannot hover.
     let label = std::iter::once(name.to_string())
@@ -287,15 +292,7 @@ pub(super) fn card(
                 .items_center()
                 .gap(px(4.))
                 .text_size(px(fs_sm()))
-                .child(
-                    div()
-                        .id("name")
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .tooltip(tooltip(name.clone()))
-                        .child(name),
-                )
+                .child(div().id("name").flex_1().min_w_0().truncate().child(name))
                 .children(warning)
                 .children(buttons),
         )

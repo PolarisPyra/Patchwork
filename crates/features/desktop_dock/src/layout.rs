@@ -3,11 +3,13 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{Role, Window, div, prelude::*, px};
 use patchwork_design_components::menu::Menu;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, radius_sm, theme};
-use patchwork_design_components::icon_button;
 use super::open_tabs::{Dock, DockEvent, DockTab};
 use super::tabs::TOOL;
 
@@ -74,20 +76,20 @@ impl Dock {
         };
         // Maximized, the close button gives the panel its own height back instead.
         let close = if self.maximized {
-            icon_button(
-                "panel-restore",
-                "Restore panel size",
-                IconName::CaretUp,
-                14.,
-                cx,
-            )
-            .size(px(TOOL))
-            .tooltip("Restore panel size")
-            .on_click(cx.listener(|this, _, _, cx| this.set_maximized(false, cx)))
-        } else {
-            icon_button("panel-close", "Close panel", IconName::X, 14., cx)
+            Button::new("panel-restore")
+                .ghost()
+                .small()
+                .icon(IconName::CaretUp)
+                .accessibility_label("Restore panel size")
                 .size(px(TOOL))
-                .tooltip("Close panel (Ctrl+`)")
+                .on_click(cx.listener(|this, _, _, cx| this.set_maximized(false, cx)))
+        } else {
+            Button::new("panel-close")
+                .ghost()
+                .small()
+                .icon(IconName::X)
+                .accessibility_label("Close panel")
+                .size(px(TOOL))
                 .on_click(cx.listener(|_, _, _, cx| cx.emit(DockEvent::Close)))
         };
         div()

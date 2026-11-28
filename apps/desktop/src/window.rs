@@ -134,7 +134,7 @@ impl Workspace {
                 cx,
             )
         });
-        let orchestrator = Self::new_orchestrator(&composer, window, cx);
+        let orchestrator = Self::new_orchestrator(window, cx);
         let orchestrator_backdrop = cx.new(|cx| OrchestratorBackdrop::new(&orchestrator, cx));
         let thumbs = cx.new(|_| patchwork_desktop_quilts::Thumbs::new(Arc::clone(&core)));
         cx.observe(&thumbs, |_, _, cx| cx.notify()).detach();

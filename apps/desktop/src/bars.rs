@@ -3,6 +3,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use patchwork_desktop_chat::prelude::*;
 use patchwork_client::GitModel;
 use patchwork_client::AppState;
@@ -15,7 +17,7 @@ use crate::window::Workspace;
 use patchwork_design_components::{menu::Dismissed, menu::Menu, menu::MenuItem};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{ACTIVITY_BAR_W, fs_xs, radius, STATUSBAR_H, TOOLBAR_H, Theme, theme};
-use patchwork_design_components::{button, spinner};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 use crate::machines::kind_icon;
@@ -159,7 +161,10 @@ impl Workspace {
             .map_or_else(|| "This computer".to_string(), |(name, _)| name.clone());
         let mark = match picked.as_ref().map(|(_, kind)| *kind) {
             Some(Some(kind)) => icon(kind_icon(kind), 20.).into_any_element(),
-            _ => spinner(16., t.text_muted).into_any_element(),
+            _ => Spinner::new()
+                .with_size(gpui::px(16.))
+                .color(t.text_muted)
+                .into_any_element(),
         };
         let (hover, fg) = (t.bg_hover, t.text);
         div()

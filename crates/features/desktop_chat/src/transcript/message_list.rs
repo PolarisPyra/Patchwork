@@ -2,6 +2,8 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use crate::prelude::*;
 use patchwork_client::AppState;
 use std::sync::Arc;
@@ -16,7 +18,7 @@ use patchwork_client::local::core::chats::{Message, MessageStatus, Part, Role as
 
 use patchwork_design_theme::{fs_xs, Theme};
 use patchwork_design_text::format_tokens;
-use patchwork_design_components::{list_scrollbar, spinner};
+use patchwork_design_components::list_scrollbar;
 use crate::window::{is_busy};
 
 use patchwork_design_text::markdown::find_in;
@@ -303,7 +305,7 @@ fn compacted_divider(
             .flex()
             .items_center()
             .gap(px(6.))
-            .child(spinner(11., t.text_subtle))
+            .child(Spinner::new().with_size(gpui::px(11.)).color(t.text_subtle))
             .child("Compacting context"),
         Compaction::Stopped => div().child("Compaction stopped"),
         Compaction::Compacted => div().child(match before {

@@ -2,6 +2,9 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{
     App, Context, EventEmitter, FocusHandle, Focusable, InteractiveElement as _, IntoElement,
     KeyDownEvent, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
@@ -10,7 +13,7 @@ use gpui::{
 use patchwork_client::Session;
 use patchwork_protocol::chats::ChatStatus;
 use patchwork_protocol::messages::{Message, Part, Role};
-use patchwork_design_components::{BtnKind, btn, input_box};
+use patchwork_design_components::input_box;
 use patchwork_design_text::markdown::markdown;
 use patchwork_design_theme::{Theme, fs_sm, theme};
 use patchwork_views_chat::image_markdown::without_image_markdown;
@@ -93,7 +96,7 @@ impl Render for ChatScreen {
             .iter()
             .map(|m| message(m, &t, cx))
             .collect();
-        let back = back_button("chat.back", &t).on_click(cx.listener(|_, _, _, cx| {
+        let back = back_button("chat.back").on_click(cx.listener(|_, _, _, cx| {
             Session::close(cx);
             cx.emit(ChatEvent::Back);
         }));
@@ -133,10 +136,15 @@ impl ChatScreen {
             div().text_color(t.text).child(self.draft.clone())
         };
         let button = if running {
-            btn("composer.stop", "Stop", BtnKind::Plain, false, t)
+            Button::new("composer.stop")
+                .small()
+                .accessibility_label("Stop")
                 .on_click(cx.listener(|_, _, _, cx| Session::stop(cx)))
         } else {
-            btn("composer.send", "Send", BtnKind::Primary, false, t)
+            Button::new("composer.send")
+                .primary()
+                .small()
+                .accessibility_label("Send")
                 .on_click(cx.listener(|this, _, _, cx| this.send(cx)))
         };
         div()

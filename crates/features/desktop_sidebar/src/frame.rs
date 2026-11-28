@@ -41,9 +41,9 @@ pub(crate) fn render(
         .relative()
         .flex()
         .flex_col()
-        .flex_none()
+        // The window gives the sidebar its width and the full height beside the activity bar.
+        .size_full()
         .min_h_0()
-        .w(px(width))
         .border_r_1()
         .border_color(t.border)
         .bg(t.bg_panel)

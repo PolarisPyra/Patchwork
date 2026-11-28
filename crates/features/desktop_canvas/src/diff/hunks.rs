@@ -2,6 +2,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use super::review::Draft;
 use super::review::note_for;
 use super::parse::Row;
@@ -19,7 +23,7 @@ use patchwork_client::local::core::source_control::HunkAction;
 use crate::Canvas;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, Theme, theme};
-use patchwork_design_components::{BtnKind, btn, button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 /// A monospace character's width at `--fs-md`, for the widest line's floor.
@@ -244,7 +248,6 @@ impl Canvas {
                 .px(px(6.))
                 .py(px(2.))
                 .text_color(t.text_muted)
-                .tooltip(tooltip(label))
                 .when(busy && text != "Note", |b| b.opacity(0.5).cursor_default())
                 .when(!busy || text == "Note", |b| {
                     b.hover(move |s| s.bg(hover).text_color(fg))
@@ -437,15 +440,16 @@ impl Canvas {
                     .justify_end()
                     .gap(px(8.))
                     .child(
-                        btn("note-cancel", "Cancel", BtnKind::Plain, false, t)
-                            .child("Cancel")
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.cancel_note(window, cx)),
-                            ),
+                        Button::new("note-cancel").small().label("Cancel").on_click(
+                            cx.listener(|this, _, window, cx| this.cancel_note(window, cx)),
+                        ),
                     )
                     .child(
-                        btn("note-save", save, BtnKind::Primary, !has_text, t)
-                            .child(save)
+                        Button::new("note-save")
+                            .primary()
+                            .small()
+                            .disabled(!has_text)
+                            .label(save)
                             .when(has_text, |b| {
                                 b.on_click(
                                     cx.listener(|this, _, window, cx| this.save_note(window, cx)),
@@ -521,7 +525,6 @@ impl Canvas {
                     format!("Edit note on {}", note.place),
                     IconName::PencilSimple,
                 )
-                .tooltip(tooltip("Edit"))
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.draft = None;
                     this.editing = Some(id);
@@ -537,7 +540,6 @@ impl Canvas {
                     format!("Delete note on {}", note.place),
                     IconName::Trash,
                 )
-                .tooltip(tooltip("Delete"))
                 .on_click(cx.listener(move |_, _, _, cx| {
                     if let Some(list) = cx.default_global::<Review>().notes.get_mut(&project) {
                         list.retain(|n| n.id != id);

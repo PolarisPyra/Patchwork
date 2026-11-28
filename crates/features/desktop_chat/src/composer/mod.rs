@@ -10,7 +10,6 @@ pub mod access_picker;
 pub mod agent_picker;
 pub mod chips;
 pub mod footer;
-pub mod launch;
 pub mod menus;
 pub mod model_notice;
 pub mod model_picker;

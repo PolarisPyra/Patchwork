@@ -3,6 +3,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Selectable as _;
+use gpui::component::Sizable as _;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -17,7 +21,6 @@ use super::devices::AndroidPanel;
 use patchwork_design_components::menu::MenuItem;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_sm, fs_xs, Theme};
-use patchwork_design_components::{dropdown_chip, icon_button};
 
 /// How often the log is read again: often enough to look live, seldom enough to stay cheap
 /// while an app writes thousands of lines.
@@ -221,18 +224,21 @@ impl AndroidPanel {
                     .children(log.logcat.package().map(str::to_string)),
             )
             .child(
-                dropdown_chip(
-                    "android-log-level",
-                    format!("Lowest level shown: {}", level_name(log.level)),
-                    level_name(log.level),
-                    self.menu_open("Lowest level shown"),
-                    &t,
-                )
-                .on_click(cx.listener(Self::open_level_menu)),
+                Button::new("android-log-level")
+                    .ghost()
+                    .small()
+                    .accessibility_label(format!("Lowest level shown: {}", level_name(log.level)))
+                    .label(level_name(log.level))
+                    .dropdown_caret(true)
+                    .selected(self.menu_open("Lowest level shown"))
+                    .on_click(cx.listener(Self::open_level_menu)),
             )
             .child(
-                icon_button("android-log-copy", "Copy the log", IconName::Copy, 14., cx)
-                    .tooltip("Copy")
+                Button::new("android-log-copy")
+                    .ghost()
+                    .small()
+                    .icon(IconName::Copy)
+                    .accessibility_label("Copy the log")
                     .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(log) = &this.log {
                             let text: Vec<&str> =
@@ -242,24 +248,24 @@ impl AndroidPanel {
                     })),
             )
             .child(
-                icon_button(
-                    "android-log-clear",
-                    "Clear the log",
-                    IconName::Prohibit,
-                    14.,
-                    cx,
-                )
-                .tooltip("Clear")
-                .on_click(cx.listener(|this, _, _, cx| {
-                    if let Some(log) = &this.log {
-                        let logcat = Arc::clone(&log.logcat);
-                        cx.background_spawn(async move { logcat.clear() }).detach();
-                    }
-                })),
+                Button::new("android-log-clear")
+                    .ghost()
+                    .small()
+                    .icon(IconName::Prohibit)
+                    .accessibility_label("Clear the log")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(log) = &this.log {
+                            let logcat = Arc::clone(&log.logcat);
+                            cx.background_spawn(async move { logcat.clear() }).detach();
+                        }
+                    })),
             )
             .child(
-                icon_button("android-log-close", "Close the log", IconName::X, 14., cx)
-                    .tooltip("Close")
+                Button::new("android-log-close")
+                    .ghost()
+                    .small()
+                    .icon(IconName::X)
+                    .accessibility_label("Close the log")
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_log(cx))),
             );
         Some(

@@ -6,7 +6,6 @@ use std::path::PathBuf;
 
 use gpui::{Div, ObjectFit, SharedString, Stateful, div, img, prelude::*, px};
 use patchwork_model::chats::{Attachment, AttachmentKind};
-use patchwork_design_components::tooltip;
 use patchwork_design_icons::{IconName, icon};
 use patchwork_design_theme::{Theme, fs_sm, fs_xs, radius};
 
@@ -67,7 +66,6 @@ pub fn attachment_chip(id: impl Into<SharedString>, a: &Attachment, t: &Theme) -
         .pl(px(8.))
         .text_size(px(fs_sm()))
         .text_color(t.text)
-        .tooltip(tooltip(a.path.clone()))
         .child(lead)
         .child(div().min_w_0().truncate().child(a.name.clone()))
         .child(

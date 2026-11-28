@@ -3,6 +3,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use gpui::{
     AnyElement, ExternalPaths, FontWeight, KeyDownEvent, Role, SharedString, Window, div,
     prelude::*, px, relative,
@@ -14,9 +18,7 @@ use super::devices::AndroidPanel;
 use patchwork_design_components::menu::Menu;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_lg, fs_sm, fs_xs, radius, Theme, theme};
-use patchwork_design_components::{
-    BtnKind, btn, button, icon_button, input_box, scrollbar, spinner, tooltip,
-};
+use patchwork_design_components::{button, input_box, scrollbar};
 use patchwork_design_icons::icon;
 
 /// What dismissing an alert does.
@@ -160,15 +162,12 @@ impl AndroidPanel {
                     ),
             )
             .child(
-                icon_button(
-                    "close-android",
-                    "Close Android devices",
-                    IconName::X,
-                    16.,
-                    cx,
-                )
-                .tooltip("Close")
-                .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
+                Button::new("close-android")
+                    .ghost()
+                    .small()
+                    .icon(IconName::X)
+                    .accessibility_label("Close Android devices")
+                    .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
             )
     }
 
@@ -190,7 +189,7 @@ impl AndroidPanel {
                     .items_center()
                     .gap(px(8.))
                     .text_color(t.text_muted)
-                    .child(spinner(14., t.text_muted))
+                    .child(Spinner::new().with_size(gpui::px(14.)).color(t.text_muted))
                     .child("Looking for the Android SDK")
                     .into_any_element(),
             );
@@ -226,7 +225,9 @@ impl AndroidPanel {
             section("Virtual devices", t)
                 .when(can_create, |row| {
                     row.child(
-                        btn("android-new-device", "New device", BtnKind::Plain, false, t)
+                        Button::new("android-new-device")
+                            .small()
+                            .accessibility_label("New device")
                             .child(icon(IconName::Plus, 14.))
                             .child("New device")
                             .on_click(
@@ -274,16 +275,12 @@ impl AndroidPanel {
         parts.push(
             section("Connected devices", t)
                 .child(
-                    btn(
-                        "android-pair",
-                        "Pair a phone over Wi-Fi",
-                        BtnKind::Plain,
-                        false,
-                        t,
-                    )
-                    .child(icon(IconName::PlugsConnected, 14.))
-                    .child("Pair over Wi-Fi")
-                    .on_click(cx.listener(|this, _, window, cx| this.open_pair(window, cx))),
+                    Button::new("android-pair")
+                        .small()
+                        .accessibility_label("Pair a phone over Wi-Fi")
+                        .child(icon(IconName::PlugsConnected, 14.))
+                        .child("Pair over Wi-Fi")
+                        .on_click(cx.listener(|this, _, window, cx| this.open_pair(window, cx))),
                 )
                 .into_any_element(),
         );
@@ -319,10 +316,6 @@ impl AndroidPanel {
                         .flex_1()
                         .min_w_0()
                         .truncate()
-                        .tooltip(tooltip(format!(
-                            "{path}\nFrom {}",
-                            android::source_label(sdk.source)
-                        )))
                         .child(format!("SDK: {path}")),
                 )
                 .child(
@@ -365,15 +358,12 @@ impl AndroidPanel {
                     .child(div().flex_1().min_w_0().child(self.sdk_field.clone())),
             )
             .child(
-                btn(
-                    "android-sdk-save",
-                    "Use this SDK folder",
-                    BtnKind::Primary,
-                    false,
-                    t,
-                )
-                .child("Use")
-                .on_click(cx.listener(|this, _, _, cx| this.save_sdk(cx))),
+                Button::new("android-sdk-save")
+                    .primary()
+                    .small()
+                    .accessibility_label("Use this SDK folder")
+                    .child("Use")
+                    .on_click(cx.listener(|this, _, _, cx| this.save_sdk(cx))),
             )
             .into_any_element()
     }
@@ -415,20 +405,16 @@ impl AndroidPanel {
                     .child(div().flex_1().min_w_0().child(error.to_string()))
                     .when_some(dismiss, |row, dismiss| {
                         row.child(
-                            icon_button(
-                                SharedString::from(format!("android-dismiss-{id}")),
-                                "Dismiss",
-                                IconName::X,
-                                12.,
-                                cx,
-                            )
-                            .size(px(20.))
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
+                            Button::new(SharedString::from(format!("android-dismiss-{id}")))
+                                .ghost()
+                                .small()
+                                .icon(IconName::X)
+                                .accessibility_label("Dismiss")
+                                .size(px(20.))
+                                .on_click(cx.listener(move |this, _, _, cx| {
                                     dismiss(this);
                                     cx.notify();
-                                },
-                            )),
+                                })),
                         )
                     }),
             )

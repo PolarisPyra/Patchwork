@@ -3,6 +3,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
+use gpui::component::tag::Tag;
 use patchwork_views_logos::{agent_label, agent_logo};
 use std::sync::Arc;
 
@@ -13,7 +18,7 @@ use super::{AGENT_KINDS, Onboarding, Probe};
 use super::rows::{choice_row, heading, key_id, picked, row_end, tick};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, radius, Theme};
-use patchwork_design_components::{BtnKind, badge, btn, button, spinner};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 impl Onboarding {
@@ -153,25 +158,26 @@ impl Onboarding {
 
 /// Every badge is as wide as the longest usual one, so they line up from row to row.
 fn status_badge(probe: Option<&Probe>, t: &Theme) -> AnyElement {
-    let wide = |b: patchwork_design_components::Tag| b.min_w(px(112.)).justify_center().gap(px(4.));
+    let wide = |b: Tag| b.min_w(px(112.)).justify_center().gap(px(4.));
     let Some(probe) = probe.filter(|p| !p.checking) else {
-        return wide(badge("", t))
-            .child(spinner(12., t.text_muted))
+        return wide(Tag::secondary().small().child(""))
+            .child(Spinner::new().with_size(gpui::px(12.)).color(t.text_muted))
             .child("Checking…")
             .into_any_element();
     };
     let b = match &probe.status {
-        None => wide(badge("Check failed", t)),
-        Some(s) if !s.installed => wide(badge("Not installed", t)),
-        Some(s) if !s.signed_in => wide(badge("Not signed in", t))
+        None => wide(Tag::secondary().small().child("Check failed")),
+        Some(s) if !s.installed => wide(Tag::secondary().small().child("Not installed")),
+        Some(s) if !s.signed_in => wide(Tag::secondary().small().child("Not signed in"))
             .bg(t.danger_soft)
             .text_color(t.danger),
-        Some(s) => wide(badge(
-            s.version
-                .as_ref()
-                .map_or_else(|| "Ready".to_string(), |v| format!("Ready · {v}")),
-            t,
-        ))
+        Some(s) => wide(
+            Tag::secondary().small().child(
+                s.version
+                    .as_ref()
+                    .map_or_else(|| "Ready".to_string(), |v| format!("Ready · {v}")),
+            ),
+        )
         .bg(t.success.opacity(0.14))
         .text_color(t.success),
     };
@@ -185,7 +191,10 @@ pub fn agent_step(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) ->
         .gap(px(4.))
         .text_color(accent)
         .child(if checking {
-            spinner(14., accent).into_any_element()
+            Spinner::new()
+                .with_size(gpui::px(14.))
+                .color(accent)
+                .into_any_element()
         } else {
             icon(IconName::ArrowsClockwise, 14.).into_any_element()
         })
@@ -278,27 +287,24 @@ fn download_button(
 ) -> AnyElement {
     let installing = this.installing.contains(&kind);
     let name = agent_label(kind);
-    btn(
-        key_id("setup-download", kind),
-        if installing {
+    Button::new(key_id("setup-download", kind))
+        .small()
+        .disabled(installing)
+        .accessibility_label(if installing {
             format!("Installing {name}")
         } else {
             format!("Download {name}")
-        },
-        BtnKind::Plain,
-        installing,
-        t,
-    )
-    .when(installing, |b| {
-        b.role(Role::Status)
-            .child(spinner(12., t.text_muted))
-            .child("Installing…")
-    })
-    .when(!installing, |b| {
-        b.child("Download")
-            .on_click(cx.listener(move |this, _, _, cx| this.install(kind, cx)))
-    })
-    .into_any_element()
+        })
+        .when(installing, |b| {
+            b.role(Role::Status)
+                .child(Spinner::new().with_size(gpui::px(12.)).color(t.text_muted))
+                .child("Installing…")
+        })
+        .when(!installing, |b| {
+            b.child("Download")
+                .on_click(cx.listener(move |this, _, _, cx| this.install(kind, cx)))
+        })
+        .into_any_element()
 }
 
 /// Why `kind`'s last download failed.

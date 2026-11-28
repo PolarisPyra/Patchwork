@@ -249,10 +249,14 @@ impl TextArea {
         let can_copy = !self.selected.is_empty() && !self.masked;
         let item = |label: &'static str, action: Box<dyn gpui::Action>, focus: &FocusHandle| {
             let focus = focus.clone();
-            MenuItem::new(label, move |window, cx| {
-                window.focus(&focus, cx);
-                focus.dispatch_action(action.as_ref(), window, cx);
-            })
+            let keys: std::rc::Rc<dyn gpui::Action> = std::rc::Rc::from(action.boxed_clone());
+            MenuItem {
+                keys: Some(keys),
+                ..MenuItem::new(label, move |window, cx| {
+                    window.focus(&focus, cx);
+                    focus.dispatch_action(action.as_ref(), window, cx);
+                })
+            }
         };
         let mut items = Vec::new();
         if can_copy {

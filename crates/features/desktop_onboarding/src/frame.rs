@@ -3,6 +3,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use gpui::{
     AnyElement, FontWeight, Hsla, Role, Window, div, img, linear_color_stop, linear_gradient,
     prelude::*, px, relative, rgb,
@@ -14,7 +19,7 @@ use super::{
 };
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_lg, fs_sm, fs_xl, fs_xxl, radius_lg, radius_sm, Theme, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, spinner};
+
 use patchwork_design_icons::icon;
 
 /// The logo's colours as a fill, from `a` to `b`.
@@ -181,23 +186,20 @@ impl Render for Onboarding {
                     .justify_end()
                     .gap(px(8.))
                     .child(
-                        icon_button(
-                            "setup-theme",
-                            "Dark theme",
-                            if light { IconName::Sun } else { IconName::Moon },
-                            16.,
-                            cx,
-                        )
-                        .toggled(!light)
-                        .tooltip(if light {
-                            "Light theme (switch to dark)"
-                        } else {
-                            "Dark theme (switch to light)"
-                        })
-                        .on_click(cx.listener(|_, _, _, cx| cx.emit(OnboardingEvent::ToggleTheme))),
+                        Button::new("setup-theme")
+                            .ghost()
+                            .small()
+                            .icon(if light { IconName::Sun } else { IconName::Moon })
+                            .accessibility_label("Dark theme")
+                            .toggled(!light)
+                            .on_click(
+                                cx.listener(|_, _, _, cx| cx.emit(OnboardingEvent::ToggleTheme)),
+                            ),
                     )
                     .child(
-                        btn("setup-skip", "Skip setup", BtnKind::Plain, false, &t)
+                        Button::new("setup-skip")
+                            .small()
+                            .accessibility_label("Skip setup")
                             .bg(gpui::transparent_black())
                             .border_color(gpui::transparent_black())
                             .text_color(t.text_muted)
@@ -285,23 +287,28 @@ impl Render for Onboarding {
                             .gap(px(8.))
                             .when(step > 0, |row| {
                                 row.child(
-                                    large(btn("setup-back", "Back", BtnKind::Plain, false, &t))
-                                        .child("Back")
-                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                    large(
+                                        Button::new("setup-back")
+                                            .small()
+                                            .accessibility_label("Back"),
+                                    )
+                                    .child("Back")
+                                    .on_click(cx.listener(
+                                        move |this, _, window, cx| {
                                             this.go_to(step - 1, window, cx);
-                                        })),
+                                        },
+                                    )),
                                 )
                             })
                             // Moves on without importing, also while the scans still run, or
                             // without adding a project.
                             .when(step == IMPORTS_STEP || step == PROJECTS_STEP, |row| {
-                                let skip = large(btn(
-                                    "setup-skip-step",
-                                    "Skip",
-                                    BtnKind::Plain,
-                                    self.saving,
-                                    &t,
-                                ))
+                                let skip = large(
+                                    Button::new("setup-skip-step")
+                                        .small()
+                                        .disabled(self.saving)
+                                        .accessibility_label("Skip"),
+                                )
                                 .child("Skip");
                                 row.child(if self.saving {
                                     skip
@@ -312,17 +319,20 @@ impl Render for Onboarding {
                                 })
                             })
                             .child({
-                                let go = large(btn(
-                                    "setup-continue",
-                                    continue_label,
-                                    BtnKind::Primary,
-                                    !can_continue,
-                                    &t,
-                                ))
+                                let go = large(
+                                    Button::new("setup-continue")
+                                        .primary()
+                                        .small()
+                                        .disabled(!can_continue)
+                                        .accessibility_label(continue_label),
+                                )
                                 .min_w(px(190.))
                                 .child(continue_label)
                                 .child(if self.saving {
-                                    spinner(16., t.text_on_accent).into_any_element()
+                                    Spinner::new()
+                                        .with_size(gpui::px(16.))
+                                        .color(t.text_on_accent)
+                                        .into_any_element()
                                 } else {
                                     icon(IconName::ArrowRight, 16.).into_any_element()
                                 });
@@ -357,6 +367,6 @@ impl Render for Onboarding {
 }
 
 /// `.btn-lg`: a taller, wider button.
-fn large(b: patchwork_design_components::Button) -> patchwork_design_components::Button {
+fn large(b: Button) -> Button {
     b.h(px(36.)).px(px(20.))
 }

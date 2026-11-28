@@ -6112,6 +6112,7 @@ dependencies = [
  "patchwork-design-tasks",
  "patchwork-design-text",
  "patchwork-design-theme",
+ "patchwork-desktop-chat",
  "patchwork-model",
  "patchwork-themes",
  "patchwork-views-chat",

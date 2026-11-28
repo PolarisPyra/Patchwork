@@ -2,6 +2,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -11,7 +15,7 @@ use gpui::{
 };
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, radius_sm, theme};
-use patchwork_design_components::{BtnKind, btn, spinner};
+
 use patchwork_design_icons::icon;
 
 use crate::Dock;
@@ -143,9 +147,15 @@ impl Dock {
                     .px(px(12.))
                     .text_size(px(fs_sm()))
                     .child(
-                        btn("screen-capture", "Capture", BtnKind::Plain, busy, &t)
+                        Button::new("screen-capture")
+                            .small()
+                            .disabled(busy)
+                            .accessibility_label("Capture")
                             .child(if busy {
-                                spinner(13., t.text_muted).into_any_element()
+                                Spinner::new()
+                                    .with_size(gpui::px(13.))
+                                    .color(t.text_muted)
+                                    .into_any_element()
                             } else {
                                 icon(IconName::Camera, 13.).into_any_element()
                             })
@@ -155,7 +165,9 @@ impl Dock {
                             }),
                     )
                     .child(
-                        btn("screen-live", "Live", BtnKind::Plain, false, &t)
+                        Button::new("screen-live")
+                            .small()
+                            .accessibility_label("Live")
                             .toggled(live)
                             .when(live, |b| b.bg(t.bg_selected_muted).text_color(fg))
                             .child("Live")

@@ -5,6 +5,9 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use crate::prelude::*;
 use patchwork_client::GitModel;
 use std::sync::Arc;
@@ -22,7 +25,7 @@ use super::goal_bar::strip_action;
 use patchwork_design_components::{menu::Dismissed, menu::Menu, menu::MenuItem};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_sm, fs_xs, radius_sm};
-use patchwork_design_components::{button, icon_button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 use crate::window::{is_working};
 
@@ -467,7 +470,6 @@ fn no_worktree(error: &str, t: &Theme) -> Stateful<gpui::Div> {
         .items_center()
         .gap(px(6.))
         .text_color(t.danger)
-        .tooltip(tooltip(text.clone()))
         .child(icon(IconName::Warning, 13.).flex_none())
         .child(div().min_w_0().truncate().child(text))
 }
@@ -538,7 +540,6 @@ pub fn worktree_strip<W: ChatWindow>(
         .gap(px(6.))
         .text_color(muted)
         .hover(move |s| s.text_color(fg))
-        .tooltip(tooltip(format!("Working in a worktree on {branch}")))
         .child(
             icon(IconName::Folders, 13.)
                 .flex_none()
@@ -581,17 +582,14 @@ pub fn worktree_strip<W: ChatWindow>(
             }
             cx.notify();
         }));
-    let more = icon_button(
-        "worktree-menu",
-        "Worktree actions",
-        IconName::DotsThree,
-        14.,
-        cx,
-    )
-    .flex_none()
-    .aria_expanded(menu.is_some())
-    .tooltip("Worktree actions")
-    .on_click(cx.listener(W::toggle_worktree_menu));
+    let more = Button::new("worktree-menu")
+        .ghost()
+        .small()
+        .icon(IconName::DotsThree)
+        .accessibility_label("Worktree actions")
+        .flex_none()
+        .aria_expanded(menu.is_some())
+        .on_click(cx.listener(W::toggle_worktree_menu));
     let message = message.map(|(text, failed)| {
         let shown: SharedString = text.into();
         div()
@@ -601,7 +599,6 @@ pub fn worktree_strip<W: ChatWindow>(
             .min_w_0()
             .truncate()
             .text_color(if failed { t.danger } else { t.text_muted })
-            .tooltip(tooltip(shown.clone()))
             .child(shown)
     });
     let status = div()
@@ -617,33 +614,24 @@ pub fn worktree_strip<W: ChatWindow>(
         .when(idle && conflicted, |d| {
             d.child(
                 strip_action("worktree-resolve", "Ask to resolve", t)
-                    .tooltip(tooltip("Have the task bring in the project's changes"))
                     .on_click(cx.listener(|w, _, _, cx| w.resolve_worktree(cx))),
             )
         })
         .when(idle && off_branch.is_some(), |d| {
             d.child(
                 strip_action("worktree-switch-back", "Switch back", t)
-                    .tooltip(tooltip(format!(
-                        "Check out {} again",
-                        state.worktree.branch
-                    )))
                     .on_click(cx.listener(|w, _, _, cx| w.worktree_step(Step::SwitchBack, cx))),
             )
         })
         .when(idle && landed_on.is_some(), |d| {
             d.child(
                 strip_action("worktree-clean-up", "Clean up", t)
-                    .tooltip(tooltip(
-                        "Reset the worktree to the branch that has its changes",
-                    ))
                     .on_click(cx.listener(|w, _, _, cx| w.worktree_step(Step::CleanUp, cx))),
             )
         })
         .when(idle && state.behind > 0 && off_branch.is_none(), |d| {
             d.child(
                 strip_action("worktree-update", "Update", t)
-                    .tooltip(tooltip("Bring in the project's new commits"))
                     .on_click(cx.listener(|w, _, _, cx| w.worktree_step(Step::Update, cx))),
             )
         })
@@ -705,12 +693,10 @@ pub fn worktree_strip<W: ChatWindow>(
             .when(list.is_some(), |d| d.border_t_1().border_color(t.border))
             .child(
                 strip_action("worktree-discard", "Discard", t)
-                    .tooltip(tooltip("Throw away the task's changes"))
                     .on_click(cx.listener(|w, _, window, cx| w.discard_worktree(window, cx))),
             )
             .child(
                 strip_action("worktree-merge", "Merge", t)
-                    .tooltip(tooltip("Bring the task's changes into the project"))
                     .on_click(cx.listener(|w, _, _, cx| w.worktree_step(Step::Merge, cx))),
             )
     });

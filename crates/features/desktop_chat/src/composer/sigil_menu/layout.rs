@@ -7,16 +7,23 @@ use super::commands::scored;
 use super::commands::Item;
 use super::commands::commands;
 use super::commands::file_items;
+use super::commands::FILE_LIMIT;
 use super::commands::token;
-use super::commands::{Runs, runs_of};
-use gpui::{AnyElement, FontWeight, Role, SharedString, deferred, div, prelude::*, px, relative};
+use super::commands::{Runs, Token, runs_of};
+use super::open_menu::Mentions;
+use gpui::{
+    AnyElement, FontWeight, Role, SharedString, WeakEntity, Window, deferred, div, prelude::*, px,
+    relative,
+};
 use patchwork_model::provider::{AgentKind, ProviderSlashCommand};
 use crate::composer::Composer;
 use crate::composer::menus::Roles;
+use crate::host::Mention;
 use patchwork_views_chat::{sigils::SigilKind, sigils::Sigils};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, font_mono, fs_xs};
 use patchwork_design_components::button;
+use patchwork_design_components::menu::{Menu, MenuItem};
 use patchwork_design_icons::icon;
 
 impl Composer {
@@ -27,6 +34,7 @@ impl Composer {
         agent: AgentKind,
         provider: &[ProviderSlashCommand],
         t: &Theme,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let sigils = cx.try_global::<Sigils>().cloned().unwrap_or_default();
@@ -39,16 +47,27 @@ impl Composer {
             .filter(|tk| agent != AgentKind::Antigravity || tk.kind != SigilKind::Skills);
         let kind = token.as_ref().map(|tk| tk.kind);
         let project = self.host.project(cx).map(|p| p.id.clone());
+        // The host may list its own places for `@`, as the orchestrator page lists projects and
+        // chats.
+        let mentions = self
+            .host
+            .mentions(cx)
+            .filter(|_| kind == Some(SigilKind::Files));
         let typed = kind.map(|kind| (kind, project));
         if typed != self.sigil.kind {
             self.sigil.kind = typed;
             match kind {
-                Some(SigilKind::Files) => self.load_files(cx),
+                Some(SigilKind::Files) if mentions.is_none() => self.load_files(cx),
                 Some(SigilKind::Skills) => self.load_skills(cx),
                 Some(SigilKind::Agents) => self.load_roles(cx),
                 _ => {}
             }
         }
+        if let Some(mentions) = mentions {
+            let token = token.filter(|_| !self.sigil.closed);
+            return self.mention_menu(&mentions, token, window, cx);
+        }
+        self.sigil.mentions = None;
         let open = token.filter(|_| !self.sigil.closed).and_then(|tk| {
             let query = tk.query();
             let items = match tk.kind {
@@ -244,4 +263,100 @@ impl Composer {
             .child(deferred(card).with_priority(1))
             .into_any_element()
     }
+}
+
+impl Composer {
+    /// The app's menu over the chat box, listing the host's places for the `@` word `token`:
+    /// each with its own places in a menu beside it, or, once a name is typed, every place with
+    /// it in its name or where it is.
+    fn mention_menu(
+        &mut self,
+        mentions: &[Mention],
+        token: Option<Token>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let listed = token.map(|tk| {
+            let query = tk.query();
+            let items = mention_items(mentions, &query, &cx.weak_entity());
+            (tk, query, items)
+        });
+        let Some((tk, query, (ids, items))) = listed.filter(|(_, _, (ids, _))| !ids.is_empty())
+        else {
+            self.sigil.open = None;
+            self.sigil.mentions = None;
+            self.editor.update(cx, |e, _| e.menu_keys = false);
+            return None;
+        };
+        self.editor.update(cx, |e, _| e.menu_keys = true);
+        self.sigil.open = Some((tk, Vec::new()));
+        let made_for = (query, ids);
+        if self.sigil.mentions.as_ref().map(|m| &m.made_for) != Some(&made_for) {
+            let menu = Menu::attached("Projects and chats", items, window, cx);
+            self.sigil.mentions = Some(Mentions::new(made_for, menu, cx));
+        }
+        let menu = self.sigil.mentions.as_ref()?.menu.clone();
+        Some(
+            div()
+                .absolute()
+                .left_0()
+                .bottom(relative(1.))
+                .pb(px(6.))
+                .child(deferred(menu).with_priority(1))
+                .into_any_element(),
+        )
+    }
+}
+
+/// The rows for the host's `mentions`, and the ids of the places they pick: each place with its
+/// own in a menu beside it, or, for a typed `query`, every place whose name or whereabouts hold
+/// it, with where it is after its name.
+fn mention_items(
+    mentions: &[Mention],
+    query: &str,
+    composer: &WeakEntity<Composer>,
+) -> (Vec<String>, Vec<MenuItem>) {
+    let mut ids = Vec::new();
+    let mut pick = |m: &Mention| {
+        ids.push(m.id.clone());
+        let (id, composer) = (m.id.clone(), composer.clone());
+        MenuItem::new(m.label.clone(), move |window, cx| {
+            let (id, composer) = (id.clone(), composer.clone());
+            // The menu runs its row inside the composer's own key handling, so the pick waits
+            // until that is done.
+            window.defer(cx, move |window, cx| {
+                let _ = composer.update(cx, |this, cx| this.pick_mention(&id, window, cx));
+            });
+        })
+        .icon(m.icon)
+    };
+    let items = if query.is_empty() {
+        fn tree(m: &Mention, pick: &mut dyn FnMut(&Mention) -> MenuItem) -> MenuItem {
+            let item = if m.children.is_empty() {
+                pick(m)
+            } else {
+                let rows = m.children.iter().map(|c| tree(c, pick)).collect();
+                MenuItem::submenu(m.label.clone(), rows).icon(m.icon)
+            };
+            if m.separated { item.separated() } else { item }
+        }
+        mentions.iter().map(|m| tree(m, &mut pick)).collect()
+    } else {
+        mentions
+            .iter()
+            .flat_map(|m| {
+                if m.children.is_empty() {
+                    std::slice::from_ref(m)
+                } else {
+                    m.children.as_slice()
+                }
+            })
+            .filter(|m| {
+                m.label.to_lowercase().contains(query) || m.detail.to_lowercase().contains(query)
+            })
+            .take(FILE_LIMIT)
+            .map(|m| pick(m).detail(m.detail.clone()))
+            .collect()
+    };
+    (ids, items)
 }

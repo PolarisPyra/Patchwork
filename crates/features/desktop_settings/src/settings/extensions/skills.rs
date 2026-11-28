@@ -3,6 +3,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Sizable as _;
 use std::sync::Arc;
 
 use futures::StreamExt;
@@ -15,7 +17,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, letter_badge, switch, token_row};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::theme;
-use patchwork_design_components::{BtnKind, btn};
+
 use patchwork_design_icons::icon;
 
 use patchwork_views_chat::{sigils::SigilKind, sigils::default_sigil};
@@ -196,7 +198,9 @@ pub fn render(
         .child(filter)
         .child(search)
         .child(
-            btn("skills-open", "Open folder", BtnKind::Plain, false, &t)
+            Button::new("skills-open")
+                .small()
+                .accessibility_label("Open folder")
                 .px(px(10.))
                 .child(icon(IconName::FolderSimple, 13.))
                 .child("Open folder")
@@ -226,15 +230,11 @@ pub fn render(
                     ),
                 )
                 .child(
-                    btn(
-                        SharedString::from(format!("skill-edit-{}", skill.path)),
-                        format!("Edit {}", skill.name),
-                        BtnKind::Plain,
-                        false,
-                        &t,
-                    )
-                    .child("Edit")
-                    .on_click(cx.listener(move |d, _, _, cx| d.edit_file(&path, cx))),
+                    Button::new(SharedString::from(format!("skill-edit-{}", skill.path)))
+                        .small()
+                        .accessibility_label(format!("Edit {}", skill.name))
+                        .child("Edit")
+                        .on_click(cx.listener(move |d, _, _, cx| d.edit_file(&path, cx))),
                 )
                 .child(
                     switch(
@@ -269,14 +269,16 @@ pub fn render(
     let folder = token_row("Folder", &t)
         .when(custom_dir, |row| {
             row.child(
-                btn("skills-default", "Use default", BtnKind::Plain, false, &t)
-                    .child("Use default")
+                Button::new("skills-default")
+                    .small()
+                    .label("Use default")
                     .on_click(cx.listener(|d, _, _, cx| d.choose_skills_dir(None, cx))),
             )
         })
         .child(
-            btn("skills-change", "Change…", BtnKind::Plain, false, &t)
-                .child("Change…")
+            Button::new("skills-change")
+                .small()
+                .label("Change…")
                 .on_click(cx.listener(|d, _, _, cx| d.pick_skills_dir(cx))),
         );
     div()

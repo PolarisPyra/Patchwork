@@ -2,6 +2,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use patchwork_views_logos::agent_label;
 use gpui::{AnyElement, Role, SharedString, div, prelude::*, px};
 use patchwork_client::local::core::costs::{CostFilter, CostRange, Tally};
@@ -15,7 +17,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{empty, list_box, section_heading, segmented};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, radius_lg, radius_sm, theme};
-use patchwork_design_components::{button, spinner};
+use patchwork_design_components::button;
 use patchwork_design_text::format_tokens;
 use patchwork_design_icons::icon;
 
@@ -32,7 +34,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             .gap(px(8.))
             .py(px(10.))
             .text_color(t.text_muted)
-            .child(spinner(14., t.text_muted))
+            .child(Spinner::new().with_size(gpui::px(14.)).color(t.text_muted))
             .child("Adding up costs")
             .into_any_element();
     };

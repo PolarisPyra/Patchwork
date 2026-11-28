@@ -2,6 +2,12 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
+use gpui::component::tag::Tag;
 use patchwork_views_logos::{agent_label, agent_logo};
 use gpui::{
     AnyElement, ClipboardItem, Div, FontWeight, Role, SharedString, Stateful, Window, div,
@@ -12,7 +18,7 @@ use patchwork_client::local::core::provider::{AgentKind, UpdateMethod};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::switch;
 use patchwork_design_theme::{fs, fs_sm, fs_xs, Theme, theme};
-use patchwork_design_components::{BtnKind, badge, btn, spinner};
+
 use patchwork_views_logos::provider_logo;
 use super::AntigravityAuth;
 use super::catalog::{PromptOf, UpdateStep, cli_kinds};
@@ -37,13 +43,8 @@ fn default_badge(t: &Theme) -> Div {
 }
 
 /// `.badge`, green when `ok`, red when `bad`.
-pub(super) fn status_badge(
-    text: impl Into<SharedString>,
-    ok: bool,
-    bad: bool,
-    t: &Theme,
-) -> patchwork_design_components::Tag {
-    let b = badge(text, t);
+pub(super) fn status_badge(text: impl Into<SharedString>, ok: bool, bad: bool, t: &Theme) -> Tag {
+    let b = Tag::secondary().small().child(text.into());
     if ok {
         b.bg(t.success.opacity(0.15)).text_color(t.success)
     } else if bad {
@@ -153,70 +154,68 @@ impl SettingsDialog {
                     let release = &u.release;
                     let running = matches!(u.step, UpdateStep::Running);
                     let button = match &release.method {
-                        UpdateMethod::Run => btn(
-                            SharedString::from(format!("update-{key}")),
-                            format!(
-                                "Update {label} from {} to {}",
-                                release.installed, release.latest
-                            ),
-                            BtnKind::Plain,
-                            running,
-                            &t,
-                        )
-                        .when(running, |b| {
-                            b.role(Role::Status)
-                                .child(spinner(12., t.text_muted))
-                                .child("Updating…")
-                        })
-                        .when(!running, |b| {
-                            b.child("Update")
-                                .on_click(cx.listener(move |d, _, _, cx| d.update_cli(kind, cx)))
-                        }),
+                        UpdateMethod::Run => {
+                            Button::new(SharedString::from(format!("update-{key}")))
+                                .small()
+                                .disabled(running)
+                                .accessibility_label(format!(
+                                    "Update {label} from {} to {}",
+                                    release.installed, release.latest
+                                ))
+                                .when(running, |b| {
+                                    b.role(Role::Status)
+                                        .child(
+                                            Spinner::new()
+                                                .with_size(gpui::px(12.))
+                                                .color(t.text_muted),
+                                        )
+                                        .child("Updating…")
+                                })
+                                .when(!running, |b| {
+                                    b.child("Update").on_click(
+                                        cx.listener(move |d, _, _, cx| d.update_cli(kind, cx)),
+                                    )
+                                })
+                        }
                         UpdateMethod::Manual(command) => {
                             let copied = command.clone();
-                            btn(
-                                SharedString::from(format!("update-{key}")),
-                                format!("Copy the command that updates {label}: {command}"),
-                                BtnKind::Plain,
-                                false,
-                                &t,
-                            )
-                            .tooltip(command.clone())
-                            .child("Copy Update")
-                            .on_click(cx.listener(
-                                move |_, _, _, cx| {
+                            Button::new(SharedString::from(format!("update-{key}")))
+                                .small()
+                                .accessibility_label(format!(
+                                    "Copy the command that updates {label}: {command}"
+                                ))
+                                .child("Copy Update")
+                                .on_click(cx.listener(move |_, _, _, cx| {
                                     cx.write_to_clipboard(ClipboardItem::new_string(
                                         copied.clone(),
                                     ));
-                                },
-                            ))
+                                }))
                         }
                     };
                     button.min_w(px(fs(ACTION_W))).into_any_element()
                 }))
                 .when(!installed && !checking && path.is_none(), |r| {
                     r.child(
-                        btn(
-                            SharedString::from(format!("install-{key}")),
-                            if installing {
+                        Button::new(SharedString::from(format!("install-{key}")))
+                            .small()
+                            .disabled(installing)
+                            .accessibility_label(if installing {
                                 format!("Installing {label}")
                             } else {
                                 format!("Download {label}")
-                            },
-                            BtnKind::Plain,
-                            installing,
-                            &t,
-                        )
-                        .min_w(px(fs(ACTION_W)))
-                        .when(installing, |b| {
-                            b.role(Role::Status)
-                                .child(spinner(12., t.text_muted))
-                                .child("Installing…")
-                        })
-                        .when(!installing, |b| {
-                            b.child("Download")
-                                .on_click(cx.listener(move |d, _, _, cx| d.install(kind, cx)))
-                        }),
+                            })
+                            .min_w(px(fs(ACTION_W)))
+                            .when(installing, |b| {
+                                b.role(Role::Status)
+                                    .child(
+                                        Spinner::new().with_size(gpui::px(12.)).color(t.text_muted),
+                                    )
+                                    .child("Installing…")
+                            })
+                            .when(!installing, |b| {
+                                b.child("Download")
+                                    .on_click(cx.listener(move |d, _, _, cx| d.install(kind, cx)))
+                            }),
                     )
                     .children(self.providers.install_errors.get(&kind).map(|e| {
                         div()
@@ -228,45 +227,34 @@ impl SettingsDialog {
                     }))
                 })
                 .map(|r| match &path {
-                    Some(path) => r.child(
-                        btn(
-                            SharedString::from(format!("auto-{key}")),
-                            format!("Auto-detect {label} path"),
-                            BtnKind::Plain,
-                            false,
-                            &t,
-                        )
-                        .tooltip(path.clone())
-                        .min_w(px(fs(ACTION_W)))
-                        .child("Auto-detect")
-                        .on_click(cx.listener(move |d, _, _, cx| d.set_agent_path(kind, None, cx))),
+                    Some(_) => r.child(
+                        Button::new(SharedString::from(format!("auto-{key}")))
+                            .small()
+                            .accessibility_label(format!("Auto-detect {label} path"))
+                            .min_w(px(fs(ACTION_W)))
+                            .child("Auto-detect")
+                            .on_click(
+                                cx.listener(move |d, _, _, cx| d.set_agent_path(kind, None, cx)),
+                            ),
                     ),
                     None if !checking && !installed => r.child(
-                        btn(
-                            SharedString::from(format!("locate-{key}")),
-                            format!("Locate {label}"),
-                            BtnKind::Plain,
-                            false,
-                            &t,
-                        )
-                        .min_w(px(fs(ACTION_W)))
-                        .child("Locate…")
-                        .on_click(cx.listener(move |d, _, _, cx| d.locate(kind, cx))),
+                        Button::new(SharedString::from(format!("locate-{key}")))
+                            .small()
+                            .accessibility_label(format!("Locate {label}"))
+                            .min_w(px(fs(ACTION_W)))
+                            .child("Locate…")
+                            .on_click(cx.listener(move |d, _, _, cx| d.locate(kind, cx))),
                     ),
                     None => r,
                 })
                 .when(installed && cli::has_details(kind), |r| {
                     r.child(
-                        btn(
-                            SharedString::from(format!("details-{key}")),
-                            format!("{label} details"),
-                            BtnKind::Plain,
-                            false,
-                            &t,
-                        )
-                        .min_w(px(fs(ACTION_W)))
-                        .child("Details")
-                        .on_click(cx.listener(move |d, _, _, cx| d.open_details(kind, cx))),
+                        Button::new(SharedString::from(format!("details-{key}")))
+                            .small()
+                            .accessibility_label(format!("{label} details"))
+                            .min_w(px(fs(ACTION_W)))
+                            .child("Details")
+                            .on_click(cx.listener(move |d, _, _, cx| d.open_details(kind, cx))),
                     )
                 })
                 .when(
@@ -274,41 +262,36 @@ impl SettingsDialog {
                     |r| {
                         if signed_in {
                             r.child(
-                                btn(
-                                    "agy-sign-out",
-                                    "Sign out of Antigravity",
-                                    BtnKind::Plain,
-                                    agy_auth_busy,
-                                    &t,
-                                )
-                                .min_w(px(fs(ACTION_W)))
-                                .child("Sign out")
-                                .when(!agy_auth_busy, |b| {
-                                    b.on_click(
-                                        cx.listener(|d, _, _, cx| d.sign_out_antigravity(cx)),
-                                    )
-                                }),
+                                Button::new("agy-sign-out")
+                                    .small()
+                                    .disabled(agy_auth_busy)
+                                    .accessibility_label("Sign out of Antigravity")
+                                    .min_w(px(fs(ACTION_W)))
+                                    .child("Sign out")
+                                    .when(!agy_auth_busy, |b| {
+                                        b.on_click(
+                                            cx.listener(|d, _, _, cx| d.sign_out_antigravity(cx)),
+                                        )
+                                    }),
                             )
                         } else {
                             r.child(
-                                btn(
-                                    "agy-sign-in",
-                                    "Sign in to Antigravity",
-                                    BtnKind::Primary,
-                                    agy_auth_busy,
-                                    &t,
-                                )
-                                .min_w(px(fs(ACTION_W)))
-                                .child(if agy_auth_busy {
-                                    "Signing in…"
-                                } else {
-                                    "Sign in"
-                                })
-                                .when(!agy_auth_busy, |b| {
-                                    b.on_click(
-                                        cx.listener(|d, _, _, cx| d.start_antigravity_login(cx)),
-                                    )
-                                }),
+                                Button::new("agy-sign-in")
+                                    .primary()
+                                    .small()
+                                    .disabled(agy_auth_busy)
+                                    .accessibility_label("Sign in to Antigravity")
+                                    .min_w(px(fs(ACTION_W)))
+                                    .child(if agy_auth_busy {
+                                        "Signing in…"
+                                    } else {
+                                        "Sign in"
+                                    })
+                                    .when(!agy_auth_busy, |b| {
+                                        b.on_click(cx.listener(|d, _, _, cx| {
+                                            d.start_antigravity_login(cx);
+                                        }))
+                                    }),
                             )
                         }
                     },
@@ -317,26 +300,22 @@ impl SettingsDialog {
                 // installed yet has Download and Locate in the prompt's place, so its row fits.
                 .when(kind.takes_persona() && (installed || prompting), |row| {
                     row.child(
-                        btn(
-                            SharedString::from(format!("prompt-{key}")),
-                            format!("{label} system prompt"),
-                            BtnKind::Plain,
-                            false,
-                            &t,
-                        )
-                        .aria_expanded(prompting)
-                        .when(prompted, |b| b.text_color(t.accent))
-                        .min_w(px(fs(ACTION_W)))
-                        .child("System Prompt")
-                        .on_click(cx.listener(move |d, _, window, cx| {
-                            let saved = d
-                                .settings
-                                .system_prompts
-                                .get(&kind)
-                                .cloned()
-                                .unwrap_or_default();
-                            d.toggle_prompt(PromptOf::Cli(kind), saved, window, cx);
-                        })),
+                        Button::new(SharedString::from(format!("prompt-{key}")))
+                            .small()
+                            .accessibility_label(format!("{label} system prompt"))
+                            .aria_expanded(prompting)
+                            .when(prompted, |b| b.text_color(t.accent))
+                            .min_w(px(fs(ACTION_W)))
+                            .child("System Prompt")
+                            .on_click(cx.listener(move |d, _, window, cx| {
+                                let saved = d
+                                    .settings
+                                    .system_prompts
+                                    .get(&kind)
+                                    .cloned()
+                                    .unwrap_or_default();
+                                d.toggle_prompt(PromptOf::Cli(kind), saved, window, cx);
+                            })),
                     )
                 })
                 .child(
@@ -443,39 +422,31 @@ pub(super) fn provider_actions(
     let (edit, prompt_id, toggle) = (view.clone(), id.clone(), p.clone());
     let saved_prompt = p.system_prompt.clone();
     [
-        btn(
-            SharedString::from(format!("edit-{ids}{id}")),
-            format!("Edit {}", p.name),
-            BtnKind::Plain,
-            false,
-            t,
-        )
-        .min_w(px(fs(ACTION_W)))
-        .child("Edit")
-        .on_click(cx.listener(move |d, _, window, cx| {
-            d.open_form(edit.provider.clone(), edit.has_key, window, cx);
-        }))
-        .into_any_element(),
-        btn(
-            SharedString::from(format!("prompt-{ids}{id}")),
-            format!("{} system prompt", p.name),
-            BtnKind::Plain,
-            false,
-            t,
-        )
-        .aria_expanded(prompting)
-        .when(!p.system_prompt.is_empty(), |b| b.text_color(t.accent))
-        .min_w(px(fs(ACTION_W)))
-        .child("System Prompt")
-        .on_click(cx.listener(move |d, _, window, cx| {
-            d.toggle_prompt(
-                PromptOf::Api(prompt_id.clone()),
-                saved_prompt.clone(),
-                window,
-                cx,
-            );
-        }))
-        .into_any_element(),
+        Button::new(SharedString::from(format!("edit-{ids}{id}")))
+            .small()
+            .accessibility_label(format!("Edit {}", p.name))
+            .min_w(px(fs(ACTION_W)))
+            .child("Edit")
+            .on_click(cx.listener(move |d, _, window, cx| {
+                d.open_form(edit.provider.clone(), edit.has_key, window, cx);
+            }))
+            .into_any_element(),
+        Button::new(SharedString::from(format!("prompt-{ids}{id}")))
+            .small()
+            .accessibility_label(format!("{} system prompt", p.name))
+            .aria_expanded(prompting)
+            .when(!p.system_prompt.is_empty(), |b| b.text_color(t.accent))
+            .min_w(px(fs(ACTION_W)))
+            .child("System Prompt")
+            .on_click(cx.listener(move |d, _, window, cx| {
+                d.toggle_prompt(
+                    PromptOf::Api(prompt_id.clone()),
+                    saved_prompt.clone(),
+                    window,
+                    cx,
+                );
+            }))
+            .into_any_element(),
         switch(
             format!("use-{ids}{id}"),
             format!("Use {}", p.name),

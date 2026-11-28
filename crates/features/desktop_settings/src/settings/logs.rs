@@ -2,6 +2,9 @@
 
 // Rust guideline compliant 2026-11-23
 
+use gpui::component::button::Button;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use std::sync::Arc;
 
 use gpui::{AnyElement, SharedString, div, prelude::*, px};
@@ -10,7 +13,6 @@ use patchwork_model::logging::{LOG_LEVELS, LogLevel, LoggingSettings};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, alert, choices, select_box, switch_row, token_row};
 use patchwork_design_theme::theme;
-use patchwork_design_components::{BtnKind, btn};
 
 /// The log files Patchwork writes: their title, what each holds, and its field of the settings.
 type LogField = fn(&mut LoggingSettings) -> &mut LogLevel;
@@ -106,7 +108,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 "Log folder",&t,
             )
             .child(
-                btn("export-logs", "Export…", BtnKind::Plain, exporting, &t)
+                Button::new("export-logs").small().disabled(exporting).accessibility_label("Export…")
                     .child(if exporting {
                         "Exporting…"
                     } else {
@@ -117,8 +119,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                     }),
             )
             .child(
-                btn("open-logs", "Open", BtnKind::Plain, false, &t)
-                    .child("Open")
+                Button::new("open-logs").small().label("Open")
                     .on_click(|_, _, cx| match patchwork_client::local::core::logging::logs_folder() {
                         Ok(folder) => cx.open_with_system(&folder),
                         Err(e) => {

@@ -4,6 +4,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
@@ -17,7 +19,7 @@ use crate::host::SourceControlEvent;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_md, fs_sm, radius_sm, theme};
 use patchwork_design_text::base_name;
-use patchwork_design_components::{button, spinner, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 /// A group of changes, which decides the buttons on its header.
@@ -168,7 +170,6 @@ impl ChangesView {
                         .text_size(px(fs_sm()))
                         .text_color(t.text_subtle)
                         .hover(move |s| s.bg(hover).text_color(fg))
-                        .tooltip(tooltip(format!("Changes since this branch left {base}")))
                         .child(base.clone())
                         .child(icon(
                             if open {
@@ -187,7 +188,10 @@ impl ChangesView {
             }
             Group::Merge => {
                 let lead = if self.resolving {
-                    spinner(12., t.text_subtle).into_any_element()
+                    Spinner::new()
+                        .with_size(gpui::px(12.))
+                        .color(t.text_subtle)
+                        .into_any_element()
                 } else {
                     icon(IconName::Sparkle, 14.).into_any_element()
                 };
@@ -287,7 +291,6 @@ impl ChangesView {
         .text_size(px(fs_md()))
         .text_color(t.text_muted)
         .hover(move |s| s.bg(hover))
-        .tooltip(tooltip(path.to_string()))
         .child(
             div()
                 .flex_1()

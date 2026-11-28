@@ -2,6 +2,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use gpui::{
     AnyElement, ClickEvent, ElementId, Role, SharedString, Stateful, Window, div, prelude::*, px,
 };
@@ -12,7 +16,7 @@ use super::tools::device_menu;
 use patchwork_design_components::{menu::Menu, menu::MenuItem};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, radius, Theme, theme};
-use patchwork_design_components::{BtnKind, btn, button, icon_button, spinner};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 /// A row that is one of several choices: a dot, filled when it is the one picked, then what its
@@ -68,7 +72,9 @@ fn status(
         .gap(px(6.))
         .text_size(px(fs_sm()))
         .text_color(t.text_muted)
-        .when(turning, |d| d.child(spinner(12., t.text_muted)))
+        .when(turning, |d| {
+            d.child(Spinner::new().with_size(gpui::px(12.)).color(t.text_muted))
+        })
         .child(text)
 }
 
@@ -93,24 +99,21 @@ impl AndroidPanel {
                 .flex_none()
                 .items_center()
                 .justify_center()
-                .child(spinner(14., t.text_muted))
+                .child(Spinner::new().with_size(gpui::px(14.)).color(t.text_muted))
                 .into_any_element();
         }
         let key = key.to_string();
-        icon_button(
-            id,
-            format!("Run the app on {name}"),
-            IconName::Play,
-            14.,
-            cx,
-        )
-        .tooltip("Run the app")
-        .on_click(cx.listener(move |this, _, _, cx| {
-            cx.stop_propagation();
-            this.select(key.clone(), cx);
-            this.run(cx);
-        }))
-        .into_any_element()
+        Button::new(id)
+            .ghost()
+            .small()
+            .icon(IconName::Play)
+            .accessibility_label(format!("Run the app on {name}"))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                this.select(key.clone(), cx);
+                this.run(cx);
+            }))
+            .into_any_element()
     }
 
     /// Opens the menu of a stopped virtual device: starting it without running the app, and the
@@ -178,9 +181,12 @@ impl AndroidPanel {
     ) -> AnyElement {
         let open = self.menu_open(&device_menu(&device.serial));
         let device = device.clone();
-        icon_button(id, format!("More for {name}"), IconName::DotsThree, 16., cx)
+        Button::new(id)
+            .ghost()
+            .small()
+            .icon(IconName::DotsThree)
+            .accessibility_label(format!("More for {name}"))
             .aria_expanded(open)
-            .tooltip("More")
             .on_click(cx.listener(move |this, e, window, cx| {
                 cx.stop_propagation();
                 this.open_device_menu(&device, e, window, cx);
@@ -226,19 +232,16 @@ impl AndroidPanel {
                     controls.push(self.more_button(("avd-tools", i), d, &avd.display_name, cx));
                 }
                 controls.push(
-                    icon_button(
-                        ("avd-stop", i),
-                        format!("Stop {}", avd.display_name),
-                        IconName::Stop,
-                        14.,
-                        cx,
-                    )
-                    .tooltip("Stop")
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.stop(&name, serial.clone(), cx);
-                    }))
-                    .into_any_element(),
+                    Button::new(("avd-stop", i))
+                        .ghost()
+                        .small()
+                        .icon(IconName::Stop)
+                        .accessibility_label(format!("Stop {}", avd.display_name))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.stop(&name, serial.clone(), cx);
+                        }))
+                        .into_any_element(),
                 );
             }
             (None, None) => {
@@ -246,20 +249,17 @@ impl AndroidPanel {
                 let open = self.menu.as_ref().is_some_and(|(of, _, _)| of == &avd.name);
                 controls.push(self.run_button(("avd-run", i), &name, &avd.display_name, cx));
                 controls.push(
-                    icon_button(
-                        ("avd-more", i),
-                        format!("More for {}", avd.display_name),
-                        IconName::DotsThree,
-                        16.,
-                        cx,
-                    )
-                    .aria_expanded(open)
-                    .tooltip("More")
-                    .on_click(cx.listener(move |this, e, window, cx| {
-                        cx.stop_propagation();
-                        this.open_avd_menu(&more, e, window, cx);
-                    }))
-                    .into_any_element(),
+                    Button::new(("avd-more", i))
+                        .ghost()
+                        .small()
+                        .icon(IconName::DotsThree)
+                        .accessibility_label(format!("More for {}", avd.display_name))
+                        .aria_expanded(open)
+                        .on_click(cx.listener(move |this, e, window, cx| {
+                            cx.stop_propagation();
+                            this.open_avd_menu(&more, e, window, cx);
+                        }))
+                        .into_any_element(),
                 );
             }
             // Nothing while it starts, stops or is deleted.
@@ -318,15 +318,18 @@ impl AndroidPanel {
                     .text_size(px(fs_sm()))
                     .child(div().flex_1().min_w_0().child(question))
                     .child(
-                        btn(("avd-wipe-cancel", i), "Cancel", BtnKind::Plain, false, t)
-                            .child("Cancel")
+                        Button::new(("avd-wipe-cancel", i))
+                            .small()
+                            .label("Cancel")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.confirm = None;
                                 cx.notify();
                             })),
                     )
                     .child(
-                        btn(("avd-wipe-confirm", i), action, BtnKind::Plain, false, t)
+                        Button::new(("avd-wipe-confirm", i))
+                            .small()
+                            .accessibility_label(action)
                             .text_color(t.danger)
                             .child(action)
                             .on_click(cx.listener(move |this, _, _, cx| match asked {
@@ -377,18 +380,15 @@ impl AndroidPanel {
         // An emulator can be asked to close; a phone is unplugged.
         let stop = (device.emulator && !stopping).then(|| {
             let (key, serial) = (key.clone(), device.serial.clone());
-            icon_button(
-                ("device-stop", i),
-                format!("Stop {name}"),
-                IconName::Stop,
-                14.,
-                cx,
-            )
-            .tooltip("Stop")
-            .on_click(cx.listener(move |this, _, _, cx| {
-                cx.stop_propagation();
-                this.stop(&key, serial.clone(), cx);
-            }))
+            Button::new(("device-stop", i))
+                .ghost()
+                .small()
+                .icon(IconName::Stop)
+                .accessibility_label(format!("Stop {name}"))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.stop(&key, serial.clone(), cx);
+                }))
         });
         let glyph = if device.emulator {
             IconName::DeviceMobile

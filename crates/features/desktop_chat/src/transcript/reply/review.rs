@@ -3,6 +3,9 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use crate::prelude::*;
 use patchwork_views_logos::agent_label;
 use gpui::{AnyElement, Div, Hsla, Role, SharedString, div, prelude::*, px};
@@ -11,12 +14,17 @@ use patchwork_client::local::core::chats::{Message, ReviewStatus, TurnReview};
 use patchwork_design_text::markdown::markdown;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, fs_xs, radius, Theme};
-use patchwork_design_components::{BtnKind, btn, button, spinner, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 fn status_icon(status: ReviewStatus, t: &Theme) -> AnyElement {
     let (name, color) = match status {
-        ReviewStatus::Running => return spinner(14., t.text_muted).into_any_element(),
+        ReviewStatus::Running => {
+            return Spinner::new()
+                .with_size(gpui::px(14.))
+                .color(t.text_muted)
+                .into_any_element();
+        }
         ReviewStatus::Approved => (IconName::CheckCircle, t.success),
         ReviewStatus::Concerns => (IconName::Warning, t.warning),
         ReviewStatus::Failed => (IconName::XCircle, t.danger),
@@ -59,7 +67,6 @@ pub fn review_card<W: ChatWindow>(
         .aria_expanded(open && has_text)
         .min_w_0()
         .gap_x(px(8.))
-        .tooltip(tooltip(shown))
         .child(status_icon(review.status, t))
         .child(
             div()
@@ -93,16 +100,11 @@ pub fn review_card<W: ChatWindow>(
         }));
 
     let child = review.chat_id.clone();
-    let open_chat = btn(
-        SharedString::from(format!("review-open-{id}")),
-        "Open the reviewer's chat",
-        BtnKind::Plain,
-        false,
-        t,
-    )
-    .tooltip("Open the reviewer's chat")
-    .child("Open")
-    .on_click(cx.listener(move |w, _, _, cx| w.open_chat(&child, cx)));
+    let open_chat = Button::new(SharedString::from(format!("review-open-{id}")))
+        .small()
+        .accessibility_label("Open the reviewer's chat")
+        .child("Open")
+        .on_click(cx.listener(move |w, _, _, cx| w.open_chat(&child, cx)));
 
     let details = (open && has_text).then(|| {
         div().pt(px(2.)).text_size(px(fs_sm())).child(markdown(

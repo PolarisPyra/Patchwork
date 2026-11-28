@@ -4,6 +4,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use std::sync::Arc;
 
 use gpui::{AnyElement, Div, Role, SharedString, Stateful, div, prelude::*, px};
@@ -12,7 +15,6 @@ use patchwork_client::local::core::settings::KeepWorktrees;
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, choices, select_box, switch, switch_row, token_row};
 use patchwork_design_theme::{Theme, fs_sm, theme};
-use patchwork_design_components::{BtnKind, btn};
 
 /// What a project's worktree's folder is kept for, and their names.
 const KEEPS: [(KeepWorktrees, &str); 3] = [
@@ -148,7 +150,10 @@ fn stale_row(t: &Theme, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) ->
                 .child(text)
         }))
         .child(
-            btn("worktrees-stale", title, BtnKind::Plain, running, t)
+            Button::new("worktrees-stale")
+                .small()
+                .disabled(running)
+                .accessibility_label(title)
                 .child(if running { "Deleting…" } else { "Delete" })
                 .when(!running, |b| {
                     b.on_click(cx.listener(|d, _, _, cx| d.delete_stale_worktrees(cx)))

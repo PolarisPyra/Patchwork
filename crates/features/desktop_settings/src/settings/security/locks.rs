@@ -3,6 +3,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use gpui::{AnyElement, Div, Focusable, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_client::local::core::vault::{Method, Status, status};
 use zeroize::Zeroizing;
@@ -12,7 +17,7 @@ use crate::settings::controls::{FieldKind, Section, alert, token_row, vault_noti
 use crate::settings::dialog::SettingsDialog;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, spinner};
+
 use patchwork_design_icons::icon;
 
 /// One of the pane's password fields.
@@ -66,34 +71,25 @@ pub(super) fn password_field(
             format!("{key}-show"),
             format!("Show {}", title.to_lowercase()),
             shown,
-            cx,
         )
         .on_click(cx.listener(move |d, _, _, cx| d.toggle_password(key, cx))),
     )
 }
 
 /// The eye at the end of a secret's field that shows or hides what is typed.
-pub(super) fn reveal_button(
-    id: String,
-    label: String,
-    shown: bool,
-    cx: &mut Context<SettingsDialog>,
-) -> patchwork_design_components::Button {
-    icon_button(
-        SharedString::from(id),
-        label,
-        if shown {
+pub(super) fn reveal_button(id: String, label: String, shown: bool) -> Button {
+    Button::new(SharedString::from(id))
+        .ghost()
+        .small()
+        .icon(if shown {
             IconName::EyeSlash
         } else {
             IconName::Eye
-        },
-        14.,
-        cx,
-    )
-    .size(px(22.))
-    .flex_none()
-    .toggled(shown)
-    .tooltip(if shown { "Hide" } else { "Show" })
+        })
+        .accessibility_label(label)
+        .size(px(22.))
+        .flex_none()
+        .toggled(shown)
 }
 
 /// One password field in its row. Enter in it does `submit`.
@@ -119,10 +115,11 @@ fn plain(
     cx: &mut Context<SettingsDialog>,
     click: impl Fn(&mut SettingsDialog, &mut Context<SettingsDialog>) + 'static,
 ) -> AnyElement {
-    let t = *theme(cx);
     let busy = d.security.busy;
-    btn(id, label, BtnKind::Plain, busy, &t)
-        .child(label)
+    Button::new(id)
+        .small()
+        .disabled(busy)
+        .label(label)
         .when(!busy, |b| {
             b.on_click(cx.listener(move |d, _, _, cx| click(d, cx)))
         })
@@ -145,7 +142,7 @@ fn actions(
             .id("security-working")
             .role(Role::Status)
             .aria_label("Working")
-            .child(spinner(14., t.text_muted))
+            .child(Spinner::new().with_size(gpui::px(14.)).color(t.text_muted))
     });
     let done = d.security.done.map(|done| {
         div()
@@ -171,8 +168,11 @@ fn actions(
         .children(done)
         .children(others)
         .child(
-            btn("security-save", label, BtnKind::Primary, busy, &t)
-                .child(label)
+            Button::new("security-save")
+                .primary()
+                .small()
+                .disabled(busy)
+                .label(label)
                 .when(!busy, |b| {
                     b.on_click(cx.listener(move |d, _, _, cx| d.change_password(change, cx)))
                 }),

@@ -6,6 +6,10 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use crate::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -17,7 +21,7 @@ use patchwork_client::local::core::chats::{Approval, ApprovalStatus};
 use patchwork_design_editor::{Changed, Submitted, TextArea};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_sm, radius, radius_sm, Theme};
-use patchwork_design_components::{BtnKind, btn};
+
 use patchwork_design_icons::icon;
 
 /// The fields of the secrets the agent waits on, and the answers on their way, by request.
@@ -164,22 +168,15 @@ pub fn secret_card<W: ChatWindow>(
     let busy = w.secrets.busy.contains(&a.id);
     let empty = field.read(cx).content.is_empty();
     let id = a.id.clone();
-    let decline = btn(
-        SharedString::from(format!("secret-decline-{id}")),
-        "Decline",
-        BtnKind::Plain,
-        busy,
-        t,
-    )
-    .child("Decline");
-    let save = btn(
-        SharedString::from(format!("secret-save-{id}")),
-        "Save securely",
-        BtnKind::Primary,
-        busy || empty,
-        t,
-    )
-    .child("Save securely");
+    let decline = Button::new(SharedString::from(format!("secret-decline-{id}")))
+        .small()
+        .disabled(busy)
+        .label("Decline");
+    let save = Button::new(SharedString::from(format!("secret-save-{id}")))
+        .primary()
+        .small()
+        .disabled(busy || empty)
+        .label("Save securely");
     div()
         .id(SharedString::from(format!("secret-{id}")))
         .role(Role::Form)

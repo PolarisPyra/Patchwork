@@ -3,13 +3,16 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{AnyElement, Hsla, Role, ScrollStrategy, SharedString, div, prelude::*, px};
 use patchwork_client::local::core::source_control::{Conflict, Take, resolve_conflict};
 
 use super::open_file::Canvas;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, font_ui, fs_xs, radius_sm};
-use patchwork_design_components::{button, icon_button, tooltip};
+use patchwork_design_components::button;
 
 impl Canvas {
     /// The conflict line `i` is in, and its place among the file's conflicts.
@@ -45,26 +48,14 @@ impl Canvas {
         t: &Theme,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let (index, conflict) = self.conflict_at(i).filter(|(_, c)| c.opens == i)?;
+        let (index, _) = self.conflict_at(i).filter(|(_, c)| c.opens == i)?;
         let n = index + 1;
         let busy = self.busy;
         let (hover, fg) = (t.bg_hover, t.text);
-        let side = |name: &str, fallback: &str| {
-            if name.is_empty() {
-                fallback.to_string()
-            } else {
-                name.to_string()
-            }
-        };
         let choices = [
             ("current", "Accept current", Take::Current),
             ("incoming", "Accept incoming", Take::Incoming),
             ("both", "Accept both", Take::Both),
-        ];
-        let about = [
-            format!("Keep {}", side(&conflict.current, "this branch's lines")),
-            format!("Keep {}", side(&conflict.incoming, "the incoming lines")),
-            "Keep both sides, this branch's first".to_string(),
         ];
         Some(
             div()
@@ -78,30 +69,24 @@ impl Canvas {
                 .pr(px(12.))
                 .font_family(font_ui())
                 .text_size(px(fs_xs()))
-                .children(
-                    choices
-                        .into_iter()
-                        .zip(about)
-                        .map(|((id, text, take), about)| {
-                            button(
-                                SharedString::from(format!("conflict-{n}-{id}")),
-                                format!("{text} for conflict {n}"),
-                            )
-                            .rounded(px(radius_sm()))
-                            .px(px(6.))
-                            .py(px(2.))
-                            .text_color(t.text_muted)
-                            .tooltip(tooltip(about))
-                            .when(busy, |b| b.opacity(0.5).cursor_default())
-                            .when(!busy, |b| {
-                                b.hover(move |s| s.bg(hover).text_color(fg))
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.settle_conflict(index, take, cx);
-                                    }))
-                            })
-                            .child(text)
-                        }),
-                )
+                .children(choices.into_iter().map(|(id, text, take)| {
+                    button(
+                        SharedString::from(format!("conflict-{n}-{id}")),
+                        format!("{text} for conflict {n}"),
+                    )
+                    .rounded(px(radius_sm()))
+                    .px(px(6.))
+                    .py(px(2.))
+                    .text_color(t.text_muted)
+                    .when(busy, |b| b.opacity(0.5).cursor_default())
+                    .when(!busy, |b| {
+                        b.hover(move |s| s.bg(hover).text_color(fg))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.settle_conflict(index, take, cx);
+                            }))
+                    })
+                    .child(text)
+                }))
                 .into_any_element(),
         )
     }
@@ -165,26 +150,20 @@ impl Canvas {
                         .child(left),
                 )
                 .child(
-                    icon_button(
-                        "previous-conflict",
-                        "Previous conflict",
-                        IconName::CaretUp,
-                        16.,
-                        cx,
-                    )
-                    .tooltip("Previous conflict")
-                    .on_click(cx.listener(|this, _, _, cx| this.jump_to_conflict(-1, cx))),
+                    Button::new("previous-conflict")
+                        .ghost()
+                        .small()
+                        .icon(IconName::CaretUp)
+                        .accessibility_label("Previous conflict")
+                        .on_click(cx.listener(|this, _, _, cx| this.jump_to_conflict(-1, cx))),
                 )
                 .child(
-                    icon_button(
-                        "next-conflict",
-                        "Next conflict",
-                        IconName::CaretDown,
-                        16.,
-                        cx,
-                    )
-                    .tooltip("Next conflict")
-                    .on_click(cx.listener(|this, _, _, cx| this.jump_to_conflict(1, cx))),
+                    Button::new("next-conflict")
+                        .ghost()
+                        .small()
+                        .icon(IconName::CaretDown)
+                        .accessibility_label("Next conflict")
+                        .on_click(cx.listener(|this, _, _, cx| this.jump_to_conflict(1, cx))),
                 )
                 .into_any_element(),
         )

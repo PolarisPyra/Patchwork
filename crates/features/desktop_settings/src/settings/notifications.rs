@@ -4,13 +4,14 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Sizable as _;
 use gpui::{AnyElement, div, prelude::*, px};
 use patchwork_client::local::core::notifications::{ChatAppsWhen, Kind, Notices};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, segmented, switch, token_row};
 use patchwork_design_theme::{fs_sm, theme};
-use patchwork_design_components::{BtnKind, btn};
 
 /// The events, each with its row's title.
 const EVENTS: [(Kind, &str); 5] = [
@@ -136,7 +137,9 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     let unmute = (muted > 0).then(|| {
         let label = format!("Unmute all ({muted})");
         token_row("Muted", &t).child(
-            btn("notify-unmute", label.clone(), BtnKind::Plain, false, &t)
+            Button::new("notify-unmute")
+                .small()
+                .accessibility_label(label.clone())
                 .child(label)
                 .on_click(cx.listener(|d, _, _, cx| {
                     d.update(

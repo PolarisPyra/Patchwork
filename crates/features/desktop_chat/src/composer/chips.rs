@@ -14,9 +14,12 @@ use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs};
 use patchwork_design_components::{above, button};
 use patchwork_design_icons::icon;
-use super::menus::{Menu, Pick};
+use super::menus::{Menu, Pick, Row};
+use super::model_picker::rows::picker_agents;
+use patchwork_design_components::menu::{Dismissed, Menu as ContextMenu, MenuItem};
+use patchwork_client::local::core::settings::Settings;
 use crate::host::ChatEvent;
-use super::draft::{Composer, LaunchProject, Picks, offered};
+use super::draft::{Composer, Picks, offered};
 
 /// The height of a picker button in the footer, as the web composer's `h-8`.
 pub(super) const TRIGGER_H: f32 = 32.;
@@ -48,20 +51,20 @@ impl Composer {
             self.menu_came_from = window.focused(cx);
         }
         self.menu = Some(menu);
-        self.launching = false;
-        self.picker = None;
-        self.agent_picker = None;
+        self.context_menu = None;
         self.highlight = usize::MAX;
         match menu {
             Menu::Model => {
                 let picks = self.picks(cx);
                 let agents = offered(self.host.as_ref(), picks.agent, cx);
-                self.open_model_picker(&agents, (picks.agent, picks.model), window, cx);
+                self.reload_bare_models(&picker_agents(&agents, picks.agent), cx);
+                self.open_context_menu(menu, window, cx);
             }
             Menu::Agent => {
-                let current = self.picks(cx).role;
-                self.open_agent_picker(current.as_deref(), window, cx);
+                self.load_roles(cx);
+                self.open_context_menu(menu, window, cx);
             }
+            Menu::Access => self.open_context_menu(menu, window, cx),
             _ => window.focus(&self.menu_focus, cx),
         }
         cx.notify();
@@ -69,11 +72,55 @@ impl Composer {
 
     pub(super) fn close_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
-        self.picker = None;
-        self.agent_picker = None;
-        self.effort_drag = None;
+        self.context_menu = None;
         self.restore_focus(window, cx);
         cx.notify();
+    }
+
+    /// The rows of the model, agent or permissions menu, its name, and whether typing narrows
+    /// it.
+    fn context_items(&self, menu: Menu, cx: &Context<Self>) -> (&'static str, Vec<MenuItem>, bool) {
+        let picks = self.picks(cx);
+        match menu {
+            Menu::Model => {
+                let agents = offered(self.host.as_ref(), picks.agent, cx);
+                let current = (picks.agent, picks.model.as_deref(), picks.effort.as_deref());
+                let (items, filtered) = self.model_items(&agents, current, cx);
+                ("Model", items, filtered)
+            }
+            Menu::Agent => {
+                let (items, filtered) = self.agent_items(picks.role.as_deref(), cx);
+                ("Agent", items, filtered)
+            }
+            _ => ("Permissions", self.access_items(picks.access, cx), false),
+        }
+    }
+
+    /// Opens the model, agent or permissions menu in the app's context-menu look. It closes
+    /// itself after a pick, on Escape or on a press outside it.
+    fn open_context_menu(&mut self, menu: Menu, window: &mut Window, cx: &mut Context<Self>) {
+        let (label, items, filtered) = self.context_items(menu, cx);
+        let made_for = shape(&items);
+        let shown = ContextMenu::open(label, items, window, cx);
+        if filtered {
+            shown.update(cx, |m, _| m.take_filter());
+        }
+        cx.subscribe_in(
+            &shown,
+            window,
+            move |this, from, e: &Dismissed, window, cx| {
+                if this.context_menu.as_ref().is_none_or(|(m, _)| m != from) {
+                    return;
+                }
+                this.context_menu = None;
+                this.menu = None;
+                this.dismissed = e.0.map(|at| (menu, at));
+                this.restore_focus(window, cx);
+                cx.notify();
+            },
+        )
+        .detach();
+        self.context_menu = Some((shown, made_for));
     }
 
     /// Gives the keys back to where they were before a menu opened, so a menu closed by a press
@@ -138,18 +185,8 @@ impl Composer {
     /// Changes what a pick changes, with the menu left as it is: the model picker stays open
     /// while a model and its effort are tried in turn.
     ///
-    /// The Orchestrator page's picks are kept for the chats its request starts; otherwise they go
-    /// to the open chat, or to the draft of the next one.
+    /// The picks go to the open chat, or to the draft of the next one.
     pub(super) fn commit(&mut self, pick: Pick, cx: &mut Context<Self>) {
-        if self.launching {
-            match pick {
-                Pick::Model(agent, model) => self.launch = Some((agent, model)),
-                Pick::Effort(effort) => self.draft.effort = effort,
-                Pick::Project(project) => self.launch_project = LaunchProject::Picked(project),
-                _ => {}
-            }
-            return cx.notify();
-        }
         if let Pick::Project(project) = pick {
             // As picking it in the sidebar does: its newest chat opens, or a new one in it.
             cx.emit(ChatEvent::SelectProject(project));
@@ -221,7 +258,7 @@ impl Composer {
         cx: &mut Context<Self>,
     ) -> Div {
         // The Orchestrator page's menus are drawn there.
-        let open = self.menu == Some(menu) && !self.launching;
+        let open = self.menu == Some(menu);
         let hover = t.bg_hover;
         let chip = chip
             .aria_expanded(open)
@@ -230,21 +267,20 @@ impl Composer {
                 cx.listener(move |this, e, window, cx| this.toggle_menu(menu, e, window, cx)),
             );
         let body = open.then(|| {
-            if menu == Menu::Model {
-                let agents = offered(self.host.as_ref(), picks.agent, cx);
-                return self.model_picker(
-                    &agents,
-                    (picks.agent, picks.model.as_deref(), picks.effort.as_deref()),
-                    t,
-                    window,
-                    cx,
+            if matches!(menu, Menu::Model | Menu::Agent | Menu::Access) {
+                // The models or agents were still being listed when the menu opened.
+                let (_, items, _) = self.context_items(menu, cx);
+                if self
+                    .context_menu
+                    .as_ref()
+                    .is_some_and(|(_, made_for)| *made_for != shape(&items))
+                {
+                    self.open_context_menu(menu, window, cx);
+                }
+                return self.context_menu.as_ref().map_or_else(
+                    || div().into_any_element(),
+                    |(m, _)| m.clone().into_any_element(),
                 );
-            }
-            if menu == Menu::Agent {
-                return self.agent_picker(picks.role.as_deref(), t, window, cx);
-            }
-            if menu == Menu::Access {
-                return self.access_picker(picks.access, t, cx);
             }
             let rows = if menu == Menu::Project {
                 let current = self.host.project(cx).map(|p| p.id.clone());
@@ -339,4 +375,52 @@ pub(super) fn fill_ring(fill: f32, t: &Theme) -> AnyElement {
     .size(px(14.))
     .flex_none()
     .into_any_element()
+}
+
+impl Composer {
+    /// The project menu's rows, as the web composer's `ProjectSelector`: the projects under a
+    /// "Projects" heading, then "No project" below a rule.
+    pub(super) fn project_rows(
+        &self,
+        settings: &Settings,
+        current: Option<&str>,
+        t: &Theme,
+    ) -> Vec<Row> {
+        let row = |id: Option<String>, name: &str, glyph: IconName| {
+            let checked = current == id.as_deref();
+            let body = div()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .child(icon(glyph, 14.).flex_none().text_color(t.text_muted))
+                .child(div().max_w(px(240.)).truncate().child(name.to_string()))
+                .into_any_element();
+            Row::new(Pick::Project(id), body, name.to_string(), checked)
+        };
+        let mut rows: Vec<Row> = settings
+            .projects
+            .iter()
+            .map(|p| row(Some(p.id.clone()), &p.name, IconName::Folder))
+            .collect();
+        if let Some(first) = rows.first_mut() {
+            first.heading = Some("Projects");
+        }
+        let mut none = row(None, "No project", IconName::ChatCircle);
+        none.ruled = !rows.is_empty();
+        rows.push(none);
+        rows
+    }
+}
+
+/// The rows' names, and their submenus' in brackets, to tell when a menu's rows have changed.
+fn shape(items: &[MenuItem]) -> String {
+    items
+        .iter()
+        .map(|item| match &item.submenu {
+            Some(sub) => format!("{}[{}]", item.label, shape(sub)),
+            None => item.label.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join("|")
 }

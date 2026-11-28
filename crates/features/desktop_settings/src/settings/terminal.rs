@@ -3,6 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{AnyElement, SharedString, Window, div, prelude::*, px};
 use patchwork_client::local::core::settings::{
     CursorStyle, DetectLocale, RightClickBehavior, TerminalSettings,
@@ -12,7 +15,6 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, segmented, switch_row, token_row};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_md, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button};
 
 /// Width of the settings' text fields (`TextField`'s default).
 const FIELD_WIDTH: f32 = 220.;
@@ -103,44 +105,37 @@ fn env_editor(
                 .child(name_field)
                 .child(div().min_w_0().flex_1().child(value_field))
                 .child(
-                    btn(
-                        SharedString::from(format!("term-env-remove-{i}")),
-                        "Remove from shell",
-                        BtnKind::Plain,
-                        false,
-                        &t,
-                    )
-                    .toggled(removed)
-                    .when(removed, |b| b.bg(t.bg_selected_muted))
-                    .tooltip("Take this variable out of the shell's environment")
-                    .child("Remove from shell")
-                    .on_click(cx.listener(move |d, _, _, cx| {
-                        let name = toggle.clone();
-                        d.set_terminal(
-                            |s| {
-                                s.env.insert(name, removed.then(String::new));
-                            },
-                            cx,
-                        );
-                    })),
+                    Button::new(SharedString::from(format!("term-env-remove-{i}")))
+                        .small()
+                        .accessibility_label("Remove from shell")
+                        .toggled(removed)
+                        .when(removed, |b| b.bg(t.bg_selected_muted))
+                        .child("Remove from shell")
+                        .on_click(cx.listener(move |d, _, _, cx| {
+                            let name = toggle.clone();
+                            d.set_terminal(
+                                |s| {
+                                    s.env.insert(name, removed.then(String::new));
+                                },
+                                cx,
+                            );
+                        })),
                 )
                 .child(
-                    icon_button(
-                        SharedString::from(format!("term-env-delete-{i}")),
-                        format!("Delete {name}"),
-                        IconName::X,
-                        14.,
-                        cx,
-                    )
-                    .on_click(cx.listener(move |d, _, _, cx| {
-                        let name = delete.clone();
-                        d.set_terminal(
-                            |s| {
-                                s.env.remove(&name);
-                            },
-                            cx,
-                        );
-                    })),
+                    Button::new(SharedString::from(format!("term-env-delete-{i}")))
+                        .ghost()
+                        .small()
+                        .icon(IconName::X)
+                        .accessibility_label(format!("Delete {name}"))
+                        .on_click(cx.listener(move |d, _, _, cx| {
+                            let name = delete.clone();
+                            d.set_terminal(
+                                |s| {
+                                    s.env.remove(&name);
+                                },
+                                cx,
+                            );
+                        })),
                 )
         })
         .collect();
@@ -159,8 +154,9 @@ fn env_editor(
                         .child(div().text_size(px(fs_md())).child("Environment variables")),
                 )
                 .child(
-                    btn("term-env-add", "Add", BtnKind::Plain, false, &t)
-                        .child("Add")
+                    Button::new("term-env-add")
+                        .small()
+                        .label("Add")
                         .on_click(cx.listener(|d, _, _, cx| {
                             d.set_terminal(
                                 |s| {
@@ -394,8 +390,9 @@ pub fn sections(
         |s, n| s.fast_scroll_sensitivity = n as f32
     );
 
-    let reset = btn("term-reset", "Reset to defaults", BtnKind::Plain, false, &t)
-        .child("Reset to defaults")
+    let reset = Button::new("term-reset")
+        .small()
+        .label("Reset to defaults")
         .on_click(cx.listener(|d, _, _, cx| {
             d.set_terminal(|s| *s = TerminalSettings::default(), cx);
         }));

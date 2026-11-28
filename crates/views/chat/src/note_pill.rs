@@ -3,6 +3,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use gpui::{Div, Role, SharedString, div, prelude::*, px};
 use patchwork_model::chats::{Message, StepStatus, ToolCall};
 
@@ -10,7 +12,6 @@ use crate::turn_contents::{PATCHWORK_TOOL, is_running};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_xs};
 use patchwork_design_icons::icon;
-use patchwork_design_components::spinner;
 
 /// The icon and the words a Patchwork tool's pill shows.
 fn note_of(tool: &ToolCall) -> (IconName, String) {
@@ -93,7 +94,10 @@ pub fn note_pill(m: &Message, i: usize, tool: &ToolCall, t: &Theme) -> Div {
     let failed = tool.status == StepStatus::Error;
     let color = if failed { t.danger } else { t.text_muted };
     let mark = if running {
-        spinner(11., color).into_any_element()
+        Spinner::new()
+            .with_size(gpui::px(11.))
+            .color(color)
+            .into_any_element()
     } else if failed {
         icon(IconName::XCircle, 12.)
             .text_color(color)

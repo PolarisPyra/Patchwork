@@ -4,6 +4,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::collections::{HashMap, HashSet};
 
 use gpui::{AnyElement, Focusable, FontWeight, SharedString, Window, div, prelude::*, px};
@@ -13,7 +18,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, Section, alert, labeled};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, fs_xs, radius_sm, theme};
-use patchwork_design_components::{BtnKind, btn, spinner};
+
 use patchwork_design_icons::icon;
 
 /// The add form's fields share this prefix, so closing it forgets them.
@@ -123,7 +128,9 @@ fn add_device(
 ) -> AnyElement {
     let t = *theme(cx);
     let Some(draft) = d.ssh.adding.as_ref() else {
-        return btn("ssh-add-device", "Add a host", BtnKind::Plain, false, &t)
+        return Button::new("ssh-add-device")
+            .small()
+            .accessibility_label("Add a host")
             .gap(px(6.))
             .child(icon(IconName::Plus, 14.))
             .child("Add a host")
@@ -209,15 +216,21 @@ fn add_device(
                 .border_color(t.border)
                 .pt(px(12.))
                 .child(
-                    btn("ssh-form-save", "Save", BtnKind::Primary, !can_save, &t)
+                    Button::new("ssh-form-save")
+                        .primary()
+                        .small()
+                        .disabled(!can_save)
+                        .accessibility_label("Save")
                         .child(if busy { "Saving…" } else { "Save" })
                         .when(can_save, |b| {
                             b.on_click(cx.listener(|d, _, _, cx| d.save_device(cx)))
                         }),
                 )
                 .child(
-                    btn("ssh-form-cancel", "Cancel", BtnKind::Plain, busy, &t)
-                        .child("Cancel")
+                    Button::new("ssh-form-cancel")
+                        .small()
+                        .disabled(busy)
+                        .label("Cancel")
                         .when(!busy, |b| {
                             b.on_click(cx.listener(|d, _, _, cx| d.close_add_device(cx)))
                         }),
@@ -290,19 +303,18 @@ pub fn render(
                     .child(if r.ok { "Connected" } else { "Failed" })
             }))
             .child(
-                btn(
-                    SharedString::from(format!("ssh-test-{}", h.name)),
-                    format!("Test {}", h.name),
-                    BtnKind::Plain,
-                    busy,
-                    &t,
-                )
-                .gap(px(6.))
-                .when(busy, |b| b.child(spinner(13., t.text_muted)))
-                .child("Test")
-                .when(!busy, |b| {
-                    b.on_click(cx.listener(move |d, _, _, cx| d.test_host(name.clone(), cx)))
-                }),
+                Button::new(SharedString::from(format!("ssh-test-{}", h.name)))
+                    .small()
+                    .disabled(busy)
+                    .accessibility_label(format!("Test {}", h.name))
+                    .gap(px(6.))
+                    .when(busy, |b| {
+                        b.child(Spinner::new().with_size(gpui::px(13.)).color(t.text_muted))
+                    })
+                    .child("Test")
+                    .when(!busy, |b| {
+                        b.on_click(cx.listener(move |d, _, _, cx| d.test_host(name.clone(), cx)))
+                    }),
             )
     });
     let rows: Vec<_> = rows.collect();
@@ -328,7 +340,7 @@ pub fn render(
                     .px(px(16.))
                     .py(px(10.))
                     .text_color(t.text_muted)
-                    .child(spinner(14., t.text_muted))
+                    .child(Spinner::new().with_size(gpui::px(14.)).color(t.text_muted))
                     .child("Reading ~/.ssh/config…"),
             )
         })
