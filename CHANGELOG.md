@@ -3,6 +3,27 @@
 All notable changes to Patchwork are documented here, for the people who use it.
 Each release adds its notes at the top; see docs/release.md.
 
+## [26.11.163] - 2026-11-28
+
+## What's Changed
+* refactor(workspace): split crates by domain, add patchwork-daemon, and move UI under apps/desktop by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/376
+* refactor: remove unused RPC server, client, protocol, and Settings Devices page by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/377
+* refactor: vendor GPUI, add the Android client, and use GPUI's hot reload by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/378
+* feat(dev): hot reload bar and function keys for dx by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/379
+* fix(ui): match the composer's project and machine controls to the folder chip by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/380
+* feat(dev): compact colour-coded dx output under cargo run desktop by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/381
+* refactor(sidebar): remove the GitHub Issues view; sidebar keys are Ctrl+1 to Ctrl+5 by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/382
+* refactor(workspace): layer the crates into model, core, client, design, views and features by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/383
+* refactor(gpui): build on gpui-kit from crates.io and drop vendor/ by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/384
+* docs(agents): add the context menu rules by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/386
+* fix(dev): keep dx hot patching working under cargo run desktop by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/385
+* refactor(ui): one shared context menu for every picker, and no hover tooltips by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/387
+* feat(composer): group Antigravity's orchestrator and other vendors' models in submenus by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/388
+* fix(orchestrator): draw the pinned route chip as a box concentric with the composer by @PolarisPyra in https://github.com/PolarisPyra/Patchwork/pull/389
+
+
+**Full Changelog**: https://github.com/PolarisPyra/Patchwork/compare/26.11.162...26.11.163
+
 ## [26.11.162] - 2026-11-25
 
 ## What's Changed

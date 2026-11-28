@@ -5739,7 +5739,7 @@ checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
 
 [[package]]
 name = "patchwork"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -5790,7 +5790,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-android"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "android_logger",
  "gpui-kit",
@@ -5804,7 +5804,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-android-platform"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "android-activity",
  "anyhow",
@@ -5819,7 +5819,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-client"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "futures",
  "gpui-kit",
@@ -5838,7 +5838,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-core"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -5883,7 +5883,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-design-backgrounds"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "log",
@@ -5894,7 +5894,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-design-components"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "patchwork-design-icons",
@@ -5903,7 +5903,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-design-editor"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "log",
@@ -5917,7 +5917,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-design-icons"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "log",
@@ -5926,14 +5926,14 @@ dependencies = [
 
 [[package]]
 name = "patchwork-design-tasks"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
 ]
 
 [[package]]
 name = "patchwork-design-text"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "chrono",
  "gpui-kit",
@@ -5947,7 +5947,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-design-theme"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "patchwork-design-icons",
@@ -5957,7 +5957,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-agents"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "log",
@@ -5974,7 +5974,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-browser"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "image",
@@ -5987,7 +5987,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-canvas"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "patchwork-client",
@@ -6003,7 +6003,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-chat"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "futures",
  "gpui-kit",
@@ -6029,7 +6029,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-dialogs"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "patchwork-client",
@@ -6046,7 +6046,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-dock"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "futures",
  "gpui-kit",
@@ -6067,7 +6067,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-emulator"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "futures",
  "gpui-kit",
@@ -6083,7 +6083,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-onboarding"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "log",
@@ -6100,7 +6100,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-orchestrator"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "log",
@@ -6121,7 +6121,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-quilts"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "log",
@@ -6137,7 +6137,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-search"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "patchwork-design-components",
@@ -6148,7 +6148,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-settings"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6177,7 +6177,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-sidebar"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "log",
@@ -6197,7 +6197,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-source-control"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "log",
@@ -6215,7 +6215,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-desktop-usage"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "patchwork-client",
@@ -6231,7 +6231,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-gateway"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "base64 0.22.1",
  "image",
@@ -6250,7 +6250,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-git"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "log",
  "patchwork-platform",
@@ -6260,7 +6260,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-harness"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6281,7 +6281,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-lifecycle"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "chrono",
  "log",
@@ -6300,7 +6300,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-mobile"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
  "patchwork-client",
@@ -6313,7 +6313,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-model"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "serde",
  "serde_json",
@@ -6321,7 +6321,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-platform"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "async-io",
  "base64 0.22.1",
@@ -6344,7 +6344,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-protocol"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "patchwork-model",
  "serde",
@@ -6353,7 +6353,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-provider-acp"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "patchwork-platform",
  "patchwork-provider-core",
@@ -6362,7 +6362,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-provider-antigravity"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "patchwork-platform",
  "patchwork-provider-core",
@@ -6371,7 +6371,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-provider-api"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "log",
  "patchwork-model",
@@ -6385,7 +6385,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-provider-claude"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "patchwork-platform",
  "patchwork-provider-core",
@@ -6394,7 +6394,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-provider-codex"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "patchwork-platform",
  "patchwork-provider-core",
@@ -6404,7 +6404,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-provider-core"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "log",
  "patchwork-model",
@@ -6415,7 +6415,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-provider-opencode"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "base64 0.22.1",
  "patchwork-platform",
@@ -6429,7 +6429,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-remote"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "base64 0.22.1",
  "libc",
@@ -6442,7 +6442,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-server"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",
@@ -6460,7 +6460,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-sidecars"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -6493,14 +6493,14 @@ dependencies = [
 
 [[package]]
 name = "patchwork-themes"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "patchwork-vault"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "argon2",
  "base64 0.22.1",
@@ -6516,14 +6516,14 @@ dependencies = [
 
 [[package]]
 name = "patchwork-views-actions"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "gpui-kit",
 ]
 
 [[package]]
 name = "patchwork-views-chat"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "chrono",
  "gpui-kit",
@@ -6537,7 +6537,7 @@ dependencies = [
 
 [[package]]
 name = "patchwork-views-logos"
-version = "26.11.162"
+version = "26.11.163"
 dependencies = [
  "base64 0.22.1",
  "gpui-kit",
