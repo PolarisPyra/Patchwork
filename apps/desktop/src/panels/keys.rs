@@ -319,14 +319,6 @@ pub(super) fn window_keys(root: Stateful<Div>, cx: &mut Context<Workspace>) -> S
             }),
         )
         .on_action(
-            cx.listener(|this, _: &patchwork_views_actions::ShowIssues, _, cx| {
-                this.view = Some(View::Issues);
-                this.page = Page::Chats;
-                this.peeking = false;
-                cx.notify();
-            }),
-        )
-        .on_action(
             cx.listener(|this, _: &patchwork_views_actions::ShowQuilts, _, cx| {
                 this.show_quilts_page(cx);
             }),

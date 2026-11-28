@@ -154,8 +154,7 @@ Pieces drawn from Patchwork's data. They may read `patchwork-model`, never the c
   - `src/checks/` — post-turn project check detection, execution, and failure parsing
   - `src/import/`, `src/usage/`, `src/costs/`, `src/scheduled/`, `src/quilts/`, `src/themes/`,
     `src/source_control/`, `src/worktree/`, `src/vault/`, `src/updates/`, `src/logging/`,
-    `src/events.rs`, `src/backgrounds.rs`, `src/notifications.rs`, `src/issues.rs`,
-    `src/service.rs`
+    `src/events.rs`, `src/backgrounds.rs`, `src/notifications.rs`, `src/service.rs`
 - `crates/patchwork_server` (`patchwork-server`) — the server phones and browsers connect to: the
   listener, HTTP and websocket, pairing and scopes, `requests.rs` (the `Handler` answering
   protocol methods over `Core`) and `events.rs` (the pushes each core event sends).

@@ -15,7 +15,6 @@ pub mod gateway;
 pub use patchwork_harness as harness;
 pub use patchwork_harness::helper_role;
 pub mod import;
-pub mod issues;
 pub mod logging;
 pub mod notifications;
 pub mod orchestration;

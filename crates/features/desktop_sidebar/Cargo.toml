@@ -1,6 +1,6 @@
 [package]
 name = "patchwork-desktop-sidebar"
-description = "Patchwork's sidebar: the task tree, the Archived and Issues views, and their rows"
+description = "Patchwork's sidebar: the task tree, the Archived view, and their rows"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

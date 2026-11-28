@@ -316,7 +316,6 @@ impl Workspace {
                 IconName::GitDiff,
                 cx,
             ))
-            .child(entry(View::Issues, "Issues", IconName::ListChecks, cx))
             .child(
                 activity_button("Quilts", "Quilts".into(), &t, on_quilts)
                     .aria_toggled(on_quilts.into())

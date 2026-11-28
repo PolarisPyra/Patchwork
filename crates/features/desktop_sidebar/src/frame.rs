@@ -11,7 +11,6 @@ use patchwork_design_icons::{IconName, icon};
 use patchwork_design_theme::{Theme, fs_md, fs_sm, radius_sm, theme};
 
 use crate::archived_list::archived_view;
-use crate::issues::issues_view;
 use crate::task_list::tasks_view;
 use crate::{SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, Sidebar, SidebarEvent, View};
 
@@ -27,7 +26,6 @@ pub(crate) fn render(
     let body = match view {
         View::Tasks => tasks_view(w, cx).into_any_element(),
         View::Archived => archived_view(w, cx).into_any_element(),
-        View::Issues => issues_view(w, cx).into_any_element(),
         View::Changes => div()
             .flex_1()
             .min_h_0()

@@ -1,5 +1,5 @@
-//! Patchwork's sidebar: the search button, its views (the task tree, Source Control's changes, the
-//! open project's issues, and what was archived), the usage button, and the edge that resizes it.
+//! Patchwork's sidebar: the search button, its views (the task tree, Source Control's changes, and
+//! what was archived), the usage button, and the edge that resizes it.
 //!
 //! The sidebar reads the chats, projects and agents from [`AppState`], and what the window shows
 //! through a [`SidebarHost`]. What needs the window, such as opening a chat or a row's menu, it
@@ -18,7 +18,6 @@ mod chat_row;
 mod collapsed;
 mod frame;
 mod host;
-mod issues;
 mod provider_folders;
 mod rename_field;
 mod reorder;
@@ -39,7 +38,6 @@ use patchwork_client::AppState;
 pub use host::{SIDEBAR_MAX, SIDEBAR_MIN, SIDEBAR_WIDTH, SidebarEvent, SidebarHost, View};
 pub use rows::Row;
 
-use issues::IssueLists;
 use provider_folders::SortUndo;
 use rename_field::Renaming;
 use rows::Picking;
@@ -52,7 +50,6 @@ pub struct Sidebar {
     collapsed: HashSet<String>,
     /// The Archived view's groups folded away, for this launch.
     archived_collapsed: HashSet<String>,
-    issues: IssueLists,
     picking: Picking,
     renaming: Option<Renaming>,
     /// Where each sorted project's tasks were before it was sorted by provider.
@@ -88,7 +85,6 @@ impl Sidebar {
             host,
             collapsed,
             archived_collapsed: HashSet::new(),
-            issues: IssueLists::default(),
             picking: Picking::default(),
             renaming: None,
             sort_undo: HashMap::new(),

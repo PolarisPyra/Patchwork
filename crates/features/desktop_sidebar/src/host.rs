@@ -27,8 +27,6 @@ pub enum View {
     Tasks,
     /// Source Control's changes.
     Changes,
-    /// The open project's GitHub issues.
-    Issues,
     /// What was archived.
     Archived,
 }
