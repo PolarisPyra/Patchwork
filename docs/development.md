@@ -67,7 +67,7 @@ Options after `desktop` go to `dx serve`. It needs `uv` and the dx CLI at the ve
 - **GPUI** lives under `vendor/` (excluded from workspace members in `Cargo.toml` and linked as path
   dependencies). See [vendor/README.md](../vendor/README.md) for the pinned upstream commit and
   regeneration steps.
-- **Icons** live as SVGs under `assets/icons/`. `apps/desktop/crates/tokens` (`patchwork-ui-tokens`)
+- **Icons** live as SVGs under `assets/icons/`. `crates/design/icons` (`patchwork-design-icons`)
   packs and compresses them at build time into `icons.pack` and generates the typed `IconName` enum;
   in debug builds, icons are read from disk, so an edited icon shows on the next launch.
 
@@ -115,16 +115,10 @@ git config core.hooksPath scripts/hooks
 The `pre-push` hook runs `cargo fmt --all -- --check`, clippy with `-D warnings` and
 `node --check` on the website's script before each push, on the files in the working tree. It
 takes a couple of seconds when nothing has changed since the last build and a few seconds after an
-incremental edit to `crates/patchwork_backend` or a desktop crate. `git push --no-verify` skips it;
+incremental edit to `crates/patchwork_core` or a desktop crate. `git push --no-verify` skips it;
 CI runs the same checks either way ([CI and deploys](ci.md)).
 
 ## Checks
-
-Run all workspace checks with:
-
-```sh
-scripts/check.sh
-```
 
 | Check | Command |
 | --- | --- |

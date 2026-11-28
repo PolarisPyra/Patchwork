@@ -9,22 +9,21 @@
 
 // Rust guideline compliant 2026-10-09
 
-mod agents;
-mod canvas;
-mod chat;
-mod logs;
-mod orchestrator;
-mod screen;
-mod sidebar;
-mod terminal;
-mod workspace;
+mod bars;
+mod dialogs;
+mod hot_reload;
+mod machines;
+mod nav;
+mod panels;
+mod shortcuts;
+mod row_menu;
+mod updates;
+mod window;
+mod wiring;
 
+use patchwork_desktop_chat::prelude::*;
 use std::sync::Arc;
 use std::time::Duration;
-
-// Linked for its dependencies alone, which every crate then takes from the shared library.
-#[cfg(feature = "dynamic")]
-use patchwork_dylib as _;
 
 use futures::StreamExt;
 use futures::channel::mpsc;
@@ -32,21 +31,17 @@ use gpui::{
     App, Bounds, Window, WindowHandle, Font, FontStyle, FontWeight, TextRenderingMode,
     TitlebarOptions, WindowBounds, WindowOptions, font, prelude::*, px, size,
 };
-use patchwork_backend::Core;
+use patchwork_core::Core;
+use patchwork_server::CoreServer;
 use patchwork_platform::Dirs;
 
-use patchwork_ui_theme::brand;
-use patchwork_ui_components::confirm_dialog;
-use patchwork_ui_markdown::sigils;
-use patchwork_ui_components::{APP_TITLE, Quit};
-use patchwork_ui_theme::self as theme;
-use crate::workspace::Workspace;
+use patchwork_design_components::confirm_dialog;
+use patchwork_views_chat::sigils;
+use patchwork_views_actions::{APP_TITLE, Quit};
+use patchwork_design_theme as theme;
+use crate::window::Workspace;
 
 /// The app's allocator, which is faster than the system one when laying out and shaping text.
-///
-/// Not with `dynamic`: Rust's shared standard library allocates with the system allocator, and
-/// a block it allocates can't be freed by this one.
-#[cfg(not(feature = "dynamic"))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
@@ -56,13 +51,13 @@ const SCHEDULED_TICK: Duration = Duration::from_secs(30);
 /// Runs the helper the first argument names and returns its exit code, or None to open the app.
 /// Without this, every hook or relay an agent starts would open another Patchwork window.
 fn run_helper() -> Option<i32> {
-    use patchwork_backend::source_control;
+    use patchwork_core::source_control;
     // Git and ssh start this binary to ask a sign-in question, with the question alone.
     if std::env::var_os(source_control::ASKPASS_ENV).is_some() && std::env::args().len() == 2 {
         return Some(source_control::run_askpass());
     }
     let arg = std::env::args().nth(1)?;
-    patchwork_backend::helper_role(&arg).map(|run| run())
+    patchwork_core::helper_role(&arg).map(|run| run())
 }
 
 /// Starts the tasks whose time or event has come, on a timer of its own, for the life of the
@@ -139,7 +134,9 @@ fn forward<T: 'static>(
 
 fn main() {
     // Before anything holds a key: the app, and the helpers that are handed one.
-    let dumps = patchwork_daemon::crash::harden_process();
+    let dumps = patchwork_lifecycle::crash::harden_process();
+    // The screen and input Patchwork's own agent uses, in the app and in the bridge it starts.
+    patchwork_core::harness::computer::install(Box::new(patchwork_core::computer::Hands));
     // Agents start this binary as a helper, without the window: a hook, a relay or a bridge.
     if let Some(code) = run_helper() {
         std::process::exit(code);
@@ -161,7 +158,7 @@ fn main() {
     if patchwork_platform::processes::instance::raise_running(&dirs.data) {
         return;
     }
-    patchwork_daemon::logging::start_main_log(&dirs.logs);
+    patchwork_lifecycle::logging::start_main_log(&dirs.logs);
     if let Err(e) = dumps {
         log::warn!(error:% = e; "a crash could write Patchwork's memory to a core file: {{error}}");
     }
@@ -187,18 +184,25 @@ fn main() {
             return;
         }
     };
+    // The logos crate names an API model's provider from the providers saved in Patchwork's data.
+    patchwork_views_logos::set_api_provider_loader(patchwork_core::provider::api::providers);
+    // The chat apps: the core reaches them through the hooks this sets, and the Patchwork that
+    // owns the data connects them.
+    patchwork_gateway::install(&core);
     start_scheduled_tasks(Arc::clone(&core));
     core.start_update_checks();
     core.start_limit_resumes();
     core.start_worktree_cleanup();
+    // Only the Patchwork that owns the data serves phones and browsers; start_server checks.
+    core.start_server();
     gpui_platform::application()
-        .with_assets(brand::Assets)
+        .with_assets(theme::Assets)
         .run(move |cx: &mut App| {
-            if let Err(e) = cx.text_system().add_fonts(brand::fonts()) {
+            if let Err(e) = cx.text_system().add_fonts(theme::fonts()) {
                 log::warn!(error:% = e; "could not load the fonts: {{error}}");
             }
             prewarm_fonts(cx);
-            cx.background_spawn(async { patchwork_ui_markdown::highlight::warm() })
+            cx.background_spawn(async { patchwork_design_text::highlight::warm() })
                 .detach();
             // Grayscale text, which reads lighter than subpixel on the dark theme.
             cx.set_text_rendering_mode(TextRenderingMode::Grayscale);
@@ -219,6 +223,7 @@ fn main() {
             let bounds =
                 WindowBounds::Windowed(Bounds::centered(None, size(px(1600.), px(960.)), cx));
             let applied = core.applied_theme();
+            patchwork_client::init_local(Arc::clone(&core), cx);
             let opened = cx.open_window(
                 WindowOptions {
                     window_bounds: Some(bounds),
@@ -279,7 +284,7 @@ fn main() {
             let typed = Arc::clone(&core);
             cx.intercept_keystrokes(move |_, _, _| typed.note_activity())
                 .detach();
-            workspace::hot_reload::init(cx);
+            hot_reload::init(cx);
             cx.on_system_notification_response(move |response, cx| {
                 let chat_id = response
                     .tag
@@ -289,7 +294,7 @@ fn main() {
                 let _ = window.update(cx, |workspace, window, cx| {
                     cx.activate(true);
                     window.activate_window();
-                    if chat_id == workspace::CLI_UPDATE_TAG {
+                    if chat_id == updates::CLI_UPDATE_TAG {
                         workspace.open_settings(Some("providers"), window, cx);
                     } else {
                         workspace.open_chat(&chat_id, cx);

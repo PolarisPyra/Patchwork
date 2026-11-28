@@ -1,0 +1,21 @@
+[package]
+name = "patchwork-design-theme"
+description = "Patchwork's look: palette, sizes, fonts, and the assets built into the binary"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-design-icons.workspace = true
+patchwork-themes.workspace = true
+
+gpui = { workspace = true, default-features = true }
+rust-embed = { workspace = true, default-features = true, features = ["include-exclude"] }
+
+[lints]
+workspace = true

@@ -35,7 +35,7 @@ fn main() {
         // A terminal's shell on a Windows host.
         ssh::SHELL_ARG => serve::shell,
         // The roles Patchwork's own binary has too: bridges, hooks and relays.
-        other => patchwork_backend::helper_role(other).unwrap_or_else(|| {
+        other => patchwork_harness::helper_role(other).unwrap_or_else(|| {
             eprintln!("Unknown argument {arg}");
             std::process::exit(2);
         }),

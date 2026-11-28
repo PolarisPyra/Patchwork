@@ -1,0 +1,30 @@
+[package]
+name = "patchwork-gateway"
+description = "Patchwork's gateway: the chat apps that reach Patchwork's chats"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-core = { workspace = true, default-features = false }
+patchwork-model.workspace = true
+patchwork-platform.workspace = true
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_json = { workspace = true, default-features = true, features = ["preserve_order"] }
+log = { workspace = true, default-features = true }
+uuid = { workspace = true, default-features = true, features = ["v4"] }
+ureq = { workspace = true, default-features = true, features = ["json"] }
+# The websockets Discord, Slack and Mattermost send messages over.
+tungstenite = { workspace = true, features = ["handshake", "rustls-tls-webpki-roots"] }
+base64 = { workspace = true, default-features = true }
+url = { workspace = true, default-features = true }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+sha2 = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

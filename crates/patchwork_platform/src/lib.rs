@@ -28,6 +28,7 @@ pub use processes::programs::{Locked, blocked, lossy_lines, unreachable};
 pub use processes::programs::expand_windows_vars;
 #[doc(inline)]
 pub use files::dirs::{Dirs, dirs};
+#[cfg(feature = "launcher-icon")]
 #[doc(inline)]
 pub use machine::launcher::set_launcher_icon;
 #[doc(inline)]

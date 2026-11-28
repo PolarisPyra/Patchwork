@@ -10,7 +10,7 @@ use patchwork_platform::{Error, Locked};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use super::catalog::{ApiProvider, KeyChange, ProviderView};
+use patchwork_model::provider::api::{ApiProvider, KeyChange, ProviderView};
 use super::secrets::{delete_secret, headers_secret, store_secret, with_headers};
 use super::servers;
 

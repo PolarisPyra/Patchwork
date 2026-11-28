@@ -1,0 +1,57 @@
+[package]
+name = "patchwork-sidecars"
+description = "The machines beside Patchwork's core: Android devices and emulators, a browser, the integrated terminal, and the computer itself"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-model.workspace = true
+patchwork-platform.workspace = true
+patchwork-harness.workspace = true
+base64 = { workspace = true, default-features = true }
+futures = { workspace = true, default-features = true }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+libc = { workspace = true, default-features = true }
+log = { workspace = true, default-features = true }
+serde = { workspace = true, default-features = true, features = ["derive", "rc"] }
+serde_json = { workspace = true, default-features = true, features = ["preserve_order"] }
+url = { workspace = true, default-features = true }
+uuid = { workspace = true, default-features = true, features = ["v4"] }
+# The browser's DevTools socket.
+tungstenite = { workspace = true, features = ["handshake", "rustls-tls-webpki-roots"] }
+# Browser frames decode straight to the BGRA pixels the app draws.
+zune-jpeg = { workspace = true, default-features = true }
+# The integrated terminal's pseudo-terminals, and the screen and modes a window gets back.
+portable-pty = { workspace = true, default-features = true }
+# The error type a pseudo-terminal taken over from an earlier run reports, as portable-pty has it.
+anyhow = { workspace = true, features = ["std"] }
+vt100 = { workspace = true, default-features = true }
+# Computer use: the pointer and keyboard.
+enigo = { workspace = true, default-features = true }
+# Android emulator gRPC screen streaming.
+http = { workspace = true, default-features = true }
+prost = { workspace = true, features = ["derive", "std"] }
+tokio = { workspace = true, features = ["net", "rt", "sync", "time"] }
+tonic = { workspace = true, features = ["channel"] }
+tonic-prost.workspace = true
+
+# Screenshots. On Linux they are taken in src/computer/linux.rs with crates the app already builds, since
+# xcap would also build PipeWire, which needs newer headers than the AppImage's build machine has.
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+xcap.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, default-features = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = { workspace = true, default-features = true, features = ["randr"] }
+zbus = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

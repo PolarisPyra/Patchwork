@@ -4791,24 +4791,37 @@ dependencies = [
  "image",
  "log",
  "mimalloc",
- "patchwork-backend",
- "patchwork-daemon",
- "patchwork-desktop-android",
+ "patchwork-client",
+ "patchwork-core",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "patchwork-desktop-agents",
  "patchwork-desktop-browser",
+ "patchwork-desktop-canvas",
+ "patchwork-desktop-chat",
  "patchwork-desktop-dialogs",
+ "patchwork-desktop-dock",
+ "patchwork-desktop-emulator",
  "patchwork-desktop-onboarding",
+ "patchwork-desktop-orchestrator",
  "patchwork-desktop-quilts",
  "patchwork-desktop-search",
  "patchwork-desktop-settings",
- "patchwork-desktop-shared",
- "patchwork-dylib",
+ "patchwork-desktop-sidebar",
+ "patchwork-desktop-source-control",
+ "patchwork-desktop-usage",
+ "patchwork-gateway",
+ "patchwork-lifecycle",
  "patchwork-platform",
+ "patchwork-server",
  "patchwork-themes",
- "patchwork-ui-backdrop",
- "patchwork-ui-components",
- "patchwork-ui-editor",
- "patchwork-ui-markdown",
- "patchwork-ui-theme",
+ "patchwork-views-actions",
+ "patchwork-views-chat",
+ "patchwork-views-logos",
  "serde",
  "serde_json",
  "vt100",
@@ -4822,26 +4835,47 @@ dependencies = [
  "gpui",
  "gpui_android",
  "log",
+ "patchwork-client",
+ "patchwork-design-theme",
+ "patchwork-mobile",
+ "patchwork-themes",
 ]
 
 [[package]]
-name = "patchwork-backend"
+name = "patchwork-client"
 version = "26.11.162"
 dependencies = [
- "anyhow",
+ "futures",
+ "gpui",
+ "log",
+ "patchwork-core",
+ "patchwork-gateway",
+ "patchwork-model",
+ "patchwork-protocol",
+ "patchwork-server",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tungstenite 0.30.0",
+ "ureq",
+ "url",
+]
+
+[[package]]
+name = "patchwork-core"
+version = "26.11.162"
+dependencies = [
  "base64 0.22.1",
  "chrono",
- "enigo",
- "futures",
  "globset",
- "http",
  "ignore",
  "image",
  "libc",
  "log",
  "notify",
- "patchwork-daemon",
  "patchwork-git",
+ "patchwork-harness",
+ "patchwork-lifecycle",
+ "patchwork-model",
  "patchwork-platform",
  "patchwork-provider-acp",
  "patchwork-provider-antigravity",
@@ -4850,10 +4884,9 @@ dependencies = [
  "patchwork-provider-codex",
  "patchwork-provider-core",
  "patchwork-provider-opencode",
+ "patchwork-sidecars",
  "patchwork-themes",
  "patchwork-vault",
- "portable-pty",
- "prost",
  "pulldown-cmark",
  "regex",
  "resvg",
@@ -4861,56 +4894,106 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "tokio",
  "toml 1.1.8+spec-1.1.0",
- "tonic",
- "tonic-prost",
- "tungstenite 0.30.0",
  "ureq",
  "url",
  "uuid",
- "vt100",
  "windows-sys 0.60.2",
  "winreg 0.56.0",
- "x11rb",
- "xcap",
  "zbus",
  "zeroize",
  "zip",
- "zune-jpeg",
 ]
 
 [[package]]
-name = "patchwork-daemon"
+name = "patchwork-design-backgrounds"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "log",
+ "patchwork-design-components",
+ "patchwork-design-theme",
+ "patchwork-themes",
+]
+
+[[package]]
+name = "patchwork-design-components"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "patchwork-design-icons",
+ "patchwork-design-theme",
+]
+
+[[package]]
+name = "patchwork-design-editor"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "log",
+ "patchwork-design-components",
+ "patchwork-design-icons",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "pulldown-cmark",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "patchwork-design-icons"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "log",
+ "miniz_oxide 0.8.9",
+]
+
+[[package]]
+name = "patchwork-design-tasks"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+]
+
+[[package]]
+name = "patchwork-design-text"
 version = "26.11.162"
 dependencies = [
  "chrono",
- "log",
- "minisign-verify",
- "patchwork-platform",
- "patchwork-provider-core",
- "regex",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "ureq",
- "zeroize",
- "zip",
+ "gpui",
+ "patchwork-design-components",
+ "patchwork-design-icons",
+ "patchwork-design-theme",
+ "pulldown-cmark",
+ "syntect",
+ "two-face",
 ]
 
 [[package]]
-name = "patchwork-desktop-android"
+name = "patchwork-design-theme"
 version = "26.11.162"
 dependencies = [
- "futures",
  "gpui",
- "image",
+ "patchwork-design-icons",
+ "patchwork-themes",
+ "rust-embed",
+]
+
+[[package]]
+name = "patchwork-desktop-agents"
+version = "26.11.162"
+dependencies = [
+ "gpui",
  "log",
- "patchwork-backend",
- "patchwork-platform",
- "patchwork-ui-components",
- "patchwork-ui-editor",
- "patchwork-ui-theme",
+ "patchwork-client",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "patchwork-model",
+ "patchwork-themes",
 ]
 
 [[package]]
@@ -4919,26 +5002,107 @@ version = "26.11.162"
 dependencies = [
  "gpui",
  "image",
- "patchwork-backend",
- "patchwork-ui-components",
- "patchwork-ui-editor",
- "patchwork-ui-theme",
+ "patchwork-client",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-theme",
+]
+
+[[package]]
+name = "patchwork-desktop-canvas"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "patchwork-client",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "patchwork-model",
+ "patchwork-platform",
+]
+
+[[package]]
+name = "patchwork-desktop-chat"
+version = "26.11.162"
+dependencies = [
+ "futures",
+ "gpui",
+ "image",
+ "log",
+ "patchwork-client",
+ "patchwork-design-backgrounds",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "patchwork-model",
+ "patchwork-platform",
+ "patchwork-themes",
+ "patchwork-views-actions",
+ "patchwork-views-chat",
+ "patchwork-views-logos",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
 name = "patchwork-desktop-dialogs"
 version = "26.11.162"
 dependencies = [
- "dirs",
  "gpui",
- "patchwork-backend",
- "patchwork-desktop-shared",
+ "patchwork-client",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "patchwork-model",
  "patchwork-platform",
- "patchwork-ui-components",
- "patchwork-ui-editor",
- "patchwork-ui-markdown",
- "patchwork-ui-theme",
- "zeroize",
+ "patchwork-views-logos",
+]
+
+[[package]]
+name = "patchwork-desktop-dock"
+version = "26.11.162"
+dependencies = [
+ "futures",
+ "gpui",
+ "log",
+ "patchwork-client",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "patchwork-model",
+ "patchwork-platform",
+ "patchwork-views-logos",
+ "serde_json",
+ "vt100",
+]
+
+[[package]]
+name = "patchwork-desktop-emulator"
+version = "26.11.162"
+dependencies = [
+ "futures",
+ "gpui",
+ "image",
+ "log",
+ "patchwork-client",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-theme",
 ]
 
 [[package]]
@@ -4947,12 +5111,35 @@ version = "26.11.162"
 dependencies = [
  "gpui",
  "log",
- "patchwork-backend",
- "patchwork-desktop-shared",
+ "patchwork-client",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-theme",
+ "patchwork-model",
  "patchwork-platform",
- "patchwork-ui-components",
- "patchwork-ui-editor",
- "patchwork-ui-theme",
+ "patchwork-views-logos",
+]
+
+[[package]]
+name = "patchwork-desktop-orchestrator"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "log",
+ "patchwork-client",
+ "patchwork-design-backgrounds",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "patchwork-model",
+ "patchwork-themes",
+ "patchwork-views-chat",
+ "patchwork-views-logos",
 ]
 
 [[package]]
@@ -4960,15 +5147,15 @@ name = "patchwork-desktop-quilts"
 version = "26.11.162"
 dependencies = [
  "gpui",
- "image",
  "log",
- "patchwork-backend",
- "patchwork-desktop-browser",
+ "patchwork-client",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-text",
+ "patchwork-design-theme",
  "patchwork-platform",
- "patchwork-ui-components",
- "patchwork-ui-editor",
- "patchwork-ui-markdown",
- "patchwork-ui-theme",
 ]
 
 [[package]]
@@ -4976,10 +5163,10 @@ name = "patchwork-desktop-search"
 version = "26.11.162"
 dependencies = [
  "gpui",
- "patchwork-backend",
- "patchwork-ui-components",
- "patchwork-ui-editor",
- "patchwork-ui-theme",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-theme",
 ]
 
 [[package]]
@@ -4993,68 +5180,95 @@ dependencies = [
  "gpui",
  "image",
  "log",
- "patchwork-backend",
- "patchwork-desktop-shared",
+ "patchwork-client",
+ "patchwork-design-backgrounds",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "patchwork-model",
  "patchwork-platform",
  "patchwork-themes",
- "patchwork-ui-backdrop",
- "patchwork-ui-components",
- "patchwork-ui-editor",
- "patchwork-ui-markdown",
- "patchwork-ui-theme",
+ "patchwork-views-actions",
+ "patchwork-views-chat",
+ "patchwork-views-logos",
  "serde_json",
  "zeroize",
 ]
 
 [[package]]
-name = "patchwork-desktop-shared"
+name = "patchwork-desktop-sidebar"
 version = "26.11.162"
 dependencies = [
  "gpui",
- "patchwork-backend",
- "patchwork-ui-theme",
+ "log",
+ "patchwork-client",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "patchwork-model",
+ "patchwork-platform",
+ "patchwork-views-actions",
+ "patchwork-views-chat",
+ "patchwork-views-logos",
 ]
 
 [[package]]
-name = "patchwork-dylib"
+name = "patchwork-desktop-source-control"
 version = "26.11.162"
 dependencies = [
- "anyhow",
- "argon2",
- "base64 0.22.1",
- "chacha20poly1305",
- "chrono",
- "dirs",
- "enigo",
- "futures",
- "globset",
  "gpui",
- "gpui_platform",
- "ignore",
+ "log",
+ "patchwork-client",
+ "patchwork-design-components",
+ "patchwork-design-editor",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "patchwork-model",
+ "patchwork-platform",
+ "patchwork-views-logos",
+]
+
+[[package]]
+name = "patchwork-desktop-usage"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "patchwork-client",
+ "patchwork-design-components",
+ "patchwork-design-icons",
+ "patchwork-design-tasks",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "patchwork-model",
+ "patchwork-platform",
+ "patchwork-views-logos",
+]
+
+[[package]]
+name = "patchwork-gateway"
+version = "26.11.162"
+dependencies = [
+ "base64 0.22.1",
  "image",
  "log",
- "minisign-verify",
- "notify",
- "portable-pty",
- "pulldown-cmark",
- "regex",
- "resvg",
+ "patchwork-core",
+ "patchwork-model",
+ "patchwork-platform",
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "thiserror 2.0.21",
- "toml 1.1.8+spec-1.1.0",
  "tungstenite 0.30.0",
- "unicode-segmentation",
  "ureq",
  "url",
  "uuid",
- "vt100",
- "x11rb",
- "zbus",
- "zeroize",
- "zip",
- "zune-jpeg",
 ]
 
 [[package]]
@@ -5063,6 +5277,67 @@ version = "26.11.162"
 dependencies = [
  "log",
  "patchwork-platform",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "patchwork-harness"
+version = "26.11.162"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "globset",
+ "ignore",
+ "log",
+ "patchwork-model",
+ "patchwork-platform",
+ "patchwork-provider-claude",
+ "patchwork-provider-core",
+ "patchwork-provider-opencode",
+ "regex",
+ "serde",
+ "serde_json",
+ "ureq",
+ "uuid",
+]
+
+[[package]]
+name = "patchwork-lifecycle"
+version = "26.11.162"
+dependencies = [
+ "chrono",
+ "log",
+ "minisign-verify",
+ "patchwork-model",
+ "patchwork-platform",
+ "patchwork-provider-core",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "ureq",
+ "zeroize",
+ "zip",
+]
+
+[[package]]
+name = "patchwork-mobile"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+ "patchwork-client",
+ "patchwork-design-components",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "patchwork-protocol",
+ "patchwork-views-chat",
+]
+
+[[package]]
+name = "patchwork-model"
+version = "26.11.162"
+dependencies = [
  "serde",
  "serde_json",
 ]
@@ -5091,6 +5366,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "patchwork-protocol"
+version = "26.11.162"
+dependencies = [
+ "patchwork-model",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "patchwork-provider-acp"
 version = "26.11.162"
 dependencies = [
@@ -5113,6 +5397,7 @@ name = "patchwork-provider-api"
 version = "26.11.162"
 dependencies = [
  "log",
+ "patchwork-model",
  "patchwork-platform",
  "patchwork-provider-core",
  "patchwork-vault",
@@ -5145,6 +5430,7 @@ name = "patchwork-provider-core"
 version = "26.11.162"
 dependencies = [
  "log",
+ "patchwork-model",
  "patchwork-platform",
  "serde",
  "serde_json",
@@ -5170,7 +5456,7 @@ version = "26.11.162"
 dependencies = [
  "base64 0.22.1",
  "libc",
- "patchwork-backend",
+ "patchwork-harness",
  "patchwork-platform",
  "serde",
  "serde_json",
@@ -5178,78 +5464,61 @@ dependencies = [
 ]
 
 [[package]]
+name = "patchwork-server"
+version = "26.11.162"
+dependencies = [
+ "base64 0.22.1",
+ "chacha20poly1305",
+ "log",
+ "patchwork-core",
+ "patchwork-platform",
+ "patchwork-protocol",
+ "qrcodegen",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tungstenite 0.30.0",
+ "url",
+]
+
+[[package]]
+name = "patchwork-sidecars"
+version = "26.11.162"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "enigo",
+ "futures",
+ "http",
+ "image",
+ "libc",
+ "log",
+ "patchwork-harness",
+ "patchwork-model",
+ "patchwork-platform",
+ "portable-pty",
+ "prost",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tonic",
+ "tonic-prost",
+ "tungstenite 0.30.0",
+ "url",
+ "uuid",
+ "vt100",
+ "windows-sys 0.60.2",
+ "x11rb",
+ "xcap",
+ "zbus",
+ "zune-jpeg",
+]
+
+[[package]]
 name = "patchwork-themes"
 version = "26.11.162"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "patchwork-ui-backdrop"
-version = "26.11.162"
-dependencies = [
- "gpui",
- "log",
- "patchwork-themes",
- "patchwork-ui-components",
- "patchwork-ui-theme",
-]
-
-[[package]]
-name = "patchwork-ui-components"
-version = "26.11.162"
-dependencies = [
- "gpui",
- "log",
- "patchwork-ui-theme",
-]
-
-[[package]]
-name = "patchwork-ui-editor"
-version = "26.11.162"
-dependencies = [
- "gpui",
- "log",
- "patchwork-ui-components",
- "patchwork-ui-markdown",
- "patchwork-ui-theme",
- "pulldown-cmark",
- "unicode-segmentation",
-]
-
-[[package]]
-name = "patchwork-ui-markdown"
-version = "26.11.162"
-dependencies = [
- "chrono",
- "gpui",
- "log",
- "patchwork-ui-components",
- "patchwork-ui-theme",
- "pulldown-cmark",
- "serde_json",
- "syntect",
- "two-face",
- "unicode-segmentation",
-]
-
-[[package]]
-name = "patchwork-ui-theme"
-version = "26.11.162"
-dependencies = [
- "base64 0.22.1",
- "gpui",
- "log",
- "patchwork-themes",
- "patchwork-ui-tokens",
- "rust-embed",
-]
-
-[[package]]
-name = "patchwork-ui-tokens"
-version = "26.11.162"
-dependencies = [
- "miniz_oxide 0.8.9",
 ]
 
 [[package]]
@@ -5266,6 +5535,38 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "zeroize",
+]
+
+[[package]]
+name = "patchwork-views-actions"
+version = "26.11.162"
+dependencies = [
+ "gpui",
+]
+
+[[package]]
+name = "patchwork-views-chat"
+version = "26.11.162"
+dependencies = [
+ "chrono",
+ "gpui",
+ "patchwork-design-components",
+ "patchwork-design-icons",
+ "patchwork-design-text",
+ "patchwork-design-theme",
+ "patchwork-model",
+ "serde_json",
+]
+
+[[package]]
+name = "patchwork-views-logos"
+version = "26.11.162"
+dependencies = [
+ "base64 0.22.1",
+ "gpui",
+ "patchwork-design-icons",
+ "patchwork-design-theme",
+ "patchwork-model",
 ]
 
 [[package]]
@@ -5656,6 +5957,12 @@ checksum = "7f6d64c71eb498fe9eae14ce4ec935c555749aef511cca85b5568910d6e48001"
 dependencies = [
  "bytemuck",
 ]
+
+[[package]]
+name = "qrcodegen"
+version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4339fc7a1021c9c1621d87f5e3505f2805c8c105420ba2f2a4df86814590c142"
 
 [[package]]
 name = "quick-error"

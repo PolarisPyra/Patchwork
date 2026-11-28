@@ -39,5 +39,5 @@ Run nothing the user already has running.
 # Patchwork: Tests
 
 - **Never write tests.** Add no smoke, unit, integration, regression, snapshot, or end-to-end (E2E)
-  tests, test helpers, or fixtures. The repo has none; verify changes with `scripts/check.sh` and
-  in the running app.
+  tests, test helpers, or fixtures. The repo has none; verify changes with `cargo fmt --all -- --check`,
+  `cargo clippy --workspace --all-targets -- -D warnings`, and in the running app.

@@ -1,0 +1,25 @@
+[package]
+name = "patchwork-views-chat"
+description = "The chat pieces the desktop and the phone share: the transcript's turns and steps, the composer pill, sigils and attachment chips"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-design-components.workspace = true
+patchwork-design-icons.workspace = true
+patchwork-design-text.workspace = true
+patchwork-design-theme.workspace = true
+patchwork-model.workspace = true
+
+chrono = { workspace = true, features = ["clock"] }
+gpui = { workspace = true, default-features = true }
+serde_json = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

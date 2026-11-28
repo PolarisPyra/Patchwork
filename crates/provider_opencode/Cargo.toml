@@ -14,11 +14,15 @@ categories.workspace = true
 base64 = { workspace = true, default-features = true }
 patchwork-provider-core.workspace = true
 patchwork-platform.workspace = true
-rusqlite = { workspace = true, features = ["bundled", "fallible_uint"] }
+rusqlite = { workspace = true, features = ["bundled", "fallible_uint"], optional = true }
 serde = { workspace = true, default-features = true, features = ["derive"] }
 serde_json = { workspace = true, default-features = true }
 ureq = { workspace = true, default-features = true, features = ["json"] }
 uuid = { workspace = true, default-features = true, features = ["v4"] }
+
+[features]
+# Reading OpenCode's database, to tell whether a 1.x needs one of its own.
+sqlite = ["dep:rusqlite"]
 
 [lints]
 workspace = true

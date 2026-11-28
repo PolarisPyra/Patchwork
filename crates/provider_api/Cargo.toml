@@ -11,6 +11,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+patchwork-model.workspace = true
 log = { workspace = true, default-features = true }
 patchwork-provider-core.workspace = true
 patchwork-platform.workspace = true

@@ -1,0 +1,26 @@
+[package]
+name = "patchwork-design-text"
+description = "Patchwork's text: Markdown layout, syntax highlighting, selectable text and formatting"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-design-components.workspace = true
+patchwork-design-icons.workspace = true
+patchwork-design-theme.workspace = true
+
+chrono = { workspace = true, features = ["clock"] }
+gpui = { workspace = true, default-features = true }
+pulldown-cmark.workspace = true
+syntect.workspace = true
+# Syntax definitions for syntect beyond its own set, such as TypeScript and TOML.
+two-face = { workspace = true, features = ["syntect-onig"] }
+
+[lints]
+workspace = true

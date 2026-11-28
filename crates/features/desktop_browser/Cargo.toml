@@ -1,0 +1,24 @@
+[package]
+name = "patchwork-desktop-browser"
+description = "Patchwork's desktop browser sidecar view, drawing web pages and quilts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-design-components.workspace = true
+patchwork-design-editor.workspace = true
+patchwork-design-icons.workspace = true
+patchwork-design-theme.workspace = true
+patchwork-client = { workspace = true, features = ["local"] }
+
+gpui = { workspace = true, default-features = true }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+
+[lints]
+workspace = true

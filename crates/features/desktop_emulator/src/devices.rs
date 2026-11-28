@@ -1,0 +1,576 @@
+//! The Android panel's state: the SDK and devices as last read, the device picked, and what is
+//! under way.
+
+// Rust guideline compliant 2026-10-09
+
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+
+use gpui::{Entity, EventEmitter, FocusHandle, Pixels, Point, ScrollHandle, Task, Window, prelude::*};
+use patchwork_client::local::core::android::{
+    self as android, Avd, Boot, Device, MobileProject, RunMode, RunTarget, Sdk, Snapshot, Variant,
+};
+use patchwork_client::local::core::{Error, Core};
+
+use super::create::Create;
+use super::log::LogPane;
+use super::screen::DeviceScreen;
+use super::tools::Sheet;
+use patchwork_design_components::menu::Menu;
+use patchwork_design_editor::{Submitted, TextArea};
+
+/// What the panel asks the window to do.
+#[derive(Debug)]
+pub enum AndroidEvent {
+    /// Close the panel.
+    Close,
+    /// Run the app with `Launch` in the panel's terminal.
+    Run(patchwork_client::local::core::terminal::Launch),
+    /// Type keys into the app's run, such as `r` to reload it.
+    Type(&'static str),
+}
+
+/// How often the devices are read again while the panel is open: often enough that a phone
+/// plugged in or an emulator closed shows within a moment, seldom enough that adb stays idle.
+const POLL: Duration = Duration::from_secs(2);
+
+/// What is being done to a virtual device.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Busy {
+    Starting,
+    Stopping,
+    Deleting,
+}
+
+/// What the panel asks about before doing it to a virtual device.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Confirm {
+    /// Erase its apps and data, then start it.
+    Wipe,
+    /// Delete the device itself.
+    Delete,
+}
+
+/// Where running the app stands.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Run {
+    Idle,
+    /// Its device is starting, or its command is being put together.
+    Preparing,
+    /// Its command runs in a terminal.
+    Running,
+}
+
+pub struct AndroidPanel {
+    pub(super) core: Arc<Core>,
+    pub project_id: String,
+    pub(super) project: MobileProject,
+    /// The SDK and devices as last read. None until the first read returns.
+    pub(super) snapshot: Option<Snapshot>,
+    /// Why this machine can't run an emulator at speed, once checked.
+    pub(super) acceleration: Option<Error>,
+    acceleration_checked: bool,
+    /// The device the app runs on: a virtual device's name, or a connected device's serial.
+    pub(super) selected: Option<String>,
+    pub(super) busy: HashMap<String, Busy>,
+    /// The emulators asked to close, by serial. adb lists one as offline, without the name of its
+    /// virtual device, while it shuts down, so it is left out until adb lets it go.
+    stopping: HashSet<String>,
+    /// The virtual device the panel asks about, and what it asks.
+    pub(super) confirm: Option<(String, Confirm)>,
+    /// The last failure of an action, until dismissed.
+    pub(super) failure: Option<Error>,
+    /// The errors whose tool output is shown, by the id of their alert.
+    pub(super) open_details: HashSet<String>,
+    pub(super) sdk_field: Entity<TextArea>,
+    pub(super) sdk_editing: bool,
+    pub(super) run: Run,
+    /// The device the run under way is on.
+    pub(super) running_on: Option<String>,
+    /// Whether the run under way was asked to stop, so its exit code is no failure.
+    pub(super) stop_asked: bool,
+    /// The device a Kotlin or Java app was last run on, and its virtual device: saving builds
+    /// and installs it there again.
+    pub(super) last_run: Option<(String, Option<String>)>,
+    /// Counts saves, so only the last of a burst rebuilds.
+    pub(super) saves: u64,
+    /// The variants the app can be built as, and the one runs build.
+    pub(super) variants: Vec<Variant>,
+    pub(super) variant: Variant,
+    /// The app's log, while it shows.
+    pub(super) log: Option<LogPane>,
+    /// What is asked for in place of the device lists: a place, a saved state, a phone to pair.
+    pub(super) sheet: Option<Sheet>,
+    /// What a device is being asked to do, and what the last action did.
+    pub(super) working: Option<String>,
+    pub(super) notice: Option<String>,
+    pub(super) create: Option<Create>,
+    /// The screen of the device picked, while it is running.
+    pub(super) screen: Option<Entity<DeviceScreen>>,
+    /// The menu that is open, by what it is of, and where it opened.
+    pub(super) menu: Option<(String, Entity<Menu>, Point<Pixels>)>,
+    pub(super) scroll: ScrollHandle,
+    pub(super) focus: FocusHandle,
+    _poll: Task<()>,
+}
+
+impl AndroidPanel {
+    pub fn new(
+        core: Arc<Core>,
+        project_id: String,
+        project: MobileProject,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let sdk_field = cx.new(|cx| {
+            let mut field = TextArea::new("Android SDK folder", "Android SDK folder", cx);
+            field.single_line = true;
+            field.placeholder_color = Some(patchwork_design_theme::input_placeholder());
+            field
+        });
+        cx.subscribe(&sdk_field, |this, _, _: &Submitted, cx| this.save_sdk(cx))
+            .detach();
+        let poll = cx.spawn(async move |this, cx| {
+            loop {
+                let Ok((core, root)) = this.update(cx, |this, _| {
+                    (Arc::clone(&this.core), this.project.root.clone())
+                }) else {
+                    break;
+                };
+                let snapshot = cx
+                    .background_spawn(async move { core.android().snapshot(&root) })
+                    .await;
+                if this
+                    .update(cx, |this, cx| this.apply(snapshot, cx))
+                    .is_err()
+                {
+                    break;
+                }
+                cx.background_executor().timer(POLL).await;
+            }
+        });
+        let focus = cx.focus_handle();
+        window.focus(&focus, cx);
+        let panel = Self {
+            selected: core.android().device(&project_id),
+            core,
+            project_id,
+            project,
+            snapshot: None,
+            acceleration: None,
+            acceleration_checked: false,
+            busy: HashMap::new(),
+            stopping: HashSet::new(),
+            confirm: None,
+            failure: None,
+            open_details: HashSet::new(),
+            sdk_field,
+            sdk_editing: false,
+            run: Run::Idle,
+            running_on: None,
+            stop_asked: false,
+            last_run: None,
+            saves: 0,
+            variants: Vec::new(),
+            variant: Variant::default(),
+            log: None,
+            sheet: None,
+            working: None,
+            notice: None,
+            create: None,
+            screen: None,
+            menu: None,
+            scroll: ScrollHandle::new(),
+            focus,
+            _poll: poll,
+        };
+        panel.load_variants(cx);
+        panel
+    }
+
+    /// The project's app was found again, perhaps as another framework or in another folder.
+    pub fn set_project(&mut self, project: MobileProject, cx: &mut Context<Self>) {
+        if self.project != project {
+            self.project = project;
+            self.load_variants(cx);
+            cx.notify();
+        }
+    }
+
+    pub(super) fn sdk(&self) -> Option<&Sdk> {
+        self.snapshot.as_ref()?.sdk.as_ref().ok()
+    }
+
+    pub(super) fn avds(&self) -> &[Avd] {
+        self.snapshot.as_ref().map_or(&[], |s| s.avds.as_slice())
+    }
+
+    pub(super) fn devices(&self) -> &[Device] {
+        self.snapshot
+            .as_ref()
+            .and_then(|s| s.devices.as_ref().ok())
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// The running emulator of a virtual device.
+    pub(super) fn device_of(&self, avd: &str) -> Option<&Device> {
+        self.devices()
+            .iter()
+            .find(|d| d.avd.as_deref() == Some(avd))
+    }
+
+    /// Takes a fresh read of the SDK and devices. The device picked stays while it still exists;
+    /// else one that is running is picked, else the first virtual device, else none.
+    fn apply(&mut self, mut snapshot: Snapshot, cx: &mut Context<Self>) {
+        if let Ok(devices) = &mut snapshot.devices {
+            self.stopping
+                .retain(|serial| devices.iter().any(|d| &d.serial == serial));
+            devices.retain(|d| {
+                d.state == android::DeviceState::Online || !self.stopping.contains(&d.serial)
+            });
+        }
+        self.snapshot = Some(snapshot);
+        let exists = |key: &String| {
+            self.avds().iter().any(|avd| &avd.name == key)
+                || self.devices().iter().any(|d| &d.serial == key)
+        };
+        if !self.selected.as_ref().is_some_and(exists) {
+            let running = self.devices().first().map(device_key);
+            let first = self.avds().first().map(|avd| avd.name.clone());
+            self.selected = running.or(first);
+        }
+        self.sync_screen(cx);
+        self.sync_log(cx);
+        if !self.acceleration_checked
+            && let Some(sdk) = self.sdk().cloned()
+        {
+            self.acceleration_checked = true;
+            patchwork_design_tasks::off_thread(
+                cx,
+                move || android::acceleration(&sdk),
+                move |this, checked, cx| {
+                    this.acceleration = checked.err();
+                    cx.notify();
+                },
+            );
+        }
+        cx.notify();
+    }
+
+    /// Shows the screen of the device picked while it runs, and no screen otherwise.
+    fn sync_screen(&mut self, cx: &mut Context<Self>) {
+        let key = self.selected.as_deref();
+        let shown = self.devices().iter().find(|d| {
+            d.state == android::DeviceState::Online
+                && (Some(d.serial.as_str()) == key || d.avd.as_deref() == key)
+        });
+        let current = self.screen.as_ref().map(|s| s.read(cx).serial.clone());
+        match shown {
+            Some(device) if current.as_ref() != Some(&device.serial) => {
+                let (core, serial) = (Arc::clone(&self.core), device.serial.clone());
+                let root = self.project.root.clone();
+                let name = device_key(device);
+                self.screen = Some(cx.new(|cx| DeviceScreen::new(core, root, serial, name, cx)));
+            }
+            Some(_) => {}
+            None => self.screen = None,
+        }
+    }
+
+    /// Reads the SDK and devices now, rather than at the next poll, after something changed them.
+    pub(super) fn refresh(&mut self, cx: &mut Context<Self>) {
+        let (core, root) = (Arc::clone(&self.core), self.project.root.clone());
+        patchwork_design_tasks::off_thread(
+            cx,
+            move || core.android().snapshot(&root),
+            AndroidPanel::apply,
+        );
+    }
+
+    /// Picks the device the app runs on, and remembers it for the project.
+    pub(super) fn select(&mut self, key: String, cx: &mut Context<Self>) {
+        if self.selected.as_ref() == Some(&key) {
+            return;
+        }
+        self.selected = Some(key.clone());
+        self.sync_screen(cx);
+        self.sync_log(cx);
+        let (core, project) = (Arc::clone(&self.core), self.project_id.clone());
+        cx.background_spawn(async move {
+            if let Err(e) = core.android().set_device(&project, &key) {
+                log::warn!(error:% = e; "could not remember the device: {{error}}");
+            }
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Starts a virtual device and waits for Android to start in it; then runs the app on it
+    /// when `then_run`.
+    pub(super) fn start(&mut self, avd: &str, boot: Boot, then_run: bool, cx: &mut Context<Self>) {
+        if self.busy.contains_key(avd) {
+            return;
+        }
+        self.busy.insert(avd.to_string(), Busy::Starting);
+        self.failure = None;
+        self.confirm = None;
+        let (core, root) = (Arc::clone(&self.core), self.project.root.clone());
+        let name = avd.to_string();
+        let task = cx.background_spawn({
+            let name = name.clone();
+            async move {
+                let booting = core.android().start_emulator(&root, &name, boot)?;
+                core.android().await_boot(&root, &booting)?;
+                Ok::<_, Error>(booting.serial)
+            }
+        });
+        cx.spawn(async move |this, cx| {
+            let started = task.await;
+            this.update(cx, |this, cx| {
+                this.busy.remove(&name);
+                match started {
+                    Ok(serial) if then_run => this.launch(serial, Some(name.clone()), cx),
+                    Ok(_) => {}
+                    Err(e) => {
+                        this.failure = Some(e);
+                        this.run = Run::Idle;
+                    }
+                }
+                this.refresh(cx);
+                cx.notify();
+            })
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Asks the emulator `serial` to close. `key` is what its row is busy under: the virtual
+    /// device it runs, else its serial.
+    pub(super) fn stop(&mut self, key: &str, serial: String, cx: &mut Context<Self>) {
+        let avd = key;
+        self.busy.insert(avd.to_string(), Busy::Stopping);
+        self.failure = None;
+        self.stopping.insert(serial.clone());
+        let (core, root) = (Arc::clone(&self.core), self.project.root.clone());
+        let name = avd.to_string();
+        let task = cx.background_spawn({
+            let serial = serial.clone();
+            async move { core.android().stop_emulator(&root, &serial) }
+        });
+        cx.spawn(async move |this, cx| {
+            let stopped = task.await;
+            this.update(cx, |this, cx| {
+                this.busy.remove(&name);
+                if stopped.is_err() {
+                    this.stopping.remove(&serial);
+                }
+                this.failure = stopped.err();
+                this.refresh(cx);
+                cx.notify();
+            })
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Deletes a stopped virtual device, with its apps and data.
+    pub(super) fn delete(&mut self, avd: &str, cx: &mut Context<Self>) {
+        self.busy.insert(avd.to_string(), Busy::Deleting);
+        self.failure = None;
+        self.confirm = None;
+        let (core, root) = (Arc::clone(&self.core), self.project.root.clone());
+        let name = avd.to_string();
+        let task = cx.background_spawn({
+            let name = name.clone();
+            async move { core.android().delete_avd(&root, &name) }
+        });
+        cx.spawn(async move |this, cx| {
+            let deleted = task.await;
+            this.update(cx, |this, cx| {
+                this.busy.remove(&name);
+                this.failure = deleted.err();
+                this.refresh(cx);
+                cx.notify();
+            })
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Builds, installs and runs the project on the device picked, starting it first when it is a
+    /// virtual device that is stopped.
+    pub(super) fn run(&mut self, cx: &mut Context<Self>) {
+        if self.run != Run::Idle {
+            return;
+        }
+        self.failure = None;
+        let Some(key) = self.selected.clone() else {
+            self.failure = Some("Pick a device to run on, or create one.".into());
+            return cx.notify();
+        };
+        let device = self
+            .devices()
+            .iter()
+            .find(|d| d.serial == key || d.avd.as_deref() == Some(&key))
+            .cloned();
+        match device {
+            Some(device) => match android::problem(&device) {
+                Some(problem) => self.failure = Some(problem),
+                None => self.launch(device.serial, device.avd, cx),
+            },
+            None if self.avds().iter().any(|avd| avd.name == key) => {
+                self.run = Run::Preparing;
+                self.start(&key, Boot::Quick, true, cx);
+            }
+            None => self.failure = Some("That device is no longer connected. Pick another.".into()),
+        }
+        cx.notify();
+    }
+
+    /// Runs the framework's own command for the device `serial` in a terminal of its own. `avd` is
+    /// the virtual device an emulator runs.
+    pub(super) fn launch(&mut self, serial: String, avd: Option<String>, cx: &mut Context<Self>) {
+        self.run = Run::Preparing;
+        self.last_run = Some((serial.clone(), avd.clone()));
+        self.stop_asked = false;
+        self.running_on = Some(serial.clone());
+        let (core, project) = (Arc::clone(&self.core), self.project.clone());
+        let variant = self.variant.clone();
+        patchwork_design_tasks::off_thread(
+            cx,
+            move || {
+                let target = RunTarget {
+                    serial: &serial,
+                    avd: avd.as_deref(),
+                    variant: &variant,
+                    mode: RunMode::Attached,
+                };
+                core.android_run(&project, &target)
+            },
+            move |this, prepared, cx| {
+                match prepared {
+                    Ok((launch, _)) => {
+                        this.run = Run::Running;
+                        cx.emit(AndroidEvent::Run(launch));
+                    }
+                    Err(e) => {
+                        this.run = Run::Idle;
+                        this.failure = Some(e);
+                    }
+                }
+                cx.notify();
+            },
+        );
+    }
+
+    /// The command a run started in the terminal has ended, with `code`, or did not start.
+    pub fn run_finished(&mut self, code: Option<u32>, output: &str, cx: &mut Context<Self>) {
+        if self.run != Run::Running {
+            return;
+        }
+        self.run = Run::Idle;
+        self.running_on = None;
+        match code {
+            Some(0) => {}
+            // A run asked to stop ends as its tool ends when interrupted.
+            _ if std::mem::take(&mut self.stop_asked) => self.last_run = None,
+            Some(code) => {
+                self.failure = Some(Error::Tool {
+                    message: format!(
+                        "The build or the run failed (exit code {code}). Fix the first error its output \
+                         names, then run again. The whole output is in its terminal tab."
+                    ),
+                    detail: output.to_string(),
+                });
+            }
+            None => {
+                self.failure = Some(Error::Tool {
+                    message: "The run ended without an exit code: its terminal could not be \
+                              opened, or the command was killed."
+                        .into(),
+                    detail: output.to_string(),
+                });
+            }
+        }
+        cx.notify();
+    }
+
+    /// Opens the field for the SDK's folder with the one in use in it.
+    pub(super) fn edit_sdk(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let current = self
+            .core
+            .settings()
+            .android_sdk
+            .or_else(|| {
+                self.sdk()
+                    .map(|sdk| sdk.root.to_string_lossy().into_owned())
+            })
+            .unwrap_or_default();
+        self.sdk_field
+            .update(cx, |field, cx| field.set_text(&current, cx));
+        self.sdk_editing = true;
+        window.focus(
+            &gpui::Focusable::focus_handle(self.sdk_field.read(cx), cx),
+            cx,
+        );
+        cx.notify();
+    }
+
+    /// Keeps the SDK folder typed in the field, and looks for the SDK again.
+    pub(super) fn save_sdk(&mut self, cx: &mut Context<Self>) {
+        let path = self.sdk_field.read(cx).content.clone();
+        let core = Arc::clone(&self.core);
+        patchwork_design_tasks::off_thread(
+            cx,
+            move || core.set_android_sdk(&path),
+            move |this, saved, cx| {
+                match saved {
+                    Ok(()) => {
+                        this.sdk_editing = false;
+                        this.failure = None;
+                        this.acceleration_checked = false;
+                        this.refresh(cx);
+                    }
+                    Err(e) => this.failure = Some(e),
+                }
+                cx.notify();
+            },
+        );
+    }
+
+    pub(super) fn toggle_detail(&mut self, id: &str, cx: &mut Context<Self>) {
+        if !self.open_details.remove(id) {
+            self.open_details.insert(id.to_string());
+        }
+        cx.notify();
+    }
+
+    pub(super) fn close(&mut self, cx: &mut Context<Self>) {
+        cx.emit(AndroidEvent::Close);
+    }
+
+    /// The folder name the project's app is in, for the header.
+    pub(super) fn folder(&self) -> String {
+        PathBuf::from(&self.project.root)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    }
+}
+
+/// What picks a connected device: the virtual device it runs, else its serial.
+pub(super) fn device_key(device: &Device) -> String {
+    device.avd.clone().unwrap_or_else(|| device.serial.clone())
+}
+
+impl EventEmitter<AndroidEvent> for AndroidPanel {}
+
+impl std::fmt::Debug for AndroidPanel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AndroidPanel")
+            .field("project_id", &self.project_id)
+            .finish_non_exhaustive()
+    }
+}

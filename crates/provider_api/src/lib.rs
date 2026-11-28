@@ -3,7 +3,6 @@
 
 // Rust guideline compliant 2026-11-23
 
-mod catalog;
 mod health;
 mod models;
 mod secrets;
@@ -11,7 +10,9 @@ pub mod servers;
 mod store;
 
 #[doc(inline)]
-pub use catalog::{ApiModel, ApiProvider, Header, KeyChange, KeyStore, ProviderView};
+pub use patchwork_model::provider::api::{
+    ApiModel, ApiProvider, Header, KeyChange, KeyStore, ProviderView,
+};
 #[doc(inline)]
 pub use health::{DiscoveredServer, ProviderHealth, discover, probe};
 #[doc(inline)]

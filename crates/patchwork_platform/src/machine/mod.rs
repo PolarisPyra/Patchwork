@@ -5,5 +5,6 @@
 // Rust guideline compliant 2026-10-09
 
 pub mod device;
+#[cfg(feature = "launcher-icon")]
 pub(crate) mod launcher;
 pub mod memory;

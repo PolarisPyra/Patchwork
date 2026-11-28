@@ -11,6 +11,7 @@ use patchwork_provider_core::{
 };
 use patchwork_platform::Locked;
 use patchwork_platform::files::paths::home_dir;
+#[cfg(feature = "sqlite")]
 use rusqlite::{Connection, OpenFlags};
 
 /// `opencode` on PATH or in the usual install folders, else where its installer puts it.
@@ -44,6 +45,7 @@ pub fn data_dir() -> Option<PathBuf> {
 ///
 /// 1.x opens only a database with a `session` table. Once OpenCode 2 has migrated the shared
 /// database to `session_v2`, giving 1.x its own database lets it run without being updated.
+#[cfg(feature = "sqlite")]
 #[must_use]
 pub fn needs_own_database() -> bool {
     let Some(shared) = data_dir().map(|dir| dir.join(SHARED_DATABASE)) else {
@@ -61,6 +63,14 @@ pub fn needs_own_database() -> bool {
         })
         .unwrap_or_default();
     !tables.is_empty() && !tables.iter().any(|name| name == "session")
+}
+
+/// Whether the OpenCode in use is a 1.x that cannot open the shared database: never, in a build
+/// that cannot read the database, such as the helper on an SSH host, which starts no OpenCode.
+#[cfg(not(feature = "sqlite"))]
+#[must_use]
+pub fn needs_own_database() -> bool {
+    false
 }
 
 /// Checks whether the OpenCode CLI is installed and usable.

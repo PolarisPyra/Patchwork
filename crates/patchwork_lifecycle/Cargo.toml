@@ -1,0 +1,29 @@
+[package]
+name = "patchwork-lifecycle"
+description = "Patchwork app lifecycle: updates, restarts, crash containment, and logging"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-model.workspace = true
+patchwork-platform.workspace = true
+patchwork-provider-core.workspace = true
+chrono = { workspace = true, features = ["clock"] }
+log = { workspace = true, default-features = true }
+minisign-verify = { workspace = true, default-features = true }
+regex = { workspace = true, default-features = true }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_json = { workspace = true, default-features = true, features = ["preserve_order"] }
+sha2 = { workspace = true, default-features = true }
+ureq = { workspace = true, default-features = true, features = ["json"] }
+zeroize = { workspace = true, default-features = true }
+zip = { workspace = true, features = ["deflate-flate2-zlib-rs"] }
+
+[lints]
+workspace = true

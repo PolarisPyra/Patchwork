@@ -1,0 +1,480 @@
+//! The shape of the app's settings.
+
+// Rust guideline compliant 2026-11-23
+
+use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+
+use crate::backgrounds::ChatBackground;
+use crate::notifications::NotificationSettings;
+use crate::permissions::PermissionSettings;
+use crate::projects::Project;
+use crate::provider::AgentKind;
+use crate::themes::{Follow, ProjectLook};
+use patchwork_themes::{BackdropChoice, Color, Density, TextSize};
+use crate::chats::AgentPick;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    Light,
+    #[default]
+    Dark,
+    /// Dark with true-black backgrounds, for OLED screens.
+    Oled,
+    System,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate setting the user turns on or off"
+)]
+pub struct Integrations {
+    pub github: bool,
+    pub terminal: bool,
+    pub figma: bool,
+    pub browser: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate setting the user turns on or off"
+)]
+pub struct Settings {
+    pub onboarded: bool,
+    pub theme: Theme,
+    /// Connected agents; the first is the default for new tasks.
+    pub agents: Vec<AgentKind>,
+    /// Agent CLIs the user located by hand, used instead of searching for them.
+    pub agent_paths: HashMap<AgentKind, String>,
+    /// What each agent CLI is told at launch after Patchwork's own instructions. API providers
+    /// keep theirs with the provider.
+    pub system_prompts: HashMap<AgentKind, String>,
+    pub integrations: Integrations,
+    pub projects: Vec<Project>,
+    /// Where the window was left. Flattened, so it is saved among the other settings' keys.
+    #[serde(flatten)]
+    pub window: WindowState,
+    pub tokens: TokenSettings,
+    /// The model that reads the images of a message on Patchwork's own agent and describes them
+    /// to the chat's model. None sends the images to the chat's model.
+    pub vision: Option<VisionModel>,
+    /// Folder of the skills every agent loads. None uses `skills` in the config folder.
+    pub skills_dir: Option<String>,
+    /// Skills switched off in Settings, by name.
+    pub disabled_skills: Vec<String>,
+    pub notifications: NotificationSettings,
+    pub updates: UpdateSettings,
+    /// Id of the app icon color way in `assets/logos/manifest.json`. None uses the manifest default.
+    pub logo: Option<String>,
+    /// What shows behind every chat's messages, unless the chat has its own.
+    pub chat_background: ChatBackground,
+    /// What shows behind the Quilts page. None is the background every chat shares.
+    pub quilts_background: Option<ChatBackground>,
+    /// The Orchestrator, chats and Quilts show one background: picking it for one picks it
+    /// for all.
+    pub sync_backgrounds: bool,
+    /// The theme whose colors the app is drawn in, by its id. None draws `theme`.
+    pub theme_id: Option<String>,
+    /// The color scheme `theme` System draws while the system is light, by its id. None is
+    /// Light.
+    pub system_light: Option<String>,
+    /// The color scheme `theme` System draws while the system is dark, by its id: `oled`, or a
+    /// file's. None is Dark.
+    pub system_dark: Option<String>,
+    /// The code theme of light windows, by its id. None uses the color scheme's own colors.
+    pub code_theme_light: Option<String>,
+    /// The code theme of dark windows, by its id. None uses the color scheme's own colors.
+    pub code_theme_dark: Option<String>,
+    /// What the chats that write a theme or a background run on. None is what a new chat runs on.
+    pub generator: Option<AgentPick>,
+    /// How large the app's text is.
+    pub text_size: TextSize,
+    /// Nothing moves on its own: animations and the Orchestrator's backdrop hold still.
+    pub reduce_motion: bool,
+    /// What the Orchestrator page shows behind it.
+    pub orchestrator_backdrop: BackdropChoice,
+    /// What it shows in a light window while `theme` is System. None is `orchestrator_backdrop`.
+    pub system_light_backdrop: Option<BackdropChoice>,
+    /// What it shows in a dark window while `theme` is System. None is `orchestrator_backdrop`.
+    pub system_dark_backdrop: Option<BackdropChoice>,
+    /// What decides whether `theme` System is light or dark.
+    pub follow: Follow,
+    /// The color of buttons, links and what is selected, in place of the color scheme's.
+    pub accent: Option<Color>,
+    /// The font family of the app's text, code aside. None is the color scheme's, else the
+    /// app's.
+    pub ui_font: Option<String>,
+    /// How much room rows and their padding take.
+    pub density: Density,
+    /// The color scheme and accent of projects that have their own, by project id.
+    pub project_looks: HashMap<String, ProjectLook>,
+    /// The projects whose new tasks edit the project folder itself, not a worktree each, by id.
+    pub edit_in_place: Vec<String>,
+    pub logging: LoggingSettings,
+    pub terminal: TerminalSettings,
+    pub permissions: PermissionSettings,
+    /// Answering an agent's question takes a second click on the picked answer.
+    pub confirm_answers: bool,
+    /// Enter steers a running reply instead of queueing the message for after it.
+    pub steer_while_working: bool,
+    /// Agents' thoughts show open in the transcript instead of waiting for a click.
+    pub show_thoughts: bool,
+    /// Each chat picks the agent, model and effort of its orchestrator and its executor.
+    pub granular_chats: bool,
+    /// Agents are not given Patchwork's tools to start, message and wait on other chats.
+    pub chat_tools_off: bool,
+    /// Phones and other computers on the network may connect to the server inside the app. Off,
+    /// it listens on this computer alone. Read when the app starts, so a change waits for a restart.
+    pub devices_on_network: bool,
+    /// Patchwork's own agent carries on calling tools for as long as it takes, instead of stopping
+    /// after a set number of steps for the user to carry it on.
+    pub unlimited_steps: bool,
+    /// Tokens a turn of Patchwork's own agent may send and receive before it stops for the user to
+    /// carry it on; 0 sets no limit.
+    pub turn_token_limit: u64,
+    /// What a launch does with the replies the last session's closing cut off.
+    pub resume_at_launch: ResumeAtLaunch,
+    /// Opening a task, or starting one, gives it a tab of its own beside the open task's,
+    /// instead of showing it in the open task's tab.
+    pub tasks_in_new_tab: bool,
+    /// Folder of hook bundles. None uses `hooks` in the config folder.
+    pub hooks_dir: Option<String>,
+    /// Hook bundles switched off in Settings, by folder name.
+    pub disabled_hooks: Vec<String>,
+    /// Whether Patchwork's own agent may drive the pointer and keyboard.
+    pub computer_use: bool,
+    /// Whether agents may see the screen: Patchwork's own agent's `computer_screenshot`, and a
+    /// paired chat app conversation's `/screenshot` and `send_screenshot`. Apart from
+    /// `computer_use`: seeing the screen lets no agent click or type.
+    pub see_screen: bool,
+    /// Whether a project's own check command runs after every task.
+    pub checks: CheckSettings,
+    /// Where a fork works, and when a task's worktree is cleaned up.
+    pub worktrees: WorktreeSettings,
+    /// The Android SDK's folder, when the user set one. None finds it.
+    pub android_sdk: Option<String>,
+    /// Whether an agent may run the app on Android devices, look at their screens and touch them.
+    pub android_use: bool,
+    /// The chat apps Patchwork answers on.
+    pub gateway: crate::gateway::GatewaySettings,
+    pub vault: crate::vault::VaultSettings,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            onboarded: false,
+            theme: Theme::default(),
+            agents: Vec::new(),
+            agent_paths: HashMap::new(),
+            system_prompts: HashMap::new(),
+            integrations: Integrations::default(),
+            projects: Vec::new(),
+            window: WindowState::default(),
+            tokens: TokenSettings::default(),
+            vision: None,
+            skills_dir: None,
+            disabled_skills: Vec::new(),
+            notifications: NotificationSettings::default(),
+            updates: UpdateSettings::default(),
+            logo: None,
+            chat_background: ChatBackground::default(),
+            quilts_background: None,
+            sync_backgrounds: false,
+            theme_id: None,
+            system_light: None,
+            system_dark: None,
+            code_theme_light: None,
+            code_theme_dark: None,
+            generator: None,
+            text_size: TextSize::default(),
+            reduce_motion: false,
+            orchestrator_backdrop: BackdropChoice::default(),
+            system_light_backdrop: None,
+            system_dark_backdrop: None,
+            follow: Follow::default(),
+            accent: None,
+            ui_font: None,
+            density: Density::default(),
+            project_looks: HashMap::new(),
+            edit_in_place: Vec::new(),
+            logging: LoggingSettings::default(),
+            terminal: TerminalSettings::default(),
+            permissions: PermissionSettings::default(),
+            confirm_answers: false,
+            steer_while_working: false,
+            show_thoughts: false,
+            granular_chats: false,
+            chat_tools_off: false,
+            devices_on_network: false,
+            unlimited_steps: true,
+            turn_token_limit: 0,
+            resume_at_launch: ResumeAtLaunch::default(),
+            tasks_in_new_tab: false,
+            hooks_dir: None,
+            disabled_hooks: Vec::new(),
+            computer_use: false,
+            see_screen: false,
+            checks: CheckSettings::default(),
+            worktrees: WorktreeSettings::default(),
+            android_sdk: None,
+            android_use: false,
+            gateway: crate::gateway::GatewaySettings::default(),
+            vault: crate::vault::VaultSettings::default(),
+        }
+    }
+}
+
+/// What the window was left showing, kept with the settings so the next launch opens there.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WindowState {
+    /// The project the window shows. None shows no project.
+    pub active_project_id: Option<String>,
+    /// The SSH host, by its `Host` alias, whose folders Add Project opens on. None is this
+    /// computer.
+    pub default_machine: Option<String>,
+}
+
+impl Settings {
+    /// Brings settings saved by an earlier version up to this one's, once each.
+    pub(crate) fn upgrade(&mut self) {
+        crate::permissions::seed(&mut self.permissions);
+        // 0 leaves Claude to compact near the model's full window, far past where it gets
+        // costly. It was the old default, then a choice labelled "Default", so it is reset once
+        // to 200k.
+        let tokens = &mut self.tokens;
+        if !tokens.compact_window_reset {
+            tokens.compact_window_reset = true;
+            if tokens.claude_compact_window == 0 {
+                tokens.claude_compact_window = 200_000;
+            }
+        }
+    }
+
+    /// Sets whether the project's new tasks edit its own folder rather than a worktree each.
+    /// Turning worktrees on for one project while they are off everywhere turns them back on
+    /// and keeps every other project editing its folder.
+    pub fn set_edit_in_place(&mut self, project_id: &str, in_place: bool) {
+        if !in_place && self.worktrees.disabled {
+            self.worktrees.disabled = false;
+            self.edit_in_place = self.projects.iter().map(|p| p.id.clone()).collect();
+        }
+        self.edit_in_place.retain(|id| id != project_id);
+        if in_place {
+            self.edit_in_place.push(project_id.to_owned());
+        }
+    }
+
+    /// The agent new chats start on: the first connected one, else Claude.
+    #[must_use]
+    pub fn default_agent(&self) -> AgentKind {
+        self.agents.first().copied().unwrap_or(AgentKind::Claude)
+    }
+
+    /// What the chats that write a theme or a background run on, while its agent is still connected.
+    #[must_use]
+    pub fn generator_pick(&self) -> Option<&AgentPick> {
+        self.generator
+            .as_ref()
+            .filter(|pick| self.agents.contains(&pick.agent))
+    }
+}
+
+/// A model that reads images: an API provider's `provider/model`, or a model of a CLI the user
+/// is signed in to, which Patchwork runs on its own for each message with images.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VisionModel {
+    pub agent: AgentKind,
+    pub model: String,
+}
+
+/// A project's checks: the command its `package.json`, manifest or Makefile names, run after a
+/// task that changed files, so a reply says whether the project's tests still pass.
+///
+/// Off for every project until it is turned on: running a test suite after every task is the
+/// person's call, not the app's. A reply shows what the checks made of it only when they ran.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct CheckSettings {
+    /// What a project does unless it says otherwise.
+    pub after_every_task: bool,
+    /// Projects that answer for themselves, by project id.
+    pub projects: HashMap<String, bool>,
+}
+
+impl CheckSettings {
+    /// Whether `project_id` runs its checks after every task.
+    #[must_use]
+    pub fn on(&self, project_id: &str) -> bool {
+        self.projects
+            .get(project_id)
+            .copied()
+            .unwrap_or(self.after_every_task)
+    }
+}
+
+/// Task worktrees: whether a fork shares its source task's worktree, and what cleaning one up
+/// keeps.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WorktreeSettings {
+    /// Whether tasks edit their project's own folder rather than getting a worktree each, in
+    /// every project.
+    pub disabled: bool,
+    /// Whether a fork gets a worktree of its own, rather than working in its source task's.
+    pub fork_into_new: bool,
+    /// Whether deleting a task removes its worktree, and what keeps one from being cleaned up.
+    pub cleanup: WorktreeCleanup,
+}
+
+/// What happens to task worktrees as they are cleaned up.
+///
+/// Deleting the task removes the worktree with its branch; cleaning one up from the settings
+/// removes only its folder, which the task's next turn makes again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WorktreeCleanup {
+    /// Whether deleting a task removes its worktree.
+    pub with_deleted_tasks: bool,
+    /// Which local changes keep a worktree from being cleaned up, unless its task is deleted.
+    pub keep: KeepWorktrees,
+}
+
+impl Default for WorktreeCleanup {
+    fn default() -> Self {
+        Self {
+            with_deleted_tasks: true,
+            keep: KeepWorktrees::default(),
+        }
+    }
+}
+
+/// Which local changes keep a worktree from cleanup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum KeepWorktrees {
+    /// Changed or new files git doesn't ignore.
+    #[default]
+    Uncommitted,
+    /// Changed files git tracks.
+    Tracked,
+    /// Any file not committed, ignored ones too.
+    AnyFiles,
+}
+
+pub use patchwork_model::terminal::{CursorStyle, DetectLocale, RightClickBehavior, TerminalSettings};
+
+pub use patchwork_lifecycle::logging::{LOG_LEVELS, LogLevel, LoggingSettings};
+pub use patchwork_lifecycle::updates::UpdateSettings;
+
+/// What a launch does with the replies the last session cut off by quitting, restarting for an
+/// update, or crashing.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ResumeAtLaunch {
+    /// Resumes them.
+    #[default]
+    Always,
+    /// Says how many there are, and resumes them when told to.
+    Ask,
+    /// Leaves each for its own Resume button.
+    Never,
+}
+
+/// Settings that trade a little convenience for fewer tokens spent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate setting the user turns on or off"
+)]
+pub struct TokenSettings {
+    /// Shows the token counts under each finished reply.
+    pub show_usage: bool,
+    /// A context above this is flagged.
+    pub warn_above: u64,
+    /// The context size at which Claude compacts mid-task. 0 leaves Claude's own, near the
+    /// model's full window.
+    pub claude_compact_window: u64,
+    /// Set once a `claude_compact_window` of 0 was reset to 200k. Settings labelled 0 "Default",
+    /// so it was picked as the safe choice; once reset, choosing When full (0) again sticks.
+    // Missing in settings saved before it, unlike the struct's default.
+    #[serde(default)]
+    pub compact_window_reset: bool,
+    /// The context size at which Patchwork's own agent compacts an API task before its next
+    /// request. 0 leaves it until the provider refuses the conversation as too long.
+    pub api_compact_window: u64,
+    /// The context size at which Codex compacts mid-task. 0 leaves Codex's own.
+    pub codex_compact_window: u64,
+    /// The context size at which OpenCode compacts mid-task. 0 leaves OpenCode's own, near the
+    /// model's full window.
+    pub opencode_compact_window: u64,
+    /// The context size over which an Antigravity task compacts before its next message, since
+    /// Antigravity has no setting for it. 0 leaves Antigravity's own.
+    pub antigravity_compact_window: u64,
+    /// Model for new tasks, per agent. A missing agent uses the CLI's own default.
+    pub default_models: HashMap<AgentKind, String>,
+    /// Names a new chat or task with a title its provider writes from the first message,
+    /// rather than that message's first line.
+    pub generate_titles: bool,
+    /// An API model, `provider/model`, that writes every title, so a local model can name chats
+    /// that run in the cloud. None leaves each chat's title to its own provider.
+    pub title_model: Option<String>,
+    /// Titles are written only by a local model: `title_model`, or the chat's own model when it
+    /// runs locally. Without one, a chat keeps its first line as its title.
+    pub titles_local_only: bool,
+}
+
+impl Default for TokenSettings {
+    fn default() -> Self {
+        Self {
+            show_usage: true,
+            warn_above: 150_000,
+            claude_compact_window: 200_000,
+            compact_window_reset: true,
+            api_compact_window: 128_000,
+            codex_compact_window: 0,
+            opencode_compact_window: 0,
+            antigravity_compact_window: 0,
+            default_models: HashMap::new(),
+            generate_titles: true,
+            title_model: None,
+            titles_local_only: false,
+        }
+    }
+}
+
+impl TokenSettings {
+    /// The context size at which `agent` compacts by default; 0 leaves it to the agent.
+    #[must_use]
+    pub fn compact_window(&self, agent: AgentKind) -> u64 {
+        match agent {
+            AgentKind::Claude => self.claude_compact_window,
+            AgentKind::Codex => self.codex_compact_window,
+            AgentKind::Antigravity => self.antigravity_compact_window,
+            AgentKind::OpenCode => self.opencode_compact_window,
+            AgentKind::Api => self.api_compact_window,
+            _ => 0,
+        }
+    }
+
+    /// The field that holds `agent`'s compact window, when it has one.
+    pub fn compact_window_mut(&mut self, agent: AgentKind) -> Option<&mut u64> {
+        Some(match agent {
+            AgentKind::Claude => &mut self.claude_compact_window,
+            AgentKind::Codex => &mut self.codex_compact_window,
+            AgentKind::Antigravity => &mut self.antigravity_compact_window,
+            AgentKind::OpenCode => &mut self.opencode_compact_window,
+            AgentKind::Api => &mut self.api_compact_window,
+            _ => return None,
+        })
+    }
+}

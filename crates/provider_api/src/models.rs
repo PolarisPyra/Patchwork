@@ -9,7 +9,7 @@ use patchwork_platform::Error;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::catalog::{ApiModel, ApiProvider, Header, blank};
+use patchwork_model::provider::api::{ApiModel, ApiProvider, Header, blank};
 use super::secrets::{key, with_headers};
 use super::store::{check_url, provider, providers};
 

@@ -1,0 +1,37 @@
+[package]
+name = "patchwork-desktop-chat"
+description = "Patchwork's chat screen: the transcript, the panes and tabs, the strips above the composer, and the composer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+patchwork-design-backgrounds.workspace = true
+patchwork-design-components.workspace = true
+patchwork-design-editor.workspace = true
+patchwork-design-icons.workspace = true
+patchwork-design-tasks.workspace = true
+patchwork-design-text.workspace = true
+patchwork-design-theme.workspace = true
+patchwork-views-actions.workspace = true
+patchwork-views-chat.workspace = true
+patchwork-views-logos.workspace = true
+patchwork-client = { workspace = true, features = ["local"] }
+patchwork-model.workspace = true
+patchwork-platform.workspace = true
+patchwork-themes.workspace = true
+
+futures = { workspace = true, default-features = true }
+gpui = { workspace = true, default-features = true }
+image = { workspace = true, features = ["png", "jpeg", "webp"] }
+log = { workspace = true, default-features = true }
+serde = { workspace = true, default-features = true, features = ["derive"] }
+serde_json = { workspace = true, default-features = true }
+
+[lints]
+workspace = true

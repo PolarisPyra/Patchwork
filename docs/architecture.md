@@ -2,58 +2,122 @@
 
 ## Repo layout
 
-The repo is a Cargo workspace split into applications under `apps/`, backend and platform libraries
-under `crates/`, and a vendored GPUI stack under `vendor/` (excluded from workspace members so
-workspace lints target Patchwork's code; see [vendor/README.md](../vendor/README.md)).
+The repo is a Cargo workspace. `apps/` holds only the runnable targets, which are thin shells.
+Every library crate is under `crates/`, ordered by layer (see [layers.md](layers.md)). A vendored
+GPUI stack is under `vendor/`, kept out of the workspace members so workspace lints target
+Patchwork's code (see [vendor/README.md](../vendor/README.md)).
 
 ### Applications (`apps/`)
 
 - `apps/desktop` (`patchwork`, default workspace member) — the native window, drawn with GPUI. It
   calls `Core` directly and applies its agent events on the UI thread.
-  - `src/main.rs` — opens the core, background tasks, and the window
-  - `src/workspace/` — the window: its state, layout, bars, update card, actions, `hosts/` (glue for pages and dialogs from desktop
-    crates), and `dock/` (the tabbed area under the chat and its place in the window)
-  - `src/{chat,sidebar,canvas,agents,orchestrator,terminal}/` — UI, one folder per feature; the
-    dock's other tabs are `src/logs.rs` (Output) and `src/screen.rs`
-- `apps/desktop/crates/` — UI foundations and desktop feature crates, split to keep incremental
-  rebuilds small:
-  - `tokens` (`patchwork-ui-tokens`) — build-time packed, compressed SVG icon pool (`icons.pack`)
-    and compile-time typed `IconName` registry (with debug-mode disk reload)
-  - `theme` (`patchwork-ui-theme`) — design tokens, palette, sizing, embedded assets, icons, brand
-    marks, and view task helpers
-  - `components` (`patchwork-ui-components`) — buttons, inputs, menus, dialogs, popovers, badges,
-    avatars, scrollbars, and actions
-  - `markdown` (`patchwork-ui-markdown`) — Markdown layout, syntax highlighting, sigils, formatting,
-    and selectable text
-  - `editor` (`patchwork-ui-editor`) — multi-line text area and composer editor
-  - `backdrop` (`patchwork-ui-backdrop`) — animated backdrops, ambient scenes, and background presets
-  - `shared` (`patchwork-desktop-shared`) — helpers binding core domain types to theme marks and
-    labels
-  - `browser` (`patchwork-desktop-browser`) — browser sidecar view drawing web pages and quilts
-  - `android` (`patchwork-desktop-android`) — Android sidecar view (emulators, devices, screen
-    mirroring, and logcat)
-  - `settings` (`patchwork-desktop-settings`) — Settings dialog, its panes, and the background picker
-  - `search` (`patchwork-desktop-search`) — command palette and search modal
-  - `onboarding` (`patchwork-desktop-onboarding`) — first-run setup flow
-  - `quilts` (`patchwork-desktop-quilts`) — Quilts gallery and viewer page
-  - `dialogs` (`patchwork-desktop-dialogs`) — workspace dialogs (`add_project`, `credential`,
-    `granular`, and `interrupted`)
-  - `dylib` (`patchwork-dylib`) — bundles desktop dependencies into one shared library so `dynamic`
-    development builds relink only Patchwork
-- `apps/remote` (`patchwork-remote`) — helper binary copied to SSH hosts to run agents, their hooks,
-  and their relays remotely.
+  - `src/main.rs` — opens the core, starts the server phones connect to, background tasks, and the
+    window
+  - `src/window.rs` — the `Workspace`: the window's state, its regions, and the constructor. It
+    holds the chat's `ChatUi`, derefs to it, and implements `ChatWindow` for the chat feature
+  - `src/nav/` — `Page`, `View` and `Place`; back and forward and the place saved for the next
+    launch (`history.rs`); opening a chat, a chat looked in on, or a page (`open.rs`)
+  - `src/panels/` — the window's frame and keys, and its panels: `panels.home`, `panels.chat`,
+    `panels.details` and `panels.dock`
+  - `src/wiring/` — one file per feature crate (`sidebar.rs`, `chat.rs`, `agents.rs`, `canvas.rs`,
+    `orchestrator.rs`, `source_control.rs`, `usage.rs`, `quilts.rs`, …) that makes its view,
+    implements its host trait over the `Workspace`, and does what its events ask
+  - `src/bars.rs`, `src/dialogs.rs`, `src/shortcuts.rs`, `src/updates.rs`, `src/hot_reload.rs` —
+    the toolbar and activity bar, the dialogs, what shortcuts and menus do, the update card and
+    restart, and the hot reload bar
+  - `src/row_menu/`, `src/machines.rs` — the sidebar rows' context menu and the machines view
 - `apps/android` (`patchwork-android`) — the Android client, a GPUI app that connects to a running
   Patchwork. It runs on `vendor/gpui_android`, GPUI's Android backend, and is built into an APK by
-  `cargo run android` (`scripts/cargo-android`).
+  `cargo run android` (`scripts/cargo-android`). It reads `patchwork_client::Session`, draws with
+  the design and view crates, and never links the engine.
+  - `src/app.rs` — loads the shared fonts and theme and opens the window
+  - `src/nav.rs` — the root view, which switches between the `mobile` crate's screens on their
+    events
+- `apps/remote` (`patchwork-remote`) — helper binary copied to SSH hosts to run agents, their hooks,
+  and their relays remotely. It links only `patchwork-harness` and `patchwork-platform`.
 
-### Backend and platform crates (`crates/`)
+### Features (`crates/features/`)
 
+One crate per screen area. Each takes an `Rc<dyn …Host>` for what it reads from the window and
+emits an event enum for what it asks the window to do; shared data comes from `AppState`. A
+feature depends on no other feature and reaches the core only through
+`patchwork_client::local::core`.
+
+- `desktop_sidebar` (`patchwork-desktop-sidebar`) — projects, tasks, archived chats, and issues
+- `desktop_chat` (`patchwork-desktop-chat`) — the chat: the transcript, the panes and tabs, the
+  strips above the composer, and the composer (draft, pickers, chips, menus, and sending). Its
+  state is `ChatUi`; what it needs from the window is the `ChatWindow` trait (`window.rs`), and its
+  code is extension traits over any `ChatWindow`, re-exported by `prelude.rs`
+- `desktop_agents` (`patchwork-desktop-agents`) — an agent's home page and its details
+- `desktop_orchestrator` (`patchwork-desktop-orchestrator`) — the orchestrator page and its
+  backdrop
+- `desktop_canvas` (`patchwork-desktop-canvas`) — the file panel beside the chat: code, diffs, and
+  plans
+- `desktop_dock` (`patchwork-desktop-dock`) — the tabbed dock under the chat: terminals, the Output
+  log, and the screen
+- `desktop_source_control` (`patchwork-desktop-source-control`) — the commit box, changed files,
+  and commit graph
+- `desktop_usage` (`patchwork-desktop-usage`) — the sidebar's Usage button and plan limits popover
+- `desktop_browser` (`patchwork-desktop-browser`) — browser sidecar view drawing web pages and
+  quilts
+- `desktop_emulator` (`patchwork-desktop-emulator`) — Android sidecar view (emulators, devices,
+  screen mirroring, and logcat)
+- `desktop_settings` (`patchwork-desktop-settings`) — Settings dialog, its panes, and the
+  background picker
+- `desktop_search` (`patchwork-desktop-search`) — command palette and search modal
+- `desktop_onboarding` (`patchwork-desktop-onboarding`) — first-run setup flow
+- `desktop_quilts` (`patchwork-desktop-quilts`) — Quilts gallery and viewer page
+- `desktop_dialogs` (`patchwork-desktop-dialogs`) — workspace dialogs (`add_project`,
+  `credential`, `granular`, and `interrupted`)
+- `mobile` (`patchwork-mobile`) — the phone's screens, one module each: `pairing`, `chats`,
+  `chat`, and `approvals`. Builds without the client's `local` feature
+
+### Design (`crates/design/`)
+
+Domain-free drawing shared by every app's features. None of them knows about a window or depends
+on `patchwork-model` or an engine crate.
+
+- `icons` (`patchwork-design-icons`) — build-time packed, compressed SVG icon pool (`icons.pack`),
+  the compile-time typed `IconName` registry (with debug-mode disk reload), and drawing an icon
+- `theme` (`patchwork-design-theme`) — palette, sizes, fonts, the in-scheme wrapper, and the
+  embedded assets the window loads
+- `tasks` (`patchwork-design-tasks`) — view task helpers: work off the UI thread, timers, and the
+  file picker
+- `components` (`patchwork-design-components`) — buttons, inputs, menus, dialogs, popovers,
+  tooltips, avatars, scrollbars, and motion
+- `text` (`patchwork-design-text`) — Markdown layout, syntax highlighting, selectable text, and
+  formatting
+- `editor` (`patchwork-design-editor`) — multi-line text area and composer editor
+- `backgrounds` (`patchwork-design-backgrounds`) — animated backdrops, ambient scenes, and
+  background presets
+
+### Views (`crates/views/`)
+
+Pieces drawn from Patchwork's data. They may read `patchwork-model`, never the client or the core.
+
+- `logos` (`patchwork-views-logos`) — agent, platform and API provider logos for the kinds in
+  `patchwork-model`
+- `chat` (`patchwork-views-chat`) — transcript pieces drawn from data alone: turn contents, turn
+  splitting, note pills, the usage line, sigils, pills, attachment chips, and chat drag payloads
+- `actions` (`patchwork-views-actions`) — the desktop's actions and the app title
+
+### Engine and platform crates (`crates/`)
+
+- `crates/patchwork_model` (`patchwork-model`) — plain domain types shared by the engine, the
+  client, and the views: chats, messages, agents, providers, platforms, and settings values.
 - `crates/patchwork_platform` (`patchwork-platform`) — the user's machine, with no knowledge of
   chats or providers: processes and their environment, login shells, paths (`files/dirs.rs`),
   opening files on the desktop, the system credential store (`keychain`: Secret Service through
   `oo7` on Linux, `keyring` elsewhere), machines reached over SSH (`ssh/`), and the shared `Error`.
-- `crates/patchwork_daemon` (`patchwork-daemon`) — app lifecycle: signed updates
+- `crates/patchwork_lifecycle` (`patchwork-lifecycle`) — app lifecycle: signed updates
   (`updates/release.rs`), restarts, crash containment, and logging.
+- `crates/patchwork_protocol` (`patchwork-protocol`) — the typed methods, pushes and frames
+  Patchwork's server and its clients exchange.
+- `crates/patchwork_client` (`patchwork-client`) — what features read. `Session`, kept from
+  protocol pushes through a `Transport` (`RemoteTransport` over a websocket), is what the phone
+  draws. With the `local` feature, `AppState` (settings, chats, projects, agents, quilts, chat
+  apps) and `GitModel` are kept current from an in-process `Core` for the desktop, and
+  `local::core` re-exports the core, the server and the gateway for the features.
 - `crates/patchwork_themes` (`patchwork-themes`) — theme, scene, and code theme files as data.
 - `crates/patchwork_vault` (`patchwork-vault`) — encrypted secret vault (XChaCha20-Poly1305,
   Argon2id passwords, and recovery keys).
@@ -64,7 +128,13 @@ workspace lints target Patchwork's code; see [vendor/README.md](../vendor/README
 - `crates/provider_acp`, `crates/provider_api`, `crates/provider_claude`, `crates/provider_codex`,
   `crates/provider_antigravity`, `crates/provider_opencode` (`patchwork-provider-*`) — per-provider
   CLI/API discovery, configuration, model catalogs, probing, and bridges.
-- `crates/patchwork_backend` (`patchwork-backend`) — the core backend crate with no UI dependency:
+- `crates/patchwork_harness` (`patchwork-harness`) — Patchwork's own API-provider agent loop
+  (`agent/`) and built-in tools, and the helpers its binary runs as: the permission and prompt
+  hooks, the MCP proxy, and the relays, on this machine or an SSH host.
+- `crates/patchwork_sidecars` (`patchwork-sidecars`) — the machines beside the core: Android
+  devices and emulators (`android/`), the browser (`browser/`), the integrated terminal
+  (`terminal/`), and the computer itself (`computer/`).
+- `crates/patchwork_core` (`patchwork-core`) — the core backend crate with no UI dependency:
   - `src/lib.rs` — the module list, `Core`, and how it opens. Every other module is one domain,
     holding its wire types, its `impl Core` operations, and its logic:
   - `src/chats/` — chats, messages, and chat tools (`tools.rs`); `src/projects/` — projects, their
@@ -75,22 +145,26 @@ workspace lints target Patchwork's code; see [vendor/README.md](../vendor/README
     ending a turn, its process, turns cut off by a restart), `messages/` (sending, steering, and
     queueing), `output/` (reading agent output into agent events and streaming them), `approvals/`,
     `changes/` (which files each reply changed, and per-turn checkpoints), `tasks/` (background
-    tasks and subagents), `capabilities/` (chat-app dispatcher capabilities), and `goal/`
-  - `src/harness/` — Patchwork's own API-provider agent loop and built-in tools
+    tasks and subagents), `capabilities/` (chat-app dispatcher capabilities), and `goal.rs`
   - `src/permissions/` — approval rules and the permission hook Codex and Antigravity run
   - `src/extensions/` — user extensions: `agents.rs`, `skills.rs`, and hook bundles (`hooks/`)
   - `src/persistence/` — SQLite store (`store.rs`) and schema migrations (`migrations/mod.rs`)
-  - `src/gateway/` — chat app connections (Telegram, Discord, etc.), inbound routing, personalities,
-    and pairing
+  - `src/gateway/` — the core's side of the chat apps: pairings and bindings (`records.rs`),
+    personalities, credentials, and the runs they start
   - `src/checks/` — post-turn project check detection, execution, and failure parsing
-  - `src/import/`, `src/usage/`, `src/costs/`, `src/scheduled/`, `src/computer/`, `src/quilts/`,
-    `src/themes/`, `src/source_control/`, `src/worktree/`, `src/terminal/`, `src/browser/`,
-    `src/android/`, `src/vault/`, `src/updates/`, `src/logging/`, `src/events.rs`,
-    `src/backgrounds.rs`, `src/notifications.rs`, `src/issues.rs`, `src/service.rs`
+  - `src/import/`, `src/usage/`, `src/costs/`, `src/scheduled/`, `src/quilts/`, `src/themes/`,
+    `src/source_control/`, `src/worktree/`, `src/vault/`, `src/updates/`, `src/logging/`,
+    `src/events.rs`, `src/backgrounds.rs`, `src/notifications.rs`, `src/issues.rs`,
+    `src/service.rs`
+- `crates/patchwork_server` (`patchwork-server`) — the server phones and browsers connect to: the
+  listener, HTTP and websocket, pairing and scopes, `requests.rs` (the `Handler` answering
+  protocol methods over `Core`) and `events.rs` (the pushes each core event sends).
+- `crates/patchwork_gateway` (`patchwork-gateway`) — chat app connections (Telegram, Discord,
+  Slack, Matrix, Mattermost, Signal, QQ), inbound routing, outbound replies, and handoff.
 
 ## Data model
 
-Everything the sidebar shows comes from one SQLite database, `patchwork.db`, in the data folder. The store loads it into memory at startup and writes each change through before it is visible (`crates/patchwork_backend/src/persistence/store.rs`).
+Everything the sidebar shows comes from one SQLite database, `patchwork.db`, in the data folder. The store loads it into memory at startup and writes each change through before it is visible (`crates/patchwork_core/src/persistence/store.rs`).
 
 | Table | What it holds |
 | --- | --- |
@@ -114,15 +188,15 @@ Where a chat runs:
 
 Sidebar order is the `position` column. A new chat gets `-created_at`, so the newest is first until it is dragged. Dropping rows calls `reorder_chats`, which numbers that list `0..n`.
 
-Schema changes go in as a new entry appended to `MIGRATIONS` in `crates/patchwork_backend/src/persistence/migrations/mod.rs`. Never edit one that has shipped.
+Schema changes go in as a new entry appended to `MIGRATIONS` in `crates/patchwork_core/src/persistence/migrations/mod.rs`. Never edit one that has shipped.
 
 ## File changes
 
 The open project is watched for changes, and the UI never polls git.
 
-- **Watching** (`crates/patchwork_backend/src/projects/watch.rs`). On Linux, inotify watches one folder at a time, so its `linux` module adds a watch for each folder git keeps. On macOS and Windows, FSEvents and ReadDirectoryChangesW cover a whole tree with one watch, so its `tree` module watches the project root. On every platform, its `Filter` drops paths git ignores, `node_modules`, `target`, and everything in `.git` below its top level. The top level is kept because commits, staging, and checkouts change it.
+- **Watching** (`crates/patchwork_core/src/projects/watch.rs`). On Linux, inotify watches one folder at a time, so its `linux` module adds a watch for each folder git keeps. On macOS and Windows, FSEvents and ReadDirectoryChangesW cover a whole tree with one watch, so its `tree` module watches the project root. On every platform, its `Filter` drops paths git ignores, `node_modules`, `target`, and everything in `.git` below its top level. The top level is kept because commits, staging, and checkouts change it.
 - **Refreshing.** Events are merged until 250 ms pass without one, or for at most 1 s. Then `Core::watch_project` runs one `git status`. It runs one `git diff HEAD --numstat` for line counts only when a tracked file changed. The result goes to the UI as a `project-changed` event. Git runs with `GIT_OPTIONAL_LOCKS=0`, so its own reads do not rewrite `.git/index` and trigger another refresh.
-- **Which files a reply changed** (`crates/patchwork_backend/src/orchestration/changes/attribution.rs`).
+- **Which files a reply changed** (`crates/patchwork_core/src/orchestration/changes/attribution.rs`).
   - **Edit tools.** They name their files, and those files are listed as soon as the tool reports them.
   - **Other changes.** Changes made any other way, such as a shell `rm`, are found by comparing `git status` with how it stood when the reply started.
   - **Who made a change.** No platform reports which process wrote a file. A change therefore counts only if it happened while one of the reply's calls that could write it was running:
@@ -146,17 +220,17 @@ other than how it reads. It is off by default and turned on in Settings → Chec
 app's. There is one default for projects that have not answered, and a project can answer for
 itself: a suite too slow to run every time can be off while the others are on.
 
-- **What runs** (`crates/patchwork_backend/src/checks/detect.rs`). The first of: a `check` script in `package.json`, else its `test` script, run with the package manager the lockfile names when that tool is installed; `cargo test`; `python -m pytest`; `go test ./...`; a Makefile's `check` or `test` target; `mix test`. A project with none of them has nothing to check, and its replies show no card at all.
-- **When** (`crates/patchwork_backend/src/orchestration/turn/end.rs`). When a turn finishes with `Complete` and its reply changed at least one file. A stopped or failed turn changed nothing to judge.
-- **How** (`crates/patchwork_backend/src/checks/run.rs`). Through the same shell an agent's commands run in, in the project folder, with `CI=1` and colour off. Output keeps its last 16 KB; the process group is killed at 5 minutes, and that is never a pass.
-- **What it means** (`TurnChecks` in `crates/patchwork_backend/src/chats/messages.rs`). `passed`, `failed`, `timedOut`, or `notRun`, with the command, how long it took, one `CheckFailure` per thing that failed (`crates/patchwork_backend/src/checks/parse.rs` reads cargo's, Node's, Jest's, Vitest's, pytest's and Go's shapes), and the tail of the output. A check that did not finish is `timedOut` or `notRun`, never `passed`. A check left running when the app closed is `notRun` at the next start (`turn/recovery.rs`).
-- **What a reply shows** (`apps/desktop/src/chat/transcript/reply/checks.rs`). Under the files a reply changed: the outcome, each failure by name, and the output behind a disclosure. Its button runs the command again; its footer turns the project's checks on or off without leaving the chat. A reply shows a card only when checks ran or are running for it, so with them off there is no card at all: the switch is in Settings → Checks, which is one place to look rather than a card in every reply saying it did not check. The result arrives as a `checksRecorded` event, saved on the message like an approval.
+- **What runs** (`crates/patchwork_core/src/checks/detect.rs`). The first of: a `check` script in `package.json`, else its `test` script, run with the package manager the lockfile names when that tool is installed; `cargo test`; `python -m pytest`; `go test ./...`; a Makefile's `check` or `test` target; `mix test`. A project with none of them has nothing to check, and its replies show no card at all.
+- **When** (`crates/patchwork_core/src/orchestration/turn/end.rs`). When a turn finishes with `Complete` and its reply changed at least one file. A stopped or failed turn changed nothing to judge.
+- **How** (`crates/patchwork_core/src/checks/run.rs`). Through the same shell an agent's commands run in, in the project folder, with `CI=1` and colour off. Output keeps its last 16 KB; the process group is killed at 5 minutes, and that is never a pass.
+- **What it means** (`TurnChecks` in `crates/patchwork_core/src/chats/messages.rs`). `passed`, `failed`, `timedOut`, or `notRun`, with the command, how long it took, one `CheckFailure` per thing that failed (`crates/patchwork_core/src/checks/parse.rs` reads cargo's, Node's, Jest's, Vitest's, pytest's and Go's shapes), and the tail of the output. A check that did not finish is `timedOut` or `notRun`, never `passed`. A check left running when the app closed is `notRun` at the next start (`turn/recovery.rs`).
+- **What a reply shows** (`crates/features/desktop_chat/src/transcript/reply/checks.rs`). Under the files a reply changed: the outcome, each failure by name, and the output behind a disclosure. Its button runs the command again; its footer turns the project's checks on or off without leaving the chat. A reply shows a card only when checks ran or are running for it, so with them off there is no card at all: the switch is in Settings → Checks, which is one place to look rather than a card in every reply saying it did not check. The result arrives as a `checksRecorded` event, saved on the message like an approval.
 - **Asking another way**. The command palette's "Run checks for the open task" runs them for the reply on screen, whether or not the project has them on, and the card it produces is where they can be turned on.
 
 ## Approvals and questions
 
 An agent that wants permission, or an answer, sends a request the turn then waits on
-(`crates/patchwork_backend/src/orchestration/approvals/`). The user's answer normally goes back down the
+(`crates/patchwork_core/src/orchestration/approvals/`). The user's answer normally goes back down the
 process's stdin, or through the hook waiter, and the turn carries on.
 
 - **When no turn is waiting** (`answer.rs`, `answer_in_new_turn`). The app closed under the request,
