@@ -3,6 +3,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::checkbox::Checkbox;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use gpui::{
     AnyElement, Div, Focusable, FontWeight, KeyDownEvent, Role, SharedString, Stateful, Window,
     div, prelude::*, px,
@@ -10,9 +15,7 @@ use gpui::{
 use patchwork_design_components::{avatar::Mood, avatar::avatar};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_md, fs_sm, fs_xl, radius_sm, theme};
-use patchwork_design_components::{
-    BtnKind, btn, button, checkbox, focus_ring, icon_button, input_box, spinner,
-};
+use patchwork_design_components::{button, focus_ring, input_box};
 use patchwork_design_text::{display_title, format_relative, format_tokens};
 use patchwork_design_icons::icon;
 use patchwork_model::permissions::PermissionKind;
@@ -118,13 +121,21 @@ impl AgentPage {
                     .px(px(8.))
                     .pt(px(8.))
                     .child(
-                        icon_button("agent-background", "Background", IconName::Image, 16., cx)
+                        Button::new("agent-background")
+                            .ghost()
+                            .small()
+                            .icon(IconName::Image)
+                            .accessibility_label("Background")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 cx.emit(AgentEvent::EditBackground(this.agent.id.clone()));
                             })),
                     )
                     .child(
-                        icon_button("agent-details-close", "Close details", IconName::X, 16., cx)
+                        Button::new("agent-details-close")
+                            .ghost()
+                            .small()
+                            .icon(IconName::X)
+                            .accessibility_label("Close details")
                             .on_click(cx.listener(|this, _, _, cx| this.toggle_details(cx))),
                     ),
             )
@@ -290,7 +301,7 @@ impl AgentPage {
                         .role(Role::Status)
                         .aria_label("Loading conversations")
                         .p(px(8.))
-                        .child(spinner(16., t.text_muted)),
+                        .child(Spinner::new().with_size(gpui::px(16.)).color(t.text_muted)),
                 )
                 .into_any_element();
         };
@@ -382,13 +393,14 @@ impl AgentPage {
                             .child(format_size(file.size)),
                     )
                     .child(
-                        icon_button(
-                            SharedString::from(format!("agent-file-remove-{}", file.name)),
-                            format!("Remove {}", file.name),
-                            IconName::Trash,
-                            15.,
-                            cx,
-                        )
+                        Button::new(SharedString::from(format!(
+                            "agent-file-remove-{}",
+                            file.name
+                        )))
+                        .ghost()
+                        .small()
+                        .icon(IconName::Trash)
+                        .accessibility_label(format!("Remove {}", file.name))
                         .on_click(cx.listener(move |this, _, _, cx| this.remove_file(&name, cx))),
                     ),
             );
@@ -398,8 +410,9 @@ impl AgentPage {
             .flex_col()
             .child(
                 div().pt(px(16.)).pb(px(8.)).child(
-                    btn("agent-add-files", "Add files", BtnKind::Plain, false, &t)
-                        .child("Add files")
+                    Button::new("agent-add-files")
+                        .small()
+                        .label("Add files")
                         .on_click(cx.listener(|this, _, _, cx| this.add_files(cx))),
                 ),
             )
@@ -436,13 +449,11 @@ impl AgentPage {
             let on = self.agent.projects.contains(&project.id);
             let click = project.id.clone();
             projects = projects.child(
-                checkbox(
-                    SharedString::from(format!("agent-project-{}", project.id)),
-                    project.name.clone(),
-                    on,
-                )
-                .text_size(px(fs_md()))
-                .on_click(cx.listener(move |this, _, _, cx| this.toggle_project(&click, cx))),
+                Checkbox::new(SharedString::from(format!("agent-project-{}", project.id)))
+                    .label(project.name.clone())
+                    .checked(on)
+                    .text_size(px(fs_md()))
+                    .on_click(cx.listener(move |this, _, _, cx| this.toggle_project(&click, cx))),
             );
         }
         div()
@@ -472,7 +483,9 @@ impl AgentPage {
         ] {
             let on = !self.agent.blocked.kinds.contains(&kind);
             list = list.child(
-                checkbox(SharedString::from(format!("agent-tool-{label}")), label, on)
+                Checkbox::new(SharedString::from(format!("agent-tool-{label}")))
+                    .label(label)
+                    .checked(on)
                     .text_size(px(fs_md()))
                     .on_click(cx.listener(move |this, _, _, cx| this.toggle_kind(kind, cx))),
             );
@@ -488,13 +501,11 @@ impl AgentPage {
             let on = !self.agent.blocked.servers.contains(&name);
             let click = name.clone();
             list = list.child(
-                checkbox(
-                    SharedString::from(format!("agent-mcp-{name}")),
-                    format!("MCP: {name}"),
-                    on,
-                )
-                .text_size(px(fs_md()))
-                .on_click(cx.listener(move |this, _, _, cx| this.toggle_server(&click, cx))),
+                Checkbox::new(SharedString::from(format!("agent-mcp-{name}")))
+                    .label(format!("MCP: {name}"))
+                    .checked(on)
+                    .text_size(px(fs_md()))
+                    .on_click(cx.listener(move |this, _, _, cx| this.toggle_server(&click, cx))),
             );
         }
         list

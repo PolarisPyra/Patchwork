@@ -3,6 +3,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use patchwork_views_logos::{agent_label, agent_logo};
 use std::sync::Arc;
 
@@ -14,7 +18,6 @@ use super::themes::project_look;
 use crate::settings::{SettingsDialog, SettingsEvent};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button};
 
 #[derive(Default)]
 pub struct ProjectsState {
@@ -195,15 +198,12 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 })),
             )
             .child(
-                icon_button(
-                    SharedString::from(format!("project-remove-{}", p.id)),
-                    format!("Remove {}", p.name),
-                    IconName::Trash,
-                    14.,
-                    cx,
-                )
-                .tooltip("Remove project")
-                .on_click(cx.listener(move |d, _, _, cx| d.remove_project(remove.clone(), cx))),
+                Button::new(SharedString::from(format!("project-remove-{}", p.id)))
+                    .ghost()
+                    .small()
+                    .icon(IconName::Trash)
+                    .accessibility_label(format!("Remove {}", p.name))
+                    .on_click(cx.listener(move |d, _, _, cx| d.remove_project(remove.clone(), cx))),
             )
     });
     let projects: Vec<_> = projects.collect();
@@ -230,28 +230,26 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                         .child(div().font_weight(FontWeight::SEMIBOLD).child(label)),
                 )
                 .child(
-                    btn(
-                        SharedString::from(format!("import-{label}")),
-                        format!("Import from {label}"),
-                        BtnKind::Plain,
-                        disabled,
-                        &t,
-                    )
-                    .child(if busy == Some(source) {
-                        "Importing…"
-                    } else {
-                        "Import"
-                    })
-                    .when(!disabled, |b| {
-                        b.on_click(cx.listener(move |d, _, _, cx| d.import_from(source, cx)))
-                    }),
+                    Button::new(SharedString::from(format!("import-{label}")))
+                        .small()
+                        .disabled(disabled)
+                        .accessibility_label(format!("Import from {label}"))
+                        .child(if busy == Some(source) {
+                            "Importing…"
+                        } else {
+                            "Import"
+                        })
+                        .when(!disabled, |b| {
+                            b.on_click(cx.listener(move |d, _, _, cx| d.import_from(source, cx)))
+                        }),
                 ),
         )
     });
     let imports: Vec<_> = imports.collect();
 
-    let run_setup = btn("run-setup", "Run setup again", BtnKind::Plain, false, &t)
-        .child("Run setup again")
+    let run_setup = Button::new("run-setup")
+        .small()
+        .label("Run setup again")
         .on_click(cx.listener(|d, _, _, cx| d.update(|s| s.onboarded = false, cx)));
     div()
         .flex()

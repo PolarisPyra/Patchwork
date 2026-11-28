@@ -1,5 +1,5 @@
-//! The orchestrator page's state: the request being written, what became of each one sent, the
-//! and the questions agents are waiting on.
+//! The orchestrator page's state: what became of each request sent, and the questions agents
+//! are waiting on.
 
 // Rust guideline compliant 2026-10-09
 
@@ -8,23 +8,17 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use gpui::{
-    AppContext, Context, Entity, Focusable, Pixels, Point, SharedString, Subscription, Window, hsla,
-};
+use gpui::{AppContext, Context, Entity, SharedString, Subscription, Window};
 use patchwork_client::local::core::orchestration::{Dispatched, Target};
-use patchwork_model::chats::{Ask, Attachment, asks};
+use patchwork_desktop_chat::{ChatEvent, Composer};
+use patchwork_model::chats::{Ask, asks};
 
 use patchwork_design_backgrounds::Flight;
 use patchwork_design_text::display_title;
-use patchwork_design_components::menu::Menu;
-use patchwork_design_editor::{Arrow, BackspaceEmpty, Changed, Submitted, Tabbed, TextArea};
-use crate::host::OrchestratorHost;
+use crate::host::{OrchestratorEvent, PageHost};
 
 /// The most requests the page lists. Older ones leave it; their chats stay in the task list.
 const MAX_REQUESTS: usize = 6;
-
-/// What the field shows while it is empty and nothing is waiting.
-pub(super) const PLACEHOLDER: &str = "Do something in a project";
 
 /// What became of a request.
 pub(super) enum Outcome {
@@ -50,7 +44,7 @@ pub(super) struct Waiting {
 }
 
 impl Waiting {
-    /// The question as the pill words it, such as `Fix login redirect asks: run "cargo test"?`.
+    /// The question in words, such as `Fix login redirect asks: run "cargo test"?`.
     pub(super) fn question(&self) -> SharedString {
         let Ask { title, detail, .. } = &self.ask;
         let asked = if detail.is_empty() {
@@ -69,44 +63,28 @@ impl Waiting {
     }
 }
 
-/// The list of projects and chats opened by `@`.
-pub(super) struct Picker {
-    /// Where the `@` is in the field's text.
-    pub(super) at: usize,
-    pub(super) highlighted: usize,
-}
-
-/// The orchestrator page: one field that sends each request to the chat it belongs in, and
-/// answers the agents that are waiting.
+/// The orchestrator page: the chat box, which sends each request to the chat it belongs in, and
+/// the questions agents are waiting on.
 pub struct Orchestrator {
-    /// The window's chat box, which holds the model picker and the model a request's chat
-    /// starts with.
-    pub(super) host: Rc<dyn OrchestratorHost>,
-    pub(super) field: Entity<TextArea>,
+    /// The chat box requests are written in, the same one chats have.
+    pub(super) composer: Entity<Composer>,
     /// The requests sent since the app started, newest first.
     pub(super) requests: Vec<Request>,
     pub(super) next_id: usize,
     /// What agents are waiting to be told, in the order of the task list.
     pub(super) waiting: Vec<Waiting>,
-    /// The approval the pill is answering, when it is answering one.
+    /// The approval shown above the chat box.
     pub(super) answering: Option<String>,
-    /// The person turned the questions down for now, so the pill stays on requests.
+    /// The person put the questions aside for now, so the chat box sends requests.
     pub(super) declined: bool,
-    /// The request being written when the pill turned to a question.
-    pub(super) draft: Option<String>,
-    /// The place picked with `@`. Without one a request starts a chat in the project picked under
-    /// the pill.
+    /// The place picked with `@`. Without one a request starts a chat in the project open in
+    /// the sidebar.
     pub(super) pinned: Option<Target>,
-    pub(super) picker: Option<Picker>,
-    /// The files, folders and pictures dropped on the pill, sent with the next request.
-    pub(super) attachments: Vec<Attachment>,
-    /// The plus button's Files and Folder menu, while it is open, and where it opened.
-    pub(super) attach_menu: Option<(Entity<Menu>, Point<Pixels>)>,
     /// Where the butterfly is, kept between frames.
     pub(super) flight: Rc<RefCell<Flight>>,
     /// The picture last drawn behind the page, under the one drawn now.
     pub(super) pictures: [Option<PathBuf>; 2],
-    _subscriptions: [Subscription; 6],
+    _subscriptions: [Subscription; 2],
 }
 
 impl std::fmt::Debug for Orchestrator {
@@ -119,75 +97,51 @@ impl std::fmt::Debug for Orchestrator {
 }
 
 impl Orchestrator {
-    /// The page, reading the chat box's launch choices through `host`. The window notifies it
-    /// when the chat box changes.
-    pub fn new(
-        host: Rc<dyn OrchestratorHost>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let field = cx.new(|cx| {
-            let mut field = TextArea::new(PLACEHOLDER, "Request", cx);
-            field.single_line = true;
-            // The page's render sets the text's colors, which follow the backdrop.
-            field.selection_color = Some(hsla(0.55, 0.9, 0.65, 0.35));
-            field
-        });
+    /// The page, with a chat box of its own.
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let host = Rc::new(PageHost(cx.weak_entity()));
+        let composer = cx.new(|cx| Composer::new(host, window, cx));
         let subscriptions = [
-            cx.subscribe_in(&field, window, |this, _, _: &Submitted, window, cx| {
-                this.enter(window, cx);
-            }),
-            cx.subscribe_in(&field, window, |this, _, _: &Changed, window, cx| {
-                this.changed(window, cx);
-            }),
-            cx.subscribe_in(&field, window, |this, _, arrow: &Arrow, _, cx| {
-                this.arrow(arrow.0, cx);
-            }),
-            cx.subscribe_in(&field, window, |this, _, _: &Tabbed, window, cx| {
-                this.tab(window, cx);
-            }),
-            cx.subscribe_in(&field, window, |this, _, _: &BackspaceEmpty, _, cx| {
-                this.pinned = None;
-                cx.notify();
+            cx.subscribe(&composer, |_, _, event: &ChatEvent, cx| {
+                if let ChatEvent::OpenSettings(page) = event {
+                    cx.emit(OrchestratorEvent::OpenSettings(page));
+                }
             }),
             // A chat's title and what it asks are read from the app's state.
-            cx.observe_global_in::<AppState>(window, |this, window, cx| {
+            cx.observe_global::<AppState>(|this, cx| {
                 this.read_chats(cx);
-                this.settle(window, cx);
+                this.settle();
                 cx.notify();
             }),
         ];
         Self {
-            host,
-            field,
+            composer,
             requests: Vec::new(),
             next_id: 0,
             waiting: Vec::new(),
             answering: None,
             declined: false,
-            draft: None,
             pinned: None,
-            picker: None,
-            attachments: Vec::new(),
-            attach_menu: None,
             flight: Rc::default(),
             pictures: [None, None],
             _subscriptions: subscriptions,
         }
     }
 
-    /// Puts the cursor in the field.
+    /// Puts the cursor in the chat box.
     pub fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
-        window.focus(&self.field.read(cx).focus_handle(cx), cx);
+        self.composer.update(cx, |c, cx| c.focus(window, cx));
     }
 
-    /// Puts the cursor in the field with `text` added at its end, for a key typed outside it.
+    /// Puts the cursor in the chat box with `text` added at its end, for a key typed outside it.
     pub fn type_text(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
-        self.field.update(cx, |field, cx| {
-            let end = field.content.len();
-            field.replace(end..end, text, window, cx);
+        self.composer.update(cx, |c, cx| {
+            c.editor.update(cx, |e, cx| {
+                let end = e.content.len();
+                e.replace(end..end, text, window, cx);
+            });
+            c.focus(window, cx);
         });
-        self.focus(window, cx);
     }
 
     /// Notes what every chat's agent asks.

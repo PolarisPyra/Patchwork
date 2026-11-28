@@ -4,6 +4,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::collections::HashMap;
 
 use gpui::{Global, prelude::*, AnyElement, Div, Focusable, SharedString, Window, div, px};
@@ -12,7 +16,7 @@ use patchwork_client::local::core::provider::api::{
 };
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, radius_sm, theme};
-use patchwork_design_components::{BtnKind, btn, spinner};
+
 use patchwork_design_icons::icon;
 use patchwork_views_logos::provider_logo;
 
@@ -72,44 +76,6 @@ fn from_discovered(d: &DiscoveredServer) -> ApiProvider {
             .collect(),
         ..form::blank("custom", "", "", &[])
     }
-}
-
-/// One line under a server's name: what it serves right now, or why it is not answering.
-fn health_line(p: &ApiProvider, health: Option<&ProviderHealth>) -> String {
-    let Some(h) = health else {
-        return "Checking…".into();
-    };
-    if !h.reachable {
-        return h.error.clone().unwrap_or_else(|| "Not answering".into());
-    }
-    let served = h.served_models.len();
-    let missing = p
-        .models
-        .iter()
-        .filter(|m| !h.served_models.contains(&m.id))
-        .count();
-    let mut parts = vec![format!(
-        "{served} model{} served",
-        if served == 1 { "" } else { "s" }
-    )];
-    if missing > 0 {
-        parts.push(format!("{missing} configured not served"));
-    }
-    let reads = h.images.len();
-    let vision = h.images.values().filter(|v| **v).count();
-    if reads > 0 {
-        parts.push(if vision == 0 {
-            "text only".into()
-        } else if vision == reads {
-            "reads images".into()
-        } else {
-            format!("{vision} of {reads} read images")
-        });
-    }
-    if let Some(ms) = h.latency_ms {
-        parts.push(format!("{ms} ms"));
-    }
-    parts.join(" · ")
 }
 
 fn trim_slash(url: &str) -> &str {
@@ -229,29 +195,35 @@ impl SettingsDialog {
                 .flex()
                 .gap(px(8.))
                 .child(
-                    btn(
-                        "find-server",
-                        format!("Find where {} moved", p.name),
-                        BtnKind::Plain,
-                        busy,
-                        &t,
-                    )
-                    .child(if busy {
-                        spinner(13., t.text_muted).into_any_element()
-                    } else {
-                        icon(IconName::MagnifyingGlass, 13.).into_any_element()
-                    })
-                    .child("Find server")
-                    .when(!busy, |b| {
-                        b.on_click(cx.listener(move |d, _, _, cx| {
-                            let id = find_id.clone();
-                            d.repair(id.clone(), move || servers::relocate(&id).map(|_| ()), cx);
-                        }))
-                    }),
+                    Button::new("find-server")
+                        .small()
+                        .disabled(busy)
+                        .accessibility_label(format!("Find where {} moved", p.name))
+                        .child(if busy {
+                            Spinner::new()
+                                .with_size(gpui::px(13.))
+                                .color(t.text_muted)
+                                .into_any_element()
+                        } else {
+                            icon(IconName::MagnifyingGlass, 13.).into_any_element()
+                        })
+                        .child("Find server")
+                        .when(!busy, |b| {
+                            b.on_click(cx.listener(move |d, _, _, cx| {
+                                let id = find_id.clone();
+                                d.repair(
+                                    id.clone(),
+                                    move || servers::relocate(&id).map(|_| ()),
+                                    cx,
+                                );
+                            }))
+                        }),
                 )
                 .child(
-                    btn("change-address", "Change address", BtnKind::Plain, busy, &t)
-                        .child("Change address")
+                    Button::new("change-address")
+                        .small()
+                        .disabled(busy)
+                        .label("Change address")
                         .when(!busy, |b| {
                             b.on_click(cx.listener(move |d, _, window, cx| {
                                 d.providers.local.address = Some(base.clone());
@@ -288,16 +260,22 @@ impl SettingsDialog {
                 .gap(px(8.))
                 .child(field.flex_1())
                 .child(
-                    btn("address-save", "Save", BtnKind::Plain, busy, &t)
-                        .when(busy, |b| b.child(spinner(13., t.text_muted)))
+                    Button::new("address-save")
+                        .small()
+                        .disabled(busy)
+                        .accessibility_label("Save")
+                        .when(busy, |b| {
+                            b.child(Spinner::new().with_size(gpui::px(13.)).color(t.text_muted))
+                        })
                         .child("Save")
                         .when(!busy, |b| {
                             b.on_click(cx.listener(move |d, _, _, cx| save(d, cx)))
                         }),
                 )
                 .child(
-                    btn("address-cancel", "Cancel", BtnKind::Plain, false, &t)
-                        .child("Cancel")
+                    Button::new("address-cancel")
+                        .small()
+                        .label("Cancel")
                         .on_click(cx.listener(|d, _, _, cx| {
                             d.close_address();
                             cx.notify();
@@ -397,9 +375,11 @@ impl SettingsDialog {
                 .rounded(px(radius_sm()))
                 .text_color(t.text_muted)
                 .hover(move |s| s.bg(hover).text_color(fg))
-                .tooltip(patchwork_design_components::tooltip("Recheck"))
                 .child(if checking {
-                    spinner(13., t.text_muted).into_any_element()
+                    Spinner::new()
+                        .with_size(gpui::px(13.))
+                        .color(t.text_muted)
+                        .into_any_element()
                 } else {
                     icon(IconName::ArrowsClockwise, 15.).into_any_element()
                 })
@@ -472,7 +452,6 @@ pub fn render(
                 .border_color(if open { t.accent } else { t.border })
                 .bg(t.bg_panel)
                 .text_color(t.text)
-                .tooltip(patchwork_design_components::tooltip(health_line(p, health)))
                 .child(
                     div()
                         .absolute()
@@ -509,7 +488,6 @@ pub fn render(
             .border_color(t.border)
             .bg(t.bg_panel)
             .text_color(t.text)
-            .tooltip(patchwork_design_components::tooltip(found.base_url.clone()))
             .child(provider_logo(preset_of(found), None, 22.))
             .child(div().max_w_full().truncate().child(found.name.clone()))
             .on_click(cx.listener(move |d, _, window, cx| {

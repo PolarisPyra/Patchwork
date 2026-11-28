@@ -6,6 +6,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use std::collections::HashMap;
 
 use gpui::{
@@ -16,7 +19,7 @@ use patchwork_views_chat::sigils::SigilKind;
 use patchwork_design_editor::{Arrow, Changed, Submitted, TextArea};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_md, fs_sm, fs_xs, radius, radius_lg, radius_sm, theme};
-use patchwork_design_components::{BtnKind, btn, focus_ring, tooltip};
+use patchwork_design_components::focus_ring;
 use patchwork_design_icons::icon;
 
 use super::bindings::{
@@ -417,22 +420,19 @@ pub fn render(
         directory(d, &items, &index, sigil_rows, &t, cx)
     };
     let inspector = super::inspector::render(d, &index, &t, cx);
-    let reset_all = btn(
-        "reset-all-shortcuts",
-        "Reset all shortcuts",
-        BtnKind::Plain,
-        none_changed,
-        &t,
-    )
-    .h(px(FIELD_H))
-    .child("Reset all")
-    .when(!none_changed, |b| {
-        b.on_click(cx.listener(|d, _, _, cx| {
-            d.show_spot(Spot::None, cx);
-            d.save_keys(Overrides::new(), cx);
-            d.save_sigils(patchwork_views_chat::sigils::Sigils::default(), cx);
-        }))
-    });
+    let reset_all = Button::new("reset-all-shortcuts")
+        .small()
+        .disabled(none_changed)
+        .accessibility_label("Reset all shortcuts")
+        .h(px(FIELD_H))
+        .child("Reset all")
+        .when(!none_changed, |b| {
+            b.on_click(cx.listener(|d, _, _, cx| {
+                d.show_spot(Spot::None, cx);
+                d.save_keys(Overrides::new(), cx);
+                d.save_sigils(patchwork_views_chat::sigils::Sigils::default(), cx);
+            }))
+        });
 
     div()
         .flex()
@@ -794,7 +794,6 @@ fn row(
                                 .flex()
                                 .items_center()
                                 .text_color(t.text_subtle)
-                                .tooltip(tooltip("Built in: this key can't be changed"))
                                 .child(icon(IconName::LockSimple, 11.)),
                         )
                     })
@@ -805,8 +804,7 @@ fn row(
                                 .flex_none()
                                 .size(px(5.))
                                 .rounded_full()
-                                .bg(t.accent)
-                                .tooltip(tooltip("Changed from its default")),
+                                .bg(t.accent),
                         )
                     }),
             ),
@@ -819,7 +817,6 @@ fn row(
                     .flex()
                     .items_center()
                     .text_color(t.warning)
-                    .tooltip(tooltip("Shares a key with another command"))
                     .child(icon(IconName::Warning, 13.)),
             )
         })

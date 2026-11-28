@@ -2,6 +2,9 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use crate::prelude::*;
 use patchwork_client::GitModel;
 use patchwork_client::AppState;
@@ -12,7 +15,7 @@ use gpui::{
 };
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{InScheme, Theme, fs_sm, fs_xl, radius_sm, theme};
-use patchwork_design_components::{button, icon_button};
+use patchwork_design_components::button;
 use patchwork_design_text::display_title;
 
 use crate::panes::PaneId;
@@ -159,16 +162,13 @@ pub(super) fn subagent_footer<W: ChatWindow>(w: &W, t: &Theme, cx: &mut Context<
     let hover = t.bg_hover;
     let chat = w.chat.as_ref()?;
     if w.peeking && chat.parent.is_none() {
-        let back = icon_button(
-            "peek-back",
-            "Back to the orchestrator",
-            IconName::ArrowLeft,
-            14.,
-            cx,
-        )
-        .flex_none()
-        .tooltip("Back to the orchestrator")
-        .on_click(cx.listener(|w, _, _, cx| w.back_to_orchestrator(cx)));
+        let back = Button::new("peek-back")
+            .ghost()
+            .small()
+            .icon(IconName::ArrowLeft)
+            .accessibility_label("Back to the orchestrator")
+            .flex_none()
+            .on_click(cx.listener(|w, _, _, cx| w.back_to_orchestrator(cx)));
         let link = button("peek-orchestrator", "Orchestrator")
             .flex_none()
             .rounded(px(radius_sm()))
@@ -201,9 +201,12 @@ pub(super) fn subagent_footer<W: ChatWindow>(w: &W, t: &Theme, cx: &mut Context<
     // Back to the chat shown before, or to the parent when the subagent was opened first.
     let parent_id = found.map(|p| p.id.clone());
     let back = (w.can_go_back() || parent_id.is_some()).then(|| {
-        icon_button("subagent-back", "Go back", IconName::ArrowLeft, 14., cx)
+        Button::new("subagent-back")
+            .ghost()
+            .small()
+            .icon(IconName::ArrowLeft)
+            .accessibility_label("Go back")
             .flex_none()
-            .tooltip("Go back")
             .on_click(cx.listener(move |w, _, _, cx| {
                 if w.can_go_back() {
                     w.go_back(cx);

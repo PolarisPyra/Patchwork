@@ -4,6 +4,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -20,7 +24,7 @@ use super::layout::kind_icon;
 use super::catalog::{QuiltsPage, Place};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_lg, fs_md, fs_sm, fs_xxl, radius, radius_sm};
-use patchwork_design_components::{button, focus_ring, icon_button, input_box, scrollbar, spinner};
+use patchwork_design_components::{button, focus_ring, input_box, scrollbar};
 use patchwork_design_text::format_relative;
 use patchwork_design_icons::icon;
 
@@ -67,27 +71,20 @@ impl QuiltsPage {
                     .child(div().flex_1().min_w_0().child(self.search.clone())),
             )
             .child(
-                icon_button(
-                    "quilts-layout",
-                    if grid {
-                        "Show as list"
-                    } else {
-                        "Show as cards"
-                    },
-                    if grid {
+                Button::new("quilts-layout")
+                    .ghost()
+                    .small()
+                    .icon(if grid {
                         IconName::ListBullets
                     } else {
                         IconName::Square
-                    },
-                    16.,
-                    cx,
-                )
-                .tooltip(if grid {
-                    "Show as list"
-                } else {
-                    "Show as cards"
-                })
-                .on_click(cx.listener(move |this, _, _, cx| this.set_grid(!grid, cx))),
+                    })
+                    .accessibility_label(if grid {
+                        "Show as list"
+                    } else {
+                        "Show as cards"
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| this.set_grid(!grid, cx))),
             )
     }
 
@@ -292,9 +289,9 @@ impl QuiltsPage {
                 .rounded(px(radius()))
                 .object_fit(ObjectFit::Cover)
                 .into_any_element(),
-            None if quilt.kind.drawn() => {
-                frame.child(spinner(16., t.text_subtle)).into_any_element()
-            }
+            None if quilt.kind.drawn() => frame
+                .child(Spinner::new().with_size(gpui::px(16.)).color(t.text_subtle))
+                .into_any_element(),
             _ => frame
                 .child(icon(kind_icon(quilt.kind), 28.))
                 .into_any_element(),

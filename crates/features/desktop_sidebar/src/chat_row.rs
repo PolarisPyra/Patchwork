@@ -2,6 +2,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use gpui::{
     AnyElement, ClickEvent, DragMoveEvent, Div, Hsla, MouseButton, MouseDownEvent, Role,
     SharedString, Stateful, div, prelude::*, px,
@@ -13,7 +15,7 @@ use patchwork_client::AppState;
 use patchwork_platform::now_ms;
 use patchwork_design_components::{avatar::Mood, avatar::avatar};
 use patchwork_views_chat::{chat_drag::ChatDrag, chat_drag::ChatGhost};
-use patchwork_design_components::{button, spinner};
+use patchwork_design_components::button;
 use patchwork_design_text::{display_title, format_relative};
 use patchwork_views_logos::{agent_label, agent_logo};
 use patchwork_design_icons::{IconName, icon};
@@ -182,7 +184,10 @@ pub(crate) fn chat_row(
                 .text_color(t.warning)
                 .into_any_element()
         } else {
-            spinner(12., t.accent_text).into_any_element()
+            Spinner::new()
+                .with_size(gpui::px(12.))
+                .color(t.accent_text)
+                .into_any_element()
         };
         // At the box's right edge, in line with the times of the rows around it.
         div()

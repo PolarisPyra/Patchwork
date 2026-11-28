@@ -15,6 +15,13 @@ mod icon;
 
 pub use icon::{Icon, icon, icon_by_name, mono_svg};
 
+/// gpui-component's buttons take the icon by name: `Button::new(id).icon(IconName::X)`.
+impl gpui::component::IconNamed for IconName {
+    fn path(self) -> gpui::SharedString {
+        self.asset_path().into()
+    }
+}
+
 use std::borrow::Cow;
 
 include!(concat!(env!("OUT_DIR"), "/icon_data.rs"));

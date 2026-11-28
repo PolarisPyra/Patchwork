@@ -13,7 +13,6 @@ use super::goal_bar::strip_action;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, fs_xs, radius_sm, Theme};
 use patchwork_design_icons::icon;
-use patchwork_design_components::tooltip;
 
 /// How often a missing folder is looked for again.
 const RECHECK: std::time::Duration = std::time::Duration::from_secs(3);
@@ -158,7 +157,6 @@ pub fn missing_folder<W: ChatWindow>(w: &mut W, t: &Theme, cx: &mut Context<W>) 
                             .truncate()
                             .text_size(px(fs_xs()))
                             .text_color(t.text_subtle)
-                            .tooltip(tooltip(path.clone()))
                             .child(path),
                     )
                     .child(

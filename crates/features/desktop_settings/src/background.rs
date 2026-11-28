@@ -3,6 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{
     Entity, EventEmitter, FocusHandle, KeyDownEvent, MouseButton, SharedString, Window, prelude::*,
     px,
@@ -10,7 +13,6 @@ use gpui::{
 
 use crate::background_picker::BackgroundPicker;
 use patchwork_design_components::dialog;
-use patchwork_design_components::icon_button;
 use patchwork_design_theme::theme;
 use patchwork_design_icons::IconName;
 
@@ -89,7 +91,11 @@ impl Render for BackgroundDialog {
                 .child(
                     dialog::title_row(
                         self.title.clone(),
-                        icon_button("background-dialog-close", "Close", IconName::X, 16., cx)
+                        Button::new("background-dialog-close")
+                            .ghost()
+                            .small()
+                            .icon(IconName::X)
+                            .accessibility_label("Close")
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(Closed))),
                     )
                     // In line with the cards' pictures.

@@ -4,6 +4,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Sizable as _;
 use patchwork_views_logos::{AGENT_KINDS, agent_label};
 use gpui::{AnyElement, Div, FontWeight, SharedString, div, prelude::*, px};
 use patchwork_client::local::core::extensions::hooks::{self, HookEvent, Bundle, Hook, HookHandler};
@@ -12,7 +14,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, switch, token_row};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_xs, radius, radius_sm, Theme, theme};
-use patchwork_design_components::{BtnKind, btn};
+
 use patchwork_design_icons::icon;
 
 use crate::settings::extensions::{empty, example, list_box};
@@ -375,15 +377,18 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .items_center()
         .gap(px(8.))
         .child(
-            btn("hooks-refresh", "Refresh", BtnKind::Plain, false, &t)
-                .child("Refresh")
+            Button::new("hooks-refresh")
+                .small()
+                .label("Refresh")
                 .on_click(cx.listener(|d, _, _, cx| {
                     d.extensions.error = None;
                     d.list_bundles(cx);
                 })),
         )
         .child(
-            btn("hooks-open", "Open folder", BtnKind::Plain, false, &t)
+            Button::new("hooks-open")
+                .small()
+                .accessibility_label("Open folder")
                 .px(px(10.))
                 .child(icon(IconName::FolderSimple, 13.))
                 .child("Open folder")
@@ -407,8 +412,9 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
         .child(
             Section::new("Where they live").child(
                 token_row("Folder", &t).child(
-                    btn("hooks-open-row", "Open", BtnKind::Plain, false, &t)
-                        .child("Open")
+                    Button::new("hooks-open-row")
+                        .small()
+                        .label("Open")
                         .on_click(
                             cx.listener(move |d, _, _, cx| d.open_folder(open_row.clone(), cx)),
                         ),

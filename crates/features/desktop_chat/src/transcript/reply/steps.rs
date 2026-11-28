@@ -2,6 +2,8 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use crate::prelude::*;
 use patchwork_client::AppState;
 use std::ops::Range;
@@ -9,7 +11,7 @@ use gpui::{Div, Role, SharedString, StyledText, div, prelude::*, px};
 use patchwork_client::local::core::chats::{Message, StepStatus};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_md, fs_sm, fs_xs, radius_sm, Theme};
-use patchwork_design_components::{button, spinner};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 use patchwork_design_text::{markdown, markdown::FindIn, markdown::markdown, markdown::markdown_part};
 use patchwork_design_text::{selection::Kind, selection::selectable, selection::text_id};
@@ -107,7 +109,7 @@ pub(super) fn reply_step<W: ChatWindow>(
                         .flex()
                         .items_center()
                         .gap(px(6.))
-                        .child(spinner(11., t.text_subtle))
+                        .child(Spinner::new().with_size(gpui::px(11.)).color(t.text_subtle))
                         .child("Compacting context")
                         .into_any_element(),
                     Compaction::Compacted => div().child("Context compacted").into_any_element(),
@@ -180,7 +182,12 @@ pub(super) fn entry_row<W: ChatWindow>(
         Entry::Thinking { .. } => None,
     };
     let mark = match entry {
-        _ if active => Some(spinner(15., t.accent_text).into_any_element()),
+        _ if active => Some(
+            Spinner::new()
+                .with_size(gpui::px(15.))
+                .color(t.accent_text)
+                .into_any_element(),
+        ),
         Entry::Tool(tool) if tool.status == StepStatus::Error => Some(
             icon(IconName::XBold, 14.)
                 .text_color(t.danger)

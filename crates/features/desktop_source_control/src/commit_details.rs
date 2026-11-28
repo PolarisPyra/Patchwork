@@ -2,13 +2,14 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use gpui::{AnyElement, ClipboardItem, Role, SharedString, div, prelude::*, px};
 use patchwork_client::local::core::source_control::{GitCommit, RepoAction};
 
 use super::header_menu::{Ask, item};
 use super::git_status::ChangesView;
 use patchwork_design_components::menu::MenuItem;
-use patchwork_design_components::spinner;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_sm};
 
@@ -147,7 +148,7 @@ impl ChangesView {
             None => frame
                 .role(Role::Status)
                 .aria_label("Reading the commit")
-                .child(spinner(12., t.text_subtle)),
+                .child(Spinner::new().with_size(gpui::px(12.)).color(t.text_subtle)),
             Some(Err(e)) => frame
                 .role(Role::Alert)
                 .text_color(t.danger)

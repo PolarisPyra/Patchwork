@@ -3,6 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{
     AnyElement, Div, KeyDownEvent, Role, SharedString, Stateful, StyledText, Window, div,
     prelude::*, px, uniform_list,
@@ -13,7 +16,7 @@ use super::catalog::{QuiltsPage, Show};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, font_mono, fs_md, fs_sm, radius_sm, theme};
 use patchwork_design_components::menu::Menu;
-use patchwork_design_components::{button, focus_ring, icon_button, input_box, scrollbar};
+use patchwork_design_components::{button, focus_ring, input_box, scrollbar};
 use patchwork_design_text::format_relative;
 
 /// The height of a line of the changes.
@@ -124,8 +127,11 @@ impl QuiltsPage {
                     glyph: IconName,
                     to: Option<u32>,
                     cx: &mut Context<Self>| {
-            icon_button(id, label, glyph, 14., cx)
-                .tooltip(label)
+            Button::new(id)
+                .ghost()
+                .small()
+                .icon(glyph)
+                .accessibility_label(label)
                 .when(to.is_none(), |b| b.opacity(0.4).cursor_default())
                 .on_click(cx.listener(move |this, _, _, cx| {
                     if let Some(n) = to {
@@ -185,15 +191,11 @@ impl QuiltsPage {
             ))
             .when(after.is_some(), |d| {
                 d.child(
-                    patchwork_design_components::btn(
-                        "quilt-restore",
-                        "Restore",
-                        patchwork_design_components::BtnKind::Plain,
-                        false,
-                        t,
-                    )
-                    .ml(px(6.))
-                    .on_click(cx.listener(|this, _, _, cx| this.restore(cx))),
+                    Button::new("quilt-restore")
+                        .small()
+                        .accessibility_label("Restore")
+                        .ml(px(6.))
+                        .on_click(cx.listener(|this, _, _, cx| this.restore(cx))),
                 )
             })
     }
@@ -230,8 +232,11 @@ impl QuiltsPage {
             .border_color(t.border)
             .when(!docked, |d| {
                 d.child(
-                    icon_button("quilt-back", "Back to quilts", IconName::ArrowLeft, 16., cx)
-                        .tooltip("Back to quilts")
+                    Button::new("quilt-back")
+                        .ghost()
+                        .small()
+                        .icon(IconName::ArrowLeft)
+                        .accessibility_label("Back to quilts")
                         .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
                 )
             })
@@ -239,8 +244,11 @@ impl QuiltsPage {
             .when(!docked && self.renaming.is_none(), |d| {
                 let id = id.clone();
                 d.child(
-                    icon_button("quilt-rename", "Rename", IconName::PencilSimple, 16., cx)
-                        .tooltip("Rename")
+                    Button::new("quilt-rename")
+                        .ghost()
+                        .small()
+                        .icon(IconName::PencilSimple)
+                        .accessibility_label("Rename")
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.start_rename(&id, window, cx);
                         })),
@@ -249,8 +257,11 @@ impl QuiltsPage {
             .when(!docked, |d| {
                 let id = id.clone();
                 d.child(
-                    icon_button("quilt-pin", "Pin", IconName::PushPin, 16., cx)
-                        .tooltip(if pinned { "Unpin" } else { "Pin" })
+                    Button::new("quilt-pin")
+                        .ghost()
+                        .small()
+                        .icon(IconName::PushPin)
+                        .accessibility_label("Pin")
                         .toggled(pinned)
                         .when(pinned, |b| b.bg(t.bg_selected_muted))
                         .on_click(
@@ -262,25 +273,37 @@ impl QuiltsPage {
             .child(self.tabs(quilt.kind.drawn(), t, cx))
             .when(!docked, |d| {
                 d.child(
-                    icon_button("quilt-copy", "Copy", IconName::Copy, 16., cx)
-                        .tooltip("Copy")
+                    Button::new("quilt-copy")
+                        .ghost()
+                        .small()
+                        .icon(IconName::Copy)
+                        .accessibility_label("Copy")
                         .on_click(cx.listener(|this, _, _, cx| this.copy(cx))),
                 )
                 .child(
-                    icon_button("quilt-save", "Save as", IconName::Export, 16., cx)
-                        .tooltip("Save as")
+                    Button::new("quilt-save")
+                        .ghost()
+                        .small()
+                        .icon(IconName::Export)
+                        .accessibility_label("Save as")
                         .on_click(cx.listener(|this, _, _, cx| this.save_as(cx))),
                 )
                 .child(
-                    icon_button("quilt-chat", "Chat", IconName::ChatCircle, 16., cx)
-                        .tooltip("Chat")
+                    Button::new("quilt-chat")
+                        .ghost()
+                        .small()
+                        .icon(IconName::ChatCircle)
+                        .accessibility_label("Chat")
                         .aria_expanded(chat_shown)
                         .when(chat_shown, |b| b.bg(t.bg_selected_muted))
                         .on_click(cx.listener(|this, _, _, cx| this.open_chat(cx))),
                 )
                 .child(
-                    icon_button("quilt-delete", "Delete", IconName::Trash, 16., cx)
-                        .tooltip("Delete")
+                    Button::new("quilt-delete")
+                        .ghost()
+                        .small()
+                        .icon(IconName::Trash)
+                        .accessibility_label("Delete")
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.delete(id.clone(), window, cx);
                         })),
@@ -288,20 +311,22 @@ impl QuiltsPage {
             })
             .when(quilt.kind == QuiltKind::Slides, |d| {
                 d.child(
-                    icon_button("quilt-present", "Present", IconName::Play, 16., cx)
-                        .tooltip("Present")
+                    Button::new("quilt-present")
+                        .ghost()
+                        .small()
+                        .icon(IconName::Play)
+                        .accessibility_label("Present")
                         .on_click(cx.listener(|this, _, _, cx| this.open_outside(cx))),
                 )
             })
             .when(quilt.kind.drawn() && self.show == Show::Preview, |d| {
                 let picking = self.picking(cx);
                 d.child(
-                    icon_button("quilt-pick", "Pick an element", IconName::Target, 16., cx)
-                        .tooltip(if picking {
-                            "Stop picking (Esc)"
-                        } else {
-                            "Pick an element to ask about"
-                        })
+                    Button::new("quilt-pick")
+                        .ghost()
+                        .small()
+                        .icon(IconName::Target)
+                        .accessibility_label("Pick an element")
                         .toggled(picking)
                         .when(picking, |b| b.bg(t.bg_selected_muted))
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_picking(cx))),
@@ -309,32 +334,29 @@ impl QuiltsPage {
             })
             .when(quilt.kind.drawn(), |d| {
                 d.child(
-                    icon_button(
-                        "quilt-open",
-                        "Open in browser",
-                        IconName::ArrowSquareOut,
-                        16.,
-                        cx,
-                    )
-                    .tooltip("Open in browser")
-                    .on_click(cx.listener(|this, _, _, cx| this.open_outside(cx))),
+                    Button::new("quilt-open")
+                        .ghost()
+                        .small()
+                        .icon(IconName::ArrowSquareOut)
+                        .accessibility_label("Open in browser")
+                        .on_click(cx.listener(|this, _, _, cx| this.open_outside(cx))),
                 )
             })
             .when(docked, |d| {
                 d.child(
-                    icon_button(
-                        "quilt-full",
-                        "Open on Quilts page",
-                        IconName::CodeBlock,
-                        16.,
-                        cx,
-                    )
-                    .tooltip("Open on Quilts page")
-                    .on_click(cx.listener(|this, _, _, cx| this.open_full(cx))),
+                    Button::new("quilt-full")
+                        .ghost()
+                        .small()
+                        .icon(IconName::CodeBlock)
+                        .accessibility_label("Open on Quilts page")
+                        .on_click(cx.listener(|this, _, _, cx| this.open_full(cx))),
                 )
                 .child(
-                    icon_button("quilt-close", "Close quilt", IconName::X, 16., cx)
-                        .tooltip("Close")
+                    Button::new("quilt-close")
+                        .ghost()
+                        .small()
+                        .icon(IconName::X)
+                        .accessibility_label("Close quilt")
                         .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
                 )
             })

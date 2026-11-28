@@ -3,11 +3,14 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{EventEmitter, FontWeight, Role, Window, div, prelude::*, px};
 
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{radius, radius_sm, theme};
-use patchwork_design_components::{BtnKind, btn, button, dialog_shadow};
+use patchwork_design_components::{button, dialog_shadow};
 use patchwork_design_icons::icon;
 
 /// The user asked to resume the interrupted replies.
@@ -68,18 +71,15 @@ impl Render for InterruptedCard {
                     .child(label),
             )
             .child(
-                btn(
-                    "resume-interrupted",
-                    "Resume the interrupted replies",
-                    BtnKind::Primary,
-                    false,
-                    &t,
-                )
-                .child("Resume")
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.set(0, cx);
-                    cx.emit(Resume);
-                })),
+                Button::new("resume-interrupted")
+                    .primary()
+                    .small()
+                    .accessibility_label("Resume the interrupted replies")
+                    .child("Resume")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.set(0, cx);
+                        cx.emit(Resume);
+                    })),
             )
             .child(
                 button("dismiss-interrupted", "Dismiss")

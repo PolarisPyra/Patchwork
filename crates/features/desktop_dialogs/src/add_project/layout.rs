@@ -2,6 +2,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use super::folder_browser::Closed;
 use super::folder_browser::AddProject;
 use gpui::{
@@ -11,7 +16,7 @@ use gpui::{
 use patchwork_design_components::dialog;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_md, fs_sm, fs_xs, radius, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, spinner};
+
 use patchwork_design_icons::icon;
 
 impl Focusable for AddProject {
@@ -152,34 +157,30 @@ impl Render for AddProject {
                         .border_color(t.border)
                         .when(!hosts.is_empty(), |bar| {
                             bar.child(
-                                icon_button(
-                                    "add-project-back",
-                                    "Back to machines",
-                                    IconName::CaretLeft,
-                                    16.,
-                                    cx,
-                                )
-                                .tooltip("Machines")
-                                .on_click(
-                                    cx.listener(|this, _, _, cx| this.show_machines(false, cx)),
-                                ),
+                                Button::new("add-project-back")
+                                    .ghost()
+                                    .small()
+                                    .icon(IconName::CaretLeft)
+                                    .accessibility_label("Back to machines")
+                                    .on_click(
+                                        cx.listener(|this, _, _, cx| this.show_machines(false, cx)),
+                                    ),
                             )
                         })
                         .child(
-                            icon_button(
-                                "add-project-up",
-                                "Parent folder",
-                                IconName::ArrowUp,
-                                16.,
-                                cx,
-                            )
-                            .tooltip("Parent folder")
-                            .map(|b| match parent {
-                                Some(parent) => b.on_click(cx.listener(move |this, _, _, cx| {
-                                    this.browse(Some(parent.clone()), cx);
-                                })),
-                                None => b.opacity(0.4).cursor_default(),
-                            }),
+                            Button::new("add-project-up")
+                                .ghost()
+                                .small()
+                                .icon(IconName::ArrowUp)
+                                .accessibility_label("Parent folder")
+                                .map(|b| match parent {
+                                    Some(parent) => {
+                                        b.on_click(cx.listener(move |this, _, _, cx| {
+                                            this.browse(Some(parent.clone()), cx);
+                                        }))
+                                    }
+                                    None => b.opacity(0.4).cursor_default(),
+                                }),
                         )
                         .children(self.host.clone().map(|host| {
                             div()
@@ -201,7 +202,9 @@ impl Render for AddProject {
                                 .text_size(px(fs_md()))
                                 .child(self.field.clone()),
                         )
-                        .when(self.loading, |bar| bar.child(spinner(14., t.text_subtle))),
+                        .when(self.loading, |bar| {
+                            bar.child(Spinner::new().with_size(gpui::px(14.)).color(t.text_subtle))
+                        }),
                 )
                 .child(
                     div()
@@ -235,9 +238,19 @@ impl Render for AddProject {
                         .child("↵ open")
                         .child("⌫ up")
                         .child(
-                            btn("add-project", "Add project", BtnKind::Primary, disabled, &t)
+                            Button::new("add-project")
+                                .primary()
+                                .small()
+                                .disabled(disabled)
+                                .accessibility_label("Add project")
                                 .ml_auto()
-                                .when(self.adding, |b| b.child(spinner(13., t.text_on_accent)))
+                                .when(self.adding, |b| {
+                                    b.child(
+                                        Spinner::new()
+                                            .with_size(gpui::px(13.))
+                                            .color(t.text_on_accent),
+                                    )
+                                })
                                 .child("Add project")
                                 .when(!disabled, |b| {
                                     b.on_click(cx.listener(|this, _, _, cx| this.add(cx)))

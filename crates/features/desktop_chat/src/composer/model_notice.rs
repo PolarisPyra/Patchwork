@@ -6,6 +6,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use gpui::{AnyElement, Div, Role, Stateful, div, prelude::*, px};
 use patchwork_model::provider::AgentKind;
 use patchwork_client::local::core::provider::api::{self, servers};
@@ -16,7 +20,7 @@ use super::menus::{Menu, Pick};
 use patchwork_views_chat::pill::pill;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, Theme};
-use patchwork_design_components::{BtnKind, btn, spinner};
+
 use patchwork_design_icons::icon;
 
 /// The most other models offered when the server stopped serving the chat's.
@@ -114,10 +118,13 @@ impl Composer {
             .any(|a| a.kind == AttachmentKind::Image);
         let (text, actions): (String, Vec<AnyElement>) = if !health.reachable {
             let finding = self.health.finding;
-            let find = btn("find-server", "Find server", BtnKind::Plain, finding, t)
+            let find = Button::new("find-server")
+                .small()
+                .disabled(finding)
+                .accessibility_label("Find server")
                 .map(|b| {
                     if finding {
-                        b.child(spinner(13., t.text_muted))
+                        b.child(Spinner::new().with_size(gpui::px(13.)).color(t.text_muted))
                     } else {
                         b.child(icon(IconName::MagnifyingGlass, 13.))
                     }
@@ -140,18 +147,13 @@ impl Composer {
                 .take(MAX_OFFERED)
                 .map(|m| {
                     let pick = format!("{provider}/{m}");
-                    btn(
-                        format!("use-model-{m}"),
-                        format!("Use {m}"),
-                        BtnKind::Plain,
-                        false,
-                        t,
-                    )
-                    .child(format!("Use {m}"))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.apply(Pick::Model(AgentKind::Api, Some(pick.clone())), window, cx);
-                    }))
-                    .into_any_element()
+                    Button::new(format!("use-model-{m}"))
+                        .small()
+                        .label(format!("Use {m}"))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.apply(Pick::Model(AgentKind::Api, Some(pick.clone())), window, cx);
+                        }))
+                        .into_any_element()
                 })
                 .collect();
             (format!("{name} no longer serves {model_id}"), offered)
@@ -191,8 +193,9 @@ impl Composer {
             )
             .children(actions)
             .child(
-                btn("choose-model", "Choose model", BtnKind::Plain, false, t)
-                    .child("Choose model")
+                Button::new("choose-model")
+                    .small()
+                    .label("Choose model")
                     .on_click(cx.listener(|this, e, window, cx| {
                         this.toggle_menu(Menu::Model, e, window, cx);
                     })),

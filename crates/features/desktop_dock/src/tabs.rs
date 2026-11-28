@@ -2,16 +2,20 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Selectable as _;
+use gpui::component::Sizable as _;
 use std::collections::HashMap;
 
 use gpui::{
-    AnyElement, App, ClickEvent, MouseButton, MouseDownEvent, Role, SharedString, Window, div,
+    AnyElement, ClickEvent, MouseButton, MouseDownEvent, Role, SharedString, Window, div,
     prelude::*, px,
 };
 use patchwork_design_components::menu::MenuItem;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_md, fs_xs, radius_sm, theme};
-use patchwork_design_components::{button, icon_button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 use super::open_tabs::{MenuFor, Dock, DockTab};
 
@@ -66,10 +70,13 @@ impl Dock {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let t = *theme(cx);
-        let tool = |id: &'static str, label: &'static str, name: IconName, cx: &App| {
-            icon_button(id, label, name, 14., cx)
+        let tool = |id: &'static str, label: &'static str, name: IconName| {
+            Button::new(id)
+                .ghost()
+                .small()
+                .icon(name)
+                .accessibility_label(label)
                 .size(px(TOOL))
-                .tooltip(label)
         };
         match self.tab {
             DockTab::Terminal => {
@@ -92,7 +99,6 @@ impl Dock {
                         .text_size(px(fs_md()))
                         .text_color(t.text_muted)
                         .hover(move |s| s.bg(hover).text_color(fg))
-                        .tooltip(tooltip("Open terminals"))
                         .child(icon(IconName::TerminalWindow, 14.))
                         .child(div().max_w(px(140.)).truncate().child(name))
                         .child(icon(IconName::CaretDown, 11.))
@@ -101,9 +107,12 @@ impl Dock {
                 );
                 // New terminal, with its shell beside it, as VS Code's `+ ⌄` is.
                 let mut new = div().flex().items_center().child(
-                    icon_button("terminal-new", "New terminal", IconName::Plus, 15., cx)
+                    Button::new("terminal-new")
+                        .ghost()
+                        .small()
+                        .icon(IconName::Plus)
+                        .accessibility_label("New terminal")
                         .size(px(TOOL))
-                        .tooltip("New terminal (Ctrl+Shift+`)")
                         .on_click(cx.listener(|this, _, _, cx| this.start(true, None, cx))),
                 );
                 // An SSH host starts the user's login shell there; the shells listed are this
@@ -118,7 +127,6 @@ impl Dock {
                             .rounded(px(radius_sm()))
                             .text_color(t.text_muted)
                             .hover(move |s| s.bg(hover).text_color(fg))
-                            .tooltip(tooltip("New terminal in a shell"))
                             .child(icon(IconName::CaretDown, 11.))
                             .on_click(cx.listener(Dock::shells_menu)),
                     );
@@ -126,7 +134,7 @@ impl Dock {
                 tools.push(new.into_any_element());
                 let active = current.map(|(id, _)| id);
                 tools.push(
-                    tool("terminal-kill", "Kill the terminal", IconName::Trash, cx)
+                    tool("terminal-kill", "Kill the terminal", IconName::Trash)
                         .when(active.is_none(), |b| b.opacity(0.5).cursor_default())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             if let Some(id) = active {
@@ -136,18 +144,15 @@ impl Dock {
                         .into_any_element(),
                 );
                 tools.push(
-                    icon_button(
-                        "terminal-more",
-                        "More terminal actions",
-                        IconName::DotsThree,
-                        16.,
-                        cx,
-                    )
-                    .size(px(TOOL))
-                    .tooltip("More")
-                    .aria_expanded(self.menu_open(&MenuFor::More))
-                    .on_click(cx.listener(Dock::more_menu))
-                    .into_any_element(),
+                    Button::new("terminal-more")
+                        .ghost()
+                        .small()
+                        .icon(IconName::DotsThree)
+                        .accessibility_label("More terminal actions")
+                        .size(px(TOOL))
+                        .aria_expanded(self.menu_open(&MenuFor::More))
+                        .on_click(cx.listener(Dock::more_menu))
+                        .into_any_element(),
                 );
                 tools
             }
@@ -155,15 +160,15 @@ impl Dock {
                 let channel = self.output.channel().cloned();
                 let name = channel.as_ref().map(|c| c.name.clone());
                 let mut tools = vec![
-                    patchwork_design_components::dropdown_chip(
-                        "output-log",
-                        format!("Log: {}", name.as_deref().unwrap_or("none")),
-                        name.unwrap_or_else(|| "No logs yet".into()),
-                        self.menu_open(&MenuFor::Logs),
-                        &t,
-                    )
-                    .on_click(cx.listener(Dock::logs_menu))
-                    .into_any_element(),
+                    Button::new("output-log")
+                        .ghost()
+                        .small()
+                        .accessibility_label(format!("Log: {}", name.as_deref().unwrap_or("none")))
+                        .label(name.unwrap_or_else(|| "No logs yet".into()))
+                        .dropdown_caret(true)
+                        .selected(self.menu_open(&MenuFor::Logs))
+                        .on_click(cx.listener(Dock::logs_menu))
+                        .into_any_element(),
                 ];
                 if let Some(channel) = channel {
                     let level = *(channel.setting)(&mut self.logging.clone());
@@ -172,15 +177,15 @@ impl Dock {
                         .find(|(l, _)| *l == level)
                         .map_or("", |(_, label)| label);
                     tools.push(
-                        patchwork_design_components::dropdown_chip(
-                            "output-level",
-                            format!("{} log level: {current}", channel.name),
-                            current,
-                            self.menu_open(&MenuFor::Level),
-                            &t,
-                        )
-                        .on_click(cx.listener(Dock::level_menu))
-                        .into_any_element(),
+                        Button::new("output-level")
+                            .ghost()
+                            .small()
+                            .accessibility_label(format!("{} log level: {current}", channel.name))
+                            .label(current)
+                            .dropdown_caret(true)
+                            .selected(self.menu_open(&MenuFor::Level))
+                            .on_click(cx.listener(Dock::level_menu))
+                            .into_any_element(),
                     );
                 }
                 tools.push(
@@ -188,7 +193,6 @@ impl Dock {
                         "output-folder",
                         "Open logs folder",
                         IconName::FolderOpen,
-                        cx,
                     )
                     .on_click(|_, _, cx| match patchwork_client::local::core::logging::logs_folder() {
                         Ok(logs) => cx.open_with_system(&logs),
@@ -230,7 +234,6 @@ impl Dock {
                 .rounded(px(radius_sm()))
                 .text_color(t.text_muted)
                 .hover(move |s| s.bg(hover).text_color(fg))
-                .tooltip(tooltip("Kill terminal"))
                 .child(icon(IconName::X, 11.))
                 .opacity(0.)
                 .group_hover(group.clone(), |s| s.opacity(1.))
@@ -259,9 +262,6 @@ impl Dock {
                         row.text_color(t.text_muted)
                             .hover(move |s| s.bg(hover.opacity(0.6)).text_color(fg))
                     }
-                })
-                .when_some(shell.exit_code, |row, code| {
-                    row.tooltip(tooltip(format!("Exited with code {code}")))
                 })
                 .child(
                     button(("shell-select", id as usize), label.clone())

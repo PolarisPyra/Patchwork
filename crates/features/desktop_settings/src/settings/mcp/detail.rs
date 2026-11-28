@@ -3,6 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{AnyElement, FontWeight, SharedString, Window, div, prelude::*, px};
 use patchwork_client::local::core::provider::mcp::{self, McpServer, clis};
 
@@ -10,7 +13,6 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, letter_badge, switch};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_lg, fs_sm, fs_xs, radius, radius_sm, Theme, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button};
 
 use crate::settings::mcp::{Card, Client, Draft, Own};
 use crate::settings::controls::tildify;
@@ -69,7 +71,6 @@ fn use_row(
                 .font_family(font_mono())
                 .text_color(muted)
                 .hover(move |s| s.text_color(fg).underline())
-                .tooltip(patchwork_design_components::tooltip("Open in editor"))
                 .child(tildify(&u.file))
                 .on_click(cx.listener(move |d, _, _, cx| d.open_mcp_config(file.clone(), cx))),
             )
@@ -135,45 +136,38 @@ fn use_row(
         if status == "error" || status == "ready" {
             let restart = name.clone();
             row = row.child(
-                icon_button(
-                    SharedString::from(format!("mcp-restart-{name}")),
-                    format!("Restart {name} for {client}"),
-                    IconName::ArrowClockwise,
-                    15.,
-                    cx,
-                )
-                .tooltip("Restart")
-                .on_click(cx.listener(move |d, _, _, cx| {
-                    let name = restart.clone();
-                    d.mcp_run(
-                        move || {
-                            mcp::restart(&name);
-                            Ok(())
-                        },
-                        cx,
-                    );
-                })),
+                Button::new(SharedString::from(format!("mcp-restart-{name}")))
+                    .ghost()
+                    .small()
+                    .icon(IconName::ArrowClockwise)
+                    .accessibility_label(format!("Restart {name} for {client}"))
+                    .on_click(cx.listener(move |d, _, _, cx| {
+                        let name = restart.clone();
+                        d.mcp_run(
+                            move || {
+                                mcp::restart(&name);
+                                Ok(())
+                            },
+                            cx,
+                        );
+                    })),
             );
         }
         let edit = own.clone();
         row = row
             .child(
-                btn(
-                    SharedString::from(format!("mcp-edit-{name}")),
-                    format!("Edit {name}"),
-                    BtnKind::Plain,
-                    false,
-                    t,
-                )
-                .child("Edit")
-                .on_click(cx.listener(move |d, _, window, cx| {
-                    let draft = Draft::edit(
-                        Some(edit.name.clone()),
-                        edit.name.clone(),
-                        edit.server.clone(),
-                    );
-                    d.open_mcp_form(draft, window, cx);
-                })),
+                Button::new(SharedString::from(format!("mcp-edit-{name}")))
+                    .small()
+                    .accessibility_label(format!("Edit {name}"))
+                    .child("Edit")
+                    .on_click(cx.listener(move |d, _, window, cx| {
+                        let draft = Draft::edit(
+                            Some(edit.name.clone()),
+                            edit.name.clone(),
+                            edit.server.clone(),
+                        );
+                        d.open_mcp_form(draft, window, cx);
+                    })),
             )
             .child(
                 switch(
@@ -190,24 +184,21 @@ fn use_row(
     if let Some((key, _)) = u.cli.clone() {
         row = if status != "off" && status != "listing" && status != "unapproved" {
             row.child(
-                icon_button(
-                    SharedString::from(format!("mcp-refresh-{key}")),
-                    "List tools again",
-                    IconName::ArrowsClockwise,
-                    15.,
-                    cx,
-                )
-                .tooltip("List tools again")
-                .on_click(cx.listener(move |d, _, _, cx| {
-                    let (key, projects) = (key.clone(), d.settings.projects.clone());
-                    d.mcp_run(
-                        move || {
-                            clis::refresh(&key, &projects);
-                            Ok(())
-                        },
-                        cx,
-                    );
-                })),
+                Button::new(SharedString::from(format!("mcp-refresh-{key}")))
+                    .ghost()
+                    .small()
+                    .icon(IconName::ArrowsClockwise)
+                    .accessibility_label("List tools again")
+                    .on_click(cx.listener(move |d, _, _, cx| {
+                        let (key, projects) = (key.clone(), d.settings.projects.clone());
+                        d.mcp_run(
+                            move || {
+                                clis::refresh(&key, &projects);
+                                Ok(())
+                            },
+                            cx,
+                        );
+                    })),
             )
         } else {
             // Keeps the scope in line with the rows that have the button.
@@ -259,8 +250,11 @@ pub fn render(
         .gap(px(12.))
         .pt(px(12.))
         .child(
-            icon_button("mcp-back", "Back", IconName::CaretLeft, 16., cx)
-                .tooltip("Back")
+            Button::new("mcp-back")
+                .ghost()
+                .small()
+                .icon(IconName::CaretLeft)
+                .accessibility_label("Back")
                 .on_click(cx.listener(|d, _, _, cx| {
                     d.mcp.open_id = None;
                     cx.notify();
@@ -288,18 +282,14 @@ pub fn render(
                 ),
         )
         .children(enable.map(|key| {
-            btn(
-                "mcp-enable",
-                "Enable in Patchwork",
-                BtnKind::Primary,
-                false,
-                &t,
-            )
-            .child("Enable in Patchwork")
-            .on_click(cx.listener(move |d, _, _, cx| {
-                let (key, projects) = (key.clone(), d.settings.projects.clone());
-                d.mcp_run(move || clis::enable(&key, &projects), cx);
-            }))
+            Button::new("mcp-enable")
+                .primary()
+                .small()
+                .label("Enable in Patchwork")
+                .on_click(cx.listener(move |d, _, _, cx| {
+                    let (key, projects) = (key.clone(), d.settings.projects.clone());
+                    d.mcp_run(move || clis::enable(&key, &projects), cx);
+                }))
         }));
 
     let uses: Vec<AnyElement> = card
@@ -403,9 +393,6 @@ pub fn render(
                     .border_1()
                     .px(px(10.))
                     .py(px(6.))
-                    .tooltip(patchwork_design_components::tooltip(
-                        tool.description.clone(),
-                    ))
                     .child(
                         div()
                             .truncate()
@@ -470,19 +457,13 @@ pub fn render(
                         div()
                             .flex()
                             .gap(px(8.))
+                            .child(Button::new("mcp-all-on").small().label("All on").on_click(
+                                cx.listener(turn(true, o.clone(), off.clone(), names.clone())),
+                            ))
                             .child(
-                                btn("mcp-all-on", "All on", BtnKind::Plain, false, &t)
-                                    .child("All on")
-                                    .on_click(cx.listener(turn(
-                                        true,
-                                        o.clone(),
-                                        off.clone(),
-                                        names.clone(),
-                                    ))),
-                            )
-                            .child(
-                                btn("mcp-all-off", "All off", BtnKind::Plain, false, &t)
-                                    .child("All off")
+                                Button::new("mcp-all-off")
+                                    .small()
+                                    .label("All off")
                                     .on_click(cx.listener(turn(
                                         false,
                                         o,

@@ -3,6 +3,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::sync::Arc;
 
 use gpui::{
@@ -14,14 +18,17 @@ use patchwork_client::local::core::browser::{INSTALL_URL, MouseAction};
 use super::headless_page::BrowserView;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_sm, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, input_box, spinner};
+use patchwork_design_components::input_box;
 
 impl BrowserView {
     fn toolbar(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let focused = gpui::Focusable::focus_handle(self.address.read(cx), cx).is_focused(window);
         let nav = |id: &'static str, label: &'static str, glyph: IconName, on: bool| {
-            icon_button(id, label, glyph, 16., cx)
-                .tooltip(label)
+            Button::new(id)
+                .ghost()
+                .small()
+                .icon(glyph)
+                .accessibility_label(label)
                 .when(!on, |b| b.opacity(0.4).cursor_default())
         };
         let (reload_label, reload_icon) = if self.loading && self.sender.is_some() {
@@ -73,15 +80,12 @@ impl BrowserView {
                     .child(div().flex_1().min_w_0().child(self.address.clone())),
             )
             .child(
-                icon_button(
-                    "browser-external",
-                    "Open in browser",
-                    IconName::ArrowSquareOut,
-                    16.,
-                    cx,
-                )
-                .tooltip("Open in browser")
-                .on_click(cx.listener(|this, _, _, cx| cx.open_url(&this.url))),
+                Button::new("browser-external")
+                    .ghost()
+                    .small()
+                    .icon(IconName::ArrowSquareOut)
+                    .accessibility_label("Open in browser")
+                    .on_click(cx.listener(|this, _, _, cx| cx.open_url(&this.url))),
             )
             .into_any_element()
     }
@@ -109,18 +113,16 @@ impl BrowserView {
                     .flex()
                     .gap(px(8.))
                     .child(
-                        btn(
-                            "browser-install",
-                            "Get Google Chrome",
-                            BtnKind::Primary,
-                            false,
-                            t,
-                        )
-                        .on_click(|_, _, cx| cx.open_url(INSTALL_URL)),
+                        Button::new("browser-install")
+                            .primary()
+                            .small()
+                            .label("Get Google Chrome")
+                            .on_click(|_, _, cx| cx.open_url(INSTALL_URL)),
                     )
                     .child(
-                        btn("browser-retry", "Try again", BtnKind::Plain, false, t)
-                            .child("Try again")
+                        Button::new("browser-retry")
+                            .small()
+                            .label("Try again")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 let url = this.url.clone();
                                 this.start(url, cx);
@@ -145,7 +147,7 @@ impl BrowserView {
                 .id("browser-waiting")
                 .role(Role::Status)
                 .aria_label("Loading the page")
-                .child(spinner(16., t.text_muted))
+                .child(Spinner::new().with_size(gpui::px(16.)).color(t.text_muted))
                 .into_any_element(),
         }
     }

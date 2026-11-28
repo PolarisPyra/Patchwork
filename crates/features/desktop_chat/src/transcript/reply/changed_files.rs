@@ -3,6 +3,8 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::Sizable as _;
 use crate::prelude::*;
 use std::path::PathBuf;
 
@@ -17,7 +19,7 @@ use patchwork_client::local::core::{
 
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, fs_xs, radius, radius_sm, Theme};
-use patchwork_design_components::{BtnKind, btn, button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_text::{base_name, dir_name};
 use patchwork_design_icons::icon;
 use patchwork_client::{GitModel, ReplyFiles};
@@ -276,7 +278,6 @@ fn produced_file<W: ChatWindow>(
     .gap(px(8.))
     .px(px(4.))
     .rounded(px(radius_sm()))
-    .tooltip(tooltip(file.path.clone()))
     .child(thumb)
     .child(
         div()
@@ -356,7 +357,6 @@ fn produced_file<W: ChatWindow>(
                     .rounded(px(radius_sm()))
                     .text_color(t.text_muted)
                     .hover(move |s| s.bg(hover).text_color(fg))
-                    .tooltip(tooltip("Open in its app"))
                     .child(icon(IconName::ArrowSquareOut, 14.))
                     .on_click(move |_, _, cx| {
                         match patchwork_client::local::core::projects::resolve_inside(&root, &rel) {
@@ -461,15 +461,10 @@ fn change_summary<W: ChatWindow>(
                 })
                 .child(div().flex_1())
                 .child(
-                    btn(
-                        SharedString::from(format!("show-changes-{}", m.id)),
-                        "Show changes",
-                        BtnKind::Plain,
-                        false,
-                        t,
-                    )
-                    .child("Show changes")
-                    .on_click(cx.listener(move |w, _, _, cx| w.show_changes(&id, cx))),
+                    Button::new(SharedString::from(format!("show-changes-{}", m.id)))
+                        .small()
+                        .label("Show changes")
+                        .on_click(cx.listener(move |w, _, _, cx| w.show_changes(&id, cx))),
                 ),
         )
         .child(
@@ -524,7 +519,6 @@ fn changed_file<W: ChatWindow>(
     .px(px(4.))
     .rounded(px(radius_sm()))
     .hover(move |s| s.bg(hover))
-    .tooltip(tooltip(path.to_string()))
     .child(
         div()
             .flex_none()

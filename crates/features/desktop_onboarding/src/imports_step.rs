@@ -3,6 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
+use gpui::component::tag::Tag;
 use patchwork_views_logos::agent_logo;
 use std::sync::Arc;
 
@@ -13,7 +16,6 @@ use super::{IMPORTS_STEP, ImportProgress, ImportResult, Onboarding, OnboardingEv
 use super::rows::{choice_row, heading, key_id, row_end, tick};
 use patchwork_views_logos::source_label;
 use patchwork_design_theme::{fs_sm, Theme};
-use patchwork_design_components::{badge, spinner};
 
 impl Onboarding {
     pub(super) fn sources(&self) -> Vec<ImportSource> {
@@ -196,9 +198,11 @@ pub fn imports_step(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) 
         let mut end = Vec::new();
         if scan.is_none() {
             end.push(
-                badge("", t)
+                Tag::secondary()
+                    .small()
+                    .child("")
                     .gap(px(4.))
-                    .child(spinner(12., t.text_muted))
+                    .child(Spinner::new().with_size(gpui::px(12.)).color(t.text_muted))
                     .child("Scanning…")
                     .into_any_element(),
             );
@@ -228,7 +232,10 @@ pub fn imports_step(this: &Onboarding, t: &Theme, cx: &mut Context<Onboarding>) 
     });
     let progress = this.importing.map(|p| {
         let scan = this.scan_of(p.kind).and_then(|s| s.as_ref());
-        (spinner(12., t.text_muted), describe_progress(p, scan))
+        (
+            Spinner::new().with_size(gpui::px(12.)).color(t.text_muted),
+            describe_progress(p, scan),
+        )
     });
     div()
         .flex()

@@ -2,12 +2,15 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{
     App, Context, EventEmitter, InteractiveElement as _, IntoElement, ParentElement as _, Render,
     SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 use patchwork_client::{PendingApproval, Session};
-use patchwork_design_components::{BtnKind, btn};
+
 use patchwork_design_theme::{Theme, fs_sm, theme};
 
 use crate::{back_button, top_bar};
@@ -46,7 +49,7 @@ impl Render for ApprovalsScreen {
                 .text_color(t.text_muted)
                 .child("Nothing waiting")
         });
-        let back = back_button("approvals.back", &t)
+        let back = back_button("approvals.back")
             .on_click(cx.listener(|_, _, _, cx| cx.emit(ApprovalsEvent::Back)));
         div()
             .id("approvals")
@@ -96,23 +99,22 @@ fn row(approval: &PendingApproval, t: &Theme, cx: &App) -> impl IntoElement + us
                 .flex()
                 .gap(px(12.0))
                 .child(
-                    btn(
-                        SharedString::from(format!("approvals.allow:{}", approval.id)),
-                        "Allow",
-                        BtnKind::Success,
-                        false,
-                        t,
-                    )
+                    Button::new(SharedString::from(format!(
+                        "approvals.allow:{}",
+                        approval.id
+                    )))
+                    .success()
+                    .small()
+                    .accessibility_label("Allow")
                     .on_click(move |_, _, cx| Session::answer(&allowed, true, cx)),
                 )
                 .child(
-                    btn(
-                        SharedString::from(format!("approvals.deny:{}", approval.id)),
-                        "Deny",
-                        BtnKind::Plain,
-                        false,
-                        t,
-                    )
+                    Button::new(SharedString::from(format!(
+                        "approvals.deny:{}",
+                        approval.id
+                    )))
+                    .small()
+                    .accessibility_label("Deny")
                     .on_click(move |_, _, cx| Session::answer(&denied, false, cx)),
                 ),
         )

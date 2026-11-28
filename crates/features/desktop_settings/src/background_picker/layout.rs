@@ -3,6 +3,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -18,7 +20,7 @@ use patchwork_design_backgrounds::{PRESETS, butterfly_preview, preset_fill, scen
 use patchwork_design_components::menu::Menu;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, applied, fs_sm, radius, radius_sm, theme};
-use patchwork_design_components::{button, focus_ring, spinner, tooltip};
+use patchwork_design_components::{button, focus_ring};
 use patchwork_design_icons::icon;
 
 impl BackgroundPicker {
@@ -131,15 +133,7 @@ fn swatch(
                 .flex()
                 .items_center()
                 .text_size(px(fs_sm()))
-                .child(
-                    div()
-                        .id("name")
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .tooltip(tooltip(name.clone()))
-                        .child(name),
-                ),
+                .child(div().id("name").flex_1().min_w_0().truncate().child(name)),
         )
 }
 
@@ -285,7 +279,6 @@ impl Render for BackgroundPicker {
                     .group_hover(group, |s| s.opacity(1.))
                     .focus(|s| s.opacity(1.))
                     .hover(move |s| s.text_color(fg))
-                    .tooltip(tooltip(format!("Remove {name}")))
                     .child(icon(IconName::X, 9.))
                     .on_click(cx.listener(move |p, _, _, cx| {
                         p.remove_picture(&remove, removed_name.clone(), cx);
@@ -335,7 +328,7 @@ impl Render for BackgroundPicker {
                                 .rounded(px(radius_sm()))
                                 .border_1()
                                 .border_color(t.border)
-                                .child(spinner(18., muted)),
+                                .child(Spinner::new().with_size(gpui::px(18.)).color(muted)),
                         )
                     })
                     .child(

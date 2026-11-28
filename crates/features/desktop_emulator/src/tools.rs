@@ -4,6 +4,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -18,7 +23,7 @@ use patchwork_design_components::menu::MenuItem;
 use patchwork_design_editor::{Submitted, TextArea};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_sm, radius, Theme};
-use patchwork_design_components::{BtnKind, btn, button, icon_button, input_box, spinner};
+use patchwork_design_components::{button, input_box};
 use patchwork_design_icons::icon;
 
 /// How often the network is asked which phones announce themselves while pairing is open.
@@ -430,15 +435,19 @@ impl AndroidPanel {
                         .justify_end()
                         .gap(px(8.))
                         .child(
-                            btn("android-sheet-close", "Close", BtnKind::Plain, false, t)
-                                .child("Close")
+                            Button::new("android-sheet-close")
+                                .small()
+                                .label("Close")
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.close_sheet(window, cx);
                                 })),
                         )
                         .child(
-                            btn("android-sheet-submit", action, BtnKind::Primary, busy, t)
-                                .child(action)
+                            Button::new("android-sheet-submit")
+                                .primary()
+                                .small()
+                                .disabled(busy)
+                                .label(action)
                                 .when(!busy, |b| {
                                     b.on_click(cx.listener(|this, _, _, cx| this.submit_sheet(cx)))
                                 }),
@@ -465,7 +474,7 @@ impl AndroidPanel {
                 .gap(px(8.))
                 .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
-                .child(spinner(14., t.text_muted))
+                .child(Spinner::new().with_size(gpui::px(14.)).color(t.text_muted))
                 .child("Reading the saved states")
                 .into_any_element();
         };
@@ -500,36 +509,30 @@ impl AndroidPanel {
                             .child(SharedString::from(name.clone())),
                     )
                     .child(
-                        icon_button(
-                            ("android-state-load", i),
-                            format!("Load {name}"),
-                            IconName::ArrowCounterClockwise,
-                            14.,
-                            cx,
-                        )
-                        .tooltip("Load")
-                        .on_click(cx.listener({
-                            let name = name.clone();
-                            move |this, _, _, cx| {
-                                this.saved_state(StateAction::Load, name.clone(), cx);
-                            }
-                        })),
+                        Button::new(("android-state-load", i))
+                            .ghost()
+                            .small()
+                            .icon(IconName::ArrowCounterClockwise)
+                            .accessibility_label(format!("Load {name}"))
+                            .on_click(cx.listener({
+                                let name = name.clone();
+                                move |this, _, _, cx| {
+                                    this.saved_state(StateAction::Load, name.clone(), cx);
+                                }
+                            })),
                     )
                     .child(
-                        icon_button(
-                            ("android-state-delete", i),
-                            format!("Delete {name}"),
-                            IconName::Trash,
-                            14.,
-                            cx,
-                        )
-                        .tooltip("Delete")
-                        .on_click(cx.listener({
-                            let name = name.clone();
-                            move |this, _, _, cx| {
-                                this.saved_state(StateAction::Delete, name.clone(), cx);
-                            }
-                        })),
+                        Button::new(("android-state-delete", i))
+                            .ghost()
+                            .small()
+                            .icon(IconName::Trash)
+                            .accessibility_label(format!("Delete {name}"))
+                            .on_click(cx.listener({
+                                let name = name.clone();
+                                move |this, _, _, cx| {
+                                    this.saved_state(StateAction::Delete, name.clone(), cx);
+                                }
+                            })),
                     )
             }))
             .into_any_element()

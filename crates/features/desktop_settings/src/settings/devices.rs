@@ -6,6 +6,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariant;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use gpui::{AnyElement, ClipboardItem, Div, FontWeight, Role, SharedString, div, prelude::*, px};
@@ -13,7 +18,6 @@ use patchwork_client::local::server::{CoreServer, Device, PairCode, ServerInfo, 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, alert, switch, token_row};
 use patchwork_design_theme::{Theme, font_mono, fs_sm, fs_xl, fs_xs, radius, theme};
-use patchwork_design_components::{BtnKind, btn};
 
 /// How big one square of the QR code is drawn. Small enough that a version-10 code (57 squares)
 /// stays inside 200px, as on the web, large enough for a phone camera to read off a screen.
@@ -201,25 +205,20 @@ fn copy_button(
     id: &str,
     label: &str,
     text: String,
-    t: &Theme,
     cx: &mut Context<SettingsDialog>,
-) -> patchwork_design_components::Button {
+) -> Button {
     let id = SharedString::from(format!("devices-copy-{id}"));
     let shown = if d.devices.copied.as_ref() == Some(&id) {
         "Copied"
     } else {
         label
     };
-    btn(
-        id.clone(),
-        format!("{label} {text}"),
-        BtnKind::Plain,
-        false,
-        t,
-    )
-    .flex_none()
-    .child(shown.to_string())
-    .on_click(cx.listener(move |d, _, _, cx| d.copy(id.clone(), text.clone(), cx)))
+    Button::new(id.clone())
+        .small()
+        .accessibility_label(format!("{label} {text}"))
+        .flex_none()
+        .child(shown.to_string())
+        .on_click(cx.listener(move |d, _, _, cx| d.copy(id.clone(), text.clone(), cx)))
 }
 
 /// Text in the code font, cut short with an ellipsis when it does not fit.
@@ -302,7 +301,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             &t,
         ))
         .when(!info.token.is_empty(), |r| {
-            r.child(copy_button(d, "token", "Copy", info.token.clone(), &t, cx))
+            r.child(copy_button(d, "token", "Copy", info.token.clone(), cx))
         });
     let network_row = token_row("Let devices on my network connect", &t).child(
         switch(
@@ -360,39 +359,30 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 .items_center()
                 .gap(px(8.))
                 .child(div().flex_1().min_w_0().child(code_text(url.clone(), &t)))
-                .child(copy_button(
-                    d,
-                    &format!("url-{i}"),
-                    "Copy",
-                    url.clone(),
-                    &t,
-                    cx,
-                ))
+                .child(copy_button(d, &format!("url-{i}"), "Copy", url.clone(), cx))
         })
         .collect();
     let pairing = d.devices.pairing;
-    let make = btn(
-        "devices-make-code",
-        "Make a pairing code",
-        if code.is_some() {
-            BtnKind::Plain
+    let make = Button::new("devices-make-code")
+        .with_variant(if code.is_some() {
+            ButtonVariant::Secondary
         } else {
-            BtnKind::Primary
-        },
-        pairing,
-        &t,
-    )
-    .flex_none()
-    .child(if pairing {
-        "Making a code…"
-    } else if code.is_some() {
-        "Make a new code"
-    } else {
-        "Make a pairing code"
-    })
-    .when(!pairing, |b| {
-        b.on_click(cx.listener(|d, _, _, cx| d.make_code(cx)))
-    });
+            ButtonVariant::Primary
+        })
+        .small()
+        .disabled(pairing)
+        .accessibility_label("Make a pairing code")
+        .flex_none()
+        .child(if pairing {
+            "Making a code…"
+        } else if code.is_some() {
+            "Make a new code"
+        } else {
+            "Make a pairing code"
+        })
+        .when(!pairing, |b| {
+            b.on_click(cx.listener(|d, _, _, cx| d.make_code(cx)))
+        });
     let shown_code = code.as_ref().map(|c| {
         div()
             .flex()
@@ -422,7 +412,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     });
     let copy_link = code
         .as_ref()
-        .map(|c| copy_button(d, "link", "Copy link", c.link.clone(), &t, cx));
+        .map(|c| copy_button(d, "link", "Copy link", c.link.clone(), cx));
     let pair = Section::new("Pair a device").child(
         div().flex().gap(px(16.)).p(px(16.)).child(qr).child(
             div()
@@ -487,23 +477,19 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                 let id = device.id.clone();
                 token_row(device.name.clone(), &t)
                     .child(
-                        btn(
-                            SharedString::from(format!("devices-revoke-{}", device.id)),
-                            format!("Revoke {}", device.name),
-                            BtnKind::Plain,
-                            false,
-                            &t,
-                        )
-                        .text_color(t.danger)
-                        .child(if sure { "Cut it off?" } else { "Revoke" })
-                        .on_click(cx.listener(move |d, _, _, cx| {
-                            if sure {
-                                d.revoke(id.clone(), cx);
-                            } else {
-                                d.devices.confirm = Some(id.clone());
-                                cx.notify();
-                            }
-                        })),
+                        Button::new(SharedString::from(format!("devices-revoke-{}", device.id)))
+                            .small()
+                            .accessibility_label(format!("Revoke {}", device.name))
+                            .text_color(t.danger)
+                            .child(if sure { "Cut it off?" } else { "Revoke" })
+                            .on_click(cx.listener(move |d, _, _, cx| {
+                                if sure {
+                                    d.revoke(id.clone(), cx);
+                                } else {
+                                    d.devices.confirm = Some(id.clone());
+                                    cx.notify();
+                                }
+                            })),
                     )
                     .into_any_element()
             })

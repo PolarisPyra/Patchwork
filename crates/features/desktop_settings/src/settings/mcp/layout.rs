@@ -2,6 +2,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Sizable as _;
 use std::collections::BTreeMap;
 use gpui::{AnyElement, Window, div, prelude::*, px};
 use patchwork_client::local::core::provider::mcp::ToolInfo;
@@ -10,7 +12,7 @@ use crate::settings::controls::{FieldKind, Section, alert, empty, list_box, sear
 use crate::settings::extensions::filter_select;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, radius, theme};
-use patchwork_design_components::{BtnKind, btn};
+
 use patchwork_design_icons::icon;
 use super::form::Draft;
 use super::rows::server_row;
@@ -134,7 +136,9 @@ pub fn render(
         .child(picker)
         .child(search_box(search, &t).min_w_0().w(px(208.)))
         .child(
-            btn("mcp-add", "Add server", BtnKind::Plain, false, &t)
+            Button::new("mcp-add")
+                .small()
+                .accessibility_label("Add server")
                 .px(px(10.))
                 .gap(px(6.))
                 .child(icon(IconName::Plus, 13.))

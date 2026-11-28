@@ -2,13 +2,17 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use patchwork_views_logos::agent_label;
 use gpui::{Div, Focusable, Window, div, prelude::*, px};
 use patchwork_client::local::core::provider::api::{self, ApiProvider, KeyChange};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
 use patchwork_design_theme::theme;
-use patchwork_design_components::{BtnKind, btn};
+
 use super::catalog::{PROMPT_FIELD, Prompt, PromptOf};
 
 impl SettingsDialog {
@@ -174,8 +178,10 @@ impl SettingsDialog {
                     .items_center()
                     .gap(px(8.))
                     .child(
-                        btn("prompt-clear", "Clear", BtnKind::Plain, busy || empty, &t)
-                            .child("Clear")
+                        Button::new("prompt-clear")
+                            .small()
+                            .disabled(busy || empty)
+                            .label("Clear")
                             .when(!busy && !empty, |b| {
                                 b.on_click(cx.listener(|d, _, _, cx| {
                                     if let Some(p) = &mut d.providers.prompt {
@@ -189,8 +195,10 @@ impl SettingsDialog {
                             }),
                     )
                     .child(
-                        btn("prompt-cancel", "Cancel", BtnKind::Plain, busy, &t)
-                            .child("Cancel")
+                        Button::new("prompt-cancel")
+                            .small()
+                            .disabled(busy)
+                            .label("Cancel")
                             .when(!busy, |b| {
                                 b.on_click(cx.listener(|d, _, _, cx| {
                                     d.providers.prompt = None;
@@ -200,17 +208,15 @@ impl SettingsDialog {
                             }),
                     )
                     .child(
-                        btn(
-                            "prompt-save",
-                            "Save",
-                            BtnKind::Primary,
-                            busy || unchanged,
-                            &t,
-                        )
-                        .child(if busy { "Saving…" } else { "Save" })
-                        .when(!busy && !unchanged, |b| {
-                            b.on_click(cx.listener(|d, _, _, cx| d.save_prompt(cx)))
-                        }),
+                        Button::new("prompt-save")
+                            .primary()
+                            .small()
+                            .disabled(busy || unchanged)
+                            .accessibility_label("Save")
+                            .child(if busy { "Saving…" } else { "Save" })
+                            .when(!busy && !unchanged, |b| {
+                                b.on_click(cx.listener(|d, _, _, cx| d.save_prompt(cx)))
+                            }),
                     ),
             )
     }

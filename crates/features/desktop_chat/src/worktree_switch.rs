@@ -4,6 +4,9 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use crate::prelude::*;
 use patchwork_client::GitModel;
 use patchwork_client::AppState;
@@ -16,7 +19,7 @@ use patchwork_client::local::core::projects::Project;
 use crate::above_composer::goal_bar::strip_action;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_sm, radius_sm};
-use patchwork_design_components::{button, icon_button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 /// The window's worktree switch methods, for any [`ChatWindow`].
@@ -146,15 +149,9 @@ pub fn worktree_pick_chip<W: ChatWindow>(
         Err(why) => chip
             .aria_label(format!("New tasks work in: {label}. {why}"))
             .opacity(0.6)
-            .cursor_default()
-            .tooltip(tooltip(why)),
+            .cursor_default(),
         Ok(_) => chip
             .hover(move |s| s.text_color(fg))
-            .tooltip(tooltip(if on {
-                "New tasks edit the project folder instead"
-            } else {
-                "New tasks work in a worktree each"
-            }))
             .on_click(cx.listener(|w, _, _, cx| w.flip_worktree_pick(cx))),
     }
 }
@@ -204,7 +201,6 @@ pub fn worktree_told_line<W: ChatWindow>(
                     .min_w_0()
                     .flex_1()
                     .truncate()
-                    .tooltip(tooltip(text.clone()))
                     .child(text),
             )
             .when(local, |d| {
@@ -218,14 +214,18 @@ pub fn worktree_told_line<W: ChatWindow>(
                 )
             })
             .child(
-                strip_action("worktree-told-off", "Edit project folder next time", t)
-                    .tooltip(tooltip("New tasks in this project edit its folder"))
-                    .on_click(cx.listener(move |w, _, _, cx| {
+                strip_action("worktree-told-off", "Edit project folder next time", t).on_click(
+                    cx.listener(move |w, _, _, cx| {
                         w.dismiss_worktree_told(id_off.clone(), true, cx);
-                    })),
+                    }),
+                ),
             )
             .child(
-                icon_button("worktree-told-close", "Dismiss", IconName::X, 12., cx)
+                Button::new("worktree-told-close")
+                    .ghost()
+                    .small()
+                    .icon(IconName::X)
+                    .accessibility_label("Dismiss")
                     .flex_none()
                     .on_click(cx.listener(move |w, _, _, cx| {
                         w.dismiss_worktree_told(id_done.clone(), false, cx);

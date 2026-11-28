@@ -2,13 +2,16 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{
     Context, EventEmitter, InteractiveElement as _, IntoElement, ParentElement as _, Render,
     SharedString, StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 use patchwork_client::Session;
 use patchwork_protocol::chats::ChatStatus;
-use patchwork_design_components::{BtnKind, btn};
+
 use patchwork_design_theme::{fs_sm, theme};
 
 use crate::top_bar;
@@ -42,14 +45,11 @@ impl Render for ChatsScreen {
         let t = *theme(cx);
         let waiting = Session::get(cx).approvals.list.len();
         let approvals = (waiting > 0).then(|| {
-            btn(
-                "chats.approvals",
-                format!("{waiting} waiting"),
-                BtnKind::Primary,
-                false,
-                &t,
-            )
-            .on_click(cx.listener(|_, _, _, cx| cx.emit(ChatsEvent::ShowApprovals)))
+            Button::new("chats.approvals")
+                .primary()
+                .small()
+                .accessibility_label(format!("{waiting} waiting"))
+                .on_click(cx.listener(|_, _, _, cx| cx.emit(ChatsEvent::ShowApprovals)))
         });
         let session = Session::get(cx);
         let (hover, border) = (t.bg_hover, t.border);

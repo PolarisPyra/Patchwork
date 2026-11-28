@@ -2,6 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{AnyElement, FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_model::platform::Platform;
 use patchwork_platform::now_ms;
@@ -10,7 +13,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{list_box, token_row};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_sm, roomy, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button};
+
 use patchwork_design_icons::icon;
 
 /// The milliseconds in a minute, for the pairing code's time left.
@@ -52,8 +55,9 @@ pub(super) fn pairing_row(
             )
     });
     let pairing = token_row("Pairing code", &t).children(shown).child(
-        btn("gw-new-code", "New code", BtnKind::Plain, false, &t)
-            .child("New code")
+        Button::new("gw-new-code")
+            .small()
+            .label("New code")
             .on_click(cx.listener(|d, _, _, cx| {
                 d.gateway.code = Some(d.core.new_pairing_code());
                 cx.notify();
@@ -109,13 +113,15 @@ pub(super) fn paired(d: &SettingsDialog, cx: &mut Context<SettingsDialog>) -> An
                 .py(px(8.))
                 .child(div().min_w_0().flex_1().truncate().child(name.clone()))
                 .child(
-                    icon_button(
-                        SharedString::from(format!("gw-unpair-{}-{}", platform.id(), paired.id)),
-                        format!("Remove {name}"),
-                        IconName::X,
-                        14.,
-                        cx,
-                    )
+                    Button::new(SharedString::from(format!(
+                        "gw-unpair-{}-{}",
+                        platform.id(),
+                        paired.id
+                    )))
+                    .ghost()
+                    .small()
+                    .icon(IconName::X)
+                    .accessibility_label(format!("Remove {name}"))
                     .on_click(cx.listener(move |d, _, _, cx| {
                         d.remove_paired(platform, id.clone(), cx);
                     })),

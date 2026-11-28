@@ -2,13 +2,16 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{AnyElement, ClickEvent, ClipboardItem, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_model::platform::Platform;
 
 use crate::settings::SettingsDialog;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_sm, radius_sm, theme};
-use patchwork_design_components::{button, icon_button};
+use patchwork_design_components::button;
 
 /// One step: what to do, a command to run, and the page to do it on.
 struct Step {
@@ -206,16 +209,14 @@ pub(super) fn setup(platform: Platform, cx: &mut gpui::Context<SettingsDialog>) 
                         .child(command),
                 )
                 .child(
-                    icon_button(
-                        SharedString::from(format!("gw-{id}-copy-{number}")),
-                        format!("Copy {command}"),
-                        IconName::Copy,
-                        14.,
-                        cx,
-                    )
-                    .on_click(move |_: &ClickEvent, _: &mut Window, cx| {
-                        cx.write_to_clipboard(ClipboardItem::new_string(command.to_string()));
-                    }),
+                    Button::new(SharedString::from(format!("gw-{id}-copy-{number}")))
+                        .ghost()
+                        .small()
+                        .icon(IconName::Copy)
+                        .accessibility_label(format!("Copy {command}"))
+                        .on_click(move |_: &ClickEvent, _: &mut Window, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(command.to_string()));
+                        }),
                 )
         });
         let link = step.link.map(|(label, url)| {

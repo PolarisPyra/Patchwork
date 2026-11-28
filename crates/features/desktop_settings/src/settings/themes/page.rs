@@ -4,6 +4,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,7 +31,6 @@ use crate::settings::controls::{FieldKind, Section, alert, anchored, segmented, 
 use crate::background_picker::BackgroundPicker;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, spinner};
 
 /// How often a folder is looked at for the file a chat is writing, and how many times before
 /// giving up: ten minutes.
@@ -292,27 +296,23 @@ pub(super) fn generator(
     let writing = d.themes.writing[kind as usize].clone();
     let busy = writing.is_some();
     let describe = div().flex_1().min_w_0().child(describe);
-    let generate = btn(
-        SharedString::from(format!("generate-{}", kind.field())),
-        format!("Generate a {noun}"),
-        BtnKind::Primary,
-        busy,
-        &t,
-    )
-    .child("Generate")
-    .when(!busy, |b| {
-        b.on_click(cx.listener(move |d, _, _, cx| d.generate_themed(kind, cx)))
-    });
-    let open_folder = icon_button(
-        SharedString::from(format!("folder-{}", kind.field())),
-        format!("Open the {noun} folder"),
-        IconName::FolderOpen,
-        16.,
-        cx,
-    )
-    .on_click(cx.listener(move |_, _, _, cx| {
-        SettingsDialog::open_themed_folder(folder.clone(), cx);
-    }));
+    let generate = Button::new(SharedString::from(format!("generate-{}", kind.field())))
+        .primary()
+        .small()
+        .disabled(busy)
+        .accessibility_label(format!("Generate a {noun}"))
+        .child("Generate")
+        .when(!busy, |b| {
+            b.on_click(cx.listener(move |d, _, _, cx| d.generate_themed(kind, cx)))
+        });
+    let open_folder = Button::new(SharedString::from(format!("folder-{}", kind.field())))
+        .ghost()
+        .small()
+        .icon(IconName::FolderOpen)
+        .accessibility_label(format!("Open the {noun} folder"))
+        .on_click(cx.listener(move |_, _, _, cx| {
+            SettingsDialog::open_themed_folder(folder.clone(), cx);
+        }));
     let row = div()
         .pb(px(10.))
         .flex()
@@ -336,7 +336,7 @@ pub(super) fn generator(
                 .gap(px(8.))
                 .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
-                .child(spinner(14., t.text_muted))
+                .child(Spinner::new().with_size(gpui::px(14.)).color(t.text_muted))
                 .child(format!("A chat is writing {id}"))
         }))
         .into_any_element()

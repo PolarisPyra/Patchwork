@@ -5,6 +5,7 @@
 use gpui::{AnyElement, App, FocusHandle, Window};
 use patchwork_client::local::core::chats::{Attachment, Chat, NewChat};
 use patchwork_client::local::core::projects::Project;
+use patchwork_design_icons::IconName;
 use patchwork_design_theme::Theme;
 
 /// The worktree's pieces the window draws for the composer: its strip, the files it changed,
@@ -43,6 +44,24 @@ pub struct Outgoing {
     pub role: Option<String>,
     /// Waits for the running turn rather than steering it.
     pub queue: bool,
+}
+
+/// A place the `@` menu offers in place of the project's files, as on the orchestrator page.
+#[derive(Debug, Clone)]
+pub struct Mention {
+    /// What the host is given back when it is picked.
+    pub id: String,
+    /// Its name.
+    pub label: String,
+    /// What it is in, shown quieter after the name while a typed name narrows the list.
+    pub detail: String,
+    /// The icon before the name.
+    pub icon: IconName,
+    /// The places it holds, listed in a menu of its own beside it. One with any is not picked
+    /// itself; a typed name finds them among the rest.
+    pub children: Vec<Mention>,
+    /// A line above it, starting a group.
+    pub separated: bool,
 }
 
 /// The composer's view of the window: the open chat, its project, and the panels above the
@@ -92,6 +111,19 @@ pub trait ChatHost {
 
     /// Sends `message`, first asking what a new granular chat runs with when its project asks.
     fn send(&self, message: Outgoing, window: &mut Window, cx: &mut App);
+
+    /// The composer offers to move the message to another project.
+    fn picks_project(&self, _cx: &App) -> bool {
+        true
+    }
+
+    /// What `@` lists in place of the project's files. None lists the files.
+    fn mentions(&self, _cx: &App) -> Option<Vec<Mention>> {
+        None
+    }
+
+    /// `@` picked the mention with `id`.
+    fn mention(&self, _id: &str, _cx: &mut App) {}
 }
 
 /// What the composer asks of the window.

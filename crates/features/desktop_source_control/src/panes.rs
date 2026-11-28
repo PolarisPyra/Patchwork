@@ -14,7 +14,7 @@ use super::commit_graph;
 use patchwork_design_components::menu::Menu;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_md, fs_sm, radius_sm, Theme, theme};
-use patchwork_design_components::{button, list_scrollbar, scrollbar, tooltip};
+use patchwork_design_components::{button, list_scrollbar, scrollbar};
 use patchwork_design_icons::icon;
 use super::file_list::{Entry, Group};
 use super::header_menu::REPO_MENU;
@@ -325,7 +325,6 @@ impl Render for ChangesView {
                                     .rounded(px(radius_sm()))
                                     .text_color(t.text_muted)
                                     .hover(move |s| s.bg(hover).text_color(fg))
-                                    .tooltip(tooltip("Refresh"))
                                     .child(icon(IconName::ArrowsClockwise, 18.).mt(px(1.)))
                                     .on_click(cx.listener(|this, _, _, cx| this.refresh_all(cx))),
                             )
@@ -338,7 +337,6 @@ impl Render for ChangesView {
                                         .text_color(t.text_muted)
                                         .hover(move |s| s.bg(hover).text_color(fg))
                                         .aria_expanded(repo_open)
-                                        .tooltip(tooltip("Repository actions"))
                                         .child(icon(IconName::DotsThree, 18.))
                                         .on_click(cx.listener(
                                             |this, e: &gpui::ClickEvent, window, cx| {

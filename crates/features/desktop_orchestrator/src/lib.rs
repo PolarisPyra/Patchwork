@@ -1,5 +1,5 @@
-//! The orchestrator page: a single field over an animated butterfly. A request written in it goes
-//! to the chat it names, or starts a chat in the project it names, without opening either.
+//! The orchestrator page: the chat box over an animated butterfly. A request written in it goes to
+//! the chat `@` names, or starts a chat in the project it names, without opening either.
 
 #![expect(
     clippy::unused_self,
@@ -8,14 +8,12 @@
 
 // Rust guideline compliant 2026-10-09
 
-mod attachments;
 mod cards;
-mod chips;
 mod host;
 mod layout;
 mod pill;
 mod requests;
 
-pub use host::{Launch, LaunchMenu, OrchestratorEvent, OrchestratorHost};
+pub use host::OrchestratorEvent;
 pub use layout::OrchestratorBackdrop;
 pub use requests::Orchestrator;

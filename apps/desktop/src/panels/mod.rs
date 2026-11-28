@@ -60,7 +60,11 @@ impl Workspace {
         }
         let chats = self.page == Page::Chats;
         let sidebar = self.sidebar_view().map(|_| {
-            let width = px(self.sidebar_width);
+            // A narrow window gives the sidebar at most half the room beside the activity bar,
+            // so the chat keeps the rest; the width set by dragging comes back as it widens.
+            let room =
+                f32::from(window.viewport_size().width) - patchwork_design_theme::ACTIVITY_BAR_W;
+            let width = px(self.sidebar_width.min((room / 2.).max(160.)));
             self.sidebar
                 .clone()
                 .cached(StyleRefinement::default().flex_none().w(width))
@@ -110,7 +114,7 @@ impl Workspace {
                     .min_h_0()
                     .child(self.activity_bar(cx))
                     .children(sidebar)
-                    .children(orchestrating.then(|| self.home_panel()))
+                    .children(orchestrating.then(|| self.home_panel(cx)))
                     .children(quilts.map(|page| self.quilts_panel(page, quilt_chat, cx)))
                     .children(agent_page)
                     .children(

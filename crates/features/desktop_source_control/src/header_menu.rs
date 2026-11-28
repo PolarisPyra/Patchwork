@@ -15,7 +15,7 @@ use patchwork_design_components::menu::MenuItem;
 use patchwork_design_editor::{Changed, Submitted, TextArea};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_md, radius_sm};
-use patchwork_design_components::{button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 /// What marks the repository's menus among the view's menus.
@@ -402,7 +402,6 @@ impl ChangesView {
                         .rounded(px(radius_sm()))
                         .text_color(t.text_muted)
                         .hover(move |s| s.bg(hover).text_color(fg))
-                        .tooltip(tooltip("Cancel"))
                         .child(icon(IconName::X, 12.))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.asking = None;

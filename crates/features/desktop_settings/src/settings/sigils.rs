@@ -11,7 +11,7 @@ use patchwork_views_chat::{
 };
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, radius_sm, Theme};
-use patchwork_design_components::{button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 pub const SIGILS_PAGE: &str = "Sigils";
@@ -103,7 +103,6 @@ pub fn rows(
                                 .text_color(muted)
                                 .hover(move |s| s.bg(hover).text_color(fg))
                                 .child(icon(IconName::ArrowCounterClockwise, 12.))
-                                .tooltip(tooltip(format!("Reset to {}", default_sigil(kind))))
                                 .on_click(cx.listener(
                                     move |d, _, _, cx| {
                                         let next = d.sigils(cx).reset(kind);
@@ -129,7 +128,6 @@ pub fn rows(
                                         .hover(move |s| s.bg(hover))
                                 }
                             })
-                            .tooltip(tooltip("Change sigil"))
                             .map(|b| {
                                 if recording {
                                     b.child(

@@ -6,7 +6,7 @@
 use gpui::{AnyElement, Div, MouseButton, Window, div, prelude::*, px};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_xs};
-use patchwork_design_components::{button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 use super::chips::TRIGGER_H;
@@ -17,8 +17,6 @@ use super::menus::Menu;
 pub(super) struct WorkspaceState {
     /// The project's name and folder, or none for a chat in no project.
     pub project: Option<(String, String)>,
-    /// The SSH host the chat runs on; none is this computer.
-    pub host: Option<String>,
     /// The worktree picker and the worktree's status, which the web's row lacks.
     pub worktree_pick: AnyElement,
     pub worktree: Option<AnyElement>,
@@ -35,12 +33,9 @@ impl Composer {
         cx: &mut Context<Self>,
     ) -> Div {
         let fg = t.text;
-        let (name, tip) = match &s.project {
-            Some((name, path)) => (name.clone(), path.clone()),
-            None => (
-                "No project".to_owned(),
-                "This chat is not in a project".to_owned(),
-            ),
+        let name = match &s.project {
+            Some((name, _)) => name.clone(),
+            None => "No project".to_owned(),
         };
         let project = button("project", format!("Select project, current: {name}"))
             .h(px(TRIGGER_H))
@@ -53,22 +48,19 @@ impl Composer {
             .line_height(px(16.))
             .text_color(t.text_muted)
             .hover(move |s| s.text_color(fg))
-            .tooltip(tooltip(tip))
             .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
             .child(div().min_w_0().flex_1().truncate().child(name))
             .child(icon(IconName::CaretDown, 12.));
-        let project = self.chip_with_menu(Menu::Project, project, picks, false, t, window, cx);
-        let machine_tip = match &s.host {
-            Some(host) => format!("Machine: {host}"),
-            None => "Machine: this computer".to_owned(),
-        };
+        let project = self
+            .host
+            .picks_project(cx)
+            .then(|| self.chip_with_menu(Menu::Project, project, picks, false, t, window, cx));
         let machine = button("machine", "Machine")
             .size(px(20.))
             .flex_none()
             .justify_center()
             .text_color(t.text_muted)
             .hover(move |s| s.text_color(fg))
-            .tooltip(tooltip(machine_tip))
             .child(icon(IconName::Desktop, 13.))
             .on_click(cx.listener(|_, _, _, cx| {
                 // Settings' Devices pane, where the machines are added and picked.
@@ -97,7 +89,7 @@ impl Composer {
                     .flex()
                     .items_center()
                     .gap(px(8.))
-                    .child(project)
+                    .children(project)
                     .child(small(s.worktree_pick))
                     .children(s.worktree.map(small)),
             )

@@ -2,6 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use patchwork_views_logos::agent_label;
 use std::sync::Arc;
 
@@ -12,7 +15,7 @@ use crate::settings::controls::{Section, alert, switch};
 use crate::settings::{SettingsDialog, SettingsEvent};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, fs_xs, radius_lg, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button};
+
 use patchwork_design_icons::icon;
 use super::editor::{editor};
 use super::tasks::{blank, run_history, when_label};
@@ -157,45 +160,36 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                 .items_center()
                 .gap(px(6.))
                 .child(
-                    btn(
-                        SharedString::from(format!("sched-run-{id}")),
-                        format!("Run {} now", task.name),
-                        BtnKind::Plain,
-                        false,
-                        &t,
-                    )
-                    .px(px(10.))
-                    .gap(px(6.))
-                    .tooltip("Start this task now")
-                    .child(icon(IconName::Play, 13.))
-                    .child("Run")
-                    .on_click(cx.listener(move |d, _, _, cx| {
-                        let (core, id) = (Arc::clone(&d.core), run_id.clone());
-                        d.scheduled.error = None;
-                        d.run(
-                            move || core.run_scheduled_task(&id).map(drop),
-                            |d, out, cx| {
-                                d.scheduled.error = out.err().map(|e| e.to_string());
-                                cx.emit(SettingsEvent::ChatsChanged);
-                                d.list_scheduled(cx);
-                            },
-                            cx,
-                        );
-                    })),
+                    Button::new(SharedString::from(format!("sched-run-{id}")))
+                        .small()
+                        .accessibility_label(format!("Run {} now", task.name))
+                        .px(px(10.))
+                        .gap(px(6.))
+                        .child(icon(IconName::Play, 13.))
+                        .child("Run")
+                        .on_click(cx.listener(move |d, _, _, cx| {
+                            let (core, id) = (Arc::clone(&d.core), run_id.clone());
+                            d.scheduled.error = None;
+                            d.run(
+                                move || core.run_scheduled_task(&id).map(drop),
+                                |d, out, cx| {
+                                    d.scheduled.error = out.err().map(|e| e.to_string());
+                                    cx.emit(SettingsEvent::ChatsChanged);
+                                    d.list_scheduled(cx);
+                                },
+                                cx,
+                            );
+                        })),
                 )
                 .child(
-                    btn(
-                        SharedString::from(format!("sched-edit-{id}")),
-                        format!("Edit {}", task.name),
-                        BtnKind::Plain,
-                        false,
-                        &t,
-                    )
-                    .px(px(10.))
-                    .gap(px(6.))
-                    .child(icon(IconName::PencilSimple, 13.))
-                    .child("Edit")
-                    .on_click(cx.listener(move |d, _, _, cx| d.edit_task(edit.clone(), cx))),
+                    Button::new(SharedString::from(format!("sched-edit-{id}")))
+                        .small()
+                        .accessibility_label(format!("Edit {}", task.name))
+                        .px(px(10.))
+                        .gap(px(6.))
+                        .child(icon(IconName::PencilSimple, 13.))
+                        .child("Edit")
+                        .on_click(cx.listener(move |d, _, _, cx| d.edit_task(edit.clone(), cx))),
                 )
                 .child(
                     switch(
@@ -214,21 +208,18 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                     })),
                 )
                 .child(
-                    icon_button(
-                        SharedString::from(format!("sched-delete-{id}")),
-                        format!("Delete {}", task.name),
-                        IconName::Trash,
-                        14.,
-                        cx,
-                    )
-                    .tooltip("Delete task")
-                    .on_click(cx.listener(move |d, _, _, cx| {
-                        let (core, id) = (Arc::clone(&d.core), remove.clone());
-                        if d.scheduled.editing.as_ref().is_some_and(|e| e.id == id) {
-                            d.close_task(cx);
-                        }
-                        d.scheduled_run(move || core.remove_scheduled_task(&id), cx);
-                    })),
+                    Button::new(SharedString::from(format!("sched-delete-{id}")))
+                        .ghost()
+                        .small()
+                        .icon(IconName::Trash)
+                        .accessibility_label(format!("Delete {}", task.name))
+                        .on_click(cx.listener(move |d, _, _, cx| {
+                            let (core, id) = (Arc::clone(&d.core), remove.clone());
+                            if d.scheduled.editing.as_ref().is_some_and(|e| e.id == id) {
+                                d.close_task(cx);
+                            }
+                            d.scheduled_run(move || core.remove_scheduled_task(&id), cx);
+                        })),
                 ),
         )
         .into_any_element()
@@ -257,7 +248,9 @@ pub fn render(
         .items_center()
         .gap(px(8.))
         .child(
-            btn("sched-refresh", "Refresh", BtnKind::Plain, false, &t)
+            Button::new("sched-refresh")
+                .small()
+                .accessibility_label("Refresh")
                 .px(px(10.))
                 .gap(px(6.))
                 .child(icon(IconName::ArrowsClockwise, 13.))
@@ -265,7 +258,9 @@ pub fn render(
                 .on_click(cx.listener(|d, _, _, cx| d.list_scheduled(cx))),
         )
         .child(
-            btn("sched-new", "New task", BtnKind::Plain, false, &t)
+            Button::new("sched-new")
+                .small()
+                .accessibility_label("New task")
                 .px(px(10.))
                 .gap(px(6.))
                 .child(icon(IconName::Plus, 13.))

@@ -3,6 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use std::collections::VecDeque;
 
 use gpui::{Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent, Window, div, prelude::*, px};
@@ -12,7 +15,6 @@ use patchwork_design_editor::{Changed, Submitted, TextArea};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_md, radius_sm, theme};
 use patchwork_design_components::dialog;
-use patchwork_design_components::{BtnKind, btn, icon_button};
 
 /// How wide the dialog is.
 const WIDTH: f32 = 420.;
@@ -122,8 +124,9 @@ impl Render for CredentialDialog {
             ("Cancel", "Continue")
         };
         let field = asked.field.clone();
-        let decline = btn("credential-decline", no, BtnKind::Plain, false, &t)
-            .child(no)
+        let decline = Button::new("credential-decline")
+            .small()
+            .label(no)
             .on_click(cx.listener(|this, _, window, cx| {
                 // ssh takes the word, where git takes no answer as a refusal.
                 let said = this
@@ -133,8 +136,10 @@ impl Render for CredentialDialog {
                     .map(|_| "no".to_string());
                 this.answer(said, window, cx);
             }));
-        let accept = btn("credential-accept", yes, BtnKind::Primary, false, &t)
-            .child(yes)
+        let accept = Button::new("credential-accept")
+            .primary()
+            .small()
+            .label(yes)
             .on_click(cx.listener(move |this, _, window, cx| {
                 let value = if confirm {
                     "yes".to_string()
@@ -158,7 +163,11 @@ impl Render for CredentialDialog {
             .text_size(px(fs_md()))
             .child(dialog::title_row(
                 title,
-                icon_button("credential-close", "Cancel", IconName::X, 16., cx)
+                Button::new("credential-close")
+                    .ghost()
+                    .small()
+                    .icon(IconName::X)
+                    .accessibility_label("Cancel")
                     .on_click(cx.listener(|this, _, window, cx| this.answer(None, window, cx))),
             ))
             .child(

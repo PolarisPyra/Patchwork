@@ -7,14 +7,24 @@ use gpui::{AnyElement, Div, Entity, Stateful, StyleRefinement, Window, div, prel
 use patchwork_desktop_quilts::QuiltsPage;
 
 use patchwork_desktop_chat::backdrop::quilts_scheme;
-use patchwork_design_theme::in_scheme;
+use patchwork_design_theme::{applied, in_scheme};
 use crate::nav::Page;
 use crate::window::Workspace;
 
 impl Workspace {
     /// The orchestrator page. The backdrop is its own view under the page, so as it moves the
     /// page's frame is reused.
-    pub(super) fn home_panel(&self) -> Stateful<Div> {
+    pub(super) fn home_panel(&self, cx: &gpui::App) -> Stateful<Div> {
+        let page = self
+            .orchestrator
+            .clone()
+            .cached(StyleRefinement::default().flex_1().min_w_0().min_h_0());
+        // Drawn in its backdrop's scheme, as a chat is in its background's, so the chat box is
+        // the same glass over both.
+        let page = match applied(cx).backdrop.scheme {
+            Some(scheme) => in_scheme(scheme, page).into_any_element(),
+            None => page.into_any_element(),
+        };
         div()
             .id("panels.home")
             .relative()
@@ -27,11 +37,7 @@ impl Workspace {
                     .clone()
                     .cached(StyleRefinement::default().absolute().inset_0()),
             )
-            .child(
-                self.orchestrator
-                    .clone()
-                    .cached(StyleRefinement::default().flex_1().min_w_0().min_h_0()),
-            )
+            .child(page)
     }
 
     /// The Quilts page while it shows. The page and its browser are made when it shows and

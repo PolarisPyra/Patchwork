@@ -3,6 +3,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use patchwork_client::local::core::provider::{AgentKind, ProviderKind};
 use patchwork_client::local::core::provider::cli_info::{
     CliPage, InfoCommand, CliFeature as Feature, CliRows as Rows, CliReading as Info,
@@ -10,7 +13,7 @@ use patchwork_client::local::core::provider::cli_info::{
 use gpui::{prelude::*, px, AnyElement, FontWeight, Role, SharedString, Window, div};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_sm, fs_xs, radius, radius_sm, theme};
-use patchwork_design_components::{BtnKind, btn};
+
 use patchwork_design_icons::icon;
 
 use crate::settings::SettingsDialog;
@@ -187,8 +190,10 @@ pub fn render(
         .pt(px(12.))
         .pb(px(16.));
     let read_again = |id: &'static str| {
-        btn(id, "Read again", BtnKind::Plain, busy, &t)
-            .child("Read again")
+        Button::new(id)
+            .small()
+            .disabled(busy)
+            .label("Read again")
             .when(!busy, |b| {
                 b.on_click(cx.listener(|d, _, _, cx| d.read_details(cx)))
             })
@@ -262,22 +267,19 @@ pub fn render(
         .iter()
         .map(|&(label, title, command)| {
             let title = format!("{} {title}", spec.name);
-            btn(
-                SharedString::from(format!("cmd-{label}")),
-                label,
-                BtnKind::Plain,
-                busy,
-                &t,
-            )
-            .when(command == InfoCommand::Doctor, |b| {
-                b.child(icon(IconName::Stethoscope, 13.))
-            })
-            .child(label)
-            .when(!busy, |b| {
-                b.on_click(cx.listener(move |d, _, _, cx| {
-                    d.run_details_command(title.clone(), command, cx);
-                }))
-            })
+            Button::new(SharedString::from(format!("cmd-{label}")))
+                .small()
+                .disabled(busy)
+                .accessibility_label(label)
+                .when(command == InfoCommand::Doctor, |b| {
+                    b.child(icon(IconName::Stethoscope, 13.))
+                })
+                .child(label)
+                .when(!busy, |b| {
+                    b.on_click(cx.listener(move |d, _, _, cx| {
+                        d.run_details_command(title.clone(), command, cx);
+                    }))
+                })
         })
         .collect();
     let tools = div()
@@ -357,16 +359,14 @@ pub fn render(
                     .text_size(px(fs_xs()))
                     .text_color(t.text_subtle)
                     .child(title)
-                    .child(
-                        btn("output-close", "Close", BtnKind::Plain, false, &t)
-                            .child("Close")
-                            .on_click(cx.listener(|d, _, _, cx| {
-                                if let Some(x) = &mut d.providers.details {
-                                    x.output = None;
-                                }
-                                cx.notify();
-                            })),
-                    ),
+                    .child(Button::new("output-close").small().label("Close").on_click(
+                        cx.listener(|d, _, _, cx| {
+                            if let Some(x) = &mut d.providers.details {
+                                x.output = None;
+                            }
+                            cx.notify();
+                        }),
+                    )),
             )
             .child(
                 div()
@@ -385,10 +385,6 @@ pub fn render(
     let rows: Vec<_> = features
         .iter()
         .map(|f| {
-            let tip = match &f.source {
-                Some(source) => format!("{}\n{}", f.detail, tildify(source)),
-                None => f.detail.clone(),
-            };
             div()
                 .id(SharedString::from(format!("feature-{}", f.name)))
                 .role(Role::Row)
@@ -416,7 +412,6 @@ pub fn render(
                         .font_family(font_mono())
                         .text_size(px(fs_xs()))
                         .text_color(t.text_muted)
-                        .tooltip(patchwork_design_components::tooltip(tip))
                         .child(f.detail.clone()),
                 )
                 .child(

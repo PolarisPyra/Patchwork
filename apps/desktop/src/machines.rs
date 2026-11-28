@@ -3,10 +3,14 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use gpui::{EventEmitter, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_platform::files::browse::{self, Machine};
 use patchwork_platform::machine::device::{self, Kind};
-use patchwork_design_components::{button, icon_button, spinner};
+use patchwork_design_components::button;
 use patchwork_design_icons::{IconName, icon};
 use patchwork_design_theme::{fs_md, fs_sm, radius_sm, theme};
 
@@ -104,14 +108,12 @@ impl Render for DevicesView {
             .font_weight(FontWeight::SEMIBOLD)
             .child("Devices")
             .child(
-                icon_button(
-                    "refresh-devices",
-                    "Refresh",
-                    IconName::ArrowsClockwise,
-                    18.,
-                    cx,
-                )
-                .on_click(cx.listener(|this, _, _, cx| this.load(true, cx))),
+                Button::new("refresh-devices")
+                    .ghost()
+                    .small()
+                    .icon(IconName::ArrowsClockwise)
+                    .accessibility_label("Refresh")
+                    .on_click(cx.listener(|this, _, _, cx| this.load(true, cx))),
             );
         let rows = self
             .devices
@@ -123,7 +125,10 @@ impl Render for DevicesView {
                 let host = (!m.local).then(|| m.name.clone());
                 let mark = match kind {
                     Some(kind) => icon(kind_icon(*kind), 16.).into_any_element(),
-                    None => spinner(14., t.text_muted).into_any_element(),
+                    None => Spinner::new()
+                        .with_size(gpui::px(14.))
+                        .color(t.text_muted)
+                        .into_any_element(),
                 };
                 button(SharedString::from(format!("device-{i}")), name.clone())
                     .role(Role::ListItem)
@@ -180,7 +185,7 @@ impl Render for DevicesView {
                                 .px(px(12.))
                                 .role(Role::Status)
                                 .aria_label("Loading devices")
-                                .child(spinner(14., t.text_muted)),
+                                .child(Spinner::new().with_size(gpui::px(14.)).color(t.text_muted)),
                         )
                     })
                     .children(rows)

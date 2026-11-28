@@ -3,6 +3,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use std::sync::Arc;
 
 use gpui::{
@@ -16,7 +20,7 @@ use super::rows::picked;
 use patchwork_design_components::input_box;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_lg, fs_sm, radius, radius_lg, radius_sm, Theme};
-use patchwork_design_components::{BtnKind, btn, button};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 impl Onboarding {
@@ -209,7 +213,11 @@ pub fn projects_step(
         let field_focused = this.name.read(cx).focus_handle(cx).is_focused(window);
         let empty = this.name.read(cx).content.trim().is_empty();
         let off = busy || empty;
-        let go = btn("setup-create-in", "Create in…", BtnKind::Primary, off, t).child("Create in…");
+        let go = Button::new("setup-create-in")
+            .primary()
+            .small()
+            .disabled(off)
+            .label("Create in…");
         let go = if off {
             go
         } else {

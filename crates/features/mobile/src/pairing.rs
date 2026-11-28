@@ -2,12 +2,15 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{
     Context, EventEmitter, FocusHandle, InteractiveElement as _, IntoElement, KeyDownEvent,
     ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, Window, div, px,
 };
 use patchwork_client::{Pairing, Session};
-use patchwork_design_components::{BtnKind, btn, input_box};
+use patchwork_design_components::input_box;
 use patchwork_design_theme::{Theme, fs_xxl, theme};
 
 /// What the pairing screen tells the app.
@@ -151,8 +154,10 @@ impl Render for PairingScreen {
             .child(self.field(Field::Address, focused, &t, cx))
             .child(self.field(Field::Code, focused, &t, cx))
             .child(
-                btn("pairing.pair", "Pair", BtnKind::Primary, false, &t)
-                    .child("Pair")
+                Button::new("pairing.pair")
+                    .primary()
+                    .small()
+                    .label("Pair")
                     .on_click(cx.listener(|this, _, _, cx| this.pair(cx))),
             )
             .children(status)

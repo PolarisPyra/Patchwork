@@ -132,7 +132,6 @@ impl Composer {
         let can_compact = chat.is_some_and(|t| !t.messages.is_empty()) && !working;
         let row = WorkspaceState {
             project: host.project(cx).map(|p| (p.name.clone(), p.path.clone())),
-            host: host.machine(cx),
             worktree_pick,
             worktree,
         };
@@ -198,7 +197,7 @@ impl Composer {
         };
         let row = self.workspace_row(row, &footer.picks, &t, window, cx);
         let footer = self.footer(&footer, &t, window, cx);
-        let sigil_menu = self.sigil_menu(agent, &provider_commands, &t, cx);
+        let sigil_menu = self.sigil_menu(agent, &provider_commands, &t, window, cx);
         // What the message attaches, at the top of the card above the draft.
         let attached = (!attachments.is_empty()).then(|| {
             div()
@@ -263,7 +262,7 @@ impl Composer {
                 let keys = &e.keystroke;
                 let m = &keys.modifiers;
                 if keys.key == "escape" {
-                    if this.sigil_escape(cx) {
+                    if this.sigil_escape(window, cx) {
                         return cx.stop_propagation();
                     }
                     // As the web's: Escape in the draft stops a running reply.

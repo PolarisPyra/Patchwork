@@ -3,13 +3,17 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use patchwork_client::AppState;
 use std::sync::Arc;
 use gpui::{AnyElement, Div, PromptLevel, Role, SharedString, Stateful, Window, div, prelude::*, px};
 use patchwork_model::chats::TokenUsage;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, font_mono, fs_md, fs_sm, fs_xs, radius_sm};
-use patchwork_design_components::{button, icon_button, spinner};
+use patchwork_design_components::button;
 use patchwork_design_text::{display_title, format_relative, format_tokens};
 use patchwork_design_icons::icon;
 use super::details::heading;
@@ -225,7 +229,11 @@ impl AgentPage {
                     .pt(px(8.))
                     .ml(px(-6.))
                     .child(
-                        icon_button("agent-drill-back", "Back", IconName::CaretLeft, 14., cx)
+                        Button::new("agent-drill-back")
+                            .ghost()
+                            .small()
+                            .icon(IconName::CaretLeft)
+                            .accessibility_label("Back")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.drill = None;
                                 cx.notify();
@@ -279,7 +287,7 @@ impl AgentPage {
                 .role(Role::Status)
                 .aria_label("Loading")
                 .p(px(8.))
-                .child(spinner(16., t.text_muted))
+                .child(Spinner::new().with_size(gpui::px(16.)).color(t.text_muted))
                 .into_any_element(),
             Some(Err(e)) => div()
                 .id("agent-brief-error")

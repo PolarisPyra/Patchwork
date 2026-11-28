@@ -5,6 +5,10 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use crate::prelude::*;
 use patchwork_platform::now_ms;
 use gpui::{Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px, relative};
@@ -12,7 +16,7 @@ use patchwork_client::local::core::chats::{BackgroundTask, TaskStatus};
 
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, radius, Theme};
-use patchwork_design_components::{button, icon_button, spinner};
+use patchwork_design_components::button;
 
 /// What each kind of task the agents report is called here. Any other kind is shown as it comes.
 fn kind_label(kind: &str) -> &str {
@@ -124,16 +128,13 @@ fn cut_off_row<W: ChatWindow>(
             .on_click(cx.listener(move |w, _, _, cx| w.run_cut_off_again(&task, cx))),
         )
         .child(
-            icon_button(
-                SharedString::from(format!("dismiss-cut-off-{i}")),
-                format!("Dismiss {description}"),
-                IconName::X,
-                12.,
-                cx,
-            )
-            .flex_none()
-            .tooltip("Dismiss")
-            .on_click(cx.listener(move |w, _, _, cx| w.dismiss_cut_off(tool_id.clone(), cx))),
+            Button::new(SharedString::from(format!("dismiss-cut-off-{i}")))
+                .ghost()
+                .small()
+                .icon(IconName::X)
+                .accessibility_label(format!("Dismiss {description}"))
+                .flex_none()
+                .on_click(cx.listener(move |w, _, _, cx| w.dismiss_cut_off(tool_id.clone(), cx))),
         )
 }
 
@@ -167,7 +168,7 @@ pub fn background_tasks<W: ChatWindow>(
         let lead = if task.status == TaskStatus::Running {
             div()
                 .flex_none()
-                .child(spinner(12., t.accent))
+                .child(Spinner::new().with_size(gpui::px(12.)).color(t.accent))
                 .into_any_element()
         } else {
             div()

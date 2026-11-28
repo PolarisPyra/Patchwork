@@ -3,6 +3,9 @@
 
 // Rust guideline compliant 2026-11-27
 
+use gpui::component::button::Button;
+use gpui::component::Sizable as _;
+use gpui::component::tag::Tag;
 use crate::prelude::*;
 use patchwork_client::AppState;
 use std::collections::HashSet;
@@ -18,7 +21,7 @@ use patchwork_design_text::markdown::markdown;
 use super::plan_steps::plan_title;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_md, fs_sm, radius, radius_sm, Theme};
-use patchwork_design_components::{BtnKind, badge, btn, button, popup_shadow};
+use patchwork_design_components::{button, popup_shadow};
 use patchwork_design_icons::icon;
 use patchwork_design_text::slug_file_name;
 
@@ -233,7 +236,7 @@ pub fn proposed_plan<W: ChatWindow>(
                 .flex()
                 .items_center()
                 .gap(px(12.))
-                .child(badge("Plan", t))
+                .child(Tag::secondary().small().child("Plan"))
                 .child(
                     div()
                         .flex_1()
@@ -278,21 +281,17 @@ pub fn proposed_plan<W: ChatWindow>(
             };
             d.child(
                 div().mt(px(12.)).flex().justify_center().child(
-                    btn(
-                        SharedString::from(format!("plan-expand-{key}")),
-                        label,
-                        BtnKind::Plain,
-                        false,
-                        t,
-                    )
-                    .aria_expanded(expanded)
-                    .child(label)
-                    .on_click(cx.listener(move |w, _, _, cx| {
-                        if !w.proposed.expanded.remove(&key) {
-                            w.proposed.expanded.insert(key.clone());
-                        }
-                        cx.notify();
-                    })),
+                    Button::new(SharedString::from(format!("plan-expand-{key}")))
+                        .small()
+                        .accessibility_label(label)
+                        .aria_expanded(expanded)
+                        .child(label)
+                        .on_click(cx.listener(move |w, _, _, cx| {
+                            if !w.proposed.expanded.remove(&key) {
+                                w.proposed.expanded.insert(key.clone());
+                            }
+                            cx.notify();
+                        })),
                 ),
             )
         })

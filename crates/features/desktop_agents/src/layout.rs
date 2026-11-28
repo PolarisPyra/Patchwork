@@ -3,6 +3,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use patchwork_client::AppState;
 use gpui::{Div, FontWeight, KeyDownEvent, Role, SharedString, Stateful, Window, div, prelude::*, px};
 use patchwork_client::local::core::agents::STARTING_POINTS;
@@ -11,7 +15,7 @@ use patchwork_design_icons::IconName;
 use patchwork_design_theme::{
     InScheme, Theme, fs_lg, fs_md, fs_sm, radius, radius_lg, radius_sm, theme,
 };
-use patchwork_design_components::{button, icon_button, spinner, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 use super::details::{radio, radio_group};
 use super::home::{AgentPage, Layout};
@@ -175,7 +179,6 @@ impl AgentPage {
                 .bg(t.bg_panel)
                 .shadow(header_shadow())
                 .hover(move |s| s.bg(hover))
-                .tooltip(tooltip("Find in conversation"))
                 .child(icon(IconName::MagnifyingGlass, 14.))
                 .on_click(cx.listener(|this, _, _, cx| this.find_in_newest(cx))),
         )
@@ -196,7 +199,6 @@ impl AgentPage {
             .bg(t.bg_panel)
             .shadow(header_shadow())
             .hover(move |s| s.bg(hover))
-            .tooltip(tooltip("Agent details"))
             .child(icon(IconName::GearSix, 14.))
             .on_click(cx.listener(|this, _, _, cx| this.toggle_details(cx)))
     }
@@ -327,16 +329,14 @@ impl AgentPage {
                             .child("Pick a starting point"),
                     )
                     .child(
-                        icon_button(
-                            "agent-start-close",
-                            "Close starting points",
-                            IconName::X,
-                            16.,
-                            cx,
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.close_start(window, cx);
-                        })),
+                        Button::new("agent-start-close")
+                            .ghost()
+                            .small()
+                            .icon(IconName::X)
+                            .accessibility_label("Close starting points")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.close_start(window, cx);
+                            })),
                     ),
             )
             .child(list)
@@ -375,7 +375,7 @@ impl AgentPage {
                 .gap(px(8.))
                 .text_size(px(fs_sm()))
                 .text_color(t.text_muted)
-                .child(spinner(14., t.text_muted))
+                .child(Spinner::new().with_size(gpui::px(14.)).color(t.text_muted))
                 .child("Starting")
         });
         div()

@@ -7,7 +7,7 @@ use crate::prelude::*;
 use gpui::{Div, Window, div, prelude::*, px};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_sm, radius};
-use patchwork_design_components::{button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 use super::find_bar;
 use super::subagent_list;
@@ -111,7 +111,6 @@ pub fn header<W: ChatWindow>(
             .bg(t.bg_panel)
             .shadow(shadow())
             .hover(move |s| s.bg(hover))
-            .tooltip(tooltip("Agent details"))
             .child(icon(IconName::GearSix, 14.))
             .on_click(cx.listener(|w, _, _, cx| w.toggle_agent_details(cx)))
     });
@@ -130,7 +129,6 @@ pub fn header<W: ChatWindow>(
             .text_color(t.text_muted)
             .shadow(shadow())
             .hover(move |s| s.bg(hover).text_color(fg))
-            .tooltip(tooltip("Android devices"))
             .child(icon(IconName::DeviceMobile, 14.))
             .on_click(cx.listener(|w, _, window, cx| w.toggle_android(window, cx)))
     });
@@ -147,7 +145,6 @@ pub fn header<W: ChatWindow>(
             .text_color(t.text_muted)
             .shadow(shadow())
             .hover(move |s| s.bg(hover).text_color(fg))
-            .tooltip(tooltip("Continue in terminal"))
             .child(icon(IconName::Terminal, 14.))
             .on_click(cx.listener(|w, _, _, cx| w.continue_in_cli(cx)))
     });

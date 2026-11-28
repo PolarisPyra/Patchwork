@@ -2,12 +2,16 @@
 
 // Rust guideline compliant 2026-11-22
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::sync::Arc;
 
 use gpui::{Div, Focusable, Role, Window, div, prelude::*, px};
 use patchwork_client::local::core::provider::{AgentKind, antigravity};
 use patchwork_design_theme::{fs_sm, theme};
-use patchwork_design_components::{BtnKind, btn, spinner};
 
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert};
@@ -220,11 +224,12 @@ impl SettingsDialog {
                     .role(Role::Status)
                     .text_size(px(fs_sm()))
                     .text_color(t.text_muted)
-                    .child(spinner(12., t.text_muted))
+                    .child(Spinner::new().with_size(gpui::px(12.)).color(t.text_muted))
                     .child("Starting Antigravity ACP Google sign-in…")
                     .child(
-                        btn("agy-auth-cancel", "Cancel", BtnKind::Plain, false, &t)
-                            .child("Cancel")
+                        Button::new("agy-auth-cancel")
+                            .small()
+                            .label("Cancel")
                             .on_click(cx.listener(|d, _, _, cx| {
                                 d.cancel_antigravity_auth(cx);
                             })),
@@ -250,26 +255,17 @@ impl SettingsDialog {
                             .items_center()
                             .gap(px(8.))
                             .child(
-                                btn("agy-auth-open", "Open Google Sign-in", BtnKind::Plain, false, &t)
-                                    .child("Open Google Sign-in")
+                                Button::new("agy-auth-open").small().label("Open Google Sign-in")
                                     .on_click(move |_, _, cx| cx.open_url(&open_url)),
                             )
                             .child(
-                                btn("agy-auth-cancel", "Cancel", BtnKind::Plain, false, &t)
-                                    .child("Cancel")
+                                Button::new("agy-auth-cancel").small().label("Cancel")
                                     .on_click(cx.listener(|d, _, _, cx| {
                                         d.cancel_antigravity_auth(cx);
                                     })),
                             )
                             .child(
-                                btn(
-                                    "agy-auth-submit",
-                                    "Complete Sign-in",
-                                    BtnKind::Primary,
-                                    empty,
-                                    &t,
-                                )
-                                .child("Complete Sign-in")
+                                Button::new("agy-auth-submit").primary().small().disabled(empty).label("Complete Sign-in")
                                 .when(!empty, |b| {
                                     b.on_click(cx.listener(|d, _, _, cx| {
                                         d.submit_antigravity_code(cx);
@@ -287,7 +283,7 @@ impl SettingsDialog {
                     .role(Role::Status)
                     .text_size(px(fs_sm()))
                     .text_color(t.text_muted)
-                    .child(spinner(12., t.text_muted))
+                    .child(Spinner::new().with_size(gpui::px(12.)).color(t.text_muted))
                     .child("Verifying Google sign-in with Antigravity…"),
             ),
             AntigravityAuth::SigningOut => panel.child(
@@ -299,7 +295,7 @@ impl SettingsDialog {
                     .role(Role::Status)
                     .text_size(px(fs_sm()))
                     .text_color(t.text_muted)
-                    .child(spinner(12., t.text_muted))
+                    .child(Spinner::new().with_size(gpui::px(12.)).color(t.text_muted))
                     .child("Signing out of Antigravity…"),
             ),
             AntigravityAuth::Failed(message) => panel
@@ -310,15 +306,18 @@ impl SettingsDialog {
                         .items_center()
                         .gap(px(8.))
                         .child(
-                            btn("agy-auth-dismiss", "Dismiss", BtnKind::Plain, false, &t)
-                                .child("Dismiss")
+                            Button::new("agy-auth-dismiss")
+                                .small()
+                                .label("Dismiss")
                                 .on_click(cx.listener(|d, _, _, cx| {
                                     d.cancel_antigravity_auth(cx);
                                 })),
                         )
                         .child(
-                            btn("agy-auth-retry", "Try again", BtnKind::Primary, false, &t)
-                                .child("Try again")
+                            Button::new("agy-auth-retry")
+                                .primary()
+                                .small()
+                                .label("Try again")
                                 .on_click(cx.listener(|d, _, _, cx| {
                                     d.start_antigravity_login(cx);
                                 })),

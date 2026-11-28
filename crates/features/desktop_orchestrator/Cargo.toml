@@ -12,6 +12,7 @@ categories.workspace = true
 
 [dependencies]
 patchwork-design-backgrounds.workspace = true
+patchwork-desktop-chat.workspace = true
 patchwork-design-components.workspace = true
 patchwork-design-editor.workspace = true
 patchwork-design-icons.workspace = true

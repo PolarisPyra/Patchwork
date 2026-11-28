@@ -1,10 +1,10 @@
-//! Popups, menus' rows and tooltips.
+//! Popups and menus' rows.
 
 // Rust guideline compliant 2026-10-09
 
 use gpui::{
-    Anchor, App, BoxShadow, Div, ElementId, Role, SharedString, Stateful, Window, anchored,
-    deferred, div, point, prelude::*, px,
+    Anchor, BoxShadow, Div, ElementId, Role, SharedString, Stateful, anchored, deferred, div,
+    point, prelude::*, px,
 };
 use patchwork_design_theme::{fs_md, radius, radius_sm, Theme};
 
@@ -106,10 +106,4 @@ pub fn menu_item(
         .when(checked, |row| row.bg(t.bg_selected_muted))
         .when(highlighted && !checked, |row| row.bg(hover))
         .hover(move |s| s.bg(hover))
-}
-
-/// A tooltip: gpui-component's, with `text` beside the pointer.
-pub fn tooltip(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> gpui::AnyView {
-    let text = text.into();
-    move |window, cx| gpui::component::tooltip::Tooltip::new(text.clone()).build(window, cx)
 }

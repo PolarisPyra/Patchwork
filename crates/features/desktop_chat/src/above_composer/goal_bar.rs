@@ -10,7 +10,7 @@ use patchwork_client::local::core::chats::{Goal, GoalStatus};
 
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, fs_xs, radius_sm, Theme};
-use patchwork_design_components::{button, tooltip};
+use patchwork_design_components::button;
 use patchwork_design_text::full_elapsed;
 use patchwork_design_icons::icon;
 use crate::window::{is_working};
@@ -135,8 +135,6 @@ pub fn goal_banner<W: ChatWindow>(
     let (muted, fg) = (t.text_muted, t.text);
     let started = goal.started_at;
     let objective: SharedString = goal.objective.clone().into();
-    // A long objective scrolls in the banner, so the tooltip names it by its first line.
-    let first_line = goal.objective.lines().next().unwrap_or_default().to_owned();
     let toggle = button("goal-toggle", label.clone())
         .aria_expanded(open)
         .flex_1()
@@ -144,7 +142,6 @@ pub fn goal_banner<W: ChatWindow>(
         .gap(px(8.))
         .text_color(muted)
         .hover(move |s| s.text_color(fg))
-        .tooltip(tooltip(first_line))
         .child(
             icon(IconName::Target, 13.)
                 .flex_none()
@@ -197,14 +194,12 @@ pub fn goal_banner<W: ChatWindow>(
         .when(working && active, |d| {
             d.child(
                 strip_action("goal-stop", "Stop", t)
-                    .tooltip(tooltip("Pause the goal"))
                     .on_click(cx.listener(|w, _, _, cx| w.stop(cx))),
             )
         })
         .when(!working && can_resume(&goal), |d| {
             d.child(
                 strip_action("goal-resume", "Resume", t)
-                    .tooltip(tooltip("Carry on with the goal"))
                     .on_click(cx.listener(|w, _, _, cx| w.resume_goal(cx))),
             )
         })
@@ -222,7 +217,6 @@ pub fn goal_banner<W: ChatWindow>(
         .child({
             let label = if clear_failed { "Retry" } else { "Clear goal" };
             strip_action("goal-clear", label, t)
-                .tooltip(tooltip("Drop the goal"))
                 .on_click(cx.listener(|w, _, _, cx| w.clear_goal(cx)))
         });
     Some(

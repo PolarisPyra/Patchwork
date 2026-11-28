@@ -9,7 +9,6 @@ use gpui::{AnyElement, FocusHandle, FontWeight, Role, SharedString, div, img, pr
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{anchored, radio};
 use patchwork_design_theme::{radius_sm, theme};
-use patchwork_design_components::tooltip;
 
 /// The pane's own state.
 #[derive(Default)]
@@ -119,7 +118,6 @@ pub(in crate::settings) fn app_icon_row(
                                     .hover(move |s| s.bg(t.bg_hover))
                             }
                         })
-                        .tooltip(tooltip(l.name.clone()))
                         .child(
                             img(patchwork_design_theme::asset(format!(
                                 "app-icons/{}.svg",

@@ -2,12 +2,16 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
+use gpui::component::tag::Tag;
 use gpui::{FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_model::chats::Message;
 use patchwork_design_text::highlight::file_label;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_lg, fs_sm, radius, Theme};
-use patchwork_design_components::{BtnKind, badge, btn, icon_button, tooltip};
 use patchwork_design_text::{base_name, dir_name};
 use patchwork_design_icons::icon;
 use super::diff::Review;
@@ -67,7 +71,6 @@ impl Canvas {
                             .text_size(px(fs_lg()))
                             .font_weight(FontWeight::SEMIBOLD)
                             .truncate()
-                            .when_some(self.path.clone(), |d, path| d.tooltip(tooltip(path)))
                             .child(name),
                     )
                     .children(subtitle.map(|s| {
@@ -86,23 +89,22 @@ impl Canvas {
                     .flex_none()
                     .when(review > 0, |d| {
                         d.child(
-                            btn(
-                                "send-review",
-                                format!("Send review ({review})"),
-                                BtnKind::Primary,
-                                false,
-                                t,
-                            )
-                            .child(icon(IconName::ChatText, 14.))
-                            .child(format!("Send review ({review})"))
-                            .on_click(cx.listener(|this, _, _, cx| this.send_review(cx))),
+                            Button::new("send-review")
+                                .primary()
+                                .small()
+                                .accessibility_label(format!("Send review ({review})"))
+                                .child(icon(IconName::ChatText, 14.))
+                                .child(format!("Send review ({review})"))
+                                .on_click(cx.listener(|this, _, _, cx| this.send_review(cx))),
                         )
                     })
                     .when(
                         self.path.is_some() && !patchwork_platform::ssh::is_remote(&self.root),
                         |d| {
                             d.child(
-                                btn("open-in-editor", "Open in editor", BtnKind::Plain, false, t)
+                                Button::new("open-in-editor")
+                                    .small()
+                                    .accessibility_label("Open in editor")
                                     .child(icon(IconName::ArrowSquareOut, 14.))
                                     .child("Open in editor")
                                     .on_click(
@@ -111,7 +113,10 @@ impl Canvas {
                             )
                             .child({
                                 let label = if self.copied { "Copied" } else { "Copy" };
-                                btn("copy-file", label, BtnKind::Plain, !has_content, t)
+                                Button::new("copy-file")
+                                    .small()
+                                    .disabled(!has_content)
+                                    .accessibility_label(label)
                                     .child(icon(
                                         if self.copied {
                                             IconName::Check
@@ -128,8 +133,11 @@ impl Canvas {
                         },
                     )
                     .child(
-                        icon_button("close-canvas", "Close canvas", IconName::X, 16., cx)
-                            .tooltip("Close")
+                        Button::new("close-canvas")
+                            .ghost()
+                            .small()
+                            .icon(IconName::X)
+                            .accessibility_label("Close canvas")
                             .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
                     ),
             )
@@ -219,7 +227,7 @@ impl Canvas {
                     .hover(move |s| s.text_color(fg))
                     .child(label.to_string())
                     .when(count > 0, |d| {
-                        let b = badge(count.to_string(), t);
+                        let b = Tag::secondary().small().child(count.to_string());
                         d.child(if on {
                             b.bg(t.border_strong).text_color(t.text)
                         } else {
@@ -238,7 +246,9 @@ impl Canvas {
                 let on = self.blame_on;
                 d.child(div().ml_auto().children(self.conflict_nav(t, cx)))
                     .child(
-                        btn("toggle-blame", "Blame", BtnKind::Plain, false, t)
+                        Button::new("toggle-blame")
+                            .small()
+                            .accessibility_label("Blame")
                             .toggled(on)
                             .when(on, |b| b.bg(selected).text_color(fg))
                             .child(icon(IconName::GitCommit, 14.))
@@ -254,19 +264,21 @@ impl Canvas {
                         .flex_none()
                         .gap(px(4.))
                         .child(
-                            icon_button(
-                                "previous-change",
-                                "Previous change",
-                                IconName::CaretUp,
-                                16.,
-                                cx,
-                            )
-                            .tooltip("Previous change")
-                            .on_click(cx.listener(|this, _, _, cx| this.jump_to_change(-1, cx))),
+                            Button::new("previous-change")
+                                .ghost()
+                                .small()
+                                .icon(IconName::CaretUp)
+                                .accessibility_label("Previous change")
+                                .on_click(
+                                    cx.listener(|this, _, _, cx| this.jump_to_change(-1, cx)),
+                                ),
                         )
                         .child(
-                            icon_button("next-change", "Next change", IconName::CaretDown, 16., cx)
-                                .tooltip("Next change")
+                            Button::new("next-change")
+                                .ghost()
+                                .small()
+                                .icon(IconName::CaretDown)
+                                .accessibility_label("Next change")
                                 .on_click(cx.listener(|this, _, _, cx| this.jump_to_change(1, cx))),
                         ),
                 )

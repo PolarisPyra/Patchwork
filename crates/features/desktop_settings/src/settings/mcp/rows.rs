@@ -103,14 +103,6 @@ pub(super) fn server_row(
     };
     let id = card.id.clone();
     let hover = t.bg_hover;
-    let title = if card.status == "error" {
-        card.uses
-            .iter()
-            .find_map(|u| u.error.clone())
-            .unwrap_or_default()
-    } else {
-        card.target.clone()
-    };
     patchwork_design_components::button(
         SharedString::from(format!("mcp-{}", card.id)),
         card.name.clone(),
@@ -125,7 +117,6 @@ pub(super) fn server_row(
     .when(card.status == "off" || card.status == "unapproved", |b| {
         b.opacity(0.55)
     })
-    .tooltip(patchwork_design_components::tooltip(title))
     .child(letter_badge(&card.name, 24.))
     .child(
         div()

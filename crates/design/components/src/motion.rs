@@ -1,4 +1,4 @@
-//! What moves in place, the spinner, and the one clock every animation steps by.
+//! What moves in place, and the one clock every animation steps by.
 
 // Rust guideline compliant 2026-10-09
 
@@ -6,24 +6,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
-use gpui::component::spinner::Spinner;
-use gpui::component::{Sizable, Size as KitSize};
-use gpui::{App, EntityId, Hsla, Role, Window, div, prelude::*, px};
-
-/// gpui-component's spinner, `size` pixels across in `color`.
-#[must_use]
-pub fn spinner(size: f32, color: Hsla) -> impl IntoElement {
-    div()
-        .id("spinner")
-        .role(Role::ProgressIndicator)
-        .aria_label("Loading")
-        .flex_none()
-        .child(
-            Spinner::new()
-                .color(color)
-                .with_size(KitSize::Size(px(size))),
-        )
-}
+use gpui::{App, EntityId, Window, px};
 
 /// How often what moves in place, a spinner's arc or a card's shimmer, moves on.
 const MOTION_FPS: f32 = 60.;

@@ -5,6 +5,8 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use patchwork_client::AppState;
 use patchwork_views_logos::{agent_label, agent_logo};
 use patchwork_platform::now_ms;
@@ -15,8 +17,7 @@ use patchwork_model::provider::AgentKind;
 use patchwork_client::local::core::usage::UsageWindow;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, theme, fs, fs_sm, radius_lg, radius_sm};
-use patchwork_design_components::{button, popup_shadow, spinner, tooltip};
-use patchwork_design_text::format_date;
+use patchwork_design_components::{button, popup_shadow};
 use patchwork_design_icons::icon;
 
 use super::limits::{
@@ -249,13 +250,11 @@ fn agent_section(
         .and_then(|u| u.updated_at)
         .filter(|_| !state.busy)
         .map(|at| {
-            let secs = i64::try_from(at / 1000).unwrap_or(i64::MAX);
             div()
                 .id(SharedString::from(format!("usage-ago-{name}")))
                 .flex_none()
                 .text_size(px(fs(10.5)))
                 .text_color(t.text_subtle)
-                .tooltip(tooltip(format!("Last reported {}", format_date(secs))))
                 .child(ago(at, now))
         });
     let refresh = ready.then(|| {
@@ -270,10 +269,9 @@ fn agent_section(
         .rounded(px(5.))
         .text_color(t.text_subtle)
         .hover(move |s| s.bg(hover).text_color(fg))
-        .tooltip(tooltip(refresh_label))
         .map(|b| {
             if state.busy {
-                b.child(spinner(12., t.text_subtle))
+                b.child(Spinner::new().with_size(gpui::px(12.)).color(t.text_subtle))
             } else {
                 b.child(icon(IconName::ArrowsClockwise, 12.))
             }
@@ -343,10 +341,7 @@ fn agent_section(
                 .pb(px(2.))
                 .text_size(px(fs(11.5)))
                 .text_color(t.text_muted)
-                .when_some(why, |row, why| {
-                    row.aria_label(format!("{note}: {why}"))
-                        .tooltip(tooltip(why))
-                })
+                .when_some(why, |row, why| row.aria_label(format!("{note}: {why}")))
                 .child(note)
         }))
         .when(!rows.is_empty(), |s| {

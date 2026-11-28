@@ -3,6 +3,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::rc::Rc;
 
 use gpui::{AnyElement, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
@@ -14,7 +18,6 @@ use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, font_ui, fs_sm, radius};
 use patchwork_design_text::format_date;
 use patchwork_design_icons::icon;
-use patchwork_design_components::{icon_button, spinner, tooltip};
 
 /// How many of a file's commits are read at once.
 const PAGE: usize = 100;
@@ -146,12 +149,6 @@ impl Canvas {
         }
         let date = format_date(range.time);
         let day = date.rsplit_once(", ").map_or(date.as_str(), |(day, _)| day);
-        let about = format!(
-            "{} {}\n{}, {date}",
-            short(&range.hash),
-            range.subject,
-            range.author
-        );
         let revision = FileRevision {
             hash: range.hash.clone(),
             author: range.author.clone(),
@@ -172,7 +169,6 @@ impl Canvas {
                 .cursor_pointer()
                 .hover(move |s| s.text_color(fg))
                 .focus(move |s| s.text_color(fg))
-                .tooltip(tooltip(about))
                 .child(format!("{} · {day}", range.author))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.show_revision(revision.clone(), cx);
@@ -217,15 +213,12 @@ impl Canvas {
                         .child(revision.subject.clone()),
                 )
                 .child(
-                    icon_button(
-                        "close-revision",
-                        "Show uncommitted changes",
-                        IconName::X,
-                        14.,
-                        cx,
-                    )
-                    .tooltip("Show uncommitted changes")
-                    .on_click(cx.listener(|this, _, _, cx| this.clear_revision(cx))),
+                    Button::new("close-revision")
+                        .ghost()
+                        .small()
+                        .icon(IconName::X)
+                        .accessibility_label("Show uncommitted changes")
+                        .on_click(cx.listener(|this, _, _, cx| this.clear_revision(cx))),
                 )
                 .into_any_element(),
         )
@@ -239,7 +232,7 @@ impl Canvas {
                     .id("canvas-history-loading")
                     .role(Role::Status)
                     .aria_label("Loading the file's history")
-                    .child(spinner(18., t.text_subtle))
+                    .child(Spinner::new().with_size(gpui::px(18.)).color(t.text_subtle))
                     .into_any_element();
             }
             Some(Err(e)) => {

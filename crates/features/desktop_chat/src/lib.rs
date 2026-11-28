@@ -37,6 +37,6 @@ pub mod worktree_marks;
 pub mod worktree_switch;
 
 pub use composer::{Composer, Picks};
-pub use host::{ChatEvent, ChatHost, Outgoing, WorktreeParts};
+pub use host::{ChatEvent, ChatHost, Mention, Outgoing, WorktreeParts};
 pub use layout::{ChatView, OPEN_HOLD};
 pub use window::{ChatUi, ChatWindow, MenuTarget, ReplyNotice};

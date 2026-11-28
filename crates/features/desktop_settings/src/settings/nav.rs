@@ -3,11 +3,14 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use gpui::{AnyElement, Entity, Focusable, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_design_editor::{Arrow, Changed, Submitted, TextArea};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_md, fs_xs, input_placeholder, radius, radius_sm, theme};
-use patchwork_design_components::{button, icon_button, mix};
+use patchwork_design_components::{button, mix};
 use patchwork_design_icons::icon;
 use super::controls::{center_when_drawn, seek};
 use super::dialog::SettingsDialog;
@@ -186,20 +189,18 @@ impl SettingsDialog {
             .child(div().flex_1().min_w_0().child(search))
             .when(typed, |d| {
                 d.child(
-                    icon_button(
-                        "settings-search-clear",
-                        "Clear the search",
-                        IconName::X,
-                        12.,
-                        cx,
-                    )
-                    .on_click(cx.listener(|d, _, window, cx| {
-                        d.clear_search(cx);
-                        if let Some(search) = &d.search {
-                            let focus = search.read(cx).focus_handle(cx);
-                            window.focus(&focus, cx);
-                        }
-                    })),
+                    Button::new("settings-search-clear")
+                        .ghost()
+                        .small()
+                        .icon(IconName::X)
+                        .accessibility_label("Clear the search")
+                        .on_click(cx.listener(|d, _, window, cx| {
+                            d.clear_search(cx);
+                            if let Some(search) = &d.search {
+                                let focus = search.read(cx).focus_handle(cx);
+                                window.focus(&focus, cx);
+                            }
+                        })),
                 )
             })
             .into_any_element()

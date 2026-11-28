@@ -4,6 +4,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use std::collections::HashSet;
 use std::sync::{Arc, OnceLock};
 
@@ -18,7 +21,7 @@ use crate::settings::controls::{Section, minutes_stepper, token_row};
 use crate::settings::{SettingsDialog, SettingsEvent};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_sm, fs_xs, theme};
-use patchwork_design_components::{BtnKind, btn, button};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 /// The releases opened, by version; None until the pane first draws, which opens the newest.
@@ -189,20 +192,14 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
     let status = d.core.update_status();
     let failed = matches!(status.state, UpdateState::Failed { .. });
     let action = match &status.state {
-        UpdateState::Ready { .. } => btn(
-            "update-action",
-            "Restart to update",
-            BtnKind::Plain,
-            false,
-            &t,
-        )
-        .child("Restart to update")
-        .on_click(cx.listener(|_, _, _, cx| cx.emit(SettingsEvent::RestartToUpdate))),
-        UpdateState::Available { .. } => {
-            btn("update-action", "Download", BtnKind::Plain, false, &t)
-                .child("Download")
-                .on_click(|_, _, cx| cx.open_url(RELEASES_URL))
-        }
+        UpdateState::Ready { .. } => Button::new("update-action")
+            .small()
+            .label("Restart to update")
+            .on_click(cx.listener(|_, _, _, cx| cx.emit(SettingsEvent::RestartToUpdate))),
+        UpdateState::Available { .. } => Button::new("update-action")
+            .small()
+            .label("Download")
+            .on_click(|_, _, cx| cx.open_url(RELEASES_URL)),
         UpdateState::Idle
         | UpdateState::Checking
         | UpdateState::UpToDate
@@ -217,8 +214,10 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             } else {
                 "Check for updates"
             };
-            btn("update-action", label, BtnKind::Plain, working, &t)
-                .child(label)
+            Button::new("update-action")
+                .small()
+                .disabled(working)
+                .label(label)
                 .when(!working, |b| {
                     b.on_click(cx.listener(|d, _, _, _| Arc::clone(&d.core).check_for_updates()))
                 })
@@ -257,28 +256,20 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
             token_row("Data folder", &t)
                 .child(mono(data))
                 .child(
-                    btn(
-                        "about-copy-data",
-                        "Copy the data folder",
-                        BtnKind::Plain,
-                        false,
-                        &t,
-                    )
-                    .child("Copy")
-                    .on_click(move |_, _, cx| {
-                        cx.write_to_clipboard(ClipboardItem::new_string(copy_data.clone()));
-                    }),
+                    Button::new("about-copy-data")
+                        .small()
+                        .accessibility_label("Copy the data folder")
+                        .child("Copy")
+                        .on_click(move |_, _, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(copy_data.clone()));
+                        }),
                 )
                 .child(
-                    btn(
-                        "about-open-data",
-                        "Open the data folder",
-                        BtnKind::Plain,
-                        false,
-                        &t,
-                    )
-                    .child("Open")
-                    .on_click(move |_, _, cx| cx.open_with_system(open_data.as_ref())),
+                    Button::new("about-open-data")
+                        .small()
+                        .accessibility_label("Open the data folder")
+                        .child("Open")
+                        .on_click(move |_, _, cx| cx.open_with_system(open_data.as_ref())),
                 ),
         );
     div()

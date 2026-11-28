@@ -3,6 +3,11 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Selectable as _;
+use gpui::component::Sizable as _;
+use gpui::component::spinner::Spinner;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -16,7 +21,6 @@ use super::devices::{AndroidEvent, AndroidPanel, Run};
 use patchwork_design_components::{menu::Menu, menu::MenuItem};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, Theme};
-use patchwork_design_components::{dropdown_chip, icon_button, spinner, tooltip};
 
 /// What stops a command in a terminal: the interrupt key.
 const INTERRUPT: &str = "\u{3}";
@@ -305,57 +309,56 @@ impl AndroidPanel {
             return None;
         }
         let variant = (self.variants.len() > 1).then(|| {
-            dropdown_chip(
-                "android-variant",
-                format!("Build variant: {}", self.variant.name()),
-                self.variant.name(),
-                self.menu_open("Build variant"),
-                t,
-            )
-            .tooltip(tooltip("Build variant"))
-            .on_click(cx.listener(Self::open_variant_menu))
+            Button::new("android-variant")
+                .ghost()
+                .small()
+                .accessibility_label(format!("Build variant: {}", self.variant.name()))
+                .label(self.variant.name())
+                .dropdown_caret(true)
+                .selected(self.menu_open("Build variant"))
+                .on_click(cx.listener(Self::open_variant_menu))
         });
         let mut controls: Vec<AnyElement> = Vec::new();
         if self.attached() {
             controls.push(
-                icon_button(
-                    "android-reload",
-                    "Reload the app",
-                    IconName::ArrowClockwise,
-                    14.,
-                    cx,
-                )
-                .tooltip("Reload")
-                .on_click(cx.listener(|this, _, _, cx| this.reload(false, cx)))
-                .into_any_element(),
+                Button::new("android-reload")
+                    .ghost()
+                    .small()
+                    .icon(IconName::ArrowClockwise)
+                    .accessibility_label("Reload the app")
+                    .on_click(cx.listener(|this, _, _, cx| this.reload(false, cx)))
+                    .into_any_element(),
             );
             if self.project.framework.restart().is_some() {
                 controls.push(
-                    icon_button(
-                        "android-restart",
-                        "Restart the app",
-                        IconName::ArrowClockwise,
-                        14.,
-                        cx,
-                    )
-                    .tooltip("Restart")
-                    .on_click(cx.listener(|this, _, _, cx| this.reload(true, cx)))
-                    .into_any_element(),
+                    Button::new("android-restart")
+                        .ghost()
+                        .small()
+                        .icon(IconName::ArrowClockwise)
+                        .accessibility_label("Restart the app")
+                        .on_click(cx.listener(|this, _, _, cx| this.reload(true, cx)))
+                        .into_any_element(),
                 );
             }
             controls.push(
-                icon_button("android-stop-run", "Stop the run", IconName::Stop, 14., cx)
-                    .tooltip("Stop the run")
+                Button::new("android-stop-run")
+                    .ghost()
+                    .small()
+                    .icon(IconName::Stop)
+                    .accessibility_label("Stop the run")
                     .on_click(cx.listener(|this, _, _, cx| this.stop_run(cx)))
                     .into_any_element(),
             );
         }
         let log_open = self.log.is_some();
         controls.push(
-            icon_button("android-log", "App log", IconName::ListBullets, 14., cx)
+            Button::new("android-log")
+                .ghost()
+                .small()
+                .icon(IconName::ListBullets)
+                .accessibility_label("App log")
                 .toggled(log_open)
                 .when(log_open, |button| button.bg(t.bg_selected_muted))
-                .tooltip("Log")
                 .on_click(cx.listener(|this, _, _, cx| this.toggle_log(cx)))
                 .into_any_element(),
         );
@@ -394,7 +397,7 @@ impl AndroidPanel {
         };
         let working = self.working.as_ref().map(|doing| {
             row("android-working", doing.clone())
-                .child(spinner(14., t.text_muted))
+                .child(Spinner::new().with_size(gpui::px(14.)).color(t.text_muted))
                 .child(div().flex_1().min_w_0().truncate().child(doing.clone()))
                 .into_any_element()
         });
@@ -402,7 +405,11 @@ impl AndroidPanel {
             row("android-notice", done.clone())
                 .child(div().flex_1().min_w_0().truncate().child(done.clone()))
                 .child(
-                    icon_button("android-notice-dismiss", "Dismiss", IconName::X, 12., cx)
+                    Button::new("android-notice-dismiss")
+                        .ghost()
+                        .small()
+                        .icon(IconName::X)
+                        .accessibility_label("Dismiss")
                         .size(px(20.))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.notice = None;

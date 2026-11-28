@@ -6,9 +6,39 @@ use patchwork_client::AppState;
 use super::commands::Item;
 use super::commands::Token;
 use std::sync::Arc;
-use gpui::{ScrollHandle, prelude::*};
+use gpui::{Entity, ScrollHandle, Subscription, prelude::*};
+use patchwork_design_components::menu::{Dismissed, Menu};
 use crate::composer::Composer;
 use patchwork_views_chat::sigils::SigilKind;
+
+/// The host's places, in the app's menu: what it was made for, and the menu.
+pub(super) struct Mentions {
+    /// The word typed after `@` and the ids listed, which make a new menu when they change.
+    pub(super) made_for: (String, Vec<String>),
+    pub(super) menu: Entity<Menu>,
+    _dismissed: Subscription,
+}
+
+impl Mentions {
+    pub(super) fn new(
+        made_for: (String, Vec<String>),
+        menu: Entity<Menu>,
+        cx: &mut Context<Composer>,
+    ) -> Self {
+        // A press outside hides it, as Escape does, until the draft changes.
+        let dismissed = cx.subscribe(&menu, |this, _, e: &Dismissed, cx| {
+            if e.0.is_some() {
+                this.sigil.closed = true;
+                cx.notify();
+            }
+        });
+        Self {
+            made_for,
+            menu,
+            _dismissed: dismissed,
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct SigilMenu {
@@ -19,6 +49,8 @@ pub struct SigilMenu {
     /// again each time a menu opens, and when the project changes under it.
     pub(super) kind: Option<(SigilKind, Option<String>)>,
     pub(super) files: Vec<String>,
+    /// The menu `@` opens when the host lists its own places in place of files.
+    pub(super) mentions: Option<Mentions>,
     /// The enabled skills' names and descriptions.
     pub(super) skills: Vec<(String, Option<String>)>,
     /// The word and entries of the open menu, as last drawn.

@@ -2,6 +2,10 @@
 
 // Rust guideline compliant 2026-11-23
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use patchwork_views_logos::{agent_label, agent_logo};
 use gpui::{
     AnyElement, FontWeight, KeyDownEvent, MouseButton, Role, SharedString, Stateful, Window, div,
@@ -14,7 +18,7 @@ use patchwork_design_text::effort_label;
 use patchwork_design_components::dialog;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_md, fs_sm, radius, Theme, theme};
-use patchwork_design_components::{BtnKind, btn, button, icon_button};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 
 /// The height of every select on the card.
@@ -157,13 +161,14 @@ impl GranularDialog {
             };
             dropdown(main, Part::Agent, main.name().to_string(), field)
         };
-        let reset = icon_button(
-            SharedString::from(format!("granular-reset-{}", main.name())),
-            format!("Reset {}", main.name().to_lowercase()),
-            IconName::ArrowCounterClockwise,
-            14.,
-            cx,
-        )
+        let reset = Button::new(SharedString::from(format!(
+            "granular-reset-{}",
+            main.name()
+        )))
+        .ghost()
+        .small()
+        .icon(IconName::ArrowCounterClockwise)
+        .accessibility_label(format!("Reset {}", main.name().to_lowercase()))
         .on_click(cx.listener(move |this, _, _, cx| this.reset(main, cx)));
         div()
             .id(SharedString::from(format!("granular-{}", main.name())))
@@ -241,38 +246,38 @@ impl Render for GranularDialog {
             } else {
                 "Make default"
             };
-            btn(
-                "granular-default",
-                "Default for new chats",
-                BtnKind::Plain,
-                false,
-                &t,
-            )
-            .toggled(is_default)
-            .when(is_default, |b| {
-                b.border_color(t.accent)
-                    .bg(t.bg_accent_soft)
-                    .text_color(t.accent_text)
-                    .child(icon(IconName::Check, 14.))
-            })
-            .child(shown)
-            .on_click(cx.listener(|this, _, _, cx| this.toggle_default(cx)))
+            Button::new("granular-default")
+                .small()
+                .accessibility_label("Default for new chats")
+                .toggled(is_default)
+                .when(is_default, |b| {
+                    b.border_color(t.accent)
+                        .bg(t.bg_accent_soft)
+                        .text_color(t.accent_text)
+                        .child(icon(IconName::Check, 14.))
+                })
+                .child(shown)
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_default(cx)))
         });
         let buttons = div()
             .flex()
             .justify_end()
             .gap(px(8.))
             .child(
-                btn("granular-cancel", "Cancel", BtnKind::Plain, false, &t)
-                    .child("Cancel")
+                Button::new("granular-cancel")
+                    .small()
+                    .label("Cancel")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.close(false, cx);
                     })),
             )
             .children(make_default)
             .child(
-                btn("granular-save", save, BtnKind::Primary, dialog.saving, &t)
-                    .child(save)
+                Button::new("granular-save")
+                    .primary()
+                    .small()
+                    .disabled(dialog.saving)
+                    .label(save)
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.save(window, cx);
                     })),
@@ -292,7 +297,11 @@ impl Render for GranularDialog {
             .p(px(16.))
             .child(dialog::title_row(
                 dialog.title.clone(),
-                icon_button("granular-close", "Close", IconName::X, 16., cx)
+                Button::new("granular-close")
+                    .ghost()
+                    .small()
+                    .icon(IconName::X)
+                    .accessibility_label("Close")
                     .on_click(cx.listener(|this, _, _, cx| this.close(false, cx))),
             ))
             .child(panels)

@@ -2,6 +2,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use gpui::{AnyElement, Div, FontWeight, Role, Window, div, prelude::*, px};
 use patchwork_model::provider::api::KeyStore;
 
@@ -9,7 +13,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, form_footer, remove_button, vault_notice};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, radius_sm, Theme, theme};
-use patchwork_design_components::{BtnKind, btn, button, icon_button};
+use patchwork_design_components::button;
 use patchwork_design_icons::icon;
 use patchwork_views_logos::provider_logo;
 
@@ -156,11 +160,6 @@ pub fn render(
                 })
                 .text_color(muted)
                 .hover(move |s| s.border_color(t.accent).text_color(fg))
-                .tooltip(patchwork_design_components::tooltip(if logo.is_some() {
-                    "Change logo"
-                } else {
-                    "Choose logo"
-                }))
                 .child(match &logo {
                     Some(logo) => provider_logo("custom", Some(logo), 20.),
                     None => icon(IconName::Image, 16.).into_any_element(),
@@ -184,7 +183,6 @@ pub fn render(
                         .group_hover("logo", |s| s.opacity(1.))
                         .focus(|s| s.opacity(1.))
                         .hover(move |s| s.text_color(fg))
-                        .tooltip(patchwork_design_components::tooltip("Remove logo"))
                         .child(icon(IconName::X, 9.))
                         .on_click(cx.listener(|d, _, _, cx| {
                             if let Some(f) = d.form_mut() {
@@ -295,43 +293,35 @@ pub fn render(
                         .child(key_field)
                         .when(!use_env, |r| {
                             r.child(
-                                icon_button(
-                                    "show-key",
-                                    "Show key",
-                                    if show_key {
+                                Button::new("show-key")
+                                    .ghost()
+                                    .small()
+                                    .icon(if show_key {
                                         IconName::EyeSlash
                                     } else {
                                         IconName::Eye
-                                    },
-                                    15.,
-                                    cx,
-                                )
-                                .toggled(show_key)
-                                .tooltip(if show_key { "Hide key" } else { "Show key" })
-                                .on_click(cx.listener(|d, _, _, cx| d.toggle_show_key(cx))),
+                                    })
+                                    .accessibility_label("Show key")
+                                    .toggled(show_key)
+                                    .on_click(cx.listener(|d, _, _, cx| d.toggle_show_key(cx))),
                             )
                             .when(
                                 has_key && draft.key_store.is_some() && !typed_key,
                                 |r| {
                                     r.child(
-                                        icon_button(
-                                            "clear-key",
-                                            "Remove saved key",
-                                            IconName::X,
-                                            15.,
-                                            cx,
-                                        )
-                                        .toggled(clear_key)
-                                        .when(clear_key, |b| b.bg(hover).text_color(t.danger))
-                                        .tooltip("Remove saved key")
-                                        .on_click(
-                                            cx.listener(|d, _, _, cx| {
+                                        Button::new("clear-key")
+                                            .ghost()
+                                            .small()
+                                            .icon(IconName::X)
+                                            .accessibility_label("Remove saved key")
+                                            .toggled(clear_key)
+                                            .when(clear_key, |b| b.bg(hover).text_color(t.danger))
+                                            .on_click(cx.listener(|d, _, _, cx| {
                                                 if let Some(f) = d.form_mut() {
                                                     f.clear_key = !f.clear_key;
                                                 }
                                                 cx.notify();
-                                            }),
-                                        ),
+                                            })),
                                     )
                                 },
                             )
@@ -368,15 +358,21 @@ pub fn render(
         .child(
             form_footer(&t)
                 .child(
-                    btn("form-save", "Save", BtnKind::Primary, !can_save, &t)
+                    Button::new("form-save")
+                        .primary()
+                        .small()
+                        .disabled(!can_save)
+                        .accessibility_label("Save")
                         .child(if busy { "Saving…" } else { "Save" })
                         .when(can_save, |b| {
                             b.on_click(cx.listener(|d, _, _, cx| d.save_form(cx)))
                         }),
                 )
                 .child(
-                    btn("form-cancel", "Cancel", BtnKind::Plain, busy, &t)
-                        .child("Cancel")
+                    Button::new("form-cancel")
+                        .small()
+                        .disabled(busy)
+                        .label("Cancel")
                         .when(!busy, |b| {
                             b.on_click(cx.listener(|d, _, _, cx| d.close_form(false, cx)))
                         }),

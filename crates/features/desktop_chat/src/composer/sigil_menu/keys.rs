@@ -14,7 +14,15 @@ use patchwork_views_chat::{sigils::SigilKind, sigils::Sigils};
 
 impl Composer {
     /// Up or Down while the menu has the keys.
-    pub(in crate::composer) fn sigil_arrow(&mut self, step: isize, cx: &mut Context<Self>) {
+    pub(in crate::composer) fn sigil_arrow(
+        &mut self,
+        step: isize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.mention_key(if step < 0 { "up" } else { "down" }, window, cx) {
+            return;
+        }
         let count = self.sigil.open.as_ref().map_or(0, |(_, items)| items.len());
         if count > 0 {
             let next = (self.sigil.highlight as isize + step).rem_euclid(count as isize) as usize;
@@ -26,6 +34,9 @@ impl Composer {
 
     /// Tab: a folder opens, listing what is in it; anything else is picked.
     pub(in crate::composer) fn sigil_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.mention_key("tab", window, cx) {
+            return;
+        }
         let Some((tk, items)) = &self.sigil.open else {
             return;
         };
@@ -51,6 +62,9 @@ impl Composer {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        if self.sigil.mentions.is_some() {
+            return self.mention_key("enter", window, cx);
+        }
         let Some((tk, items)) = &self.sigil.open else {
             return false;
         };
@@ -71,8 +85,16 @@ impl Composer {
         true
     }
 
-    /// Escape hides the open menu until the draft changes. True when one was open.
-    pub(in crate::composer) fn sigil_escape(&mut self, cx: &mut Context<Self>) -> bool {
+    /// Escape leaves a menu of the mentions opened beside a row, or else hides the open menu
+    /// until the draft changes. True when one was open.
+    pub(in crate::composer) fn sigil_escape(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.mention_key("escape", window, cx) {
+            return true;
+        }
         if self.sigil.open.is_none() {
             return false;
         }
@@ -97,6 +119,32 @@ impl Composer {
             return;
         }
         self.complete(&name, window, cx);
+    }
+
+    /// Hands `key` to the menu of the host's mentions, when it is open. True when it took it.
+    fn mention_key(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some(mentions) = &self.sigil.mentions else {
+            return false;
+        };
+        let menu = mentions.menu.clone();
+        let took = menu.update(cx, |menu, cx| menu.press(key, window, cx));
+        if took {
+            cx.notify();
+        }
+        took
+    }
+
+    /// Picks the host's mention `id`: its `@` word leaves the draft and the host is told.
+    pub(super) fn pick_mention(&mut self, id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some((tk, _)) = &self.sigil.open {
+            let range = tk.range.clone();
+            self.editor
+                .update(cx, |e, cx| e.replace(range, "", window, cx));
+        }
+        self.sigil.mentions = None;
+        self.host.mention(id, cx);
+        self.focus(window, cx);
+        cx.notify();
     }
 
     /// Puts the pick in the draft. Later in the draft it replaces just the word typed; a pick

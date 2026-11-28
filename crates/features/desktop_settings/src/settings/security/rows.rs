@@ -3,6 +3,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use patchwork_views_logos::platform_logo;
 use gpui::{AnyElement, ClipboardItem, Focusable, Role, SharedString, Window, div, prelude::*, px};
 use patchwork_client::local::core::gateway::ChatAppCall;
@@ -13,7 +17,7 @@ use crate::settings::controls::{choices, list_box, select_box, token_row};
 use crate::settings::dialog::SettingsDialog;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, font_mono, fs_sm, radius_sm, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, input_box};
+use patchwork_design_components::input_box;
 use patchwork_design_text::format_relative;
 
 /// When a vault with a password locks by itself.
@@ -48,9 +52,10 @@ pub(super) fn protected_row(
         n => format!("{by} · {n} secrets"),
     };
     let lock = (method == Method::Password).then(|| {
-        btn("security-lock", "Lock now", BtnKind::Plain, busy, &t)
-            .child("Lock now")
-            .tooltip("Locks the secrets and stops running agents")
+        Button::new("security-lock")
+            .small()
+            .disabled(busy)
+            .label("Lock now")
             .when(!busy, |b| {
                 b.on_click(cx.listener(|d, _, _, cx| d.change_password(Change::Lock, cx)))
             })
@@ -115,20 +120,15 @@ pub(super) fn recovery_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>)
     let Some(key) = d.security.new_key.as_ref() else {
         return token_row("Recovery key", &t)
             .child(
-                btn(
-                    "security-new-key",
-                    "New recovery key",
-                    BtnKind::Plain,
-                    busy,
-                    &t,
-                )
-                .child("New recovery key")
-                .tooltip("Needs the current password")
-                .when(!busy, |b| {
-                    b.on_click(cx.listener(|d, _, _, cx| {
-                        d.change_password(Change::NewKey, cx);
-                    }))
-                }),
+                Button::new("security-new-key")
+                    .small()
+                    .disabled(busy)
+                    .label("New recovery key")
+                    .when(!busy, |b| {
+                        b.on_click(cx.listener(|d, _, _, cx| {
+                            d.change_password(Change::NewKey, cx);
+                        }))
+                    }),
             )
             .into_any_element();
     };
@@ -136,32 +136,26 @@ pub(super) fn recovery_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>)
     token_row("Recovery key", &t)
         .flex_wrap()
         .child(
-            icon_button(
-                "security-copy-key",
-                "Copy recovery key",
-                IconName::Copy,
-                14.,
-                cx,
-            )
-            .tooltip("Copy")
-            .on_click(cx.listener(move |_, _, _, cx| {
-                cx.write_to_clipboard(ClipboardItem::new_string(copied.to_string()));
-            })),
+            Button::new("security-copy-key")
+                .ghost()
+                .small()
+                .icon(IconName::Copy)
+                .accessibility_label("Copy recovery key")
+                .on_click(cx.listener(move |_, _, _, cx| {
+                    cx.write_to_clipboard(ClipboardItem::new_string(copied.to_string()));
+                })),
         )
         .child(
-            btn(
-                "security-download-key",
-                "Download recovery key",
-                BtnKind::Plain,
-                false,
-                &t,
-            )
-            .child("Download")
-            .on_click(cx.listener(|d, _, _, cx| d.download_key(cx))),
+            Button::new("security-download-key")
+                .small()
+                .accessibility_label("Download recovery key")
+                .child("Download")
+                .on_click(cx.listener(|d, _, _, cx| d.download_key(cx))),
         )
         .child(
-            btn("security-key-done", "Done", BtnKind::Plain, false, &t)
-                .child("Done")
+            Button::new("security-key-done")
+                .small()
+                .label("Done")
                 .on_click(cx.listener(|d, _, _, cx| {
                     d.security.new_key = None;
                     cx.notify();
@@ -220,17 +214,16 @@ pub(super) fn saved_rows(
         rows.push(
             token_row("Old copies", &t)
                 .child(
-                    btn(
-                        "security-clean",
-                        "Remove old copies",
-                        BtnKind::Plain,
-                        busy,
-                        &t,
-                    )
-                    .child("Remove")
-                    .when(!busy, |b| {
-                        b.on_click(cx.listener(|d, _, _, cx| d.change_password(Change::Clean, cx)))
-                    }),
+                    Button::new("security-clean")
+                        .small()
+                        .disabled(busy)
+                        .accessibility_label("Remove old copies")
+                        .child("Remove")
+                        .when(!busy, |b| {
+                            b.on_click(
+                                cx.listener(|d, _, _, cx| d.change_password(Change::Clean, cx)),
+                            )
+                        }),
                 )
                 .into_any_element(),
         );
@@ -278,23 +271,20 @@ fn secret_field(
         .when(shown, |b| {
             let name = name.clone();
             b.child(
-                icon_button(
-                    SharedString::from(format!("security-copy-{name}")),
-                    format!("Copy {label}"),
-                    IconName::Copy,
-                    14.,
-                    cx,
-                )
-                .size(px(22.))
-                .flex_none()
-                .tooltip("Copy")
-                .on_click(cx.listener(move |d, _, _, cx| {
-                    if let Some(value) = d.security.revealed.get(&name) {
-                        cx.write_to_clipboard(ClipboardItem::new_string(
-                            value.as_str().to_string(),
-                        ));
-                    }
-                })),
+                Button::new(SharedString::from(format!("security-copy-{name}")))
+                    .ghost()
+                    .small()
+                    .icon(IconName::Copy)
+                    .accessibility_label(format!("Copy {label}"))
+                    .size(px(22.))
+                    .flex_none()
+                    .on_click(cx.listener(move |d, _, _, cx| {
+                        if let Some(value) = d.security.revealed.get(&name) {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                value.as_str().to_string(),
+                            ));
+                        }
+                    })),
             )
         })
         .child(
@@ -302,7 +292,6 @@ fn secret_field(
                 format!("security-show-{name}"),
                 format!("Show {label}"),
                 shown,
-                cx,
             )
             .on_click(cx.listener(move |d, _, _, cx| d.toggle_secret(name.clone(), cx))),
         )

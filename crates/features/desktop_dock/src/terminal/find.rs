@@ -312,17 +312,14 @@ impl Dock {
                         IconName::CaretUp,
                         &t,
                     )
-                    .tooltip(patchwork_design_components::tooltip("Shift+Enter"))
                     .on_click(cx.listener(|this, _, _, cx| this.step_find(-1, cx))),
                 )
                 .child(
                     small_button("terminal-find-next", "Next match", IconName::CaretDown, &t)
-                        .tooltip(patchwork_design_components::tooltip("Enter"))
                         .on_click(cx.listener(|this, _, _, cx| this.step_find(1, cx))),
                 )
                 .child(
                     small_button("terminal-find-close", "Close find", IconName::X, &t)
-                        .tooltip(patchwork_design_components::tooltip("Esc"))
                         .on_click(cx.listener(|this, _, window, cx| this.close_find(window, cx))),
                 )
                 .into_any_element(),

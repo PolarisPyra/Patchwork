@@ -2,6 +2,9 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Sizable as _;
 use std::sync::Arc;
 
 use gpui::{
@@ -12,7 +15,7 @@ use patchwork_model::chats::Chat;
 use patchwork_client::local::core::projects::Project;
 use patchwork_client::AppState;
 use patchwork_views_chat::chat_drag::ChatDrag;
-use patchwork_design_components::{button, icon_button, scrollbar};
+use patchwork_design_components::{button, scrollbar};
 use patchwork_design_icons::{IconName, icon};
 use patchwork_design_theme::{fs_md, theme};
 
@@ -108,7 +111,11 @@ pub(crate) fn tasks_view(w: &mut Sidebar, cx: &mut Context<Sidebar>) -> impl Int
                 .on_click(cx.listener(|this, _, _, cx| this.collapse_all(cx))),
         )
         .child(
-            icon_button("open-folder", "Open folder", IconName::FolderPlus, 18., cx)
+            Button::new("open-folder")
+                .ghost()
+                .small()
+                .icon(IconName::FolderPlus)
+                .accessibility_label("Open folder")
                 .on_click(cx.listener(|this, _, _, cx| this.open_folder(cx))),
         )
         .into_any_element();

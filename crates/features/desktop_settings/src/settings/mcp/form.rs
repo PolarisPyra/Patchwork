@@ -3,6 +3,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::Button;
+use gpui::component::button::ButtonVariants as _;
+use gpui::component::Disableable as _;
+use gpui::component::Sizable as _;
 use std::collections::BTreeMap;
 
 use gpui::{AnyElement, Focusable, Window, div, prelude::*, px};
@@ -11,7 +15,6 @@ use patchwork_client::local::core::provider::mcp::{self, McpServer};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{FieldKind, alert, form_footer, labeled, remove_button};
 use patchwork_design_theme::theme;
-use patchwork_design_components::{BtnKind, btn};
 
 use crate::settings::mcp::{pairs_text, target};
 
@@ -407,7 +410,11 @@ pub fn render(
         .child(
             form_footer(&t)
                 .child(
-                    btn("mcp-form-save", "Save", BtnKind::Primary, !can_save, &t)
+                    Button::new("mcp-form-save")
+                        .primary()
+                        .small()
+                        .disabled(!can_save)
+                        .accessibility_label("Save")
                         .child(if busy {
                             "Saving…"
                         } else if is_json {
@@ -420,8 +427,10 @@ pub fn render(
                         }),
                 )
                 .child(
-                    btn("mcp-form-cancel", "Cancel", BtnKind::Plain, busy, &t)
-                        .child("Cancel")
+                    Button::new("mcp-form-cancel")
+                        .small()
+                        .disabled(busy)
+                        .label("Cancel")
                         .when(!busy, |b| {
                             b.on_click(cx.listener(|d, _, _, cx| d.close_mcp_form(cx)))
                         }),
