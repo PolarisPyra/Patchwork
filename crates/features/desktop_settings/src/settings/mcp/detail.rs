@@ -142,7 +142,7 @@ fn use_row(
                     15.,
                     cx,
                 )
-                .tooltip(patchwork_design_components::tooltip("Restart"))
+                .tooltip("Restart")
                 .on_click(cx.listener(move |d, _, _, cx| {
                     let name = restart.clone();
                     d.mcp_run(
@@ -197,7 +197,7 @@ fn use_row(
                     15.,
                     cx,
                 )
-                .tooltip(patchwork_design_components::tooltip("List tools again"))
+                .tooltip("List tools again")
                 .on_click(cx.listener(move |d, _, _, cx| {
                     let (key, projects) = (key.clone(), d.settings.projects.clone());
                     d.mcp_run(
@@ -260,7 +260,7 @@ pub fn render(
         .pt(px(12.))
         .child(
             icon_button("mcp-back", "Back", IconName::CaretLeft, 16., cx)
-                .tooltip(patchwork_design_components::tooltip("Back"))
+                .tooltip("Back")
                 .on_click(cx.listener(|d, _, _, cx| {
                     d.mcp.open_id = None;
                     cx.notify();

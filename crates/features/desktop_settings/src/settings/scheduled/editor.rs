@@ -10,7 +10,7 @@ use crate::settings::controls::{FieldKind, chip, form_footer, select_box, switch
 use crate::settings::SettingsDialog;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, fs_xs, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, tooltip};
+use patchwork_design_components::{BtnKind, btn, icon_button};
 use patchwork_design_icons::icon;
 use patchwork_design_theme::font_mono;
 use crate::settings::controls::ACCESS_MODES as MODES;
@@ -158,7 +158,7 @@ pub(super) fn editor(
                                         14.,
                                         cx,
                                     )
-                                    .tooltip(tooltip("Copy address"))
+                                    .tooltip("Copy address")
                                     .on_click(
                                         move |_: &ClickEvent, _: &mut Window, cx| {
                                             cx.write_to_clipboard(ClipboardItem::new_string(
@@ -542,7 +542,7 @@ pub(super) fn editor(
                                         if ready {
                                             b.on_click(cx.listener(|d, _, _, cx| d.save_task(cx)))
                                         } else {
-                                            b.tooltip(tooltip("Add a name and a prompt"))
+                                            b.tooltip("Add a name and a prompt")
                                         }
                                     }),
                             ),

@@ -107,14 +107,6 @@ struct Prepainted {
     scroll_x: Pixels,
 }
 
-impl IntoElement for TextElement {
-    type Element = Self;
-
-    fn into_element(self) -> Self::Element {
-        self
-    }
-}
-
 /// How a run of text is drawn: its colours and the Markdown style of each byte, if the field
 /// styles Markdown.
 #[derive(Clone, Copy)]

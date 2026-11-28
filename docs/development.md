@@ -65,11 +65,13 @@ global, and the app sends the keys to `dx-serve.py` over the Unix socket it name
 Options after `desktop` go to `dx serve`. It needs `uv` and the dx CLI at the version GPUI's
 `subsecond` pins: `cargo binstall dioxus-cli@0.7.10`.
 
-## Vendored GPUI and icons
+## GPUI and icons
 
-- **GPUI** lives under `vendor/` (excluded from workspace members in `Cargo.toml` and linked as path
-  dependencies). See [vendor/README.md](../vendor/README.md) for the pinned upstream commit and
-  regeneration steps.
+- **GPUI** is `gpui-kit` from crates.io (`gpui = { package = "gpui-kit" }` in `Cargo.toml`). Its
+  components draw in Patchwork's theme, which `crates/design/theme/src/component_theme.rs` copies
+  into gpui-component's on every theme change. `gpui-hot-reload` is the same `gpui-pre` release,
+  named directly for the hot reload feature gpui-kit does not forward; keep its pin equal to
+  gpui-kit's.
 - **Icons** live as SVGs under `assets/icons/`. `crates/design/icons` (`patchwork-design-icons`)
   packs and compresses them at build time into `icons.pack` and generates the typed `IconName` enum;
   in debug builds, icons are read from disk, so an edited icon shows on the next launch.

@@ -8,9 +8,7 @@
 
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use gpui::{
-    AnyElement, ClipboardItem, Div, FontWeight, Role, SharedString, Stateful, div, prelude::*, px,
-};
+use gpui::{AnyElement, ClipboardItem, Div, FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_client::local::server::{CoreServer, Device, PairCode, ServerInfo, qr_modules};
 use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, alert, switch, token_row};
@@ -205,7 +203,7 @@ fn copy_button(
     text: String,
     t: &Theme,
     cx: &mut Context<SettingsDialog>,
-) -> Stateful<Div> {
+) -> patchwork_design_components::Button {
     let id = SharedString::from(format!("devices-copy-{id}"));
     let shown = if d.devices.copied.as_ref() == Some(&id) {
         "Copied"

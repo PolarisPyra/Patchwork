@@ -12,7 +12,7 @@ use crate::settings::controls::{Section, alert, switch};
 use crate::settings::{SettingsDialog, SettingsEvent};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, fs_xs, radius_lg, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, tooltip};
+use patchwork_design_components::{BtnKind, btn, icon_button};
 use patchwork_design_icons::icon;
 use super::editor::{editor};
 use super::tasks::{blank, run_history, when_label};
@@ -166,7 +166,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                     )
                     .px(px(10.))
                     .gap(px(6.))
-                    .tooltip(tooltip("Start this task now"))
+                    .tooltip("Start this task now")
                     .child(icon(IconName::Play, 13.))
                     .child("Run")
                     .on_click(cx.listener(move |d, _, _, cx| {
@@ -221,7 +221,7 @@ fn task_card(task: &Task, d: &SettingsDialog, cx: &mut Context<SettingsDialog>) 
                         14.,
                         cx,
                     )
-                    .tooltip(tooltip("Delete task"))
+                    .tooltip("Delete task")
                     .on_click(cx.listener(move |d, _, _, cx| {
                         let (core, id) = (Arc::clone(&d.core), remove.clone());
                         if d.scheduled.editing.as_ref().is_some_and(|e| e.id == id) {

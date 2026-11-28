@@ -18,7 +18,7 @@ use patchwork_design_components::menu::MenuItem;
 use patchwork_design_editor::{Submitted, TextArea};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_sm, radius, Theme};
-use patchwork_design_components::{BtnKind, btn, button, icon_button, input_box, spinner, tooltip};
+use patchwork_design_components::{BtnKind, btn, button, icon_button, input_box, spinner};
 use patchwork_design_icons::icon;
 
 /// How often the network is asked which phones announce themselves while pairing is open.
@@ -507,7 +507,7 @@ impl AndroidPanel {
                             14.,
                             cx,
                         )
-                        .tooltip(tooltip("Load"))
+                        .tooltip("Load")
                         .on_click(cx.listener({
                             let name = name.clone();
                             move |this, _, _, cx| {
@@ -523,7 +523,7 @@ impl AndroidPanel {
                             14.,
                             cx,
                         )
-                        .tooltip(tooltip("Delete"))
+                        .tooltip("Delete")
                         .on_click(cx.listener({
                             let name = name.clone();
                             move |this, _, _, cx| {

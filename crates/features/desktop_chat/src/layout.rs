@@ -12,7 +12,7 @@ use gpui::{
 };
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{InScheme, Theme, fs_sm, fs_xl, radius_sm, theme};
-use patchwork_design_components::{button, icon_button, tooltip};
+use patchwork_design_components::{button, icon_button};
 use patchwork_design_text::display_title;
 
 use crate::panes::PaneId;
@@ -167,7 +167,7 @@ pub(super) fn subagent_footer<W: ChatWindow>(w: &W, t: &Theme, cx: &mut Context<
             cx,
         )
         .flex_none()
-        .tooltip(tooltip("Back to the orchestrator"))
+        .tooltip("Back to the orchestrator")
         .on_click(cx.listener(|w, _, _, cx| w.back_to_orchestrator(cx)));
         let link = button("peek-orchestrator", "Orchestrator")
             .flex_none()
@@ -203,7 +203,7 @@ pub(super) fn subagent_footer<W: ChatWindow>(w: &W, t: &Theme, cx: &mut Context<
     let back = (w.can_go_back() || parent_id.is_some()).then(|| {
         icon_button("subagent-back", "Go back", IconName::ArrowLeft, 14., cx)
             .flex_none()
-            .tooltip(tooltip("Go back"))
+            .tooltip("Go back")
             .on_click(cx.listener(move |w, _, _, cx| {
                 if w.can_go_back() {
                     w.go_back(cx);

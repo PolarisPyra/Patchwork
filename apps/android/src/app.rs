@@ -5,7 +5,7 @@
 use std::rc::Rc;
 
 use gpui::{App, AppContext as _, Application, WindowOptions};
-use gpui_android::android_activity::AndroidApp;
+use patchwork_android_platform::android_activity::AndroidApp;
 use patchwork_client::Session;
 use patchwork_themes::{Applied, Paint, Palette};
 
@@ -19,12 +19,13 @@ pub extern "Rust" fn android_main(app: AndroidApp) {
             .with_tag("Patchwork")
             .with_max_level(log::LevelFilter::Info),
     );
-    gpui_android::init(app);
-    Application::with_platform(Rc::new(gpui_android::AndroidPlatform::new())).run(
+    patchwork_android_platform::init(app);
+    Application::with_platform(Rc::new(patchwork_android_platform::AndroidPlatform::new())).run(
         |cx: &mut App| {
             if let Err(error) = cx.text_system().add_fonts(patchwork_design_theme::fonts()) {
                 log::error!("failed to load the fonts: {error:#}");
             }
+            gpui::init(cx);
             Session::init(cx);
             let opened = cx.open_window(WindowOptions::default(), |window, cx| {
                 // The desktop's palettes, following the phone's light or dark mode.

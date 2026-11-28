@@ -100,7 +100,7 @@ pub fn review_card<W: ChatWindow>(
         false,
         t,
     )
-    .tooltip(tooltip("Open the reviewer's chat"))
+    .tooltip("Open the reviewer's chat")
     .child("Open")
     .on_click(cx.listener(move |w, _, _, cx| w.open_chat(&child, cx)));
 

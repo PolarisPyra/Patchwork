@@ -12,7 +12,7 @@ use crate::settings::SettingsDialog;
 use crate::settings::controls::{Section, segmented, switch_row, token_row};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_md, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, tooltip};
+use patchwork_design_components::{BtnKind, btn, icon_button};
 
 /// Width of the settings' text fields (`TextField`'s default).
 const FIELD_WIDTH: f32 = 220.;
@@ -110,9 +110,9 @@ fn env_editor(
                         false,
                         &t,
                     )
-                    .aria_toggled(removed.into())
+                    .toggled(removed)
                     .when(removed, |b| b.bg(t.bg_selected_muted))
-                    .tooltip(tooltip("Take this variable out of the shell's environment"))
+                    .tooltip("Take this variable out of the shell's environment")
                     .child("Remove from shell")
                     .on_click(cx.listener(move |d, _, _, cx| {
                         let name = toggle.clone();

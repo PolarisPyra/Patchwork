@@ -13,7 +13,7 @@ use crate::settings::controls::{choices, list_box, select_box, token_row};
 use crate::settings::dialog::SettingsDialog;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, font_mono, fs_sm, radius_sm, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, input_box, tooltip};
+use patchwork_design_components::{BtnKind, btn, icon_button, input_box};
 use patchwork_design_text::format_relative;
 
 /// When a vault with a password locks by itself.
@@ -50,7 +50,7 @@ pub(super) fn protected_row(
     let lock = (method == Method::Password).then(|| {
         btn("security-lock", "Lock now", BtnKind::Plain, busy, &t)
             .child("Lock now")
-            .tooltip(tooltip("Locks the secrets and stops running agents"))
+            .tooltip("Locks the secrets and stops running agents")
             .when(!busy, |b| {
                 b.on_click(cx.listener(|d, _, _, cx| d.change_password(Change::Lock, cx)))
             })
@@ -123,7 +123,7 @@ pub(super) fn recovery_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>)
                     &t,
                 )
                 .child("New recovery key")
-                .tooltip(tooltip("Needs the current password"))
+                .tooltip("Needs the current password")
                 .when(!busy, |b| {
                     b.on_click(cx.listener(|d, _, _, cx| {
                         d.change_password(Change::NewKey, cx);
@@ -143,7 +143,7 @@ pub(super) fn recovery_row(d: &SettingsDialog, cx: &mut Context<SettingsDialog>)
                 14.,
                 cx,
             )
-            .tooltip(tooltip("Copy"))
+            .tooltip("Copy")
             .on_click(cx.listener(move |_, _, _, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(copied.to_string()));
             })),
@@ -287,7 +287,7 @@ fn secret_field(
                 )
                 .size(px(22.))
                 .flex_none()
-                .tooltip(tooltip("Copy"))
+                .tooltip("Copy")
                 .on_click(cx.listener(move |d, _, _, cx| {
                     if let Some(value) = d.security.revealed.get(&name) {
                         cx.write_to_clipboard(ClipboardItem::new_string(

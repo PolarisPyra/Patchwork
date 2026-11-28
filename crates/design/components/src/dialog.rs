@@ -56,7 +56,7 @@ pub fn card(
 
 /// The row at the top of a card: its title, cut short when it is too long, and `close`, the
 /// button that closes the dialog.
-pub fn title_row(title: impl Into<SharedString>, close: Stateful<Div>) -> Div {
+pub fn title_row(title: impl Into<SharedString>, close: impl IntoElement) -> Div {
     div()
         .flex()
         .items_center()

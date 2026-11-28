@@ -152,6 +152,7 @@ impl Render for PairingScreen {
             .child(self.field(Field::Code, focused, &t, cx))
             .child(
                 btn("pairing.pair", "Pair", BtnKind::Primary, false, &t)
+                    .child("Pair")
                     .on_click(cx.listener(|this, _, _, cx| this.pair(cx))),
             )
             .children(status)

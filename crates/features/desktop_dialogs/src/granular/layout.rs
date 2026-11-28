@@ -248,7 +248,7 @@ impl Render for GranularDialog {
                 false,
                 &t,
             )
-            .aria_toggled(is_default.into())
+            .toggled(is_default)
             .when(is_default, |b| {
                 b.border_color(t.accent)
                     .bg(t.bg_accent_soft)

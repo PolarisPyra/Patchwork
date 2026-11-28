@@ -14,14 +14,14 @@ use patchwork_client::local::core::browser::{INSTALL_URL, MouseAction};
 use super::headless_page::BrowserView;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_sm, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, input_box, spinner, tooltip};
+use patchwork_design_components::{BtnKind, btn, icon_button, input_box, spinner};
 
 impl BrowserView {
     fn toolbar(&self, t: &Theme, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let focused = gpui::Focusable::focus_handle(self.address.read(cx), cx).is_focused(window);
         let nav = |id: &'static str, label: &'static str, glyph: IconName, on: bool| {
             icon_button(id, label, glyph, 16., cx)
-                .tooltip(tooltip(label))
+                .tooltip(label)
                 .when(!on, |b| b.opacity(0.4).cursor_default())
         };
         let (reload_label, reload_icon) = if self.loading && self.sender.is_some() {
@@ -80,7 +80,7 @@ impl BrowserView {
                     16.,
                     cx,
                 )
-                .tooltip(tooltip("Open in browser"))
+                .tooltip("Open in browser")
                 .on_click(cx.listener(|this, _, _, cx| cx.open_url(&this.url))),
             )
             .into_any_element()
@@ -119,12 +119,12 @@ impl BrowserView {
                         .on_click(|_, _, cx| cx.open_url(INSTALL_URL)),
                     )
                     .child(
-                        btn("browser-retry", "Try again", BtnKind::Plain, false, t).on_click(
-                            cx.listener(|this, _, _, cx| {
+                        btn("browser-retry", "Try again", BtnKind::Plain, false, t)
+                            .child("Try again")
+                            .on_click(cx.listener(|this, _, _, cx| {
                                 let url = this.url.clone();
                                 this.start(url, cx);
-                            }),
-                        ),
+                            })),
                     ),
             )
             .into_any_element()

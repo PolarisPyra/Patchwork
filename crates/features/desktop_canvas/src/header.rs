@@ -129,7 +129,7 @@ impl Canvas {
                     )
                     .child(
                         icon_button("close-canvas", "Close canvas", IconName::X, 16., cx)
-                            .tooltip(tooltip("Close"))
+                            .tooltip("Close")
                             .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
                     ),
             )
@@ -239,7 +239,7 @@ impl Canvas {
                 d.child(div().ml_auto().children(self.conflict_nav(t, cx)))
                     .child(
                         btn("toggle-blame", "Blame", BtnKind::Plain, false, t)
-                            .aria_toggled(on.into())
+                            .toggled(on)
                             .when(on, |b| b.bg(selected).text_color(fg))
                             .child(icon(IconName::GitCommit, 14.))
                             .child("Blame")
@@ -261,12 +261,12 @@ impl Canvas {
                                 16.,
                                 cx,
                             )
-                            .tooltip(tooltip("Previous change"))
+                            .tooltip("Previous change")
                             .on_click(cx.listener(|this, _, _, cx| this.jump_to_change(-1, cx))),
                         )
                         .child(
                             icon_button("next-change", "Next change", IconName::CaretDown, 16., cx)
-                                .tooltip(tooltip("Next change"))
+                                .tooltip("Next change")
                                 .on_click(cx.listener(|this, _, _, cx| this.jump_to_change(1, cx))),
                         ),
                 )

@@ -6,7 +6,7 @@
 use patchwork_views_logos::{agent_label, agent_logo};
 use std::sync::Arc;
 
-use gpui::{AnyElement, Div, FontWeight, Role, SharedString, div, prelude::*, px};
+use gpui::{AnyElement, FontWeight, Role, SharedString, div, prelude::*, px};
 use patchwork_model::provider::AgentKind;
 
 use super::{AGENT_KINDS, Onboarding, Probe};
@@ -153,7 +153,7 @@ impl Onboarding {
 
 /// Every badge is as wide as the longest usual one, so they line up from row to row.
 fn status_badge(probe: Option<&Probe>, t: &Theme) -> AnyElement {
-    let wide = |b: Div| b.min_w(px(112.)).justify_center().gap(px(4.));
+    let wide = |b: patchwork_design_components::Tag| b.min_w(px(112.)).justify_center().gap(px(4.));
     let Some(probe) = probe.filter(|p| !p.checking) else {
         return wide(badge("", t))
             .child(spinner(12., t.text_muted))

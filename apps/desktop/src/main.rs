@@ -195,12 +195,14 @@ fn main() {
     core.start_worktree_cleanup();
     // Only the Patchwork that owns the data serves phones and browsers; start_server checks.
     core.start_server();
-    gpui_platform::application()
+    gpui::application()
         .with_assets(theme::Assets)
         .run(move |cx: &mut App| {
             if let Err(e) = cx.text_system().add_fonts(theme::fonts()) {
                 log::warn!(error:% = e; "could not load the fonts: {{error}}");
             }
+            // gpui-kit's components and their theme, which `theme::apply` fills in.
+            gpui::init(cx);
             prewarm_fonts(cx);
             cx.background_spawn(async { patchwork_design_text::highlight::warm() })
                 .detach();

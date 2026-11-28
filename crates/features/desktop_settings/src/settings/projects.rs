@@ -14,7 +14,7 @@ use super::themes::project_look;
 use crate::settings::{SettingsDialog, SettingsEvent};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{fs_sm, theme};
-use patchwork_design_components::{BtnKind, btn, icon_button, tooltip};
+use patchwork_design_components::{BtnKind, btn, icon_button};
 
 #[derive(Default)]
 pub struct ProjectsState {
@@ -202,7 +202,7 @@ pub fn render(d: &mut SettingsDialog, cx: &mut Context<SettingsDialog>) -> AnyEl
                     14.,
                     cx,
                 )
-                .tooltip(tooltip("Remove project"))
+                .tooltip("Remove project")
                 .on_click(cx.listener(move |d, _, _, cx| d.remove_project(remove.clone(), cx))),
             )
     });

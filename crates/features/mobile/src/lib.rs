@@ -14,11 +14,15 @@ pub use chat::{ChatEvent, ChatScreen};
 pub use chats::{ChatsEvent, ChatsScreen};
 pub use pairing::{PairingEvent, PairingScreen};
 
-use gpui::{Div, ElementId, IntoElement, ParentElement as _, Stateful, Styled as _, div, px};
+use gpui::{Div, ElementId, IntoElement, ParentElement as _, Styled as _, div, px};
 use patchwork_design_theme::{Theme, fs_xl};
 
 /// A screen's top bar: a Back button when `back` is given, then the title.
-fn top_bar(back: Option<Stateful<Div>>, title: impl IntoElement, t: &Theme) -> Div {
+fn top_bar(
+    back: Option<patchwork_design_components::Button>,
+    title: impl IntoElement,
+    t: &Theme,
+) -> Div {
     div()
         .flex()
         .flex_none()
@@ -40,7 +44,7 @@ fn top_bar(back: Option<Stateful<Div>>, title: impl IntoElement, t: &Theme) -> D
 }
 
 /// A Back button with `id`.
-fn back_button(id: impl Into<ElementId>, t: &Theme) -> Stateful<Div> {
+fn back_button(id: impl Into<ElementId>, t: &Theme) -> patchwork_design_components::Button {
     patchwork_design_components::btn(
         id,
         "Back",

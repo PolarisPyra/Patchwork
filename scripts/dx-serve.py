@@ -17,8 +17,9 @@ script sits between the terminal and dx:
   does, prints as one coloured line, with a status line under them. dx writes its log to a file
   this script follows, and the compiler's diagnostics as JSON among its output.
 - The app drives the same shortcuts over a Unix socket whose path is in `PATCHWORK_DX_CONTROL`.
-  It sends `apply`, `restart` or `toggle-paused`, one per line, and gets `paused` or `watching`
-  back on connecting and whenever that changes.
+  It sends `apply`, `restart` or `toggle-paused`, one per line. On connecting and whenever they
+  change it gets `paused` or `watching`, then `build starting`, `build building`, `build failed`
+  or `build ready`; and `patched` each time dx patches the app.
 
 dx patches only a file it sees change, so F5 rewrites each Rust file saved since the last F5
 with the bytes it already holds; dx skips the ones it has already patched. While paused it
@@ -250,6 +251,8 @@ class Build:
         self.root = root
         self.state = "starting"
         self.started = time.monotonic()
+        # How many times dx has patched the app, so the app can flash each patch.
+        self.patches = 0
         self.crates = 0
         self.errors = 0
         self.warnings = 0
@@ -326,6 +329,7 @@ class Build:
             return
         if patched := PATCHED.match(text):
             self.state = "ready"
+            self.patches += 1
             took = seconds(int(patched[2]) / 1000)
             self.screen.entry("ok", f"Patched {patched[1]} in {took}{self.tally()}")
         elif text.startswith(("Build failed", "Failed to hot-patch")):
@@ -524,12 +528,13 @@ class Serve:
         write_all(self.master, plain)
 
     def state(self) -> bytes:
-        return b"paused\n" if self.paused else b"watching\n"
+        paused = b"paused\n" if self.paused else b"watching\n"
+        return paused + f"build {self.build.state}\n".encode()
 
-    def tell_all(self) -> None:
+    def tell_all(self, extra: bytes = b"") -> None:
         for fd in list(self.clients):
             try:
-                self.clients[fd][0].sendall(self.state())
+                self.clients[fd][0].sendall(self.state() + extra)
             except OSError:
                 self.drop(fd)
 
@@ -603,7 +608,11 @@ class Serve:
             *lines, self.log_pending = (self.log_pending + chunk).split(b"\n")
             for line in lines:
                 if match := RECORD.match(line.decode(errors="replace")):
+                    before = (self.build.state, self.build.patches)
                     self.build.record(match[1], match[3])
+                    if (self.build.state, self.build.patches) != before:
+                        patched = self.build.patches != before[1]
+                        self.tell_all(b"patched\n" if patched else b"")
 
 
 def main() -> int:

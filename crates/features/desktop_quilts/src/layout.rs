@@ -13,7 +13,7 @@ use super::catalog::{QuiltsPage, Show};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, font_mono, fs_md, fs_sm, radius_sm, theme};
 use patchwork_design_components::menu::Menu;
-use patchwork_design_components::{button, focus_ring, icon_button, input_box, scrollbar, tooltip};
+use patchwork_design_components::{button, focus_ring, icon_button, input_box, scrollbar};
 use patchwork_design_text::format_relative;
 
 /// The height of a line of the changes.
@@ -125,7 +125,7 @@ impl QuiltsPage {
                     to: Option<u32>,
                     cx: &mut Context<Self>| {
             icon_button(id, label, glyph, 14., cx)
-                .tooltip(tooltip(label))
+                .tooltip(label)
                 .when(to.is_none(), |b| b.opacity(0.4).cursor_default())
                 .on_click(cx.listener(move |this, _, _, cx| {
                     if let Some(n) = to {
@@ -231,7 +231,7 @@ impl QuiltsPage {
             .when(!docked, |d| {
                 d.child(
                     icon_button("quilt-back", "Back to quilts", IconName::ArrowLeft, 16., cx)
-                        .tooltip(tooltip("Back to quilts"))
+                        .tooltip("Back to quilts")
                         .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
                 )
             })
@@ -240,7 +240,7 @@ impl QuiltsPage {
                 let id = id.clone();
                 d.child(
                     icon_button("quilt-rename", "Rename", IconName::PencilSimple, 16., cx)
-                        .tooltip(tooltip("Rename"))
+                        .tooltip("Rename")
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.start_rename(&id, window, cx);
                         })),
@@ -250,8 +250,8 @@ impl QuiltsPage {
                 let id = id.clone();
                 d.child(
                     icon_button("quilt-pin", "Pin", IconName::PushPin, 16., cx)
-                        .tooltip(tooltip(if pinned { "Unpin" } else { "Pin" }))
-                        .aria_toggled(pinned.into())
+                        .tooltip(if pinned { "Unpin" } else { "Pin" })
+                        .toggled(pinned)
                         .when(pinned, |b| b.bg(t.bg_selected_muted))
                         .on_click(
                             cx.listener(move |this, _, _, cx| this.pin(id.clone(), !pinned, cx)),
@@ -263,24 +263,24 @@ impl QuiltsPage {
             .when(!docked, |d| {
                 d.child(
                     icon_button("quilt-copy", "Copy", IconName::Copy, 16., cx)
-                        .tooltip(tooltip("Copy"))
+                        .tooltip("Copy")
                         .on_click(cx.listener(|this, _, _, cx| this.copy(cx))),
                 )
                 .child(
                     icon_button("quilt-save", "Save as", IconName::Export, 16., cx)
-                        .tooltip(tooltip("Save as"))
+                        .tooltip("Save as")
                         .on_click(cx.listener(|this, _, _, cx| this.save_as(cx))),
                 )
                 .child(
                     icon_button("quilt-chat", "Chat", IconName::ChatCircle, 16., cx)
-                        .tooltip(tooltip("Chat"))
+                        .tooltip("Chat")
                         .aria_expanded(chat_shown)
                         .when(chat_shown, |b| b.bg(t.bg_selected_muted))
                         .on_click(cx.listener(|this, _, _, cx| this.open_chat(cx))),
                 )
                 .child(
                     icon_button("quilt-delete", "Delete", IconName::Trash, 16., cx)
-                        .tooltip(tooltip("Delete"))
+                        .tooltip("Delete")
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.delete(id.clone(), window, cx);
                         })),
@@ -289,7 +289,7 @@ impl QuiltsPage {
             .when(quilt.kind == QuiltKind::Slides, |d| {
                 d.child(
                     icon_button("quilt-present", "Present", IconName::Play, 16., cx)
-                        .tooltip(tooltip("Present"))
+                        .tooltip("Present")
                         .on_click(cx.listener(|this, _, _, cx| this.open_outside(cx))),
                 )
             })
@@ -297,12 +297,12 @@ impl QuiltsPage {
                 let picking = self.picking(cx);
                 d.child(
                     icon_button("quilt-pick", "Pick an element", IconName::Target, 16., cx)
-                        .tooltip(tooltip(if picking {
+                        .tooltip(if picking {
                             "Stop picking (Esc)"
                         } else {
                             "Pick an element to ask about"
-                        }))
-                        .aria_toggled(picking.into())
+                        })
+                        .toggled(picking)
                         .when(picking, |b| b.bg(t.bg_selected_muted))
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_picking(cx))),
                 )
@@ -316,7 +316,7 @@ impl QuiltsPage {
                         16.,
                         cx,
                     )
-                    .tooltip(tooltip("Open in browser"))
+                    .tooltip("Open in browser")
                     .on_click(cx.listener(|this, _, _, cx| this.open_outside(cx))),
                 )
             })
@@ -329,12 +329,12 @@ impl QuiltsPage {
                         16.,
                         cx,
                     )
-                    .tooltip(tooltip("Open on Quilts page"))
+                    .tooltip("Open on Quilts page")
                     .on_click(cx.listener(|this, _, _, cx| this.open_full(cx))),
                 )
                 .child(
                     icon_button("quilt-close", "Close quilt", IconName::X, 16., cx)
-                        .tooltip(tooltip("Close"))
+                        .tooltip("Close")
                         .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
                 )
             })

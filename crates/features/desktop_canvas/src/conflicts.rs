@@ -172,7 +172,7 @@ impl Canvas {
                         16.,
                         cx,
                     )
-                    .tooltip(tooltip("Previous conflict"))
+                    .tooltip("Previous conflict")
                     .on_click(cx.listener(|this, _, _, cx| this.jump_to_conflict(-1, cx))),
                 )
                 .child(
@@ -183,7 +183,7 @@ impl Canvas {
                         16.,
                         cx,
                     )
-                    .tooltip(tooltip("Next conflict"))
+                    .tooltip("Next conflict")
                     .on_click(cx.listener(|this, _, _, cx| this.jump_to_conflict(1, cx))),
                 )
                 .into_any_element(),

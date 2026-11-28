@@ -3,16 +3,15 @@
 //! the app (Shift+F5). Saves apply by themselves; F5 is for one that was missed, or held by a
 //! pause.
 //!
-//! GPUI's hot reload reports dx's status as the [`HotReloadStatus`] global. The shortcuts go to
-//! `scripts/dx-serve.py`, which types them into dx, over the Unix socket it names in
-//! `PATCHWORK_DX_CONTROL`.
+//! `scripts/dx-serve.py` runs dx and reports what it is doing over the Unix socket it names in
+//! `PATCHWORK_DX_CONTROL`; the shortcuts go back over the same socket, and it types them into dx.
 
 // Rust guideline compliant 2026-10-09
 
 use std::io::Write as _;
 use std::time::Duration;
 
-use gpui::{AnyElement, App, Global, HotReloadStatus, Role, Task, div, prelude::*, px};
+use gpui::{AnyElement, App, Global, Role, Task, div, prelude::*, px};
 use patchwork_design_components::{button, spinner, tooltip};
 use patchwork_design_icons::{IconName, icon};
 use patchwork_design_theme::{Theme, fs_xs, radius};
@@ -29,9 +28,21 @@ type Control = std::os::unix::net::UnixStream;
 #[cfg(not(unix))]
 type Control = std::fs::File;
 
+/// What dx is doing, as `dx-serve.py` last said.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Build {
+    Starting,
+    Building,
+    Failed,
+    Ready,
+}
+
 /// The connection to `dx-serve.py`, and what it last said.
 struct DevServer {
     control: Option<Control>,
+    /// Whether the app was started by `dx-serve.py`, so the bar stays up after dx stops.
+    started_by_dx: bool,
+    build: Build,
     /// Whether hot reload is paused, holding saves until F5 applies them or it resumes.
     paused: bool,
     /// Whether the bar still shows the last patch.
@@ -50,27 +61,13 @@ pub(crate) fn init(cx: &mut App) {
     let has_control = control.is_some();
     cx.set_global(DevServer {
         control,
+        started_by_dx: has_control,
+        build: Build::Starting,
         paused: false,
         patched: false,
         patched_timer: None,
         _reader: reader,
     });
-    cx.observe_global::<HotReloadStatus>(|cx| {
-        if *cx.global::<HotReloadStatus>() == HotReloadStatus::Patched {
-            let timer = cx.spawn(async move |cx| {
-                cx.background_executor().timer(PATCHED_FOR).await;
-                cx.update(|cx| {
-                    cx.global_mut::<DevServer>().patched = false;
-                    cx.refresh_windows();
-                });
-            });
-            let dev = cx.global_mut::<DevServer>();
-            dev.patched = true;
-            dev.patched_timer = Some(timer);
-        }
-        cx.refresh_windows();
-    })
-    .detach();
     if has_control {
         cx.intercept_keystrokes(|e, _, cx| {
             let k = &e.keystroke;
@@ -124,7 +121,7 @@ fn read_state(control: &Control, cx: &mut App) -> Option<Task<()>> {
     Some(cx.spawn(async move |cx| {
         while let Some(line) = rx.next().await {
             cx.update(|cx| {
-                cx.global_mut::<DevServer>().paused = line.trim() == "paused";
+                take_line(line.trim(), cx);
                 cx.refresh_windows();
             });
         }
@@ -133,6 +130,33 @@ fn read_state(control: &Control, cx: &mut App) -> Option<Task<()>> {
             cx.refresh_windows();
         });
     }))
+}
+
+/// Takes one line from `dx-serve.py`: `paused`, `watching`, `build <state>` or `patched`.
+#[cfg(unix)]
+fn take_line(line: &str, cx: &mut App) {
+    let dev = cx.global_mut::<DevServer>();
+    match line {
+        "paused" => dev.paused = true,
+        "watching" => dev.paused = false,
+        "build starting" => dev.build = Build::Starting,
+        "build building" => dev.build = Build::Building,
+        "build failed" => dev.build = Build::Failed,
+        "build ready" => dev.build = Build::Ready,
+        "patched" => {
+            let timer = cx.spawn(async move |cx| {
+                cx.background_executor().timer(PATCHED_FOR).await;
+                cx.update(|cx| {
+                    cx.global_mut::<DevServer>().patched = false;
+                    cx.refresh_windows();
+                });
+            });
+            let dev = cx.global_mut::<DevServer>();
+            dev.patched = true;
+            dev.patched_timer = Some(timer);
+        }
+        _ => {}
+    }
 }
 
 #[cfg(not(unix))]
@@ -153,22 +177,21 @@ fn send(command: &str, cx: &mut App) {
     }
 }
 
-/// The bar, while GPUI's hot reload is connected to dx.
+/// The bar, while `dx-serve.py` runs the app.
 pub(crate) fn bar(t: &Theme, cx: &App) -> Option<AnyElement> {
-    let status = *cx.try_global::<HotReloadStatus>()?;
     let dev = cx.try_global::<DevServer>()?;
-    let busy = matches!(
-        status,
-        HotReloadStatus::Patching | HotReloadStatus::Rebuilding
-    );
-    let (detail, dot, text) = match status {
-        HotReloadStatus::Patching => ("Patching", t.accent, t.text_muted),
-        HotReloadStatus::Rebuilding => ("Rebuilding", t.accent, t.text_muted),
-        HotReloadStatus::Failed => ("Build failed", t.danger, t.danger),
-        HotReloadStatus::Disconnected => ("dx stopped", t.text_subtle, t.text_muted),
-        _ if dev.patched => ("Hot-patched", t.success, t.text_muted),
+    if !dev.started_by_dx {
+        return None;
+    }
+    let busy = dev.control.is_some() && matches!(dev.build, Build::Starting | Build::Building);
+    let (detail, dot, text) = match dev.build {
+        _ if dev.control.is_none() => ("dx stopped", t.text_subtle, t.text_muted),
+        Build::Starting => ("Starting", t.accent, t.text_muted),
+        Build::Building => ("Building", t.accent, t.text_muted),
+        Build::Failed => ("Build failed", t.danger, t.danger),
+        Build::Ready if dev.patched => ("Hot-patched", t.success, t.text_muted),
         _ if dev.paused => ("Paused", t.warning, t.warning),
-        _ => ("Ready", t.success, t.text_muted),
+        Build::Ready => ("Ready", t.success, t.text_muted),
     };
     let indicator = div()
         .size(px(10.))

@@ -3,7 +3,7 @@
 
 // Rust guideline compliant 2026-10-09
 
-use gpui::{App, ClipboardItem, EntityId};
+use gpui::{App, EntityId};
 
 use super::marks::Selection;
 
@@ -53,7 +53,7 @@ pub fn has_marks(cx: &mut App) -> bool {
 pub fn to_primary(text: &str, cx: &mut App) {
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     if !text.is_empty() {
-        cx.write_to_primary(ClipboardItem::new_string(text.to_string()));
+        cx.write_to_primary(gpui::ClipboardItem::new_string(text.to_string()));
     }
     #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
     let _ = (text, cx);

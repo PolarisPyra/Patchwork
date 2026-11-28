@@ -4,6 +4,7 @@
 // Rust guideline compliant 2026-11-27
 
 mod assets;
+mod component_theme;
 mod in_scheme;
 mod palette;
 mod sizes;

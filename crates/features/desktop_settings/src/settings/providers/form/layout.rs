@@ -306,12 +306,8 @@ pub fn render(
                                     15.,
                                     cx,
                                 )
-                                .aria_toggled(show_key.into())
-                                .tooltip(patchwork_design_components::tooltip(if show_key {
-                                    "Hide key"
-                                } else {
-                                    "Show key"
-                                }))
+                                .toggled(show_key)
+                                .tooltip(if show_key { "Hide key" } else { "Show key" })
                                 .on_click(cx.listener(|d, _, _, cx| d.toggle_show_key(cx))),
                             )
                             .when(
@@ -325,11 +321,9 @@ pub fn render(
                                             15.,
                                             cx,
                                         )
-                                        .aria_toggled(clear_key.into())
+                                        .toggled(clear_key)
                                         .when(clear_key, |b| b.bg(hover).text_color(t.danger))
-                                        .tooltip(patchwork_design_components::tooltip(
-                                            "Remove saved key",
-                                        ))
+                                        .tooltip("Remove saved key")
                                         .on_click(
                                             cx.listener(|d, _, _, cx| {
                                                 if let Some(f) = d.form_mut() {

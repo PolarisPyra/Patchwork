@@ -215,19 +215,14 @@ impl AndroidPanel {
                     .map(|e| self.alert("images-error", e, None, t, cx)),
             )
             .child(
-                checkbox(
-                    "android-every-abi",
-                    "Other architectures",
-                    create.every_abi,
-                    t,
-                )
-                .text_size(px(fs_sm()))
-                .on_click(cx.listener(|this, _, _, cx| {
-                    if let Some(create) = &mut this.create {
-                        create.every_abi = !create.every_abi;
-                    }
-                    cx.notify();
-                })),
+                checkbox("android-every-abi", "Other architectures", create.every_abi)
+                    .text_size(px(fs_sm()))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(create) = &mut this.create {
+                            create.every_abi = !create.every_abi;
+                        }
+                        cx.notify();
+                    })),
             )
             .child(input_box(focused, t).child(div().flex_1().min_w_0().child(create.name.clone())))
             .child(

@@ -167,7 +167,7 @@ impl AndroidPanel {
                     16.,
                     cx,
                 )
-                .tooltip(tooltip("Close"))
+                .tooltip("Close")
                 .on_click(cx.listener(|this, _, _, cx| this.close(cx))),
             )
     }

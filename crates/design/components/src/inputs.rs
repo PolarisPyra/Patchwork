@@ -4,6 +4,10 @@
 
 // Rust guideline compliant 2026-10-09
 
+use gpui::component::button::{Button, ButtonVariants};
+use gpui::component::Disableable;
+use gpui::component::checkbox::Checkbox;
+use gpui::component::tag::Tag;
 use gpui::{
     App, BoxShadow, Div, ElementId, FontWeight, Hsla, Role, SharedString, Stateful,
     StyleRefinement, div, point, prelude::*, px,
@@ -38,65 +42,34 @@ pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> State
         .items_center()
 }
 
-/// `.btn-icon`: a 28px square icon button, muted until hovered.
+/// `.btn-icon`: gpui-component's ghost icon button at 28px square, muted until hovered.
 pub fn icon_button(
     id: impl Into<ElementId>,
     label: impl Into<SharedString>,
     name: IconName,
     size: f32,
     cx: &App,
-) -> Stateful<Div> {
+) -> Button {
     let t = theme(cx);
-    let (hover, fg) = (t.bg_hover, t.text);
-    button(id, label)
+    // The kit's ghost variant owns the hover; a second `hover` panics in debug builds.
+    Button::new(id)
+        .ghost()
+        .accessibility_label(label)
         .size(px(28.))
-        .justify_center()
+        // The icon is a child, so the kit pads it as a labelled button; that padding would clip it.
+        .p_0()
         .rounded(px(radius_sm()))
         .text_color(t.text_muted)
-        .hover(move |s| s.bg(hover).text_color(fg))
         .child(icon(name, size))
 }
 
-/// A checkbox and its label (`<label><input type="checkbox">…</label>`); the row toggles it.
+/// gpui-component's checkbox and its label; the row toggles it.
 pub fn checkbox(
     id: impl Into<ElementId>,
     label: impl Into<SharedString>,
     checked: bool,
-    t: &Theme,
-) -> Stateful<Div> {
-    let label = label.into();
-    div()
-        .id(id)
-        .role(Role::CheckBox)
-        .aria_label(label.clone())
-        .aria_toggled(checked.into())
-        .tab_index(0)
-        .focus_visible(focus_ring)
-        .cursor_pointer()
-        .flex()
-        .items_center()
-        .gap(px(6.))
-        .child(
-            div()
-                .size(px(13.))
-                .flex_none()
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(3.))
-                .border_1()
-                .map(|b| {
-                    if checked {
-                        b.border_color(t.accent)
-                            .bg(t.accent)
-                            .text_color(t.text_on_accent)
-                            .child(icon(IconName::Check, 10.))
-                    } else {
-                        b.border_color(t.border_strong).bg(t.bg_editor)
-                    }
-                }),
-        )
-        .child(label)
+) -> Checkbox {
+    Checkbox::new(id).label(label.into()).checked(checked)
 }
 
 /// `color-mix(in srgb, a pct%, b)`.
@@ -121,24 +94,33 @@ pub enum BtnKind {
     Success,
 }
 
-/// `.btn`: a 28px button with a border, its label at `--fs-md`. A disabled one is faded and does
-/// not react to the pointer; its owner leaves out the click handler.
+/// `.btn`: gpui-component's button at 28px, its label at `--fs-md`.
+///
+/// It draws in `t`, which over a backdrop is that backdrop's theme. A disabled one is faded and
+/// does not react to the pointer. Assistive tech reads `label`; the caller adds what it shows.
 pub fn btn(
     id: impl Into<ElementId>,
     label: impl Into<SharedString>,
     kind: BtnKind,
     disabled: bool,
     t: &Theme,
-) -> Stateful<Div> {
-    let (bg, border, fg, hover) = match kind {
-        BtnKind::Plain => (t.bg_editor, t.border_strong, t.text, t.bg_hover),
-        BtnKind::Primary => (t.accent, t.accent, t.text_on_accent, t.accent_hover),
-        BtnKind::Success => (t.success, t.success, t.text_on_accent, darken(t.success)),
+) -> Button {
+    let (bg, border, fg) = match kind {
+        BtnKind::Plain => (t.bg_editor, t.border_strong, t.text),
+        BtnKind::Primary => (t.accent, t.accent, t.text_on_accent),
+        BtnKind::Success => (t.success, t.success, t.text_on_accent),
     };
-    let base = button(id, label)
+    // The kit owns the hover, in the window theme's `button_*_hover` colours.
+    Button::new(id)
+        .accessibility_label(label)
+        .map(|b| match kind {
+            BtnKind::Plain => b,
+            BtnKind::Primary => b.primary(),
+            BtnKind::Success => b.success(),
+        })
+        .disabled(disabled)
         .flex_none()
         .h(px(28.))
-        .justify_center()
         .gap(px(6.))
         .px(px(14.))
         .rounded(px(radius_sm()))
@@ -147,31 +129,19 @@ pub fn btn(
         .bg(bg)
         .text_color(fg)
         .text_size(px(fs_md()))
-        .whitespace_nowrap();
-    if disabled {
-        base.opacity(0.5).cursor_default()
-    } else {
-        base.hover(move |s| s.bg(hover))
-    }
+        .whitespace_nowrap()
 }
 
-/// `filter: brightness(0.92)`.
-pub(crate) fn darken(c: Hsla) -> Hsla {
-    Hsla { l: c.l * 0.92, ..c }
-}
-
-/// `.badge`: a small count or tag.
-pub fn badge(text: impl Into<SharedString>, t: &Theme) -> Div {
-    div()
+/// `.badge`: a small count or tag, on gpui-component's tag.
+pub fn badge(text: impl Into<SharedString>, t: &Theme) -> Tag {
+    Tag::custom(t.bg_selected_muted, t.text_muted, t.bg_selected_muted)
+        .border_0()
         .flex_none()
         .h(px(20.))
-        .flex()
-        .items_center()
         .px(px(6.))
+        .py_0()
         .rounded(px(radius_sm()))
-        .bg(t.bg_selected_muted)
         .text_size(px(patchwork_design_theme::fs_xs()))
-        .text_color(t.text_muted)
         .child(text.into())
 }
 

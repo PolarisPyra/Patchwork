@@ -17,7 +17,7 @@ use super::devices::AndroidPanel;
 use patchwork_design_components::menu::MenuItem;
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{font_mono, fs_sm, fs_xs, Theme};
-use patchwork_design_components::{dropdown_chip, icon_button, tooltip};
+use patchwork_design_components::{dropdown_chip, icon_button};
 
 /// How often the log is read again: often enough to look live, seldom enough to stay cheap
 /// while an app writes thousands of lines.
@@ -232,7 +232,7 @@ impl AndroidPanel {
             )
             .child(
                 icon_button("android-log-copy", "Copy the log", IconName::Copy, 14., cx)
-                    .tooltip(tooltip("Copy"))
+                    .tooltip("Copy")
                     .on_click(cx.listener(|this, _, _, cx| {
                         if let Some(log) = &this.log {
                             let text: Vec<&str> =
@@ -249,7 +249,7 @@ impl AndroidPanel {
                     14.,
                     cx,
                 )
-                .tooltip(tooltip("Clear"))
+                .tooltip("Clear")
                 .on_click(cx.listener(|this, _, _, cx| {
                     if let Some(log) = &this.log {
                         let logcat = Arc::clone(&log.logcat);
@@ -259,7 +259,7 @@ impl AndroidPanel {
             )
             .child(
                 icon_button("android-log-close", "Close the log", IconName::X, 14., cx)
-                    .tooltip(tooltip("Close"))
+                    .tooltip("Close")
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_log(cx))),
             );
         Some(

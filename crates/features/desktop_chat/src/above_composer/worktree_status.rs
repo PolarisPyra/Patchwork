@@ -590,7 +590,7 @@ pub fn worktree_strip<W: ChatWindow>(
     )
     .flex_none()
     .aria_expanded(menu.is_some())
-    .tooltip(tooltip("Worktree actions"))
+    .tooltip("Worktree actions")
     .on_click(cx.listener(W::toggle_worktree_menu));
     let message = message.map(|(text, failed)| {
         let shown: SharedString = text.into();

@@ -144,7 +144,7 @@ pub fn detail_header(
                 16.,
                 cx,
             )
-            .tooltip(patchwork_design_components::tooltip("Back"))
+            .tooltip("Back")
             .on_click(cx.listener(move |d, _, _, cx| back(d, cx))),
         )
         .child(logo)
@@ -207,7 +207,7 @@ pub fn remove_button(
     t: &Theme,
     click: impl Fn(&mut SettingsDialog, bool, &mut Context<SettingsDialog>) + 'static,
     cx: &mut Context<SettingsDialog>,
-) -> Stateful<Div> {
+) -> patchwork_design_components::Button {
     let label = if confirm { sure } else { "Remove" };
     btn(id, label, BtnKind::Plain, busy, t)
         .when(confirm, |b| b.text_color(t.danger))

@@ -20,9 +20,7 @@ use super::layout::kind_icon;
 use super::catalog::{QuiltsPage, Place};
 use patchwork_design_icons::IconName;
 use patchwork_design_theme::{Theme, fs_lg, fs_md, fs_sm, fs_xxl, radius, radius_sm};
-use patchwork_design_components::{
-    button, focus_ring, icon_button, input_box, scrollbar, spinner, tooltip,
-};
+use patchwork_design_components::{button, focus_ring, icon_button, input_box, scrollbar, spinner};
 use patchwork_design_text::format_relative;
 use patchwork_design_icons::icon;
 
@@ -84,11 +82,11 @@ impl QuiltsPage {
                     16.,
                     cx,
                 )
-                .tooltip(tooltip(if grid {
+                .tooltip(if grid {
                     "Show as list"
                 } else {
                     "Show as cards"
-                }))
+                })
                 .on_click(cx.listener(move |this, _, _, cx| this.set_grid(!grid, cx))),
             )
     }

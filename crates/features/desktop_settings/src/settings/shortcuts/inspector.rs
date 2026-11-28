@@ -289,7 +289,7 @@ fn command_card(
                             btn("reset-key", "Reset to default", BtnKind::Plain, false, t)
                                 .child(icon(IconName::ArrowCounterClockwise, 12.))
                                 .child("Reset")
-                                .tooltip(tooltip(default_label(id)))
+                                .tooltip(default_label(id))
                                 .on_click(cx.listener(move |d, _, _, cx| {
                                     d.shortcuts.shown_binding = 0;
                                     d.set_keys(id, &default_keys(id), cx);

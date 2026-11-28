@@ -4,71 +4,25 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::f32::consts::TAU;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
-use gpui::{App, EntityId, Hsla, PathBuilder, Role, Window, canvas, div, point, prelude::*, px};
+use gpui::component::spinner::Spinner;
+use gpui::component::{Sizable, Size as KitSize};
+use gpui::{App, EntityId, Hsla, Role, Window, div, prelude::*, px};
 
-/// The steady spinner.
-///
-/// A faint ring with a quarter arc running around it once every 0.8s. Every arc's lap counts from
-/// the app's start, so all spinners turn in step, however late each one appears. Nothing rotates,
-/// so the ring keeps its pixels.
+/// gpui-component's spinner, `size` pixels across in `color`.
+#[must_use]
 pub fn spinner(size: f32, color: Hsla) -> impl IntoElement {
-    static START: OnceLock<Instant> = OnceLock::new();
-    let start = *START.get_or_init(Instant::now);
-    let ring = canvas(
-        |_, _, _| {},
-        move |bounds, (), window: &mut Window, cx: &mut App| {
-            next_step(window, cx);
-            let scale = size / 24.;
-            let center = bounds.center();
-            let radius = 9. * scale;
-            let width = px(3. * scale);
-            let at = |turn: f32| {
-                let angle = turn * TAU;
-                point(
-                    center.x + px(radius * angle.cos()),
-                    center.y + px(radius * angle.sin()),
-                )
-            };
-            let mut ring = PathBuilder::stroke(width);
-            ring.move_to(at(0.));
-            ring.arc_to(point(px(radius), px(radius)), px(0.), false, true, at(0.5));
-            ring.arc_to(point(px(radius), px(radius)), px(0.), false, true, at(0.));
-            if let Ok(path) = ring.build() {
-                window.paint_path(path, color.opacity(0.25));
-            }
-            let lap = (start.elapsed().as_secs_f32() / 0.8).fract();
-            let (from, to) = (lap, lap + 0.25);
-            let mut arc = PathBuilder::stroke(width);
-            arc.move_to(at(from));
-            arc.arc_to(point(px(radius), px(radius)), px(0.), false, true, at(to));
-            if let Ok(path) = arc.build() {
-                window.paint_path(path, color);
-            }
-            // The arc's round caps.
-            for end in [from, to] {
-                let c = at(end);
-                let r = px(1.5 * scale);
-                let mut cap = PathBuilder::fill();
-                cap.move_to(point(c.x + r, c.y));
-                cap.arc_to(point(r, r), px(0.), false, true, point(c.x - r, c.y));
-                cap.arc_to(point(r, r), px(0.), false, true, point(c.x + r, c.y));
-                if let Ok(path) = cap.build() {
-                    window.paint_path(path, color);
-                }
-            }
-        },
-    )
-    .size(px(size))
-    .flex_none();
     div()
         .id("spinner")
         .role(Role::ProgressIndicator)
         .aria_label("Loading")
         .flex_none()
-        .child(ring)
+        .child(
+            Spinner::new()
+                .color(color)
+                .with_size(KitSize::Size(px(size))),
+        )
 }
 
 /// How often what moves in place, a spinner's arc or a card's shimmer, moves on.

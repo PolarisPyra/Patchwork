@@ -78,7 +78,7 @@ pub(super) fn reveal_button(
     label: String,
     shown: bool,
     cx: &mut Context<SettingsDialog>,
-) -> gpui::Stateful<Div> {
+) -> patchwork_design_components::Button {
     icon_button(
         SharedString::from(id),
         label,
@@ -92,12 +92,8 @@ pub(super) fn reveal_button(
     )
     .size(px(22.))
     .flex_none()
-    .aria_toggled(shown.into())
-    .tooltip(patchwork_design_components::tooltip(if shown {
-        "Hide"
-    } else {
-        "Show"
-    }))
+    .toggled(shown)
+    .tooltip(if shown { "Hide" } else { "Show" })
 }
 
 /// One password field in its row. Enter in it does `submit`.
