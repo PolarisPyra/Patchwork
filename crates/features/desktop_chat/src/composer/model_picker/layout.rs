@@ -1,6 +1,8 @@
-//! The model menu's rows: the starred models, each agent's models (in a submenu of its own when
-//! there are several agents, older ones in a further submenu), the effort, and starring the
+//! The model menu's rows: the starred models, each agent's models, the effort, and starring the
 //! chat's model.
+//!
+//! An agent's models sit in a submenu of their own when there are several agents. Older models,
+//! Antigravity's orchestrator models and other vendors' models each sit in a further submenu.
 
 // Rust guideline compliant 2026-10-09
 
@@ -60,8 +62,29 @@ impl Composer {
             let rows = self.rows_of(kind);
             let (current, older): (Vec<_>, Vec<_>) =
                 rows.iter().partition(|row| !row.item.is_legacy);
-            let mut items: Vec<MenuItem> =
-                current.iter().map(|row| model_row(row, false)).collect();
+            let mut groups: [(&str, IconName, Vec<MenuItem>); 2] = [
+                ("Orchestrator", IconName::Robot, Vec::new()),
+                ("Other models", IconName::Brain, Vec::new()),
+            ];
+            let mut items = Vec::new();
+            for row in &current {
+                let item = model_row(row, false);
+                match family(kind, &row.item.label) {
+                    Family::Own => items.push(item),
+                    Family::Orchestrator => groups[0].2.push(item),
+                    Family::Other => groups[1].2.push(item),
+                }
+            }
+            for (label, icon, rows) in groups {
+                if !rows.is_empty() {
+                    let group = MenuItem::submenu(label, rows).icon(icon);
+                    items.push(if items.is_empty() {
+                        group
+                    } else {
+                        group.separated()
+                    });
+                }
+            }
             if !older.is_empty() {
                 let older = older.iter().map(|row| model_row(row, false)).collect();
                 let older = MenuItem::submenu("Older models", older).icon(IconName::Clock);
@@ -141,5 +164,29 @@ impl Composer {
             items.push(star);
         }
         (items, filtered)
+    }
+}
+
+/// Which group of its agent's menu a model sits in.
+enum Family {
+    /// The agent's own models, listed at the top.
+    Own,
+    /// Antigravity's orchestrator models, in a submenu of their own.
+    Orchestrator,
+    /// Models from other vendors that the agent also serves, in a submenu of their own.
+    Other,
+}
+
+/// The group the model labelled `label` sits in among `kind`'s models. Only Antigravity mixes
+/// in orchestrator and other vendors' models; every other agent's models are its own.
+fn family(kind: AgentKind, label: &str) -> Family {
+    if kind != AgentKind::Antigravity {
+        Family::Own
+    } else if label.starts_with("Orchestrator") {
+        Family::Orchestrator
+    } else if label.starts_with("Gemini") || label == "Default" {
+        Family::Own
+    } else {
+        Family::Other
     }
 }
